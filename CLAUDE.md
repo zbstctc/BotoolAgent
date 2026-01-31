@@ -7,19 +7,19 @@ You are an autonomous coding agent working on the Botool project.
 1. Read the PRD at `prd.json` (in the same directory as this file)
 2. Read the progress log at `progress.txt` (check Codebase Patterns section first)
 3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
-4. Pick the **highest priority** user story where `passes: false`
-5. Implement that single user story
+4. Pick the **highest priority** dev task where `passes: false`
+5. Implement that single dev task
 6. Run quality checks (e.g., typecheck, lint, test - use whatever your project requires)
 7. Update CLAUDE.md files if you discover reusable patterns (see below)
-8. If checks pass, commit ALL changes with message: `feat: [Story ID] - [Story Title]`
-9. Update the PRD to set `passes: true` for the completed story
+8. If checks pass, commit ALL changes with message: `feat: [Task ID] - [Task Title]`
+9. Update the PRD to set `passes: true` for the completed task
 10. Append your progress to `progress.txt`
 
 ## Progress Report Format
 
 APPEND to progress.txt (never replace, always append):
 ```
-## [Date/Time] - [Story ID]
+## [Date/Time] - [Task ID]
 - What was implemented
 - Files changed
 - **Learnings for future iterations:**
@@ -42,7 +42,7 @@ If you discover a **reusable pattern** that future iterations should know, add i
 - Example: Export types from actions.ts for UI components
 ```
 
-Only add patterns that are **general and reusable**, not story-specific details.
+Only add patterns that are **general and reusable**, not task-specific details.
 
 ## Update CLAUDE.md Files
 
@@ -64,7 +64,7 @@ Before committing, check if any edited files have learnings worth preserving in 
 - "Field names must match the template exactly"
 
 **Do NOT add:**
-- Story-specific implementation details
+- Task-specific implementation details
 - Temporary debugging notes
 - Information already in progress.txt
 
@@ -79,7 +79,7 @@ Only update CLAUDE.md if you have **genuinely reusable knowledge** that would he
 
 ## Browser Testing (If Available)
 
-For any story that changes UI, verify it works in the browser if you have browser testing tools configured (e.g., Playwright MCP):
+For any task that changes UI, verify it works in the browser if you have browser testing tools configured (e.g., Playwright MCP):
 
 1. Navigate to the relevant page
 2. Verify the UI changes work as expected
@@ -89,16 +89,16 @@ If no browser tools are available, note in your progress report that manual brow
 
 ## Stop Condition
 
-After completing a user story, check if ALL stories have `passes: true`.
+After completing a dev task, check if ALL tasks have `passes: true`.
 
-If ALL stories are complete and passing, reply with:
+If ALL tasks are complete and passing, reply with:
 <promise>COMPLETE</promise>
 
-If there are still stories with `passes: false`, end your response normally (another iteration will pick up the next story).
+If there are still tasks with `passes: false`, end your response normally (another iteration will pick up the next task).
 
 ## Important
 
-- Work on ONE story per iteration
+- Work on ONE task per iteration
 - Commit frequently
 - Keep CI green
 - Read the Codebase Patterns section in progress.txt before starting

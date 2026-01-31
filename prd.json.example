@@ -2,9 +2,9 @@
   "project": "MyApp",
   "branchName": "botool/task-priority",
   "description": "Task Priority System - Add priority levels to tasks",
-  "userStories": [
+  "devTasks": [
     {
-      "id": "US-001",
+      "id": "DT-001",
       "title": "Add priority field to database",
       "description": "As a developer, I need to store task priority so it persists across sessions.",
       "acceptanceCriteria": [
@@ -17,21 +17,21 @@
       "notes": ""
     },
     {
-      "id": "US-002",
+      "id": "DT-002",
       "title": "Display priority indicator on task cards",
       "description": "As a user, I want to see task priority at a glance.",
       "acceptanceCriteria": [
         "Each task card shows colored priority badge (red=high, yellow=medium, gray=low)",
         "Priority visible without hovering or clicking",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser"
       ],
       "priority": 2,
       "passes": false,
       "notes": ""
     },
     {
-      "id": "US-003",
+      "id": "DT-003",
       "title": "Add priority selector to task edit",
       "description": "As a user, I want to change a task's priority when editing it.",
       "acceptanceCriteria": [
@@ -39,14 +39,14 @@
         "Shows current priority as selected",
         "Saves immediately on selection change",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser"
       ],
       "priority": 3,
       "passes": false,
       "notes": ""
     },
     {
-      "id": "US-004",
+      "id": "DT-004",
       "title": "Filter tasks by priority",
       "description": "As a user, I want to filter the task list to see only high-priority items.",
       "acceptanceCriteria": [
@@ -54,7 +54,7 @@
         "Filter persists in URL params",
         "Empty state message when no tasks match filter",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser"
       ],
       "priority": 4,
       "passes": false,
