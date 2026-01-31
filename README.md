@@ -14,15 +14,15 @@ Based on [Geoffrey Huntley's Ralph pattern](https://ghuntley.com/ralph/).
 
 ### Option 1: Copy to your project
 
-Copy the botool-dev files into your project:
+Copy the BotoolAgent files into your project:
 
 ```bash
 # From your project root
-mkdir -p scripts/botool-dev
-cp /path/to/botool-dev-agent/botool_dev.sh scripts/botool-dev/
-cp /path/to/botool-dev-agent/CLAUDE.md scripts/botool-dev/
-cp /path/to/botool-dev-agent/prd.json.example scripts/botool-dev/
-chmod +x scripts/botool-dev/botool_dev.sh
+mkdir -p scripts/BotoolAgent
+cp /path/to/BotoolAgent/BotoolAgent.sh scripts/BotoolAgent/
+cp /path/to/BotoolAgent/CLAUDE.md scripts/BotoolAgent/
+cp /path/to/BotoolAgent/prd.json.example scripts/BotoolAgent/
+chmod +x scripts/BotoolAgent/BotoolAgent.sh
 ```
 
 ### Option 2: Install skills globally
@@ -60,7 +60,7 @@ This creates `prd.json` with user stories structured for autonomous execution.
 ### 3. Run the Agent
 
 ```bash
-./scripts/botool-dev/botool_dev.sh [max_iterations]
+./scripts/BotoolAgent/BotoolAgent.sh [max_iterations]
 ```
 
 Default is 10 iterations.
@@ -79,7 +79,7 @@ The agent will:
 
 | File | Purpose |
 |------|---------|
-| `botool_dev.sh` | The bash loop that spawns fresh Claude instances |
+| `BotoolAgent.sh` | The bash loop that spawns fresh Claude instances |
 | `CLAUDE.md` | Agent instructions |
 | `prd.json` | User stories with `passes` status (the task list) |
 | `prd.json.example` | Example PRD format for reference |

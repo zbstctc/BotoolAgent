@@ -1,6 +1,6 @@
 #!/bin/bash
 # Botool Dev Agent - Long-running AI agent loop for Botool project
-# Usage: ./botool_dev.sh [max_iterations]
+# Usage: ./BotoolAgent.sh [max_iterations]
 # Based on Ralph pattern by Geoffrey Huntley
 
 set -e

@@ -241,7 +241,7 @@ Add ability to mark tasks with different statuses.
    - Copy current `prd.json` and `progress.txt` to archive
    - Reset `progress.txt` with fresh header
 
-**The botool_dev.sh script handles this automatically** when you run it, but if you are manually updating prd.json between runs, archive first.
+**The BotoolAgent.sh script handles this automatically** when you run it, but if you are manually updating prd.json between runs, archive first.
 
 ---
 
