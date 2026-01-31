@@ -1,6 +1,6 @@
-# Ralph Agent Instructions
+# Botool Dev Agent Instructions
 
-You are an autonomous coding agent working on a software project.
+You are an autonomous coding agent working on the Botool project.
 
 ## Your Task
 
@@ -79,7 +79,7 @@ Only update CLAUDE.md if you have **genuinely reusable knowledge** that would he
 
 ## Browser Testing (If Available)
 
-For any story that changes UI, verify it works in the browser if you have browser testing tools configured (e.g., via MCP):
+For any story that changes UI, verify it works in the browser if you have browser testing tools configured (e.g., Playwright MCP):
 
 1. Navigate to the relevant page
 2. Verify the UI changes work as expected
