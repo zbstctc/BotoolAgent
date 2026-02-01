@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { StageIndicator } from '@/components';
+import { StageIndicator, TaskEditor } from '@/components';
 
 interface PRDItem {
   id: string;
@@ -48,6 +48,11 @@ export default function Stage2Page() {
   const [conversionProgress, setConversionProgress] = useState<string>('');
   const [convertedPrd, setConvertedPrd] = useState<PrdJson | null>(null);
   const [conversionError, setConversionError] = useState<string>('');
+
+  // Task editing state
+  const [editableTasks, setEditableTasks] = useState<DevTask[]>([]);
+  const [isSavingTasks, setIsSavingTasks] = useState(false);
+  const [showTaskEditor, setShowTaskEditor] = useState(false);
 
   useEffect(() => {
     fetchPRDs();
@@ -146,7 +151,9 @@ export default function Stage2Page() {
                 setConversionProgress((prev) => prev + data.content);
               } else if (data.type === 'complete') {
                 setConvertedPrd(data.prdJson);
+                setEditableTasks(data.prdJson.devTasks);
                 setConversionStatus('success');
+                setShowTaskEditor(true);
               } else if (data.type === 'error') {
                 setConversionError(data.error);
                 setConversionStatus('error');
@@ -167,6 +174,43 @@ export default function Stage2Page() {
   const handleProceedToStage3 = useCallback(() => {
     router.push('/stage3');
   }, [router]);
+
+  const handleTasksChange = useCallback((tasks: DevTask[]) => {
+    setEditableTasks(tasks);
+  }, []);
+
+  const handleSaveTasks = useCallback(async () => {
+    if (!convertedPrd || isSavingTasks) return;
+
+    setIsSavingTasks(true);
+    try {
+      const response = await fetch('/api/prd/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...convertedPrd,
+          devTasks: editableTasks,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save tasks');
+      }
+
+      // Update the convertedPrd with new tasks
+      setConvertedPrd({
+        ...convertedPrd,
+        devTasks: editableTasks,
+      });
+    } catch (error) {
+      console.error('Save error:', error);
+      alert('Failed to save changes. Please try again.');
+    } finally {
+      setIsSavingTasks(false);
+    }
+  }, [convertedPrd, editableTasks, isSavingTasks]);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -341,43 +385,31 @@ export default function Stage2Page() {
               )}
 
               {conversionStatus === 'success' && convertedPrd && (
-                <div className="p-4 bg-green-50 border-b border-green-100">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-green-600 text-lg">✓</span>
+                <div className="p-3 bg-green-50 border-b border-green-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600">✓</span>
                     <span className="text-sm font-medium text-green-700">
-                      prd.json created successfully!
+                      prd.json created
+                    </span>
+                    <span className="text-xs text-neutral-500">|</span>
+                    <span className="text-xs text-neutral-600">
+                      {convertedPrd.project}
+                    </span>
+                    <span className="text-xs font-mono text-blue-600">
+                      {convertedPrd.branchName}
+                    </span>
+                    <span className="text-xs text-neutral-500">|</span>
+                    <span className="text-xs text-neutral-600">
+                      {editableTasks.length} tasks
                     </span>
                   </div>
-                  <div className="bg-white rounded-lg border border-green-200 p-4">
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <p className="text-xs text-neutral-500">Project</p>
-                        <p className="text-sm font-medium">{convertedPrd.project}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-neutral-500">Branch</p>
-                        <p className="text-sm font-mono text-blue-600">{convertedPrd.branchName}</p>
-                      </div>
-                    </div>
-                    <div className="mb-3">
-                      <p className="text-xs text-neutral-500 mb-1">Dev Tasks ({convertedPrd.devTasks.length})</p>
-                      <div className="space-y-1">
-                        {convertedPrd.devTasks.slice(0, 5).map((task) => (
-                          <div key={task.id} className="flex items-center gap-2 text-sm">
-                            <span className="text-xs font-mono text-neutral-400">{task.id}</span>
-                            <span className="truncate">{task.title}</span>
-                          </div>
-                        ))}
-                        {convertedPrd.devTasks.length > 5 && (
-                          <p className="text-xs text-neutral-400">
-                            ... and {convertedPrd.devTasks.length - 5} more tasks
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-xs text-neutral-500">
-                      Click &quot;Start Development&quot; to proceed to Stage 3
-                    </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowTaskEditor(!showTaskEditor)}
+                      className="text-xs text-neutral-600 hover:text-neutral-900 underline"
+                    >
+                      {showTaskEditor ? 'View PRD' : 'Edit Tasks'}
+                    </button>
                   </div>
                 </div>
               )}
@@ -403,22 +435,33 @@ export default function Stage2Page() {
               )}
 
               {/* Content */}
-              <div className="flex-1 overflow-auto p-6 bg-white">
-                {loadingContent ? (
-                  <div className="animate-pulse space-y-3">
-                    <div className="h-6 bg-neutral-200 rounded w-1/2" />
-                    <div className="h-4 bg-neutral-100 rounded w-full" />
-                    <div className="h-4 bg-neutral-100 rounded w-4/5" />
-                    <div className="h-4 bg-neutral-100 rounded w-3/4" />
-                    <div className="h-4 bg-neutral-100 rounded w-full" />
-                    <div className="h-4 bg-neutral-100 rounded w-2/3" />
-                  </div>
-                ) : (
-                  <pre className="whitespace-pre-wrap font-mono text-sm text-neutral-700 leading-relaxed">
-                    {prdContent}
-                  </pre>
-                )}
-              </div>
+              {showTaskEditor && editableTasks.length > 0 ? (
+                <div className="flex-1 overflow-hidden">
+                  <TaskEditor
+                    tasks={editableTasks}
+                    onTasksChange={handleTasksChange}
+                    onSave={handleSaveTasks}
+                    isSaving={isSavingTasks}
+                  />
+                </div>
+              ) : (
+                <div className="flex-1 overflow-auto p-6 bg-white">
+                  {loadingContent ? (
+                    <div className="animate-pulse space-y-3">
+                      <div className="h-6 bg-neutral-200 rounded w-1/2" />
+                      <div className="h-4 bg-neutral-100 rounded w-full" />
+                      <div className="h-4 bg-neutral-100 rounded w-4/5" />
+                      <div className="h-4 bg-neutral-100 rounded w-3/4" />
+                      <div className="h-4 bg-neutral-100 rounded w-full" />
+                      <div className="h-4 bg-neutral-100 rounded w-2/3" />
+                    </div>
+                  ) : (
+                    <pre className="whitespace-pre-wrap font-mono text-sm text-neutral-700 leading-relaxed">
+                      {prdContent}
+                    </pre>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center bg-neutral-50">
