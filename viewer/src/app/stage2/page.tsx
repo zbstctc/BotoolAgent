@@ -54,6 +54,9 @@ export default function Stage2Page() {
   const [isSavingTasks, setIsSavingTasks] = useState(false);
   const [showTaskEditor, setShowTaskEditor] = useState(false);
 
+  // Agent start state
+  const [isStartingAgent, setIsStartingAgent] = useState(false);
+
   useEffect(() => {
     fetchPRDs();
   }, []);
@@ -174,9 +177,46 @@ export default function Stage2Page() {
     }
   }, [selectedPrd, prdContent, conversionStatus]);
 
-  const handleProceedToStage3 = useCallback(() => {
-    router.push('/stage3');
-  }, [router]);
+  const handleProceedToStage3 = useCallback(async () => {
+    if (isStartingAgent) return;
+
+    setIsStartingAgent(true);
+    try {
+      // Start the BotoolAgent in background
+      const response = await fetch('/api/agent/start', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          maxIterations: 10,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // If agent is already running, just navigate to stage 3
+        if (response.status === 409) {
+          console.log('Agent already running, proceeding to Stage 3');
+        } else {
+          console.error('Failed to start agent:', data.error);
+          // Still navigate to stage 3 - user can start agent manually
+        }
+      } else {
+        console.log('Agent started with PID:', data.pid);
+      }
+
+      // Navigate to Stage 3
+      router.push('/stage3');
+    } catch (error) {
+      console.error('Error starting agent:', error);
+      // Still navigate to stage 3 even if agent start fails
+      router.push('/stage3');
+    } finally {
+      setIsStartingAgent(false);
+    }
+  }, [router, isStartingAgent]);
 
   const handleTasksChange = useCallback((tasks: DevTask[]) => {
     setEditableTasks(tasks);
@@ -345,9 +385,14 @@ export default function Stage2Page() {
                   {conversionStatus === 'success' && (
                     <button
                       onClick={handleProceedToStage3}
-                      className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
+                      disabled={isStartingAgent}
+                      className={`rounded-md px-4 py-2 text-sm font-medium text-white transition-colors ${
+                        isStartingAgent
+                          ? 'bg-green-400 cursor-wait'
+                          : 'bg-green-600 hover:bg-green-700'
+                      }`}
                     >
-                      Start Development →
+                      {isStartingAgent ? 'Starting...' : 'Start Development →'}
                     </button>
                   )}
                   <button
