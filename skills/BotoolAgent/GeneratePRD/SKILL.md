@@ -14,11 +14,85 @@ Turn ideas into well-formed PRDs through natural collaborative dialogue - one qu
 
 This skill combines deep exploration with structured output. Instead of asking all questions upfront, we have a conversation to truly understand what you're building, then produce a PRD ready for BotoolAgent execution.
 
-**Announce at start:** "Using BotoolAgent:GeneratePRD to explore your idea and create a PRD."
+**Preferred method:** Use the BotoolAgent Viewer web interface for the best PRD creation experience with real-time preview, chat UI, and automatic saving.
+
+**Announce at start:** "Using BotoolAgent:GeneratePRD to create your PRD."
 
 ---
 
-## The Process
+## Mode Selection
+
+**Web Interface Mode (Recommended):**
+- Launch the BotoolAgent Viewer and navigate to Stage 1
+- Interactive chat interface with real-time PRD preview
+- Automatic PRD saving and seamless transition to conversion
+
+**CLI Mode (Fallback):**
+- Use when Viewer is unavailable or user explicitly requests CLI
+- Traditional dialogue-based PRD creation in terminal
+
+---
+
+## Web Interface Mode
+
+### Step 1: Check and Start Viewer
+
+```bash
+# Check if port 3000 is in use
+lsof -i :3000 | grep LISTEN
+```
+
+If the server is not running:
+
+```bash
+# Navigate to viewer directory and start dev server in background
+cd viewer && npm run dev &
+```
+
+Wait a few seconds for the server to start.
+
+### Step 2: Open Stage 1 in Browser
+
+```bash
+# macOS
+open http://localhost:3000/stage1
+
+# Linux
+xdg-open http://localhost:3000/stage1
+```
+
+### Step 3: Announce to User
+
+Output to the user:
+
+```
+BotoolAgent Viewer is now running!
+
+Opening Stage 1 - PRD Creation...
+
+Access URL: http://localhost:3000/stage1
+
+The web interface provides:
+- AI chat for collaborative PRD creation
+- Real-time PRD preview panel
+- Automatic PRD saving to tasks/
+- Seamless transition to Stage 2 for JSON conversion
+
+If the browser doesn't open, navigate manually to the URL above.
+```
+
+**Then stop here.** The user will complete PRD creation in the browser.
+
+---
+
+## CLI Mode (Fallback)
+
+Use this mode when:
+- User explicitly requests CLI mode
+- Viewer is unavailable or not installed
+- Running in a headless environment
+
+### The Process
 
 ### Phase 1: Understand the Idea
 
@@ -164,14 +238,15 @@ Each task must be **small enough to complete in one iteration**:
 
 ---
 
-## After the PRD
+## After the PRD (CLI Mode Only)
 
 Offer next steps:
 
 "PRD complete and saved to `tasks/prd-[name].md`. Next steps:
 
-1. **Convert to JSON** - Use `/BotoolAgent:PRD2JSON` to create prd.json
-2. **Run autonomously** - Execute `./BotoolAgent.sh` to implement
+1. **Open Viewer** - Use `/botoolagent` to open the web interface and continue from Stage 2
+2. **Convert to JSON** - Use `/botoolagent-prd2json` to create prd.json
+3. **Run autonomously** - Execute `./BotoolAgent.sh` to implement
 
 Which would you like to do?"
 
@@ -179,8 +254,13 @@ Which would you like to do?"
 
 ## Checklist
 
-Before saving the PRD:
+### Web Interface Mode
+- [ ] Started Viewer dev server if not running
+- [ ] Opened Stage 1 (http://localhost:3000/stage1) in browser
+- [ ] Announced access URL to user
 
+### CLI Mode
+Before saving the PRD:
 - [ ] Asked questions one at a time with AskUserQuestion
 - [ ] Explored 2-3 approaches before settling
 - [ ] Presented design in sections and validated each
