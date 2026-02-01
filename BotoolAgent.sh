@@ -225,8 +225,88 @@ if [ ! -f "$PROGRESS_FILE" ]; then
 fi
 
 # ============================================================================
+# 分支安全检查 - 防止丢失未合并的工作
+# ============================================================================
+check_branch_safety() {
+  # 从prd.json读取目标分支
+  local target_branch=$(grep -o '"branchName": "[^"]*"' "$PRD_FILE" 2>/dev/null | sed 's/"branchName": "//;s/"$//' || echo "")
+
+  if [ -z "$target_branch" ]; then
+    echo "⚠️  警告：prd.json 中没有指定 branchName"
+    return 0
+  fi
+
+  # 获取当前git分支
+  local current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+
+  if [ -z "$current_branch" ]; then
+    echo "⚠️  警告：无法获取当前git分支"
+    return 0
+  fi
+
+  echo ">>> 分支检查："
+  echo "    当前分支: $current_branch"
+  echo "    目标分支: $target_branch"
+
+  # 场景1：已经在目标分支 - 正常继续
+  if [ "$current_branch" = "$target_branch" ]; then
+    echo "    ✓ 已在目标分支，继续执行"
+    return 0
+  fi
+
+  # 场景2：在main分支 - 检查目标分支是否已存在
+  if [ "$current_branch" = "main" ] || [ "$current_branch" = "master" ]; then
+    if git show-ref --verify --quiet "refs/heads/$target_branch" 2>/dev/null; then
+      echo "    ✓ 目标分支已存在，将切换到该分支"
+    else
+      echo "    ✓ 将从main创建新分支: $target_branch"
+    fi
+    return 0
+  fi
+
+  # 场景3：在其他分支（非main非目标）- 需要检查是否有未合并的工作
+  echo "    ⚠️  当前不在main也不在目标分支"
+
+  # 检查当前分支是否有未合并到main的commits
+  local unmerged_count=$(git log main..$current_branch --oneline 2>/dev/null | wc -l | tr -d ' ')
+
+  if [ "$unmerged_count" -gt 0 ]; then
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════════╗"
+    echo "║  ⛔ 停止！检测到未合并的工作                                      ║"
+    echo "╠══════════════════════════════════════════════════════════════════╣"
+    echo "║  当前分支 '$current_branch' 有 $unmerged_count 个commit未合并到main"
+    echo "║                                                                  ║"
+    echo "║  如果现在继续，BotoolAgent将从main创建新分支                     ║"
+    echo "║  '$target_branch'，这会导致丢失当前分支的所有工作！              ║"
+    echo "╠══════════════════════════════════════════════════════════════════╣"
+    echo "║  请先执行以下操作：                                               ║"
+    echo "║                                                                  ║"
+    echo "║    1. git checkout main                                          ║"
+    echo "║    2. git merge $current_branch                                  ║"
+    echo "║    3. git push origin main  (可选但建议)                         ║"
+    echo "║    4. 重新运行 ./BotoolAgent.sh                                  ║"
+    echo "║                                                                  ║"
+    echo "║  或者如果你确定不需要当前分支的工作：                             ║"
+    echo "║    git checkout main && ./BotoolAgent.sh                         ║"
+    echo "╚══════════════════════════════════════════════════════════════════╝"
+    echo ""
+    exit 1
+  else
+    echo "    ✓ 当前分支没有未合并的工作，可以安全切换"
+    return 0
+  fi
+}
+
+# 执行分支安全检查
+if [ -f "$PRD_FILE" ]; then
+  check_branch_safety
+fi
+
+# ============================================================================
 # 主循环
 # ============================================================================
+echo ""
 echo "启动 Botool 开发代理 v2.0"
 echo "  最大迭代次数: $MAX_ITERATIONS"
 echo "  迭代超时时间: ${ITERATION_TIMEOUT}秒"
