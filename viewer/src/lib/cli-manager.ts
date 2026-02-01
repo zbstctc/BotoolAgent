@@ -6,8 +6,45 @@ export interface CLIMessage {
   content?: string;
   sessionId?: string;
   error?: string;
+  toolId?: string;
   toolName?: string;
   toolInput?: Record<string, unknown>;
+}
+
+// AskUserQuestion tool specific types
+export interface AskUserQuestionOption {
+  label: string;
+  description?: string;
+}
+
+export interface AskUserQuestion {
+  question: string;
+  header?: string;
+  options: AskUserQuestionOption[];
+  multiSelect?: boolean;
+}
+
+export interface AskUserQuestionToolInput {
+  questions: AskUserQuestion[];
+  [key: string]: unknown; // Index signature for compatibility with Record<string, unknown>
+}
+
+// Type guard to check if tool input is AskUserQuestion
+export function isAskUserQuestionInput(
+  input: Record<string, unknown>
+): input is AskUserQuestionToolInput {
+  return (
+    Array.isArray(input.questions) &&
+    input.questions.length > 0 &&
+    input.questions.every(
+      (q: unknown) =>
+        typeof q === 'object' &&
+        q !== null &&
+        'question' in q &&
+        'options' in q &&
+        Array.isArray((q as AskUserQuestion).options)
+    )
+  );
 }
 
 export interface CLISession {
@@ -19,21 +56,27 @@ export interface CLISession {
 interface StreamJSONEvent {
   type: string;
   session_id?: string;
+  index?: number;
   message?: {
     content?: Array<{
       type: string;
       text?: string;
+      id?: string;
+      name?: string;
+      input?: Record<string, unknown>;
     }>;
   };
   content_block?: {
     type: string;
     text?: string;
+    id?: string;
     name?: string;
     input?: Record<string, unknown>;
   };
   delta?: {
     type: string;
     text?: string;
+    partial_json?: string;
   };
   error?: {
     message?: string;
@@ -42,8 +85,18 @@ interface StreamJSONEvent {
     content?: Array<{
       type: string;
       text?: string;
+      id?: string;
+      name?: string;
+      input?: Record<string, unknown>;
     }>;
   };
+}
+
+// Track pending tool_use blocks during streaming
+interface PendingToolUse {
+  id: string;
+  name: string;
+  inputJson: string;
 }
 
 export class CLIManager extends EventEmitter {
@@ -55,6 +108,8 @@ export class CLIManager extends EventEmitter {
   private readonly workingDir: string;
   private timeoutId: NodeJS.Timeout | null = null;
   private readonly defaultTimeout: number = 300000; // 5 minutes default
+  // Track pending tool_use blocks by index during streaming
+  private pendingToolUses: Map<number, PendingToolUse> = new Map();
 
   constructor(options: { cliPath?: string; workingDir?: string } = {}) {
     super();
@@ -240,6 +295,13 @@ export class CLIManager extends EventEmitter {
                 type: 'text',
                 content: block.text,
               } as CLIMessage);
+            } else if (block.type === 'tool_use') {
+              this.emit('message', {
+                type: 'tool_use',
+                toolId: block.id,
+                toolName: block.name,
+                toolInput: block.input,
+              } as CLIMessage);
             }
           }
         }
@@ -253,11 +315,13 @@ export class CLIManager extends EventEmitter {
             content: event.content_block.text,
           } as CLIMessage);
         } else if (event.content_block?.type === 'tool_use') {
-          this.emit('message', {
-            type: 'tool_use',
-            toolName: event.content_block.name,
-            toolInput: event.content_block.input,
-          } as CLIMessage);
+          // Start tracking this tool_use block
+          const index = event.index ?? 0;
+          this.pendingToolUses.set(index, {
+            id: event.content_block.id || '',
+            name: event.content_block.name || '',
+            inputJson: '',
+          });
         }
         break;
 
@@ -268,11 +332,42 @@ export class CLIManager extends EventEmitter {
             type: 'text',
             content: event.delta.text,
           } as CLIMessage);
+        } else if (event.delta?.type === 'input_json_delta' && event.delta.partial_json) {
+          // Accumulate JSON for tool_use input
+          const index = event.index ?? 0;
+          const pending = this.pendingToolUses.get(index);
+          if (pending) {
+            pending.inputJson += event.delta.partial_json;
+          }
         }
         break;
 
       case 'content_block_stop':
-        // End of content block - no action needed
+        // End of content block - emit completed tool_use if any
+        {
+          const index = event.index ?? 0;
+          const pending = this.pendingToolUses.get(index);
+          if (pending) {
+            let toolInput: Record<string, unknown> = {};
+            try {
+              if (pending.inputJson) {
+                toolInput = JSON.parse(pending.inputJson);
+              }
+            } catch (e) {
+              console.error('[CLI] Failed to parse tool input JSON:', e);
+            }
+
+            this.emit('message', {
+              type: 'tool_use',
+              toolId: pending.id,
+              toolName: pending.name,
+              toolInput,
+            } as CLIMessage);
+
+            // Clean up
+            this.pendingToolUses.delete(index);
+          }
+        }
         break;
 
       case 'message_start':
@@ -298,6 +393,13 @@ export class CLIManager extends EventEmitter {
               this.emit('message', {
                 type: 'text',
                 content: block.text,
+              } as CLIMessage);
+            } else if (block.type === 'tool_use') {
+              this.emit('message', {
+                type: 'tool_use',
+                toolId: block.id,
+                toolName: block.name,
+                toolInput: block.input,
               } as CLIMessage);
             }
           }
