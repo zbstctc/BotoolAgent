@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { StageIndicator, ChatInterface } from '@/components';
+import { useMemo } from 'react';
+import { StageIndicator, ChatInterface, PRDPreview } from '@/components';
 import { useChat } from '@/hooks';
 
 const INITIAL_MESSAGE = {
@@ -21,17 +21,19 @@ export default function Stage1Page() {
     onError: (err) => console.error('Chat error:', err),
   });
 
-  const [isPrdCollapsed, setIsPrdCollapsed] = useState(false);
-
   // Extract PRD content from messages when a PRD markdown block is detected
   const prdContent = useMemo(() => {
-    // Look for PRD content in the latest assistant message
-    const lastAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant');
-    if (lastAssistantMessage) {
-      // Look for PRD markdown blocks
-      const prdMatch = lastAssistantMessage.content.match(/```markdown\n(# PRD:[\s\S]*?)```/);
-      if (prdMatch) {
-        return prdMatch[1];
+    // Look through all messages for the most recent PRD content
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message.role === 'assistant') {
+        // Look for PRD markdown blocks with various patterns
+        const prdMatch = message.content.match(/```markdown\n(# PRD:[\s\S]*?)```/) ||
+                         message.content.match(/```\n(# PRD:[\s\S]*?)```/) ||
+                         message.content.match(/(# PRD:[\s\S]+)/);
+        if (prdMatch) {
+          return prdMatch[1].trim();
+        }
       }
     }
     return '';
@@ -64,60 +66,7 @@ export default function Stage1Page() {
         </div>
 
         {/* Right: PRD Preview Area */}
-        <div
-          className={`border-l border-neutral-200 bg-neutral-50 transition-all duration-200 ${
-            isPrdCollapsed ? 'w-12' : 'w-1/3 min-w-[300px]'
-          }`}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between p-3 border-b border-neutral-200 bg-white">
-            <button
-              onClick={() => setIsPrdCollapsed(!isPrdCollapsed)}
-              className="p-1 rounded hover:bg-neutral-100 transition-colors"
-              aria-label={isPrdCollapsed ? 'Expand PRD preview' : 'Collapse PRD preview'}
-            >
-              <svg
-                className={`w-5 h-5 text-neutral-500 transition-transform ${
-                  isPrdCollapsed ? 'rotate-180' : ''
-                }`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </button>
-            {!isPrdCollapsed && (
-              <h2 className="text-sm font-medium text-neutral-700">PRD Preview</h2>
-            )}
-            {!isPrdCollapsed && (
-              <div className="w-5" /> // Spacer for alignment
-            )}
-          </div>
-
-          {/* Content */}
-          {!isPrdCollapsed && (
-            <div className="p-4 overflow-y-auto h-[calc(100%-49px)]">
-              {prdContent ? (
-                <pre className="whitespace-pre-wrap font-mono text-sm text-neutral-700">
-                  {prdContent}
-                </pre>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-center">
-                  <div className="text-3xl text-neutral-300 mb-2">📄</div>
-                  <p className="text-sm text-neutral-500">
-                    Your PRD will appear here as we discuss your project.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <PRDPreview content={prdContent} />
       </div>
     </div>
   );
