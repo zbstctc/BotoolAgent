@@ -5,6 +5,29 @@ import * as path from 'path';
 // Path to tasks directory (relative to project root)
 const PROJECT_ROOT = process.cwd();
 const TASKS_DIR = path.join(PROJECT_ROOT, '..', 'tasks');
+const SESSIONS_FILE = path.join(TASKS_DIR, '.prd-sessions.json');
+
+interface PrdSessions {
+  [prdId: string]: {
+    sessionId: string;
+    updatedAt: string;
+  };
+}
+
+function loadSessions(): PrdSessions {
+  try {
+    if (fs.existsSync(SESSIONS_FILE)) {
+      return JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf-8'));
+    }
+  } catch {
+    console.error('Error loading sessions file');
+  }
+  return {};
+}
+
+function saveSessions(sessions: PrdSessions): void {
+  fs.writeFileSync(SESSIONS_FILE, JSON.stringify(sessions, null, 2), 'utf-8');
+}
 
 function sanitizeFilename(name: string): string {
   // Remove special characters, keep alphanumeric, spaces, hyphens, and underscores
@@ -35,7 +58,7 @@ function extractPRDName(content: string): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { content, name: providedName } = body;
+    const { content, name: providedName, sessionId } = body;
 
     if (!content || typeof content !== 'string') {
       return NextResponse.json(
@@ -67,11 +90,24 @@ export async function POST(request: NextRequest) {
       const uniqueFilePath = path.join(TASKS_DIR, uniqueFilename);
       fs.writeFileSync(uniqueFilePath, content, 'utf-8');
 
+      const prdId = uniqueFilename.replace(/^prd-/, '').replace(/\.md$/, '');
+
+      // Save session mapping if sessionId is provided
+      if (sessionId) {
+        const sessions = loadSessions();
+        sessions[prdId] = {
+          sessionId,
+          updatedAt: new Date().toISOString(),
+        };
+        saveSessions(sessions);
+      }
+
       return NextResponse.json({
         success: true,
         filename: uniqueFilename,
-        id: uniqueFilename.replace(/^prd-/, '').replace(/\.md$/, ''),
+        id: prdId,
         name: prdName,
+        sessionId,
         message: 'PRD saved successfully (with unique identifier due to existing file)',
       });
     }
@@ -79,11 +115,24 @@ export async function POST(request: NextRequest) {
     // Write the file
     fs.writeFileSync(filePath, content, 'utf-8');
 
+    const prdId = filename.replace(/^prd-/, '').replace(/\.md$/, '');
+
+    // Save session mapping if sessionId is provided
+    if (sessionId) {
+      const sessions = loadSessions();
+      sessions[prdId] = {
+        sessionId,
+        updatedAt: new Date().toISOString(),
+      };
+      saveSessions(sessions);
+    }
+
     return NextResponse.json({
       success: true,
       filename,
-      id: filename.replace(/^prd-/, '').replace(/\.md$/, ''),
+      id: prdId,
       name: prdName,
+      sessionId,
       message: 'PRD saved successfully',
     });
   } catch (error) {

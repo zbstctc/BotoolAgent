@@ -1,13 +1,13 @@
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { StageIndicator, ChatInterface, PRDPreview } from '@/components';
-import { useChat } from '@/hooks';
+import { useCliChat, CliChatMessage } from '@/hooks';
 
-const INITIAL_MESSAGE = {
+const INITIAL_MESSAGE: CliChatMessage = {
   id: '1',
-  role: 'assistant' as const,
+  role: 'assistant',
   content: 'Hi! I\'m here to help you create a **PRD** (Product Requirements Document).\n\nWhat would you like to build? Tell me about your project idea.',
 };
 
@@ -17,15 +17,28 @@ export default function Stage1Page() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
 
+  // Store session ID for saving with PRD
+  const sessionIdRef = useRef<string | undefined>(undefined);
+
   const {
     messages,
     isLoading,
     error,
+    sessionId,
     sendMessage,
-  } = useChat({
+  } = useCliChat({
     initialMessages: [INITIAL_MESSAGE],
+    mode: 'prd',
     onError: (err) => console.error('Chat error:', err),
+    onSessionIdChange: (newSessionId) => {
+      sessionIdRef.current = newSessionId;
+    },
   });
+
+  // Keep ref in sync with sessionId state
+  if (sessionId && sessionIdRef.current !== sessionId) {
+    sessionIdRef.current = sessionId;
+  }
 
   // Extract PRD content from messages when a PRD markdown block is detected
   const prdContent = useMemo(() => {
@@ -61,7 +74,10 @@ export default function Stage1Page() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content: prdContent }),
+        body: JSON.stringify({
+          content: prdContent,
+          sessionId: sessionIdRef.current,
+        }),
       });
 
       const data = await response.json();
