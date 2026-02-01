@@ -9,3 +9,5 @@ export { PRDPreview } from "./PRDPreview";
 export type { PRDPreviewProps } from "./PRDPreview";
 export { TaskEditor } from "./TaskEditor";
 export { SessionResumeDialog } from "./SessionResumeDialog";
+export { ToolRenderer } from "./ToolRenderer";
+export type { ToolUseData, ToolRendererProps } from "./ToolRenderer";
