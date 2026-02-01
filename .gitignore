@@ -1,7 +1,9 @@
-# Ralph working files (generated during runs)
+# BotoolAgent working files (generated during runs)
 prd.json
 progress.txt
 .last-branch
+.agent-status
+logs/
 
 # Archive is optional to commit
 # archive/
@@ -9,5 +11,20 @@ progress.txt
 # OS files
 .DS_Store
 
-#Claude
+# Claude
 .claude/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Environment files
+.env
+.env.*
+.env.local
+
+# Node modules (in case of root level)
+node_modules/
+
+# Temporary files
+*.tmp
+*.log

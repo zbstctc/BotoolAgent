@@ -12,9 +12,90 @@ Converts PRDs to the prd.json format that BotoolAgent uses for autonomous execut
 
 ## Overview
 
-Take a PRD (from `tasks/prd-xxx.md` or provided text) and convert it to `prd.json` in your project root.
+This skill supports two modes:
+1. **Viewer Mode (Preferred)** - Use the BotoolAgent Viewer web interface for visual PRD selection and conversion
+2. **CLI Mode (Fallback)** - Direct conversion in the terminal if Viewer is unavailable
 
-**Announce at start:** "Using BotoolAgent:PRD2JSON to convert the PRD to JSON format."
+**Announce at start:** "Using BotoolAgent:PRD2JSON to convert a PRD to JSON format."
+
+---
+
+## Mode Selection: Viewer vs CLI
+
+### Step 1: Check for Available PRDs
+
+```bash
+# Check if any PRD files exist
+ls tasks/prd-*.md 2>/dev/null
+```
+
+**If no PRDs found:**
+```
+No PRD files found in tasks/ directory.
+
+Please create a PRD first using /botoolagent-generateprd or through the Viewer at:
+http://localhost:3000/stage1
+```
+Then stop here.
+
+### Step 2: Try Viewer Mode First
+
+```bash
+# Check if Viewer server is running
+lsof -i :3000 | grep LISTEN
+```
+
+**If server is NOT running:**
+```bash
+# Start the Viewer dev server in background
+cd viewer && npm run dev &
+# Wait for server to be ready (3-5 seconds)
+sleep 3
+```
+
+**Open Stage 2 directly:**
+```bash
+# macOS
+open http://localhost:3000/stage2
+
+# Linux
+xdg-open http://localhost:3000/stage2
+```
+
+**Announce to user:**
+```
+BotoolAgent Viewer is ready!
+
+Opening PRD Converter at: http://localhost:3000/stage2
+
+The web interface provides:
+- Visual PRD selection list
+- Full PRD preview before conversion
+- Streaming conversion progress
+- Task preview and editing
+- One-click start development
+
+If you prefer the CLI experience, let me know and we can continue here.
+```
+
+**Then stop here.** The user will complete conversion in the browser.
+
+### Step 3: CLI Fallback
+
+If the Viewer fails to start or the user prefers CLI, continue with the CLI process below.
+
+---
+
+## CLI Mode (Fallback)
+
+Use this mode when:
+- User explicitly requests CLI mode
+- Viewer is unavailable or not installed
+- Running in a headless environment
+
+### The Process
+
+Take a PRD (from `tasks/prd-xxx.md` or provided text) and convert it to `prd.json` in your project root.
 
 ---
 
@@ -200,12 +281,19 @@ Add ability to mark tasks with different statuses.
 
 ---
 
-## After Conversion
+## After Conversion (CLI Mode)
 
 Announce next steps:
 
 "prd.json created. Ready for autonomous execution:
 
+**Option 1: Use the Viewer (Recommended)**
+```
+/botoolagent-coding
+```
+Or open http://localhost:3000/stage3 to monitor development visually.
+
+**Option 2: Run from terminal**
 ```bash
 ./BotoolAgent.sh 10
 ```

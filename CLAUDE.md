@@ -1,104 +1,104 @@
-# Botool Dev Agent Instructions
+# Botool 开发代理指令
 
-You are an autonomous coding agent working on the Botool project.
+你是一个在 Botool 项目上工作的自主编程代理。
 
-## Your Task
+## 你的任务
 
-1. Read the PRD at `prd.json` (in the same directory as this file)
-2. Read the progress log at `progress.txt` (check Codebase Patterns section first)
-3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
-4. Pick the **highest priority** dev task where `passes: false`
-5. Implement that single dev task
-6. Run quality checks (e.g., typecheck, lint, test - use whatever your project requires)
-7. Update CLAUDE.md files if you discover reusable patterns (see below)
-8. If checks pass, commit ALL changes with message: `feat: [Task ID] - [Task Title]`
-9. Update the PRD to set `passes: true` for the completed task
-10. Append your progress to `progress.txt`
+1. 读取本目录下的 `prd.json` 文件
+2. 读取 `progress.txt` 中的进度日志（先查看 Codebase Patterns 部分）
+3. 检查你是否在 PRD 中指定的 `branchName` 分支上。如果不是，切换到该分支或从 main 创建
+4. 选择优先级最高且 `passes: false` 的开发任务
+5. 实现该单个开发任务
+6. 运行质量检查（如 typecheck、lint、test - 使用项目所需的检查工具）
+7. 如果发现可复用的模式，更新 CLAUDE.md 文件（见下文）
+8. 如果检查通过，提交所有更改，提交信息格式：`feat: [任务ID] - [任务标题]`
+9. 更新 PRD，将已完成任务的 `passes` 设为 `true`
+10. 将进度追加到 `progress.txt`
 
-## Progress Report Format
+## 进度报告格式
 
-APPEND to progress.txt (never replace, always append):
+追加到 progress.txt（永远不要替换，只能追加）：
 ```
-## [Date/Time] - [Task ID]
-- What was implemented
-- Files changed
-- **Learnings for future iterations:**
-  - Patterns discovered (e.g., "this codebase uses X for Y")
-  - Gotchas encountered (e.g., "don't forget to update Z when changing W")
-  - Useful context (e.g., "the evaluation panel is in component X")
+## [日期/时间] - [任务ID]
+- 实现了什么
+- 修改了哪些文件
+- **未来迭代的经验教训：**
+  - 发现的模式（例如："这个代码库使用 X 来做 Y"）
+  - 遇到的坑（例如："修改 W 时不要忘记更新 Z"）
+  - 有用的上下文（例如："评估面板在组件 X 中"）
 ---
 ```
 
-The learnings section is critical - it helps future iterations avoid repeating mistakes and understand the codebase better.
+经验教训部分非常关键 - 它帮助未来的迭代避免重复错误并更好地理解代码库。
 
-## Consolidate Patterns
+## 整合模式
 
-If you discover a **reusable pattern** that future iterations should know, add it to the `## Codebase Patterns` section at the TOP of progress.txt (create it if it doesn't exist). This section should consolidate the most important learnings:
+如果你发现了未来迭代应该知道的**可复用模式**，将其添加到 progress.txt 顶部的 `## Codebase Patterns` 部分（如果不存在则创建）。这个部分应该整合最重要的经验：
 
 ```
 ## Codebase Patterns
-- Example: Use `sql<number>` template for aggregations
-- Example: Always use `IF NOT EXISTS` for migrations
-- Example: Export types from actions.ts for UI components
+- 示例：聚合查询使用 `sql<number>` 模板
+- 示例：迁移脚本始终使用 `IF NOT EXISTS`
+- 示例：从 actions.ts 导出类型供 UI 组件使用
 ```
 
-Only add patterns that are **general and reusable**, not task-specific details.
+只添加**通用且可复用**的模式，不要添加特定任务的细节。
 
-## Update CLAUDE.md Files
+## 更新 CLAUDE.md 文件
 
-Before committing, check if any edited files have learnings worth preserving in nearby CLAUDE.md files:
+提交前，检查修改的文件是否有值得保存到附近 CLAUDE.md 文件中的经验：
 
-1. **Identify directories with edited files** - Look at which directories you modified
-2. **Check for existing CLAUDE.md** - Look for CLAUDE.md in those directories or parent directories
-3. **Add valuable learnings** - If you discovered something future developers/agents should know:
-   - API patterns or conventions specific to that module
-   - Gotchas or non-obvious requirements
-   - Dependencies between files
-   - Testing approaches for that area
-   - Configuration or environment requirements
+1. **识别有修改文件的目录** - 查看你修改了哪些目录
+2. **检查是否有现有的 CLAUDE.md** - 在这些目录或父目录中查找
+3. **添加有价值的经验** - 如果你发现了未来开发者/代理应该知道的内容：
+   - 该模块特有的 API 模式或约定
+   - 坑或非显而易见的要求
+   - 文件之间的依赖关系
+   - 该区域的测试方法
+   - 配置或环境要求
 
-**Examples of good CLAUDE.md additions:**
-- "When modifying X, also update Y to keep them in sync"
-- "This module uses pattern Z for all API calls"
-- "Tests require the dev server running on PORT 3000"
-- "Field names must match the template exactly"
+**好的 CLAUDE.md 添加示例：**
+- "修改 X 时，也要更新 Y 以保持同步"
+- "这个模块的所有 API 调用都使用模式 Z"
+- "测试需要开发服务器在 PORT 3000 上运行"
+- "字段名必须与模板完全匹配"
 
-**Do NOT add:**
-- Task-specific implementation details
-- Temporary debugging notes
-- Information already in progress.txt
+**不要添加：**
+- 特定任务的实现细节
+- 临时调试笔记
+- progress.txt 中已有的信息
 
-Only update CLAUDE.md if you have **genuinely reusable knowledge** that would help future work in that directory.
+只有当你有**真正可复用的知识**能帮助该目录未来的工作时，才更新 CLAUDE.md。
 
-## Quality Requirements
+## 质量要求
 
-- ALL commits must pass your project's quality checks (typecheck, lint, test)
-- Do NOT commit broken code
-- Keep changes focused and minimal
-- Follow existing code patterns
+- 所有提交必须通过项目的质量检查（typecheck、lint、test）
+- 不要提交有问题的代码
+- 保持更改集中且精简
+- 遵循现有的代码模式
 
-## Browser Testing (If Available)
+## 浏览器测试（如果可用）
 
-For any task that changes UI, verify it works in the browser if you have browser testing tools configured (e.g., Playwright MCP):
+对于任何更改 UI 的任务，如果配置了浏览器测试工具（如 Playwright MCP），请在浏览器中验证：
 
-1. Navigate to the relevant page
-2. Verify the UI changes work as expected
-3. Take a screenshot if helpful for the progress log
+1. 导航到相关页面
+2. 验证 UI 更改按预期工作
+3. 如果对进度日志有帮助，截个图
 
-If no browser tools are available, note in your progress report that manual browser verification is needed.
+如果没有浏览器工具，在进度报告中注明需要手动浏览器验证。
 
-## Stop Condition
+## 停止条件
 
-After completing a dev task, check if ALL tasks have `passes: true`.
+完成开发任务后，检查是否所有任务的 `passes` 都为 `true`。
 
-If ALL tasks are complete and passing, reply with:
+如果所有任务都已完成并通过，回复：
 <promise>COMPLETE</promise>
 
-If there are still tasks with `passes: false`, end your response normally (another iteration will pick up the next task).
+如果还有 `passes: false` 的任务，正常结束你的回复（另一次迭代会处理下一个任务）。
 
-## Important
+## 重要提醒
 
-- Work on ONE task per iteration
-- Commit frequently
-- Keep CI green
-- Read the Codebase Patterns section in progress.txt before starting
+- 每次迭代只处理一个任务
+- 频繁提交
+- 保持 CI 绿色
+- 开始前先阅读 progress.txt 中的 Codebase Patterns 部分
