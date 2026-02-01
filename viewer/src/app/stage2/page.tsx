@@ -88,6 +88,9 @@ export default function Stage2Page() {
     setConversionProgress('');
     setConvertedPrd(null);
     setConversionError('');
+    // Reset task editor state
+    setEditableTasks([]);
+    setShowTaskEditor(false);
     try {
       const response = await fetch(`/api/prd/${prd.id}`);
       const data = await response.json();
