@@ -28,7 +28,7 @@ LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch"
 
 # Archive previous run if branch changed
 if [ -f "$PRD_FILE" ] && [ -f "$LAST_BRANCH_FILE" ]; then
-  CURRENT_BRANCH=$(jq -r '.branchName // empty' "$PRD_FILE" 2>/dev/null || echo "")
+  CURRENT_BRANCH=$(grep -o '"branchName": "[^"]*"' "$PRD_FILE" 2>/dev/null | sed 's/"branchName": "//;s/"$//' || echo "")
   LAST_BRANCH=$(cat "$LAST_BRANCH_FILE" 2>/dev/null || echo "")
 
   if [ -n "$CURRENT_BRANCH" ] && [ -n "$LAST_BRANCH" ] && [ "$CURRENT_BRANCH" != "$LAST_BRANCH" ]; then
@@ -53,7 +53,7 @@ fi
 
 # Track current branch
 if [ -f "$PRD_FILE" ]; then
-  CURRENT_BRANCH=$(jq -r '.branchName // empty' "$PRD_FILE" 2>/dev/null || echo "")
+  CURRENT_BRANCH=$(grep -o '"branchName": "[^"]*"' "$PRD_FILE" 2>/dev/null | sed 's/"branchName": "//;s/"$//' || echo "")
   if [ -n "$CURRENT_BRANCH" ]; then
     echo "$CURRENT_BRANCH" > "$LAST_BRANCH_FILE"
   fi
@@ -75,15 +75,33 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   echo "==============================================================="
 
   # Run Claude Code with the agent prompt
-  OUTPUT=$(claude --dangerously-skip-permissions --print < "$SCRIPT_DIR/CLAUDE.md" 2>&1 | tee /dev/stderr) || true
+  OUTPUT_FILE=$(mktemp)
+  # Run claude directly (no tee to avoid pipe blocking issues)
+  claude --dangerously-skip-permissions --print < "$SCRIPT_DIR/CLAUDE.md" > "$OUTPUT_FILE" 2>&1 || true
+  # Show output after completion
+  cat "$OUTPUT_FILE"
 
-  # Check for completion signal
-  if echo "$OUTPUT" | grep -q "<promise>COMPLETE</promise>"; then
+  # Check for completion by verifying all tasks pass in prd.json
+  # This is more reliable than pattern matching output
+  INCOMPLETE_TASKS=$(grep -c '"passes": false' "$PRD_FILE" 2>/dev/null || echo "1")
+  if [ "$INCOMPLETE_TASKS" = "0" ]; then
+    rm -f "$OUTPUT_FILE"
     echo ""
     echo "Botool Dev Agent completed all tasks!"
     echo "Completed at iteration $i of $MAX_ITERATIONS"
     exit 0
   fi
+
+  rm -f "$OUTPUT_FILE"
+
+  # Report progress after each iteration (using grep instead of jq for compatibility)
+  COMPLETED=$(grep -c '"passes": true' "$PRD_FILE" 2>/dev/null || echo "?")
+  TOTAL=$(grep -c '"id": "DT-' "$PRD_FILE" 2>/dev/null || echo "?")
+  LAST_TASK=$(grep -o '## [0-9-]* - DT-[0-9]*' "$PROGRESS_FILE" 2>/dev/null | tail -1 | grep -o 'DT-[0-9]*' || echo "?")
+  echo ""
+  echo ">>> Progress: $COMPLETED/$TOTAL tasks completed (last: $LAST_TASK)"
+  echo ">>> $(date '+%H:%M:%S')"
+  echo ""
 
   echo "Iteration $i complete. Continuing..."
   sleep 2

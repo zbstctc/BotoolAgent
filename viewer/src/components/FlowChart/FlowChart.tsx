@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useRef, useMemo, useState, useEffect } from 'react';
 import type { Node, Edge, NodeChange, EdgeChange, Connection } from '@xyflow/react';
 import {
   ReactFlow,
@@ -21,31 +21,97 @@ import { CustomNode } from './CustomNode';
 import { NoteNode } from './NoteNode';
 import { createNode, createEdge, createNoteNode, getEdgeVisibility } from './utils';
 import { ALL_STEPS, NOTES, POSITIONS, EDGE_CONNECTIONS } from './constants';
+import type { StepStatus } from './types';
 
 const nodeTypes = { custom: CustomNode, note: NoteNode };
 
-export function FlowChart() {
-  const [visibleCount, setVisibleCount] = useState(1);
+// Agent step represents which workflow phase the agent is in
+// 'idle' = not started, 'running' = in loop, 'done' = completed all tasks
+export type AgentPhase = 'idle' | 'running' | 'done';
+
+interface FlowChartProps {
+  agentPhase?: AgentPhase;
+  currentIteration?: number;
+  showControls?: boolean; // Whether to show step-by-step navigation controls
+}
+
+// Compute step status based on agent phase and iteration count
+function getStepStatus(stepIndex: number, agentPhase: AgentPhase, currentIteration: number): StepStatus {
+  // Steps 1-3 are setup: completed once agent is running or done
+  if (stepIndex < 3) {
+    return agentPhase === 'idle' ? 'pending' : 'completed';
+  }
+
+  // Step 10 (index 9) is "Done!" - only completed when all tasks are done
+  if (stepIndex === 9) {
+    return agentPhase === 'done' ? 'completed' : 'pending';
+  }
+
+  // Step 9 (index 8) is "More stories?" decision node
+  if (stepIndex === 8) {
+    if (agentPhase === 'done') return 'completed';
+    // After iterations, the decision was made (answered "Yes" to continue)
+    if (agentPhase === 'running' && currentIteration > 0) return 'completed';
+    return 'pending';
+  }
+
+  // Steps 4-8 (indexes 3-7) are the main loop steps
+  if (agentPhase === 'running') {
+    // Highlight step 4 (AI picks a story) as current during running
+    if (stepIndex === 3) return 'current';
+    // Other loop steps show as pending
+    return 'pending';
+  }
+
+  if (agentPhase === 'done') {
+    // All loop steps completed when done
+    return 'completed';
+  }
+
+  return 'pending';
+}
+
+// Helper to compute nodes based on positions, visibility count, and agent state
+function computeNodes(
+  count: number,
+  positions: Record<string, { x: number; y: number }>,
+  agentPhase: AgentPhase = 'idle',
+  currentIteration: number = 0
+): Node[] {
+  const stepNodes = ALL_STEPS.map((step, index) =>
+    createNode(step, index < count, positions[step.id], getStepStatus(index, agentPhase, currentIteration))
+  );
+  const noteNodes = NOTES.map(note => {
+    const noteVisible = count >= note.appearsWithStep;
+    return createNoteNode(note, noteVisible, positions[note.id]);
+  });
+  return [...stepNodes, ...noteNodes];
+}
+
+function computeEdges(count: number): Edge[] {
+  return EDGE_CONNECTIONS.map((conn) =>
+    createEdge(conn, getEdgeVisibility(conn, count, ALL_STEPS))
+  );
+}
+
+export function FlowChart({ agentPhase = 'idle', currentIteration = 0, showControls = false }: FlowChartProps) {
+  const [visibleCount, setVisibleCount] = useState(ALL_STEPS.length); // Show all steps by default
   const nodePositions = useRef<Record<string, { x: number; y: number }>>({ ...POSITIONS });
 
-  const getNodes = useCallback((count: number): Node[] => {
-    const stepNodes = ALL_STEPS.map((step, index) =>
-      createNode(step, index < count, nodePositions.current[step.id])
-    );
-    const noteNodes = NOTES.map(note => {
-      const noteVisible = count >= note.appearsWithStep;
-      return createNoteNode(note, noteVisible, nodePositions.current[note.id]);
-    });
-    return [...stepNodes, ...noteNodes];
-  }, []);
-
-  const initialNodes = getNodes(1);
-  const initialEdges = EDGE_CONNECTIONS.map((conn) =>
-    createEdge(conn, false)
+  // Compute initial values using useMemo with static positions (safe during render)
+  const initialNodes = useMemo(
+    () => computeNodes(ALL_STEPS.length, POSITIONS, agentPhase, currentIteration),
+    [agentPhase, currentIteration]
   );
+  const initialEdges = useMemo(() => computeEdges(ALL_STEPS.length), []);
 
   const [nodes, setNodes] = useNodesState(initialNodes);
   const [edges, setEdges] = useEdgesState(initialEdges);
+
+  // Update nodes when agentPhase or currentIteration changes
+  useEffect(() => {
+    setNodes(computeNodes(visibleCount, nodePositions.current, agentPhase, currentIteration));
+  }, [agentPhase, currentIteration, visibleCount, setNodes]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -95,42 +161,38 @@ export function FlowChart() {
       const newCount = visibleCount + 1;
       setVisibleCount(newCount);
 
-      setNodes(getNodes(newCount));
-      setEdges(
-        EDGE_CONNECTIONS.map((conn) =>
-          createEdge(conn, getEdgeVisibility(conn, newCount, ALL_STEPS))
-        )
-      );
+      // Access ref in event handler (safe)
+      setNodes(computeNodes(newCount, nodePositions.current, agentPhase, currentIteration));
+      setEdges(computeEdges(newCount));
     }
-  }, [visibleCount, setNodes, setEdges, getNodes]);
+  }, [visibleCount, setNodes, setEdges, agentPhase, currentIteration]);
 
   const handlePrev = useCallback(() => {
     if (visibleCount > 1) {
       const newCount = visibleCount - 1;
       setVisibleCount(newCount);
 
-      setNodes(getNodes(newCount));
-      setEdges(
-        EDGE_CONNECTIONS.map((conn) =>
-          createEdge(conn, getEdgeVisibility(conn, newCount, ALL_STEPS))
-        )
-      );
+      // Access ref in event handler (safe)
+      setNodes(computeNodes(newCount, nodePositions.current, agentPhase, currentIteration));
+      setEdges(computeEdges(newCount));
     }
-  }, [visibleCount, setNodes, setEdges, getNodes]);
+  }, [visibleCount, setNodes, setEdges, agentPhase, currentIteration]);
 
   const handleReset = useCallback(() => {
-    setVisibleCount(1);
+    setVisibleCount(ALL_STEPS.length);
     nodePositions.current = { ...POSITIONS };
-    setNodes(getNodes(1));
-    setEdges(EDGE_CONNECTIONS.map((conn) => createEdge(conn, false)));
-  }, [setNodes, setEdges, getNodes]);
+    setNodes(computeNodes(ALL_STEPS.length, POSITIONS, agentPhase, currentIteration));
+    setEdges(computeEdges(ALL_STEPS.length));
+  }, [setNodes, setEdges, agentPhase, currentIteration]);
 
   return (
     <div className="flowchart-container">
-      <div className="flowchart-header">
-        <h1>How Botool Agent Works</h1>
-        <p>Autonomous AI agent loop for completing PRDs</p>
-      </div>
+      {showControls && (
+        <div className="flowchart-header">
+          <h1>How Botool Agent Works</h1>
+          <p>Autonomous AI agent loop for completing PRDs</p>
+        </div>
+      )}
       <div className="flowchart-flow">
         <ReactFlow
           nodes={nodes}
@@ -143,10 +205,10 @@ export function FlowChart() {
           fitView
           fitViewOptions={{ padding: 0.2 }}
           nodesDraggable={true}
-          nodesConnectable={true}
-          edgesReconnectable={true}
+          nodesConnectable={showControls}
+          edgesReconnectable={showControls}
           elementsSelectable={true}
-          deleteKeyCode={['Backspace', 'Delete']}
+          deleteKeyCode={showControls ? ['Backspace', 'Delete'] : []}
           panOnDrag={true}
           panOnScroll={true}
           zoomOnScroll={true}
@@ -158,23 +220,27 @@ export function FlowChart() {
           <Controls showInteractive={false} />
         </ReactFlow>
       </div>
-      <div className="flowchart-controls">
-        <button onClick={handlePrev} disabled={visibleCount <= 1}>
-          Previous
-        </button>
-        <span className="flowchart-step-counter">
-          Step {visibleCount} of {ALL_STEPS.length}
-        </span>
-        <button onClick={handleNext} disabled={visibleCount >= ALL_STEPS.length}>
-          Next
-        </button>
-        <button onClick={handleReset} className="flowchart-reset-btn">
-          Reset
-        </button>
-      </div>
-      <div className="flowchart-instructions">
-        Click Next to reveal each step
-      </div>
+      {showControls && (
+        <>
+          <div className="flowchart-controls">
+            <button onClick={handlePrev} disabled={visibleCount <= 1}>
+              Previous
+            </button>
+            <span className="flowchart-step-counter">
+              Step {visibleCount} of {ALL_STEPS.length}
+            </span>
+            <button onClick={handleNext} disabled={visibleCount >= ALL_STEPS.length}>
+              Next
+            </button>
+            <button onClick={handleReset} className="flowchart-reset-btn">
+              Reset
+            </button>
+          </div>
+          <div className="flowchart-instructions">
+            Click Next to reveal each step
+          </div>
+        </>
+      )}
     </div>
   );
 }

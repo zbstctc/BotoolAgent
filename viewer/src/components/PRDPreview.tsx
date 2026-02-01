@@ -8,6 +8,10 @@ export interface PRDPreviewProps {
   title?: string;
   defaultCollapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
+  onSave?: () => void;
+  isSaving?: boolean;
+  saveSuccess?: boolean;
+  saveError?: string;
 }
 
 export function PRDPreview({
@@ -15,6 +19,10 @@ export function PRDPreview({
   title = 'PRD Preview',
   defaultCollapsed = false,
   onCollapsedChange,
+  onSave,
+  isSaving = false,
+  saveSuccess = false,
+  saveError,
 }: PRDPreviewProps) {
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
 
@@ -56,10 +64,51 @@ export function PRDPreview({
         {!isCollapsed && (
           <h2 className="text-sm font-medium text-neutral-700">{title}</h2>
         )}
-        {!isCollapsed && (
+        {!isCollapsed && onSave && content && (
+          <button
+            onClick={onSave}
+            disabled={isSaving || saveSuccess}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              saveSuccess
+                ? 'bg-green-100 text-green-700 cursor-default'
+                : isSaving
+                ? 'bg-neutral-100 text-neutral-400 cursor-wait'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            {saveSuccess ? (
+              <span className="flex items-center gap-1">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Saved
+              </span>
+            ) : isSaving ? (
+              'Saving...'
+            ) : (
+              'Save PRD'
+            )}
+          </button>
+        )}
+        {!isCollapsed && !onSave && (
           <div className="w-5" /> // Spacer for alignment
         )}
       </div>
+
+      {/* Success/Error Messages */}
+      {!isCollapsed && saveSuccess && (
+        <div className="mx-4 mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 flex items-center gap-2">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          PRD saved successfully! Redirecting to development planning...
+        </div>
+      )}
+      {!isCollapsed && saveError && (
+        <div className="mx-4 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          {saveError}
+        </div>
+      )}
 
       {/* Content */}
       {!isCollapsed && (

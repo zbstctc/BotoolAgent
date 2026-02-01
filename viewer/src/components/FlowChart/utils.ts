@@ -1,12 +1,13 @@
 import type { Node, Edge } from '@xyflow/react';
 import { MarkerType } from '@xyflow/react';
-import type { StepData, NoteData, EdgeConnection, CustomNodeData, NoteNodeData } from './types';
+import type { StepData, NoteData, EdgeConnection, CustomNodeData, NoteNodeData, StepStatus } from './types';
 import { NODE_WIDTH, NODE_HEIGHT, POSITIONS } from './constants';
 
 export function createNode(
   step: StepData,
   visible: boolean,
-  position?: { x: number; y: number }
+  position?: { x: number; y: number },
+  status?: StepStatus
 ): Node<CustomNodeData> {
   return {
     id: step.id,
@@ -16,6 +17,7 @@ export function createNode(
       title: step.label,
       description: step.description,
       phase: step.phase,
+      status: status || 'pending',
     },
     style: {
       width: NODE_WIDTH,

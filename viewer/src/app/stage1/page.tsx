@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { StageIndicator, ChatInterface, PRDPreview } from '@/components';
 import { useChat } from '@/hooks';
 
@@ -11,6 +12,11 @@ const INITIAL_MESSAGE = {
 };
 
 export default function Stage1Page() {
+  const router = useRouter();
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | undefined>();
+
   const {
     messages,
     isLoading,
@@ -43,6 +49,40 @@ export default function Stage1Page() {
     sendMessage(content);
   };
 
+  const handleSavePRD = useCallback(async () => {
+    if (!prdContent || isSaving) return;
+
+    setIsSaving(true);
+    setSaveError(undefined);
+
+    try {
+      const response = await fetch('/api/prd/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content: prdContent }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to save PRD');
+      }
+
+      setSaveSuccess(true);
+
+      // Auto-navigate to stage2 after a short delay
+      setTimeout(() => {
+        router.push(`/stage2?prd=${data.id}`);
+      }, 1500);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save PRD');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [prdContent, isSaving, router]);
+
   return (
     <div className="flex flex-col h-[calc(100vh-64px)]">
       {/* Stage Indicator */}
@@ -66,7 +106,13 @@ export default function Stage1Page() {
         </div>
 
         {/* Right: PRD Preview Area */}
-        <PRDPreview content={prdContent} />
+        <PRDPreview
+          content={prdContent}
+          onSave={handleSavePRD}
+          isSaving={isSaving}
+          saveSuccess={saveSuccess}
+          saveError={saveError}
+        />
       </div>
     </div>
   );

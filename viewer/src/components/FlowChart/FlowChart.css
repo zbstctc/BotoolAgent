@@ -125,6 +125,20 @@
   justify-content: center;
 }
 
+/* Current step highlight with pulse animation */
+.custom-node-current {
+  animation: flowchart-pulse 2s ease-in-out infinite;
+}
+
+@keyframes flowchart-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+  }
+}
+
 .react-flow__handle {
   width: 10px;
   height: 10px;

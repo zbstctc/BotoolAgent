@@ -1,12 +1,45 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { StageIndicator } from '@/components';
 import { useFileWatcher, parsePrdJson } from '@/hooks';
 import type { DevTask, PrdData } from '@/hooks';
-import { FlowChart } from '@/components/FlowChart';
+import { FlowChart, type AgentPhase } from '@/components/FlowChart';
 
 type TaskStatus = 'pending' | 'in-progress' | 'completed' | 'failed';
+type RightPanelTab = 'flowchart' | 'log' | 'changes' | 'commits';
+
+interface FileChange {
+  path: string;
+  status: 'added' | 'modified' | 'deleted' | 'renamed';
+  additions: number;
+  deletions: number;
+}
+
+interface GitChangesData {
+  branch: string;
+  changes: FileChange[];
+  totals: {
+    files: number;
+    additions: number;
+    deletions: number;
+  };
+}
+
+interface Commit {
+  hash: string;
+  shortHash: string;
+  message: string;
+  date: string;
+  author: string;
+  taskId: string | null;
+}
+
+interface GitCommitsData {
+  branch: string;
+  commits: Commit[];
+  count: number;
+}
 
 function getTaskStatus(task: DevTask, currentTaskId: string | null): TaskStatus {
   if (task.passes) return 'completed';
@@ -45,7 +78,11 @@ export default function Stage3Page() {
   const [progressLog, setProgressLog] = useState<string>('');
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
-  const [showFlowchart, setShowFlowchart] = useState(true);
+  const [activeTab, setActiveTab] = useState<RightPanelTab>('flowchart');
+  const [gitChanges, setGitChanges] = useState<GitChangesData | null>(null);
+  const [gitChangesLoading, setGitChangesLoading] = useState(false);
+  const [gitCommits, setGitCommits] = useState<GitCommitsData | null>(null);
+  const [gitCommitsLoading, setGitCommitsLoading] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   // Use file watcher to get real-time updates
@@ -93,6 +130,68 @@ export default function Stage3Page() {
     }
   }, [progressLog]);
 
+  // Fetch git changes
+  const fetchGitChanges = useCallback(async () => {
+    setGitChangesLoading(true);
+    try {
+      const response = await fetch('/api/git/changes');
+      if (response.ok) {
+        const data = await response.json();
+        setGitChanges(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch git changes:', error);
+    } finally {
+      setGitChangesLoading(false);
+    }
+  }, []);
+
+  // Fetch git changes on mount and when tab is switched to changes
+  useEffect(() => {
+    if (activeTab === 'changes' && !gitChanges) {
+      fetchGitChanges();
+    }
+  }, [activeTab, gitChanges, fetchGitChanges]);
+
+  // Refresh git changes periodically when on changes tab
+  useEffect(() => {
+    if (activeTab === 'changes') {
+      const interval = setInterval(fetchGitChanges, 10000); // Refresh every 10 seconds
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, fetchGitChanges]);
+
+  // Fetch git commits
+  const fetchGitCommits = useCallback(async () => {
+    setGitCommitsLoading(true);
+    try {
+      const response = await fetch('/api/git/commits');
+      if (response.ok) {
+        const data = await response.json();
+        setGitCommits(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch git commits:', error);
+    } finally {
+      setGitCommitsLoading(false);
+    }
+  }, []);
+
+  // Fetch commits when tab is switched to commits
+  useEffect(() => {
+    if (activeTab === 'commits' && !gitCommits) {
+      fetchGitCommits();
+    }
+  }, [activeTab, gitCommits, fetchGitCommits]);
+
+  // Refresh commits periodically when on commits tab
+  useEffect(() => {
+    if (activeTab === 'commits') {
+      const interval = setInterval(fetchGitCommits, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, fetchGitCommits]);
+
   // Task statistics
   const completedTasks = prdData?.devTasks.filter((t) => t.passes).length || 0;
   const inProgressTasks = currentTaskId ? 1 : 0;
@@ -105,6 +204,14 @@ export default function Stage3Page() {
   const iterationCount = progressLog
     ? (progressLog.match(/^## \d{4}-\d{2}-\d{2} - DT-\d+/gm) || []).length
     : 0;
+
+  // Determine agent phase for FlowChart highlighting
+  // 'idle' = no prd loaded, 'running' = tasks in progress, 'done' = all tasks completed
+  const agentPhase = !prdData
+    ? 'idle'
+    : completedTasks === totalTasks && totalTasks > 0
+    ? 'done'
+    : 'running';
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)]">
@@ -271,9 +378,9 @@ export default function Stage3Page() {
           {/* Tabs */}
           <div className="flex items-center gap-1 p-2 border-b border-neutral-200 bg-white">
             <button
-              onClick={() => setShowFlowchart(true)}
+              onClick={() => setActiveTab('flowchart')}
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                showFlowchart
+                activeTab === 'flowchart'
                   ? 'bg-neutral-900 text-white'
                   : 'text-neutral-600 hover:bg-neutral-100'
               }`}
@@ -281,14 +388,44 @@ export default function Stage3Page() {
               Flowchart
             </button>
             <button
-              onClick={() => setShowFlowchart(false)}
+              onClick={() => setActiveTab('log')}
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                !showFlowchart
+                activeTab === 'log'
                   ? 'bg-neutral-900 text-white'
                   : 'text-neutral-600 hover:bg-neutral-100'
               }`}
             >
               Progress Log
+            </button>
+            <button
+              onClick={() => setActiveTab('changes')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'changes'
+                  ? 'bg-neutral-900 text-white'
+                  : 'text-neutral-600 hover:bg-neutral-100'
+              }`}
+            >
+              Changes
+              {gitChanges && (
+                <span className="ml-1 px-1.5 py-0.5 text-xs rounded bg-neutral-200 text-neutral-700">
+                  {gitChanges.totals.files}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('commits')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'commits'
+                  ? 'bg-neutral-900 text-white'
+                  : 'text-neutral-600 hover:bg-neutral-100'
+              }`}
+            >
+              Commits
+              {gitCommits && (
+                <span className="ml-1 px-1.5 py-0.5 text-xs rounded bg-neutral-200 text-neutral-700">
+                  {gitCommits.count}
+                </span>
+              )}
             </button>
             {lastUpdated && (
               <span className="ml-auto text-xs text-neutral-400">
@@ -298,11 +435,12 @@ export default function Stage3Page() {
           </div>
 
           {/* Content */}
-          {showFlowchart ? (
+          {activeTab === 'flowchart' && (
             <div className="flex-1 overflow-hidden">
-              <FlowChart />
+              <FlowChart agentPhase={agentPhase as AgentPhase} currentIteration={iterationCount} />
             </div>
-          ) : (
+          )}
+          {activeTab === 'log' && (
             <div className="flex-1 overflow-auto p-4 bg-neutral-900">
               {progressLog ? (
                 <pre className="font-mono text-sm text-neutral-200 whitespace-pre-wrap">
@@ -312,6 +450,137 @@ export default function Stage3Page() {
               ) : (
                 <div className="flex items-center justify-center h-full">
                   <p className="text-neutral-500 text-sm">No progress log yet...</p>
+                </div>
+              )}
+            </div>
+          )}
+          {activeTab === 'changes' && (
+            <div className="flex-1 overflow-auto p-4 bg-white">
+              {gitChangesLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="animate-spin h-6 w-6 border-2 border-neutral-300 border-t-neutral-600 rounded-full" />
+                </div>
+              ) : gitChanges ? (
+                <div>
+                  {/* Summary */}
+                  <div className="flex items-center gap-4 mb-4 pb-4 border-b border-neutral-200">
+                    <div className="text-sm text-neutral-600">
+                      <span className="font-medium">{gitChanges.totals.files}</span> files changed
+                    </div>
+                    <div className="text-sm text-green-600">
+                      <span className="font-medium">+{gitChanges.totals.additions}</span>
+                    </div>
+                    <div className="text-sm text-red-600">
+                      <span className="font-medium">-{gitChanges.totals.deletions}</span>
+                    </div>
+                    <button
+                      onClick={fetchGitChanges}
+                      className="ml-auto text-xs text-neutral-500 hover:text-neutral-700"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+                  {/* File list */}
+                  <div className="space-y-1">
+                    {gitChanges.changes.map((change) => (
+                      <div
+                        key={change.path}
+                        className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-neutral-50"
+                      >
+                        {/* Status indicator */}
+                        <span
+                          className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                            change.status === 'added'
+                              ? 'bg-green-500'
+                              : change.status === 'deleted'
+                              ? 'bg-red-500'
+                              : 'bg-yellow-500'
+                          }`}
+                        />
+                        {/* File path */}
+                        <span className="flex-1 text-sm font-mono text-neutral-700 truncate">
+                          {change.path}
+                        </span>
+                        {/* Stats */}
+                        <div className="flex items-center gap-2 text-xs flex-shrink-0">
+                          {change.additions > 0 && (
+                            <span className="text-green-600">+{change.additions}</span>
+                          )}
+                          {change.deletions > 0 && (
+                            <span className="text-red-600">-{change.deletions}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-neutral-500 text-sm">No changes detected</p>
+                </div>
+              )}
+            </div>
+          )}
+          {activeTab === 'commits' && (
+            <div className="flex-1 overflow-auto p-4 bg-white">
+              {gitCommitsLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="animate-spin h-6 w-6 border-2 border-neutral-300 border-t-neutral-600 rounded-full" />
+                </div>
+              ) : gitCommits && gitCommits.commits.length > 0 ? (
+                <div>
+                  {/* Header */}
+                  <div className="flex items-center gap-4 mb-4 pb-4 border-b border-neutral-200">
+                    <div className="text-sm text-neutral-600">
+                      <span className="font-medium">{gitCommits.count}</span> commits on{' '}
+                      <span className="font-mono text-blue-600">{gitCommits.branch}</span>
+                    </div>
+                    <button
+                      onClick={fetchGitCommits}
+                      className="ml-auto text-xs text-neutral-500 hover:text-neutral-700"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+                  {/* Commits list */}
+                  <div className="space-y-3">
+                    {gitCommits.commits.map((commit) => (
+                      <div
+                        key={commit.hash}
+                        className="p-3 rounded-lg border border-neutral-200 hover:border-neutral-300 transition-colors"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="text-xs font-mono text-neutral-400 flex-shrink-0 mt-0.5">
+                            {commit.shortHash}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-neutral-900 font-medium">
+                              {commit.message}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              {commit.taskId && (
+                                <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                                  {commit.taskId}
+                                </span>
+                              )}
+                              <span className="text-xs text-neutral-400">
+                                {new Date(commit.date).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-neutral-500 text-sm">No commits found on this branch</p>
                 </div>
               )}
             </div>
