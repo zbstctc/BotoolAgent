@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
+import { CLIManager, CLIMessage } from '@/lib/cli-manager';
 
 // Path to project root (parent of viewer)
 const PROJECT_ROOT = path.join(process.cwd(), '..');
@@ -59,173 +60,163 @@ interface ConvertRequest {
   prdId: string;
 }
 
+/**
+ * PRD to JSON conversion endpoint - now uses CLI instead of direct Anthropic API calls.
+ * This endpoint converts a PRD markdown document to structured JSON and saves it to prd.json.
+ */
 export async function POST(request: NextRequest) {
   try {
     const body: ConvertRequest = await request.json();
     const { prdContent, prdId } = body;
 
     if (!prdContent) {
-      return NextResponse.json(
-        { error: 'PRD content is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'PRD content is required' }, { status: 400 });
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'ANTHROPIC_API_KEY is not configured' },
-        { status: 500 }
-      );
-    }
+    // Get working directory (project root, parent of viewer)
+    const workingDir = process.cwd().replace(/\/viewer$/, '');
 
-    // Call Anthropic API for conversion
-    const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 8192,
-        system: SYSTEM_PROMPT,
-        messages: [
-          {
-            role: 'user',
-            content: `Convert this PRD to JSON:\n\n${prdContent}`,
-          },
-        ],
-        stream: true,
-      }),
+    // Create CLI manager instance
+    const cliManager = new CLIManager({
+      workingDir,
     });
 
-    if (!anthropicResponse.ok) {
-      const errorText = await anthropicResponse.text();
-      console.error('Anthropic API error:', errorText);
-      return NextResponse.json(
-        { error: 'Failed to connect to AI service' },
-        { status: anthropicResponse.status }
-      );
-    }
-
-    // Create a transform stream to collect the response and emit progress
+    // Create a readable stream for SSE
     const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
+    let streamController: ReadableStreamDefaultController | null = null;
     let fullContent = '';
 
-    const transformStream = new TransformStream({
-      async transform(chunk, controller) {
-        const text = decoder.decode(chunk, { stream: true });
-        const lines = text.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') {
-              continue;
-            }
-
-            try {
-              const parsed = JSON.parse(data);
-
-              if (parsed.type === 'content_block_delta') {
-                const delta = parsed.delta;
-                if (delta?.type === 'text_delta' && delta.text) {
-                  fullContent += delta.text;
-                  // Emit progress event
-                  controller.enqueue(
-                    encoder.encode(
-                      `data: ${JSON.stringify({ type: 'progress', content: delta.text })}\n\n`
-                    )
-                  );
-                }
-              } else if (parsed.type === 'message_stop') {
-                // Conversion complete - try to parse and save JSON
-                try {
-                  // Extract JSON from response (in case there's any surrounding text)
-                  const jsonMatch = fullContent.match(/\{[\s\S]*\}/);
-                  if (!jsonMatch) {
-                    throw new Error('No valid JSON found in response');
-                  }
-
-                  const prdJson = JSON.parse(jsonMatch[0]);
-
-                  // Archive existing prd.json if it has a different branch
-                  await archiveIfNeeded(prdJson);
-
-                  // Write prd.json to project root
-                  const prdJsonPath = path.join(PROJECT_ROOT, 'prd.json');
-                  fs.writeFileSync(prdJsonPath, JSON.stringify(prdJson, null, 2));
-
-                  // Reset progress.txt with fresh header
-                  const progressPath = path.join(PROJECT_ROOT, 'progress.txt');
-                  const header = `# Botool Dev Agent Progress Log\nStarted: ${new Date().toLocaleString()}\n---\n\n## Codebase Patterns\n- (patterns will be added here as discovered)\n\n---\n`;
-                  fs.writeFileSync(progressPath, header);
-
-                  controller.enqueue(
-                    encoder.encode(
-                      `data: ${JSON.stringify({
-                        type: 'complete',
-                        prdJson,
-                        savedTo: prdJsonPath,
-                      })}\n\n`
-                    )
-                  );
-                } catch (parseError) {
-                  const errorMsg = parseError instanceof Error ? parseError.message : 'Unknown error';
-                  controller.enqueue(
-                    encoder.encode(
-                      `data: ${JSON.stringify({
-                        type: 'error',
-                        error: `Failed to parse JSON: ${errorMsg}`,
-                        rawContent: fullContent,
-                      })}\n\n`
-                    )
-                  );
-                }
-              } else if (parsed.type === 'error') {
-                controller.enqueue(
-                  encoder.encode(
-                    `data: ${JSON.stringify({
-                      type: 'error',
-                      error: parsed.error?.message || 'Unknown error',
-                    })}\n\n`
-                  )
-                );
-              }
-            } catch {
-              // Skip invalid JSON lines
-            }
-          }
-        }
+    const stream = new ReadableStream({
+      start(controller) {
+        streamController = controller;
+      },
+      cancel() {
+        cliManager.stop();
       },
     });
 
-    const responseBody = anthropicResponse.body;
-    if (!responseBody) {
-      return NextResponse.json(
-        { error: 'No response body' },
-        { status: 500 }
-      );
-    }
+    // Set up CLI event handlers
+    cliManager.on('message', async (msg: CLIMessage) => {
+      if (!streamController) return;
 
-    const stream = responseBody.pipeThrough(transformStream);
+      try {
+        if (msg.type === 'text' && msg.content) {
+          fullContent += msg.content;
+          // Emit progress event
+          streamController.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: 'progress', content: msg.content })}\n\n`)
+          );
+        } else if (msg.type === 'done') {
+          // Conversion complete - try to parse and save JSON
+          try {
+            // Extract JSON from response (in case there's any surrounding text)
+            const jsonMatch = fullContent.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) {
+              throw new Error('No valid JSON found in response');
+            }
+
+            const prdJson = JSON.parse(jsonMatch[0]);
+
+            // Archive existing prd.json if it has a different branch
+            await archiveIfNeeded(prdJson);
+
+            // Write prd.json to project root
+            const prdJsonPath = path.join(PROJECT_ROOT, 'prd.json');
+            fs.writeFileSync(prdJsonPath, JSON.stringify(prdJson, null, 2));
+
+            // Reset progress.txt with fresh header
+            const progressPath = path.join(PROJECT_ROOT, 'progress.txt');
+            const header = `# Botool Dev Agent Progress Log\nStarted: ${new Date().toLocaleString()}\n---\n\n## Codebase Patterns\n- (patterns will be added here as discovered)\n\n---\n`;
+            fs.writeFileSync(progressPath, header);
+
+            streamController.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: 'complete',
+                  prdJson,
+                  savedTo: prdJsonPath,
+                })}\n\n`
+              )
+            );
+          } catch (parseError) {
+            const errorMsg = parseError instanceof Error ? parseError.message : 'Unknown error';
+            streamController.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: 'error',
+                  error: `Failed to parse JSON: ${errorMsg}`,
+                  rawContent: fullContent,
+                })}\n\n`
+              )
+            );
+          }
+          streamController.close();
+        } else if (msg.type === 'error') {
+          streamController.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: 'error',
+                error: msg.error || 'Unknown error',
+              })}\n\n`
+            )
+          );
+          streamController.close();
+        }
+        // Ignore 'session' type messages
+      } catch {
+        // Controller may be closed
+      }
+    });
+
+    cliManager.on('error', (error: Error) => {
+      if (!streamController) return;
+
+      try {
+        streamController.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              type: 'error',
+              error: error.message,
+            })}\n\n`
+          )
+        );
+        streamController.close();
+      } catch {
+        // Controller may be closed
+      }
+    });
+
+    cliManager.on('exit', () => {
+      if (!streamController) return;
+
+      try {
+        streamController.close();
+      } catch {
+        // Controller may be closed
+      }
+    });
+
+    // Start CLI and send message
+    await cliManager.start({
+      systemPrompt: SYSTEM_PROMPT,
+    });
+
+    // Prepare the conversion request
+    const fullMessage = `[System Context]\n${SYSTEM_PROMPT}\n\n[User Message]\nConvert this PRD to JSON:\n\n${prdContent}`;
+
+    // Send the message to CLI
+    await cliManager.sendMessage(fullMessage);
 
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
       },
     });
   } catch (error) {
     console.error('Convert API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -247,7 +238,8 @@ async function archiveIfNeeded(newPrdJson: { branchName: string }) {
     }
 
     // Check if progress.txt has meaningful content
-    const hasProgress = fs.existsSync(progressPath) && fs.readFileSync(progressPath, 'utf-8').includes('## 20');
+    const hasProgress =
+      fs.existsSync(progressPath) && fs.readFileSync(progressPath, 'utf-8').includes('## 20');
 
     if (hasProgress) {
       // Create archive directory

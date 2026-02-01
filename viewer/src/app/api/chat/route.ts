@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
+import { CLIManager, CLIMessage } from '@/lib/cli-manager';
 
-// System prompt for PRD generation based on the BotoolAgent skill
+// System prompt for PRD generation (used when called via legacy /api/chat endpoint)
 const SYSTEM_PROMPT = `You are a PRD (Product Requirements Document) generation assistant for BotoolAgent. Your goal is to help users create well-structured PRDs through natural, collaborative dialogue.
 
 ## Your Approach
@@ -124,6 +125,11 @@ interface ChatRequest {
   messages: ChatMessage[];
 }
 
+/**
+ * Legacy /api/chat endpoint - now uses CLI instead of direct Anthropic API calls.
+ * This endpoint maintains backward compatibility with the original useChat hook.
+ * New code should use /api/cli/chat instead.
+ */
 export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json();
@@ -136,105 +142,114 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY is not configured' }), {
-        status: 500,
+    // Get the last user message (CLI mode works with single messages, not full history)
+    const lastUserMessage = messages.filter((m) => m.role === 'user').pop();
+    if (!lastUserMessage) {
+      return new Response(JSON.stringify({ error: 'No user message found' }), {
+        status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    // Convert messages to Anthropic format
-    const anthropicMessages = messages.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-    }));
+    // Get working directory (project root, parent of viewer)
+    const workingDir = process.cwd().replace(/\/viewer$/, '');
 
-    // Create streaming response from Anthropic
-    const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
-        system: SYSTEM_PROMPT,
-        messages: anthropicMessages,
-        stream: true,
-      }),
+    // Create CLI manager instance
+    const cliManager = new CLIManager({
+      workingDir,
     });
 
-    if (!anthropicResponse.ok) {
-      const errorText = await anthropicResponse.text();
-      console.error('Anthropic API error:', errorText);
-      return new Response(JSON.stringify({ error: 'Failed to connect to AI service' }), {
-        status: anthropicResponse.status,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Create a transform stream to convert Anthropic's streaming format to our SSE format
+    // Create a readable stream for SSE
     const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
+    let streamController: ReadableStreamDefaultController | null = null;
 
-    const transformStream = new TransformStream({
-      async transform(chunk, controller) {
-        const text = decoder.decode(chunk, { stream: true });
-        const lines = text.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') {
-              controller.enqueue(encoder.encode(`data: {"type": "done"}\n\n`));
-              continue;
-            }
-
-            try {
-              const parsed = JSON.parse(data);
-
-              // Handle different event types from Anthropic
-              if (parsed.type === 'content_block_delta') {
-                const delta = parsed.delta;
-                if (delta?.type === 'text_delta' && delta.text) {
-                  controller.enqueue(
-                    encoder.encode(`data: ${JSON.stringify({ type: 'text', content: delta.text })}\n\n`)
-                  );
-                }
-              } else if (parsed.type === 'message_stop') {
-                controller.enqueue(encoder.encode(`data: {"type": "done"}\n\n`));
-              } else if (parsed.type === 'error') {
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ type: 'error', error: parsed.error?.message || 'Unknown error' })}\n\n`)
-                );
-              }
-            } catch {
-              // Skip invalid JSON lines
-            }
-          }
-        }
+    const stream = new ReadableStream({
+      start(controller) {
+        streamController = controller;
+      },
+      cancel() {
+        cliManager.stop();
       },
     });
 
-    // Pipe Anthropic's response through our transform stream
-    const responseBody = anthropicResponse.body;
-    if (!responseBody) {
-      return new Response(JSON.stringify({ error: 'No response body' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    // Set up CLI event handlers
+    cliManager.on('message', (msg: CLIMessage) => {
+      if (!streamController) return;
+
+      try {
+        // Convert CLI message format to legacy format
+        if (msg.type === 'text') {
+          streamController.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: 'text', content: msg.content })}\n\n`)
+          );
+        } else if (msg.type === 'done') {
+          streamController.enqueue(encoder.encode(`data: {"type": "done"}\n\n`));
+          streamController.close();
+        } else if (msg.type === 'error') {
+          streamController.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: 'error', error: msg.error })}\n\n`)
+          );
+          streamController.close();
+        }
+        // Ignore 'session' type messages in legacy format
+      } catch {
+        // Controller may be closed
+      }
+    });
+
+    cliManager.on('error', (error: Error) => {
+      if (!streamController) return;
+
+      try {
+        streamController.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`)
+        );
+        streamController.close();
+      } catch {
+        // Controller may be closed
+      }
+    });
+
+    cliManager.on('exit', () => {
+      if (!streamController) return;
+
+      try {
+        streamController.close();
+      } catch {
+        // Controller may be closed
+      }
+    });
+
+    // Start CLI and send message
+    await cliManager.start({
+      systemPrompt: SYSTEM_PROMPT,
+    });
+
+    // Build context from conversation history for the CLI
+    const conversationContext = messages
+      .slice(0, -1) // Exclude the last user message (we'll send it separately)
+      .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+      .join('\n\n');
+
+    // Prepare message with conversation context
+    let fullMessage = lastUserMessage.content;
+    if (conversationContext) {
+      fullMessage = `[Conversation History]\n${conversationContext}\n\n[Current Message]\n${lastUserMessage.content}`;
     }
 
-    const stream = responseBody.pipeThrough(transformStream);
+    // Prepend system prompt for new conversations
+    if (messages.length === 1) {
+      fullMessage = `[System Context]\n${SYSTEM_PROMPT}\n\n[User Message]\n${lastUserMessage.content}`;
+    }
+
+    // Send the message to CLI
+    await cliManager.sendMessage(fullMessage);
 
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
       },
     });
   } catch (error) {
