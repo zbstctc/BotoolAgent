@@ -8,3 +8,4 @@ export type { Option, OptionCardProps } from "./OptionCard";
 export { PRDPreview } from "./PRDPreview";
 export type { PRDPreviewProps } from "./PRDPreview";
 export { TaskEditor } from "./TaskEditor";
+export { SessionResumeDialog } from "./SessionResumeDialog";

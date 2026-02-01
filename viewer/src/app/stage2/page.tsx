@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { StageIndicator, TaskEditor, ChatInterface } from '@/components';
+import { StageIndicator, TaskEditor, ChatInterface, SessionResumeDialog } from '@/components';
 import { useCliChat, CliChatMessage } from '@/hooks';
 
 interface PRDItem {
@@ -39,6 +39,12 @@ const INITIAL_MESSAGE: CliChatMessage = {
   content: 'Select a PRD from the list, then click "Convert to JSON" to start the conversion process. I can help you convert your PRD into structured development tasks.',
 };
 
+const RESUME_MESSAGE: CliChatMessage = {
+  id: '1',
+  role: 'assistant',
+  content: 'Welcome back! I\'ve loaded your previous conversation. Feel free to continue adjusting the tasks or convert the PRD again if needed.',
+};
+
 export default function Stage2Page() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -63,8 +69,15 @@ export default function Stage2Page() {
   // Agent start state
   const [isStartingAgent, setIsStartingAgent] = useState(false);
 
+  // Session resume state
+  const [showResumeDialog, setShowResumeDialog] = useState(false);
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+  const [pendingPrd, setPendingPrd] = useState<PRDItem | null>(null);
+
   // Store session ID for continuing conversation
   const sessionIdRef = useRef<string | undefined>(undefined);
+  // Track current PRD ID for session mapping
+  const currentPrdIdRef = useRef<string | undefined>(undefined);
 
   // CLI Chat hook for conversion
   const {
@@ -74,6 +87,7 @@ export default function Stage2Page() {
     sessionId,
     sendMessage,
     setMessages,
+    setSessionId,
   } = useCliChat({
     initialMessages: [INITIAL_MESSAGE],
     mode: 'convert',
@@ -84,6 +98,17 @@ export default function Stage2Page() {
     },
     onSessionIdChange: (newSessionId) => {
       sessionIdRef.current = newSessionId;
+      // Update session mapping if we have a PRD ID
+      if (currentPrdIdRef.current && newSessionId) {
+        fetch('/api/prd-sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prdId: currentPrdIdRef.current,
+            sessionId: newSessionId,
+          }),
+        }).catch(console.error);
+      }
     },
   });
 
@@ -177,21 +202,31 @@ export default function Stage2Page() {
   }
 
   async function handlePrdSelect(prd: PRDItem) {
-    setSelectedPrd(prd);
     setLoadingContent(true);
-    // Reset conversion state when selecting a new PRD
-    setConversionStatus('idle');
-    setConvertedPrd(null);
-    setConversionError('');
-    // Reset task editor state
-    setEditableTasks([]);
-    setShowTaskEditor(false);
-    // Reset chat messages
-    setMessages([INITIAL_MESSAGE]);
+
     try {
+      // Load PRD content first
       const response = await fetch(`/api/prd/${prd.id}`);
       const data = await response.json();
-      setPrdContent(data.content || '');
+      const content = data.content || '';
+
+      // Check for existing session
+      const sessionResponse = await fetch(`/api/prd-sessions?prdId=${prd.id}`);
+      if (sessionResponse.ok) {
+        const sessionData = await sessionResponse.json();
+        if (sessionData.sessionId) {
+          // Found existing session, ask user if they want to resume
+          setPendingSessionId(sessionData.sessionId);
+          setPendingPrd(prd);
+          setPrdContent(content);
+          setShowResumeDialog(true);
+          setLoadingContent(false);
+          return;
+        }
+      }
+
+      // No existing session, proceed normally
+      finishPrdSelection(prd, content, false);
     } catch (error) {
       console.error('Failed to fetch PRD content:', error);
       setPrdContent('Failed to load PRD content');
@@ -199,6 +234,56 @@ export default function Stage2Page() {
       setLoadingContent(false);
     }
   }
+
+  function finishPrdSelection(prd: PRDItem, content: string, resumeSession: boolean) {
+    setSelectedPrd(prd);
+    setPrdContent(content);
+    currentPrdIdRef.current = prd.id;
+
+    // Reset conversion state when selecting a new PRD
+    setConversionStatus('idle');
+    setConvertedPrd(null);
+    setConversionError('');
+    // Reset task editor state
+    setEditableTasks([]);
+    setShowTaskEditor(false);
+
+    if (resumeSession && pendingSessionId) {
+      // Resume existing session
+      setSessionId(pendingSessionId);
+      sessionIdRef.current = pendingSessionId;
+      setMessages([RESUME_MESSAGE]);
+    } else {
+      // Start fresh
+      setMessages([INITIAL_MESSAGE]);
+      // Clear session mapping if starting new
+      if (prd.id) {
+        fetch(`/api/prd-sessions?prdId=${prd.id}`, {
+          method: 'DELETE',
+        }).catch(console.error);
+      }
+    }
+  }
+
+  // Handle resume session
+  const handleResumeSession = useCallback(() => {
+    if (pendingPrd && prdContent) {
+      finishPrdSelection(pendingPrd, prdContent, true);
+    }
+    setShowResumeDialog(false);
+    setPendingSessionId(null);
+    setPendingPrd(null);
+  }, [pendingPrd, prdContent, pendingSessionId]);
+
+  // Handle start new session
+  const handleStartNewSession = useCallback(() => {
+    if (pendingPrd && prdContent) {
+      finishPrdSelection(pendingPrd, prdContent, false);
+    }
+    setShowResumeDialog(false);
+    setPendingSessionId(null);
+    setPendingPrd(null);
+  }, [pendingPrd, prdContent]);
 
   const handleConvert = useCallback(async () => {
     if (!selectedPrd || !prdContent || conversionStatus === 'converting' || isChatLoading) {
@@ -336,6 +421,14 @@ Output the result as a JSON code block with the following structure:
     <div className="flex flex-col h-[calc(100vh-64px)]">
       {/* Stage Indicator */}
       <StageIndicator currentStage={2} completedStages={[1]} />
+
+      {/* Session Resume Dialog */}
+      <SessionResumeDialog
+        isOpen={showResumeDialog}
+        prdName={pendingPrd?.name}
+        onResume={handleResumeSession}
+        onStartNew={handleStartNewSession}
+      />
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
