@@ -1,41 +1,44 @@
 'use client';
 
-import { useState } from 'react';
-import { StageIndicator, ChatInterface, Message } from '@/components';
+import { useState, useMemo } from 'react';
+import { StageIndicator, ChatInterface } from '@/components';
+import { useChat } from '@/hooks';
+
+const INITIAL_MESSAGE = {
+  id: '1',
+  role: 'assistant' as const,
+  content: 'Hi! I\'m here to help you create a **PRD** (Product Requirements Document).\n\nWhat would you like to build? Tell me about your project idea.',
+};
 
 export default function Stage1Page() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      role: 'assistant',
-      content: 'Hi! I\'m here to help you create a **PRD** (Product Requirements Document).\n\nWhat would you like to build? Tell me about your project idea.',
-    },
-  ]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [prdContent, setPrdContent] = useState<string>('');
+  const {
+    messages,
+    isLoading,
+    error,
+    sendMessage,
+  } = useChat({
+    initialMessages: [INITIAL_MESSAGE],
+    onError: (err) => console.error('Chat error:', err),
+  });
+
   const [isPrdCollapsed, setIsPrdCollapsed] = useState(false);
 
+  // Extract PRD content from messages when a PRD markdown block is detected
+  const prdContent = useMemo(() => {
+    // Look for PRD content in the latest assistant message
+    const lastAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant');
+    if (lastAssistantMessage) {
+      // Look for PRD markdown blocks
+      const prdMatch = lastAssistantMessage.content.match(/```markdown\n(# PRD:[\s\S]*?)```/);
+      if (prdMatch) {
+        return prdMatch[1];
+      }
+    }
+    return '';
+  }, [messages]);
+
   const handleSendMessage = (content: string) => {
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content,
-    };
-
-    setMessages((prev) => [...prev, newMessage]);
-
-    // TODO: Integrate with AI API in DT-012
-    // For now, simulate a response
-    setIsLoading(true);
-    setTimeout(() => {
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `Thanks for sharing! I'll help you flesh out the requirements.\n\n**To better understand your needs, let me ask:**\n\n1. Who is the target audience for this feature?\n2. What problem does it solve?\n3. Are there any technical constraints we should consider?`,
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-      setIsLoading(false);
-    }, 1500);
+    sendMessage(content);
   };
 
   return (
@@ -47,6 +50,11 @@ export default function Stage1Page() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Chat Area */}
         <div className="flex-1 flex flex-col border-r border-neutral-200">
+          {error && (
+            <div className="mx-4 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {error}
+            </div>
+          )}
           <ChatInterface
             messages={messages}
             onSendMessage={handleSendMessage}
