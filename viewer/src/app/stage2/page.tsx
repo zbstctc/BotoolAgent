@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { StageIndicator, TaskEditor } from '@/components';
+import { StageIndicator, TaskEditor, ChatInterface } from '@/components';
+import { useCliChat, CliChatMessage } from '@/hooks';
 
 interface PRDItem {
   id: string;
@@ -32,6 +33,12 @@ interface PrdJson {
 
 type ConversionStatus = 'idle' | 'converting' | 'success' | 'error';
 
+const INITIAL_MESSAGE: CliChatMessage = {
+  id: '1',
+  role: 'assistant',
+  content: 'Select a PRD from the list, then click "Convert to JSON" to start the conversion process. I can help you convert your PRD into structured development tasks.',
+};
+
 export default function Stage2Page() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -45,7 +52,6 @@ export default function Stage2Page() {
 
   // Conversion state
   const [conversionStatus, setConversionStatus] = useState<ConversionStatus>('idle');
-  const [conversionProgress, setConversionProgress] = useState<string>('');
   const [convertedPrd, setConvertedPrd] = useState<PrdJson | null>(null);
   const [conversionError, setConversionError] = useState<string>('');
 
@@ -56,6 +62,93 @@ export default function Stage2Page() {
 
   // Agent start state
   const [isStartingAgent, setIsStartingAgent] = useState(false);
+
+  // Store session ID for continuing conversation
+  const sessionIdRef = useRef<string | undefined>(undefined);
+
+  // CLI Chat hook for conversion
+  const {
+    messages,
+    isLoading: isChatLoading,
+    error: chatError,
+    sessionId,
+    sendMessage,
+    setMessages,
+  } = useCliChat({
+    initialMessages: [INITIAL_MESSAGE],
+    mode: 'convert',
+    onError: (err) => {
+      console.error('Chat error:', err);
+      setConversionError(err);
+      setConversionStatus('error');
+    },
+    onSessionIdChange: (newSessionId) => {
+      sessionIdRef.current = newSessionId;
+    },
+  });
+
+  // Keep ref in sync with sessionId state
+  if (sessionId && sessionIdRef.current !== sessionId) {
+    sessionIdRef.current = sessionId;
+  }
+
+  // Extract JSON from messages when conversion is in progress
+  const extractedJson = useMemo(() => {
+    if (conversionStatus !== 'converting') return null;
+
+    // Look through messages for JSON content
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message.role === 'assistant') {
+        // Look for JSON blocks
+        const jsonMatch = message.content.match(/```json\n([\s\S]*?)```/) ||
+                         message.content.match(/```\n(\{[\s\S]*?\})\n```/) ||
+                         message.content.match(/(\{[\s\S]*"devTasks"[\s\S]*\})/);
+        if (jsonMatch) {
+          try {
+            const parsed = JSON.parse(jsonMatch[1]);
+            if (parsed.devTasks && Array.isArray(parsed.devTasks)) {
+              return parsed as PrdJson;
+            }
+          } catch {
+            // Continue looking
+          }
+        }
+      }
+    }
+    return null;
+  }, [messages, conversionStatus]);
+
+  // When JSON is extracted, update state
+  useEffect(() => {
+    if (extractedJson && conversionStatus === 'converting' && !isChatLoading) {
+      setConvertedPrd(extractedJson);
+      setEditableTasks(extractedJson.devTasks);
+      setConversionStatus('success');
+      setShowTaskEditor(true);
+
+      // Save the JSON to prd.json
+      savePrdJson(extractedJson);
+    }
+  }, [extractedJson, conversionStatus, isChatLoading]);
+
+  async function savePrdJson(prdJson: PrdJson) {
+    try {
+      const response = await fetch('/api/prd/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(prdJson),
+      });
+
+      if (!response.ok) {
+        console.error('Failed to save prd.json');
+      }
+    } catch (error) {
+      console.error('Save prd.json error:', error);
+    }
+  }
 
   useEffect(() => {
     fetchPRDs();
@@ -88,12 +181,13 @@ export default function Stage2Page() {
     setLoadingContent(true);
     // Reset conversion state when selecting a new PRD
     setConversionStatus('idle');
-    setConversionProgress('');
     setConvertedPrd(null);
     setConversionError('');
     // Reset task editor state
     setEditableTasks([]);
     setShowTaskEditor(false);
+    // Reset chat messages
+    setMessages([INITIAL_MESSAGE]);
     try {
       const response = await fetch(`/api/prd/${prd.id}`);
       const data = await response.json();
@@ -107,75 +201,35 @@ export default function Stage2Page() {
   }
 
   const handleConvert = useCallback(async () => {
-    if (!selectedPrd || !prdContent || conversionStatus === 'converting') {
+    if (!selectedPrd || !prdContent || conversionStatus === 'converting' || isChatLoading) {
       return;
     }
 
     setConversionStatus('converting');
-    setConversionProgress('');
     setConvertedPrd(null);
     setConversionError('');
 
-    try {
-      const response = await fetch('/api/prd/convert', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prdContent,
-          prdId: selectedPrd.id,
-        }),
-      });
+    // Send the PRD content to CLI for conversion
+    const conversionPrompt = `Please convert this PRD to JSON format:
 
-      if (!response.ok) {
-        throw new Error('Failed to start conversion');
-      }
+${prdContent}
 
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('No response body');
-      }
+Output the result as a JSON code block with the following structure:
+\`\`\`json
+{
+  "project": "[Project Name]",
+  "branchName": "botool/[feature-name-kebab-case]",
+  "description": "[Feature description]",
+  "devTasks": [...]
+}
+\`\`\``;
 
-      const decoder = new TextDecoder();
-      let buffer = '';
+    sendMessage(conversionPrompt);
+  }, [selectedPrd, prdContent, conversionStatus, isChatLoading, sendMessage]);
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              if (data.type === 'progress') {
-                setConversionProgress((prev) => prev + data.content);
-              } else if (data.type === 'complete') {
-                setConvertedPrd(data.prdJson);
-                setEditableTasks(data.prdJson.devTasks);
-                setConversionStatus('success');
-                setShowTaskEditor(true);
-              } else if (data.type === 'error') {
-                setConversionError(data.error);
-                setConversionStatus('error');
-              }
-            } catch {
-              // Skip invalid JSON
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Conversion error:', error);
-      setConversionError(error instanceof Error ? error.message : 'Unknown error');
-      setConversionStatus('error');
-    }
-  }, [selectedPrd, prdContent, conversionStatus]);
+  const handleSendChatMessage = useCallback((content: string) => {
+    sendMessage(content);
+  }, [sendMessage]);
 
   const handleProceedToStage3 = useCallback(async () => {
     if (isStartingAgent) return;
@@ -349,7 +403,7 @@ export default function Stage2Page() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
-                <div className="text-3xl text-neutral-300 mb-2">📄</div>
+                <div className="text-3xl text-neutral-300 mb-2">&#128196;</div>
                 <p className="text-sm font-medium text-neutral-700">
                   No PRD documents
                 </p>
@@ -367,7 +421,7 @@ export default function Stage2Page() {
           </div>
         </div>
 
-        {/* Right: PRD Preview & Actions */}
+        {/* Middle: Chat / PRD Preview */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {selectedPrd ? (
             <>
@@ -392,50 +446,34 @@ export default function Stage2Page() {
                           : 'bg-green-600 hover:bg-green-700'
                       }`}
                     >
-                      {isStartingAgent ? 'Starting...' : 'Start Development →'}
+                      {isStartingAgent ? 'Starting...' : 'Start Development'}
                     </button>
                   )}
                   <button
                     onClick={handleConvert}
-                    disabled={conversionStatus === 'converting' || loadingContent}
+                    disabled={conversionStatus === 'converting' || loadingContent || isChatLoading}
                     className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                      conversionStatus === 'converting'
+                      conversionStatus === 'converting' || isChatLoading
                         ? 'bg-blue-100 text-blue-600 cursor-wait'
                         : conversionStatus === 'success'
                         ? 'bg-green-100 text-green-700'
                         : 'bg-blue-600 text-white hover:bg-blue-700'
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
-                    {conversionStatus === 'converting'
+                    {conversionStatus === 'converting' || isChatLoading
                       ? 'Converting...'
                       : conversionStatus === 'success'
-                      ? '✓ Converted'
-                      : 'Convert to JSON →'}
+                      ? 'Converted'
+                      : 'Convert to JSON'}
                   </button>
                 </div>
               </div>
 
-              {/* Conversion Progress / Success Banner */}
-              {conversionStatus === 'converting' && (
-                <div className="p-4 bg-blue-50 border-b border-blue-100">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full" />
-                    <span className="text-sm font-medium text-blue-700">
-                      Converting PRD to JSON...
-                    </span>
-                  </div>
-                  {conversionProgress && (
-                    <pre className="text-xs text-blue-600 font-mono max-h-32 overflow-auto bg-white/50 rounded p-2">
-                      {conversionProgress}
-                    </pre>
-                  )}
-                </div>
-              )}
-
+              {/* Success Banner */}
               {conversionStatus === 'success' && convertedPrd && (
                 <div className="p-3 bg-green-50 border-b border-green-100 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-green-600">✓</span>
+                    <span className="text-green-600">&#10003;</span>
                     <span className="text-sm font-medium text-green-700">
                       prd.json created
                     </span>
@@ -456,22 +494,23 @@ export default function Stage2Page() {
                       onClick={() => setShowTaskEditor(!showTaskEditor)}
                       className="text-xs text-neutral-600 hover:text-neutral-900 underline"
                     >
-                      {showTaskEditor ? 'View PRD' : 'Edit Tasks'}
+                      {showTaskEditor ? 'View Chat' : 'Edit Tasks'}
                     </button>
                   </div>
                 </div>
               )}
 
+              {/* Error Banner */}
               {conversionStatus === 'error' && (
                 <div className="p-4 bg-red-50 border-b border-red-100">
                   <div className="flex items-center gap-2">
-                    <span className="text-red-500 text-lg">✗</span>
+                    <span className="text-red-500 text-lg">&#10007;</span>
                     <span className="text-sm font-medium text-red-700">
                       Conversion failed
                     </span>
                   </div>
-                  {conversionError && (
-                    <p className="text-sm text-red-600 mt-2">{conversionError}</p>
+                  {(conversionError || chatError) && (
+                    <p className="text-sm text-red-600 mt-2">{conversionError || chatError}</p>
                   )}
                   <button
                     onClick={() => setConversionStatus('idle')}
@@ -492,7 +531,8 @@ export default function Stage2Page() {
                     isSaving={isSavingTasks}
                   />
                 </div>
-              ) : (
+              ) : conversionStatus === 'idle' && !isChatLoading ? (
+                // Show PRD Preview when idle
                 <div className="flex-1 overflow-auto p-6 bg-white">
                   {loadingContent ? (
                     <div className="animate-pulse space-y-3">
@@ -509,12 +549,22 @@ export default function Stage2Page() {
                     </pre>
                   )}
                 </div>
+              ) : (
+                // Show Chat Interface during/after conversion
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <ChatInterface
+                    messages={messages}
+                    onSendMessage={handleSendChatMessage}
+                    isLoading={isChatLoading}
+                    placeholder="Ask to adjust the tasks or provide more details..."
+                  />
+                </div>
               )}
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center bg-neutral-50">
               <div className="text-center px-4">
-                <div className="text-5xl text-neutral-200 mb-4">←</div>
+                <div className="text-5xl text-neutral-200 mb-4">&#8592;</div>
                 <p className="text-sm font-medium text-neutral-600">
                   Select a PRD from the list
                 </p>
