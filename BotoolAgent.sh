@@ -167,6 +167,10 @@ update_status() {
     cb_last_completed=$(grep -o '"lastCompletedCount": [0-9]*' "$CIRCUIT_BREAKER_STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
   fi
 
+  # 双条件验证状态（使用全局变量，如果已设置）
+  local dual_check_promise="${DUAL_CHECK_PROMISE:-false}"
+  local dual_check_tasks="${DUAL_CHECK_TASKS:-false}"
+
   cat > "$STATUS_FILE" << EOF
 {
   "status": "$status",
@@ -189,6 +193,10 @@ update_status() {
     "noProgressCount": $cb_no_progress_count,
     "threshold": $CIRCUIT_BREAKER_THRESHOLD,
     "lastCompletedCount": $cb_last_completed
+  },
+  "dualExitCheck": {
+    "promiseDetected": $( [ "$dual_check_promise" = "true" ] && echo "true" || echo "false" ),
+    "allTasksComplete": $( [ "$dual_check_tasks" = "true" ] && echo "true" || echo "false" )
   }
 }
 EOF
@@ -750,6 +758,117 @@ if [ -f "$PRD_FILE" ]; then
 fi
 
 # ============================================================================
+# 双条件退出验证 - 检测 <promise>COMPLETE</promise> 和 prd.json 状态
+# ============================================================================
+
+# 检测 Claude 输出中是否包含 COMPLETE 承诺
+# 参数: $1 - 输出文件路径
+# 返回: 0 = 检测到承诺, 1 = 未检测到
+check_complete_promise() {
+  local output_file="$1"
+
+  if [ ! -f "$output_file" ]; then
+    return 1
+  fi
+
+  # 检测 <promise>COMPLETE</promise> 标签
+  if grep -q '<promise>COMPLETE</promise>' "$output_file" 2>/dev/null; then
+    return 0
+  fi
+
+  return 1
+}
+
+# 检查 prd.json 中是否所有任务都完成
+# 返回: 0 = 全部完成, 1 = 有未完成任务
+check_all_tasks_complete() {
+  local incomplete_count=$(grep -c '"passes": false' "$PRD_FILE" 2>/dev/null) || incomplete_count=0
+
+  if [ "$incomplete_count" = "0" ]; then
+    return 0
+  fi
+
+  return 1
+}
+
+# 执行双条件退出验证
+# 参数: $1 - 输出文件路径
+# 返回: 0 = 应该退出（两个条件都满足）, 1 = 不应该退出
+# 设置全局变量:
+#   - DUAL_CHECK_PROMISE: 是否检测到 COMPLETE 承诺 (true/false)
+#   - DUAL_CHECK_TASKS: 是否所有任务完成 (true/false)
+verify_dual_exit_conditions() {
+  local output_file="$1"
+
+  DUAL_CHECK_PROMISE="false"
+  DUAL_CHECK_TASKS="false"
+
+  # 检查 COMPLETE 承诺
+  if check_complete_promise "$output_file"; then
+    DUAL_CHECK_PROMISE="true"
+    echo ">>> [双条件验证] ✓ 检测到 <promise>COMPLETE</promise>"
+  else
+    echo ">>> [双条件验证] ✗ 未检测到 <promise>COMPLETE</promise>"
+  fi
+
+  # 检查任务完成状态
+  if check_all_tasks_complete; then
+    DUAL_CHECK_TASKS="true"
+    local completed=$(grep -c '"passes": true' "$PRD_FILE" 2>/dev/null || echo "0")
+    echo ">>> [双条件验证] ✓ prd.json 中所有 $completed 个任务已完成"
+  else
+    local incomplete=$(grep -c '"passes": false' "$PRD_FILE" 2>/dev/null || echo "?")
+    echo ">>> [双条件验证] ✗ prd.json 中还有 $incomplete 个未完成任务"
+  fi
+
+  # 双条件验证结果
+  if [ "$DUAL_CHECK_PROMISE" = "true" ] && [ "$DUAL_CHECK_TASKS" = "true" ]; then
+    echo ">>> [双条件验证] ✓✓ 两个条件都满足，可以安全退出"
+    return 0
+  fi
+
+  # 只满足一个条件的警告
+  if [ "$DUAL_CHECK_PROMISE" = "true" ] && [ "$DUAL_CHECK_TASKS" = "false" ]; then
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════════╗"
+    echo "║  ⚠️  警告：条件不一致                                            ║"
+    echo "╠══════════════════════════════════════════════════════════════════╣"
+    echo "║  Claude 声称任务已完成（输出 COMPLETE 承诺）                    ║"
+    echo "║  但 prd.json 中还有未完成的任务                                 ║"
+    echo "║                                                                  ║"
+    echo "║  可能原因：                                                      ║"
+    echo "║    - Claude 忘记更新 prd.json 中的 passes 字段                  ║"
+    echo "║    - Claude 对任务完成的判断有误                                ║"
+    echo "║                                                                  ║"
+    echo "║  继续下一次迭代尝试修正...                                      ║"
+    echo "╚══════════════════════════════════════════════════════════════════╝"
+    echo ""
+  fi
+
+  if [ "$DUAL_CHECK_PROMISE" = "false" ] && [ "$DUAL_CHECK_TASKS" = "true" ]; then
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════════╗"
+    echo "║  ⚠️  警告：条件不一致                                            ║"
+    echo "╠══════════════════════════════════════════════════════════════════╣"
+    echo "║  prd.json 中所有任务已标记为完成                                ║"
+    echo "║  但 Claude 没有输出 COMPLETE 承诺                               ║"
+    echo "║                                                                  ║"
+    echo "║  可能原因：                                                      ║"
+    echo "║    - 任务是在之前的迭代中完成的                                 ║"
+    echo "║    - Claude 可能还有后续工作要做                                ║"
+    echo "║    - Claude 忘记输出 COMPLETE 标记                              ║"
+    echo "║                                                                  ║"
+    echo "║  由于所有任务都已完成，将退出循环                               ║"
+    echo "╚══════════════════════════════════════════════════════════════════╝"
+    echo ""
+    # 所有任务都完成时，即使没有 COMPLETE 承诺也退出
+    return 0
+  fi
+
+  return 1
+}
+
+# ============================================================================
 # 主循环
 # ============================================================================
 echo ""
@@ -850,9 +969,10 @@ for i in $(seq 1 $MAX_ITERATIONS); do
       continue
     fi
 
-    # 成功 - 显示输出并跳出重试循环
+    # 成功 - 显示输出
     cat "$OUTPUT_FILE"
-    rm -f "$OUTPUT_FILE"
+    # 保存输出文件路径用于双条件验证（稍后删除）
+    LAST_OUTPUT_FILE="$OUTPUT_FILE"
     iteration_success=true
     break
   done
@@ -860,21 +980,36 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   if [ "$iteration_success" = false ]; then
     echo ">>> 第 $i 次迭代的所有 $MAX_RETRIES 次重试都失败了"
     update_status "failed" "第 $i 次迭代的所有重试都失败"
+    LAST_OUTPUT_FILE=""
     # 继续下一次迭代
   fi
 
-  # 检查是否完成（验证 prd.json 中所有任务都通过）
-  # 注意：grep -c 在计数为 0 时返回退出码 1，所以我们显式处理这种情况
-  INCOMPLETE_TASKS=$(grep -c '"passes": false' "$PRD_FILE" 2>/dev/null) || INCOMPLETE_TASKS=0
-  if [ "$INCOMPLETE_TASKS" = "0" ]; then
+  # 检查是否完成 - 使用双条件验证
+  echo ""
+  echo ">>> 执行双条件退出验证..."
+
+  if verify_dual_exit_conditions "$LAST_OUTPUT_FILE"; then
+    # 清理临时文件
+    [ -n "$LAST_OUTPUT_FILE" ] && rm -f "$LAST_OUTPUT_FILE"
+
     echo ""
     echo "==============================================================="
-    echo "  Botool 开发代理已完成所有任务！"
+    if [ "$DUAL_CHECK_PROMISE" = "true" ] && [ "$DUAL_CHECK_TASKS" = "true" ]; then
+      echo "  ✓✓ Botool 开发代理已完成所有任务！"
+      echo "  双条件验证通过：COMPLETE 承诺 + 任务状态"
+    else
+      echo "  ✓ Botool 开发代理已完成所有任务！"
+      echo "  单条件通过：所有任务已标记完成"
+    fi
     echo "  在第 $i 次迭代完成（共 $MAX_ITERATIONS 次）"
     echo "==============================================================="
     update_status "complete" "所有任务已完成"
     exit 0
   fi
+
+  # 清理临时文件
+  [ -n "$LAST_OUTPUT_FILE" ] && rm -f "$LAST_OUTPUT_FILE"
+  LAST_OUTPUT_FILE=""
 
   # 每次迭代后报告进度
   COMPLETED=$(grep -c '"passes": true' "$PRD_FILE" 2>/dev/null || echo "?")
