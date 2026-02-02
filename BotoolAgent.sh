@@ -17,10 +17,16 @@
 # 进程管理 - 确保脚本退出时清理它启动的进程
 # ============================================================================
 CLAUDE_PID=""
+NETWORK_MONITOR_PID=""
 
 cleanup() {
   echo ""
   echo ">>> 收到退出信号，正在清理..."
+  if [ -n "$NETWORK_MONITOR_PID" ] && kill -0 "$NETWORK_MONITOR_PID" 2>/dev/null; then
+    echo ">>> 终止网络监控进程 (PID: $NETWORK_MONITOR_PID)"
+    kill "$NETWORK_MONITOR_PID" 2>/dev/null
+    wait "$NETWORK_MONITOR_PID" 2>/dev/null
+  fi
   if [ -n "$CLAUDE_PID" ] && kill -0 "$CLAUDE_PID" 2>/dev/null; then
     echo ">>> 终止 Claude 进程 (PID: $CLAUDE_PID)"
     kill "$CLAUDE_PID" 2>/dev/null
@@ -50,6 +56,16 @@ RATE_LIMIT_MAX_CALLS=100    # 时间窗口内最大调用次数
 RATE_LIMIT_WINDOW=3600      # 时间窗口（秒），默认 1 小时
 RATE_LIMIT_STATE_FILE=""    # Rate Limiting 状态文件（启动时设置）
 
+# Circuit Breaker 配置
+CIRCUIT_BREAKER_ENABLED=true        # 是否启用 Circuit Breaker
+CIRCUIT_BREAKER_THRESHOLD=3         # 连续无进展迭代次数阈值
+CIRCUIT_BREAKER_STATE_FILE=""       # Circuit Breaker 状态文件（启动时设置）
+
+# 运行时网络健康检查配置
+NETWORK_HEALTH_CHECK_ENABLED=true   # 是否启用运行时网络检查
+NETWORK_HEALTH_CHECK_INTERVAL=60    # 检查间隔（秒）
+NETWORK_NO_ACTIVITY_THRESHOLD=300   # 无网络活动阈值（秒），超过则重启
+
 # ============================================================================
 # 加载 .botoolrc 配置文件（如果存在）
 # ============================================================================
@@ -69,6 +85,8 @@ load_config() {
   [ -n "$BOTOOL_RATE_LIMIT_ENABLED" ] && RATE_LIMIT_ENABLED="$BOTOOL_RATE_LIMIT_ENABLED"
   [ -n "$BOTOOL_RATE_LIMIT_MAX_CALLS" ] && RATE_LIMIT_MAX_CALLS="$BOTOOL_RATE_LIMIT_MAX_CALLS"
   [ -n "$BOTOOL_RATE_LIMIT_WINDOW" ] && RATE_LIMIT_WINDOW="$BOTOOL_RATE_LIMIT_WINDOW"
+  [ -n "$BOTOOL_CIRCUIT_BREAKER_ENABLED" ] && CIRCUIT_BREAKER_ENABLED="$BOTOOL_CIRCUIT_BREAKER_ENABLED"
+  [ -n "$BOTOOL_CIRCUIT_BREAKER_THRESHOLD" ] && CIRCUIT_BREAKER_THRESHOLD="$BOTOOL_CIRCUIT_BREAKER_THRESHOLD"
 }
 
 # ============================================================================
@@ -105,6 +123,7 @@ LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch"
 LOG_DIR="$SCRIPT_DIR/logs"
 STATUS_FILE="$SCRIPT_DIR/.agent-status"
 RATE_LIMIT_STATE_FILE="$SCRIPT_DIR/.rate-limit-state"
+CIRCUIT_BREAKER_STATE_FILE="$SCRIPT_DIR/.circuit-breaker-state"
 
 # 创建日志目录
 mkdir -p "$LOG_DIR"
@@ -140,6 +159,14 @@ update_status() {
     [ $rate_limit_window_remaining -lt 0 ] && rate_limit_window_remaining=0
   fi
 
+  # Circuit Breaker 状态
+  local cb_no_progress_count=0
+  local cb_last_completed=0
+  if [ "$CIRCUIT_BREAKER_ENABLED" = "true" ] && [ -f "$CIRCUIT_BREAKER_STATE_FILE" ]; then
+    cb_no_progress_count=$(grep -o '"noProgressCount": [0-9]*' "$CIRCUIT_BREAKER_STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
+    cb_last_completed=$(grep -o '"lastCompletedCount": [0-9]*' "$CIRCUIT_BREAKER_STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
+  fi
+
   cat > "$STATUS_FILE" << EOF
 {
   "status": "$status",
@@ -156,6 +183,12 @@ update_status() {
     "calls": $rate_limit_calls,
     "maxCalls": $rate_limit_max,
     "windowRemaining": $rate_limit_window_remaining
+  },
+  "circuitBreaker": {
+    "enabled": $( [ "$CIRCUIT_BREAKER_ENABLED" = "true" ] && echo "true" || echo "false" ),
+    "noProgressCount": $cb_no_progress_count,
+    "threshold": $CIRCUIT_BREAKER_THRESHOLD,
+    "lastCompletedCount": $cb_last_completed
   }
 }
 EOF
@@ -342,6 +375,121 @@ record_api_call() {
   update_rate_limit_state $RATE_WINDOW_START $RATE_CALL_COUNT $RATE_LAST_CALL
 }
 
+# ============================================================================
+# Circuit Breaker 功能 - 连续无进展时自动停止
+# ============================================================================
+
+# 初始化 Circuit Breaker 状态
+init_circuit_breaker() {
+  if [ "$CIRCUIT_BREAKER_ENABLED" != "true" ]; then
+    return 0
+  fi
+
+  # 获取当前完成的任务数
+  local current_completed=$(grep -c '"passes": true' "$PRD_FILE" 2>/dev/null) || current_completed=0
+
+  # 如果状态文件不存在，创建初始状态
+  if [ ! -f "$CIRCUIT_BREAKER_STATE_FILE" ]; then
+    cat > "$CIRCUIT_BREAKER_STATE_FILE" << EOF
+{
+  "lastCompletedCount": $current_completed,
+  "noProgressCount": 0,
+  "lastCheckIteration": 0
+}
+EOF
+    echo ">>> Circuit Breaker 已初始化: 连续 $CIRCUIT_BREAKER_THRESHOLD 次无进展将停止"
+  fi
+}
+
+# 读取 Circuit Breaker 状态
+read_circuit_breaker_state() {
+  if [ ! -f "$CIRCUIT_BREAKER_STATE_FILE" ]; then
+    init_circuit_breaker
+  fi
+
+  CB_LAST_COMPLETED=$(grep -o '"lastCompletedCount": [0-9]*' "$CIRCUIT_BREAKER_STATE_FILE" | grep -o '[0-9]*')
+  CB_NO_PROGRESS_COUNT=$(grep -o '"noProgressCount": [0-9]*' "$CIRCUIT_BREAKER_STATE_FILE" | grep -o '[0-9]*')
+  CB_LAST_CHECK_ITERATION=$(grep -o '"lastCheckIteration": [0-9]*' "$CIRCUIT_BREAKER_STATE_FILE" | grep -o '[0-9]*')
+}
+
+# 更新 Circuit Breaker 状态
+update_circuit_breaker_state() {
+  local last_completed=$1
+  local no_progress_count=$2
+  local last_check_iteration=$3
+
+  cat > "$CIRCUIT_BREAKER_STATE_FILE" << EOF
+{
+  "lastCompletedCount": $last_completed,
+  "noProgressCount": $no_progress_count,
+  "lastCheckIteration": $last_check_iteration
+}
+EOF
+}
+
+# 显示 Circuit Breaker 状态
+show_circuit_breaker_status() {
+  if [ "$CIRCUIT_BREAKER_ENABLED" != "true" ]; then
+    return 0
+  fi
+
+  read_circuit_breaker_state
+
+  echo ">>> Circuit Breaker 状态:"
+  echo "    上次记录完成数: $CB_LAST_COMPLETED"
+  echo "    连续无进展次数: $CB_NO_PROGRESS_COUNT/$CIRCUIT_BREAKER_THRESHOLD"
+}
+
+# 检查 Circuit Breaker - 每次迭代后调用
+# 返回 0 表示可以继续，返回 1 表示应该停止
+check_circuit_breaker() {
+  if [ "$CIRCUIT_BREAKER_ENABLED" != "true" ]; then
+    return 0
+  fi
+
+  read_circuit_breaker_state
+
+  # 获取当前完成的任务数
+  local current_completed=$(grep -c '"passes": true' "$PRD_FILE" 2>/dev/null) || current_completed=0
+
+  echo ">>> Circuit Breaker 检查: 完成任务数 $CB_LAST_COMPLETED -> $current_completed"
+
+  if [ "$current_completed" -gt "$CB_LAST_COMPLETED" ]; then
+    # 有进展，重置计数器
+    echo ">>> ✓ 有进展（新增 $((current_completed - CB_LAST_COMPLETED)) 个任务完成），重置 Circuit Breaker"
+    update_circuit_breaker_state $current_completed 0 $CURRENT_ITERATION
+    return 0
+  else
+    # 无进展，增加计数
+    CB_NO_PROGRESS_COUNT=$((CB_NO_PROGRESS_COUNT + 1))
+    update_circuit_breaker_state $current_completed $CB_NO_PROGRESS_COUNT $CURRENT_ITERATION
+
+    echo ">>> ⚠️  无进展（连续 $CB_NO_PROGRESS_COUNT 次）"
+
+    if [ "$CB_NO_PROGRESS_COUNT" -ge "$CIRCUIT_BREAKER_THRESHOLD" ]; then
+      echo ""
+      echo "╔══════════════════════════════════════════════════════════════════╗"
+      echo "║  ⛔ Circuit Breaker 触发 - 停止执行                              ║"
+      echo "╠══════════════════════════════════════════════════════════════════╣"
+      echo "║  连续 $CB_NO_PROGRESS_COUNT 次迭代没有完成新的任务                             "
+      echo "║  这可能表示：                                                    ║"
+      echo "║    - 代理遇到了无法自动解决的问题                               ║"
+      echo "║    - 任务需求不明确或超出代理能力                               ║"
+      echo "║    - 需要人工介入检查                                           ║"
+      echo "╠══════════════════════════════════════════════════════════════════╣"
+      echo "║  建议操作：                                                      ║"
+      echo "║    1. 检查 progress.txt 和日志了解详情                          ║"
+      echo "║    2. 检查 prd.json 中待完成的任务                              ║"
+      echo "║    3. 手动解决问题后重新运行                                    ║"
+      echo "╚══════════════════════════════════════════════════════════════════╝"
+      echo ""
+      return 1
+    fi
+
+    return 0
+  fi
+}
+
 # 后台监控进程健康
 # 如果进程看起来卡住了返回 1
 monitor_health() {
@@ -376,6 +524,49 @@ monitor_health() {
   return 0
 }
 
+# ============================================================================
+# 运行时网络健康检查
+# ============================================================================
+
+# 检查进程是否有活跃的网络连接
+check_process_network() {
+  local pid=$1
+  # 检查进程是否有 TCP 连接（排除 CLOSE_WAIT 等非活跃状态）
+  lsof -p $pid 2>/dev/null | grep -E "TCP.*ESTABLISHED" > /dev/null 2>&1
+  return $?
+}
+
+# 后台网络健康监控
+# 如果进程长时间没有网络活动，返回 1
+NETWORK_MONITOR_PID=""
+
+monitor_network_health() {
+  local pid=$1
+  local no_network_count=0
+  local checks_needed=$((NETWORK_NO_ACTIVITY_THRESHOLD / NETWORK_HEALTH_CHECK_INTERVAL))
+
+  while kill -0 $pid 2>/dev/null; do
+    sleep $NETWORK_HEALTH_CHECK_INTERVAL
+
+    if check_process_network $pid; then
+      # 有网络活动，重置计数
+      no_network_count=0
+    else
+      # 没有网络活动
+      ((no_network_count++))
+      echo ">>> [网络监控] Claude PID $pid 无网络活动 ($((no_network_count * NETWORK_HEALTH_CHECK_INTERVAL))秒)"
+
+      if [ $no_network_count -ge $checks_needed ]; then
+        echo ">>> [网络监控] ⚠️  超过 ${NETWORK_NO_ACTIVITY_THRESHOLD}秒 无网络活动，终止进程"
+        kill -9 $pid 2>/dev/null
+        return 1
+      fi
+    fi
+  done
+
+  return 0
+}
+
 # 运行 claude 并带有超时（简化版，更可靠）
 run_claude_with_monitoring() {
   local output_file=$1
@@ -396,14 +587,29 @@ run_claude_with_monitoring() {
     CLAUDE_PID=$!
     wait $CLAUDE_PID
   else
-    # 没有 timeout 命令，直接运行（依赖 Claude 自己的机制）
-    echo ">>> 警告：未找到 timeout 命令，直接运行 Claude（建议安装: brew install coreutils）"
+    # 没有 timeout 命令，使用网络健康检查作为备用保护
+    echo ">>> 警告：未找到 timeout 命令（建议安装: brew install coreutils）"
     "$CLAUDE_CMD" --dangerously-skip-permissions --print < "$SCRIPT_DIR/CLAUDE.md" > "$output_file" 2>&1 &
     CLAUDE_PID=$!
     echo ">>> Claude PID: $CLAUDE_PID"
+
+    # 启动网络健康监控（如果启用）
+    if [ "$NETWORK_HEALTH_CHECK_ENABLED" = "true" ]; then
+      echo ">>> 启动网络健康监控（${NETWORK_NO_ACTIVITY_THRESHOLD}秒无活动将重启）"
+      monitor_network_health $CLAUDE_PID &
+      NETWORK_MONITOR_PID=$!
+    fi
+
     wait $CLAUDE_PID
   fi
   local exit_code=$?
+
+  # 停止网络监控（如果在运行）
+  if [ -n "$NETWORK_MONITOR_PID" ] && kill -0 "$NETWORK_MONITOR_PID" 2>/dev/null; then
+    kill "$NETWORK_MONITOR_PID" 2>/dev/null
+    wait "$NETWORK_MONITOR_PID" 2>/dev/null
+  fi
+  NETWORK_MONITOR_PID=""
 
   # 清除 PID 记录
   CLAUDE_PID=""
@@ -556,10 +762,23 @@ if [ "$RATE_LIMIT_ENABLED" = "true" ]; then
 else
   echo "  Rate Limiting: 已禁用"
 fi
+if [ "$CIRCUIT_BREAKER_ENABLED" = "true" ]; then
+  echo "  Circuit Breaker: 连续${CIRCUIT_BREAKER_THRESHOLD}次无进展将停止"
+else
+  echo "  Circuit Breaker: 已禁用"
+fi
+if [ "$NETWORK_HEALTH_CHECK_ENABLED" = "true" ]; then
+  echo "  网络健康检查: ${NETWORK_NO_ACTIVITY_THRESHOLD}秒无活动将重启"
+else
+  echo "  网络健康检查: 已禁用"
+fi
 echo ""
 
 # 初始化 Rate Limiting
 init_rate_limit
+
+# 初始化 Circuit Breaker
+init_circuit_breaker
 
 CURRENT_ITERATION=0
 
@@ -667,6 +886,14 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   echo ""
 
   update_status "iteration_complete" "第 $i 次迭代完成，$COMPLETED/$TOTAL 个任务已完成"
+
+  # 检查 Circuit Breaker（只在迭代成功时检查）
+  if [ "$iteration_success" = true ]; then
+    if ! check_circuit_breaker; then
+      update_status "circuit_breaker" "Circuit Breaker 触发 - 连续无进展停止"
+      exit 1
+    fi
+  fi
 
   echo "第 $i 次迭代完成。继续下一次..."
   sleep 2
