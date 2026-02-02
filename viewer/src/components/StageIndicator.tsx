@@ -10,7 +10,7 @@ const stages = [
   { id: 2, name: '开发规划', available: true },
   { id: 3, name: 'Coding', available: true },
   { id: 4, name: '测试', available: true },
-  { id: 5, name: 'Review', available: false },
+  { id: 5, name: 'Review', available: true },
 ];
 
 export function StageIndicator({ currentStage, completedStages = [] }: StageIndicatorProps) {
