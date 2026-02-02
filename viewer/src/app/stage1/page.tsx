@@ -5,10 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator, ChatInterface, PRDPreview, SessionResumeDialog, ToolRenderer } from '@/components';
 import { useCliChat, CliChatMessage, ToolUse } from '@/hooks';
 import {
-  getSavedPrdSession,
-  clearPrdSession,
-  updateSessionMessages,
-  SavedPrdSession,
+  getSession,
+  updateSession,
+  deleteSession,
+  type PrdSession,
 } from '@/lib/prd-session-storage';
 
 const INITIAL_MESSAGE: CliChatMessage = {
@@ -27,12 +27,13 @@ export default function Stage1Page() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prdId = searchParams.get('prd');
+  const localSessionId = searchParams.get('session');
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
 
-  // PRD loading state
+  // PRD loading state (for editing existing PRD)
   const [loadedPrdContent, setLoadedPrdContent] = useState<string>('');
   const [loadedPrdName, setLoadedPrdName] = useState<string>('');
   const [isLoadingPrd, setIsLoadingPrd] = useState(false);
@@ -42,17 +43,15 @@ export default function Stage1Page() {
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const [sessionDecisionMade, setSessionDecisionMade] = useState(false);
 
-  // localStorage session state (for new PRD creation without prdId)
-  const [localSession, setLocalSession] = useState<SavedPrdSession | null>(null);
-  const [showLocalResumeDialog, setShowLocalResumeDialog] = useState(false);
-  const [localSessionDecisionMade, setLocalSessionDecisionMade] = useState(false);
-  // Store current time when dialog is shown (for pure rendering)
-  const [dialogOpenTime, setDialogOpenTime] = useState<number | undefined>(undefined);
+  // Local session (from multi-session storage)
+  const [currentLocalSession, setCurrentLocalSession] = useState<PrdSession | null>(null);
 
   // Store session ID for saving with PRD
   const sessionIdRef = useRef<string | undefined>(undefined);
   // Track current PRD ID for session mapping
   const currentPrdIdRef = useRef<string | undefined>(prdId || undefined);
+  // Track the localStorage session ID
+  const localSessionIdRef = useRef<string | undefined>(localSessionId || undefined);
 
   // Track current tool use for rendering
   const [currentToolUse, setCurrentToolUse] = useState<ToolUse | null>(null);
@@ -96,46 +95,46 @@ export default function Stage1Page() {
     sessionIdRef.current = sessionId;
   }
 
-  // Check for localStorage session when no prdId (new PRD creation)
+  // Redirect to Dashboard if no session or prd parameter
   useEffect(() => {
-    if (prdId || localSessionDecisionMade) return;
-
-    const savedSession = getSavedPrdSession();
-    if (savedSession && Object.keys(savedSession.questionAnswers).length > 0) {
-      // Found incomplete session in localStorage
-      setLocalSession(savedSession);
-      setDialogOpenTime(Date.now());
-      setShowLocalResumeDialog(true);
-    } else {
-      setLocalSessionDecisionMade(true);
+    if (!prdId && !localSessionId) {
+      // No session specified, redirect to Dashboard
+      router.replace('/');
     }
-  }, [prdId, localSessionDecisionMade]);
+  }, [prdId, localSessionId, router]);
 
-  // Handle localStorage session resume
-  const handleLocalResume = useCallback(() => {
-    // Keep the localStorage data, just close the dialog
-    setShowLocalResumeDialog(false);
-    setLocalSessionDecisionMade(true);
-  }, []);
-
-  // Handle localStorage session start new
-  const handleLocalStartNew = useCallback(() => {
-    // Clear localStorage and start fresh
-    clearPrdSession();
-    setLocalSession(null);
-    setShowLocalResumeDialog(false);
-    setLocalSessionDecisionMade(true);
-  }, []);
-
-  // Save messages to localStorage for context (only for new PRD creation)
+  // Load local session from localStorage when session param is provided
   useEffect(() => {
-    if (prdId) return; // Don't save if editing existing PRD
+    if (!localSessionId) return;
+
+    const session = getSession(localSessionId);
+    if (session) {
+      setCurrentLocalSession(session);
+      localSessionIdRef.current = localSessionId;
+      // If session has messages, we could restore them here
+      // For now, just mark session as loaded
+    } else {
+      // Session not found, redirect to Dashboard
+      console.warn(`Session ${localSessionId} not found, redirecting to Dashboard`);
+      router.replace('/');
+    }
+  }, [localSessionId, router]);
+
+  // Save messages to localStorage for context (only for local session)
+  useEffect(() => {
+    if (!localSessionIdRef.current) return;
 
     // Only save if we have more than the initial message
     if (messages.length > 1) {
-      updateSessionMessages(messages);
+      updateSession(localSessionIdRef.current, {
+        messages: messages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+        })),
+      });
     }
-  }, [messages, prdId]);
+  }, [messages]);
 
   // Load PRD content and check for existing session when prdId is provided
   useEffect(() => {
@@ -223,11 +222,11 @@ export default function Stage1Page() {
     return loadedPrdContent;
   }, [messages, loadedPrdContent]);
 
-  // Extract project name from first user message
+  // Extract project name
   const projectName = useMemo(() => {
-    // First check localStorage session
-    if (localSession?.projectName) {
-      return localSession.projectName;
+    // First check local session name
+    if (currentLocalSession?.name) {
+      return currentLocalSession.name;
     }
     // Fall back to extracting from messages
     const firstUserMessage = messages.find((m) => m.role === 'user');
@@ -236,7 +235,7 @@ export default function Stage1Page() {
       return name.length < firstUserMessage.content.length ? name + '...' : name;
     }
     return loadedPrdName || undefined;
-  }, [messages, localSession, loadedPrdName]);
+  }, [messages, currentLocalSession, loadedPrdName]);
 
   const handleSendMessage = (content: string) => {
     sendMessage(content);
@@ -279,8 +278,10 @@ export default function Stage1Page() {
       // Update current PRD ID ref
       currentPrdIdRef.current = data.id;
 
-      // Clear localStorage session after successful save
-      clearPrdSession();
+      // Delete the localStorage session after successful save
+      if (localSessionIdRef.current) {
+        deleteSession(localSessionIdRef.current);
+      }
 
       setSaveSuccess(true);
 
@@ -295,6 +296,18 @@ export default function Stage1Page() {
     }
   }, [prdContent, isSaving, router]);
 
+  // Don't render if we should redirect
+  if (!prdId && !localSessionId) {
+    return (
+      <div className="flex flex-col h-[calc(100vh-64px)]">
+        <StageIndicator currentStage={1} completedStages={[]} />
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-neutral-500">Redirecting to Dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-64px)]">
       {/* Stage Indicator */}
@@ -306,18 +319,6 @@ export default function Stage1Page() {
         prdName={loadedPrdName}
         onResume={handleResumeSession}
         onStartNew={handleStartNewSession}
-      />
-
-      {/* LocalStorage Session Resume Dialog (for new PRD creation) */}
-      <SessionResumeDialog
-        isOpen={showLocalResumeDialog}
-        prdName={localSession?.projectName}
-        answeredCount={localSession?.answeredQuestions}
-        totalCount={localSession?.totalQuestions}
-        lastUpdated={localSession?.updatedAt}
-        currentTime={dialogOpenTime}
-        onResume={handleLocalResume}
-        onStartNew={handleLocalStartNew}
       />
 
       {/* Loading Overlay */}
@@ -357,6 +358,7 @@ export default function Stage1Page() {
                 onRespond={handleToolRespond}
                 disabled={!pendingToolUse}
                 projectName={projectName}
+                sessionId={localSessionIdRef.current}
               />
             </div>
           )}

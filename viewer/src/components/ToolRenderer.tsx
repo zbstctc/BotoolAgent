@@ -6,6 +6,8 @@ import { OptionCard, Option } from './OptionCard';
 import {
   saveQuestionAnswers,
   getQuestionAnswers,
+  saveSessionAnswers,
+  getSession,
   QuestionAnswer,
 } from '@/lib/prd-session-storage';
 
@@ -21,13 +23,15 @@ export interface ToolRendererProps {
   disabled?: boolean;
   /** Project name for session storage */
   projectName?: string;
+  /** Session ID for multi-session storage */
+  sessionId?: string;
 }
 
 /**
  * Renders interactive tool UI based on tool type.
  * Currently supports AskUserQuestion tool.
  */
-export function ToolRenderer({ tool, onRespond, disabled = false, projectName }: ToolRendererProps) {
+export function ToolRenderer({ tool, onRespond, disabled = false, projectName, sessionId }: ToolRendererProps) {
   if (tool.toolName === 'AskUserQuestion' && isAskUserQuestionInput(tool.toolInput)) {
     return (
       <AskUserQuestionRenderer
@@ -36,6 +40,7 @@ export function ToolRenderer({ tool, onRespond, disabled = false, projectName }:
         onRespond={onRespond}
         disabled={disabled}
         projectName={projectName}
+        sessionId={sessionId}
       />
     );
   }
@@ -61,6 +66,8 @@ interface AskUserQuestionRendererProps {
   disabled?: boolean;
   /** Project name for session storage */
   projectName?: string;
+  /** Session ID for multi-session storage */
+  sessionId?: string;
 }
 
 /**
@@ -72,12 +79,27 @@ function AskUserQuestionRenderer({
   onRespond,
   disabled = false,
   projectName,
+  sessionId,
 }: AskUserQuestionRendererProps) {
   // Modal visibility state - initialize based on whether we should auto-open
   const [isModalOpen, setIsModalOpen] = useState(() => !disabled);
 
   // Track answers for each question - initialize from localStorage if available
   const [answers, setAnswers] = useState<Record<string, string[]>>(() => {
+    // If sessionId is provided, try to get answers from that session
+    if (sessionId) {
+      const session = getSession(sessionId);
+      if (session?.questionAnswers?.[toolId]) {
+        const savedAnswers = session.questionAnswers[toolId];
+        const initial: Record<string, string[]> = {};
+        input.questions.forEach((_, idx) => {
+          const key = `q${idx}`;
+          initial[key] = savedAnswers?.[key]?.selected || [];
+        });
+        return initial;
+      }
+    }
+    // Fall back to legacy single-session storage
     const savedAnswers = getQuestionAnswers(toolId);
     const initial: Record<string, string[]> = {};
     input.questions.forEach((_, idx) => {
@@ -89,6 +111,20 @@ function AskUserQuestionRenderer({
 
   // Track "other" text input for each question - initialize from localStorage if available
   const [otherValues, setOtherValues] = useState<Record<string, string>>(() => {
+    // If sessionId is provided, try to get answers from that session
+    if (sessionId) {
+      const session = getSession(sessionId);
+      if (session?.questionAnswers?.[toolId]) {
+        const savedAnswers = session.questionAnswers[toolId];
+        const initial: Record<string, string> = {};
+        input.questions.forEach((_, idx) => {
+          const key = `q${idx}`;
+          initial[key] = savedAnswers?.[key]?.otherValue || '';
+        });
+        return initial;
+      }
+    }
+    // Fall back to legacy single-session storage
     const savedAnswers = getQuestionAnswers(toolId);
     const initial: Record<string, string> = {};
     input.questions.forEach((_, idx) => {
@@ -114,13 +150,19 @@ function AskUserQuestionRenderer({
       };
     });
 
-    saveQuestionAnswers(
-      toolId,
-      combinedAnswers,
-      input.questions.length,
-      projectName
-    );
-  }, [answers, otherValues, toolId, input.questions, projectName, submitted]);
+    // If sessionId is provided, save to that specific session
+    if (sessionId) {
+      saveSessionAnswers(sessionId, toolId, combinedAnswers, input.questions.length);
+    } else {
+      // Fall back to legacy single-session storage
+      saveQuestionAnswers(
+        toolId,
+        combinedAnswers,
+        input.questions.length,
+        projectName
+      );
+    }
+  }, [answers, otherValues, toolId, input.questions, projectName, sessionId, submitted]);
 
   const handleAnswerChange = useCallback((questionKey: string, selected: string[]) => {
     setAnswers((prev) => ({
