@@ -72,6 +72,10 @@ HOOK_POST_ITERATION=""     # 每次迭代完成后执行的脚本
 HOOK_ON_COMPLETE=""        # 所有任务完成时执行的脚本
 HOOK_ON_ERROR=""           # 发生错误时执行的脚本
 
+# 通知配置
+NOTIFICATION_ENABLED=false  # 是否启用系统通知
+NOTIFICATION_SOUND=true     # 通知时是否播放声音
+
 # ============================================================================
 # 加载 .botoolrc 配置文件（如果存在）
 # ============================================================================
@@ -115,6 +119,10 @@ load_config() {
   [ -n "$BOTOOL_HOOK_POST_ITERATION" ] && HOOK_POST_ITERATION="$BOTOOL_HOOK_POST_ITERATION"
   [ -n "$BOTOOL_HOOK_ON_COMPLETE" ] && HOOK_ON_COMPLETE="$BOTOOL_HOOK_ON_COMPLETE"
   [ -n "$BOTOOL_HOOK_ON_ERROR" ] && HOOK_ON_ERROR="$BOTOOL_HOOK_ON_ERROR"
+
+  # 通知配置
+  [ -n "$BOTOOL_NOTIFICATION_ENABLED" ] && NOTIFICATION_ENABLED="$BOTOOL_NOTIFICATION_ENABLED"
+  [ -n "$BOTOOL_NOTIFICATION_SOUND" ] && NOTIFICATION_SOUND="$BOTOOL_NOTIFICATION_SOUND"
 }
 
 # ============================================================================
@@ -430,6 +438,133 @@ show_hooks_config() {
 
   if [ "$has_hooks" = "false" ]; then
     echo "  Hooks: 未配置"
+  fi
+}
+
+# ============================================================================
+# 系统通知功能 - macOS 系统通知
+# ============================================================================
+
+# 获取项目名称（从 prd.json）
+get_project_name() {
+  if [ -f "$PRD_FILE" ]; then
+    local name=$(grep -o '"project": "[^"]*"' "$PRD_FILE" 2>/dev/null | sed 's/"project": "//;s/"$//')
+    if [ -n "$name" ]; then
+      echo "$name"
+      return
+    fi
+  fi
+  echo "BotoolAgent"
+}
+
+# 发送 macOS 系统通知
+# 参数:
+#   $1 - 通知标题
+#   $2 - 通知内容
+#   $3 - 通知类型 (success/error/warning/info)
+send_notification() {
+  local title="$1"
+  local message="$2"
+  local type="${3:-info}"
+
+  # 检查是否启用通知
+  if [ "$NOTIFICATION_ENABLED" != "true" ]; then
+    return 0
+  fi
+
+  # 只在 macOS 上支持
+  if [ "$(uname)" != "Darwin" ]; then
+    echo ">>> [通知] 系统通知仅支持 macOS"
+    return 0
+  fi
+
+  # 构建 AppleScript 命令
+  local sound_option=""
+  if [ "$NOTIFICATION_SOUND" = "true" ]; then
+    # 根据类型选择不同的声音
+    case "$type" in
+      success)
+        sound_option='sound name "Glass"'
+        ;;
+      error)
+        sound_option='sound name "Basso"'
+        ;;
+      warning)
+        sound_option='sound name "Sosumi"'
+        ;;
+      *)
+        sound_option='sound name "Pop"'
+        ;;
+    esac
+  fi
+
+  # 执行 AppleScript 发送通知
+  osascript -e "display notification \"$message\" with title \"$title\" $sound_option" 2>/dev/null
+
+  if [ $? -eq 0 ]; then
+    echo ">>> [通知] 已发送系统通知: $title"
+  else
+    echo ">>> [通知] 发送通知失败"
+  fi
+}
+
+# 发送完成通知
+# 在所有任务完成时调用
+send_complete_notification() {
+  local project_name=$(get_project_name)
+  local completed=$(grep -c '"passes": true' "$PRD_FILE" 2>/dev/null || echo "0")
+
+  send_notification \
+    "✅ $project_name 完成" \
+    "所有 $completed 个任务已完成！" \
+    "success"
+}
+
+# 发送错误通知
+# 参数:
+#   $1 - 错误类型
+#   $2 - 错误消息
+send_error_notification() {
+  local error_type="$1"
+  local error_message="$2"
+  local project_name=$(get_project_name)
+
+  local title=""
+  local message=""
+
+  case "$error_type" in
+    iteration_failed)
+      title="⚠️ $project_name 迭代失败"
+      message="迭代重试次数已用尽"
+      ;;
+    circuit_breaker)
+      title="⛔ $project_name 停止"
+      message="连续多次迭代无进展，自动停止"
+      ;;
+    max_iterations)
+      title="⏰ $project_name 超限"
+      message="已达到最大迭代次数，未完成所有任务"
+      ;;
+    *)
+      title="❌ $project_name 错误"
+      message="${error_message:-发生未知错误}"
+      ;;
+  esac
+
+  send_notification "$title" "$message" "error"
+}
+
+# 显示通知配置状态
+show_notification_config() {
+  if [ "$NOTIFICATION_ENABLED" = "true" ]; then
+    echo "  系统通知: 已启用"
+    if [ "$NOTIFICATION_SOUND" = "true" ]; then
+      echo "  通知声音: 已启用"
+    else
+      echo "  通知声音: 已禁用"
+    fi
+  else
+    echo "  系统通知: 已禁用"
   fi
 }
 
@@ -1565,6 +1700,7 @@ else
   echo "  网络健康检查: 已禁用"
 fi
 show_hooks_config
+show_notification_config
 echo ""
 
 # 初始化 Rate Limiting
@@ -1682,6 +1818,8 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     LAST_OUTPUT_FILE=""
     # 执行 onError hook
     run_on_error_hook "iteration_failed" "第 $i 次迭代的所有 $MAX_RETRIES 次重试都失败"
+    # 发送错误通知
+    send_error_notification "iteration_failed" "第 $i 次迭代的所有 $MAX_RETRIES 次重试都失败"
     # 执行 postIteration hook（失败情况）
     run_post_iteration_hook "false"
     # 继续下一次迭代
@@ -1707,6 +1845,9 @@ for i in $(seq 1 $MAX_ITERATIONS); do
 
     # 执行 onComplete hook
     run_on_complete_hook
+
+    # 发送完成通知
+    send_complete_notification
 
     echo ""
     echo "==============================================================="
@@ -1746,6 +1887,8 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     if ! check_circuit_breaker; then
       # 执行 onError hook（Circuit Breaker 触发）
       run_on_error_hook "circuit_breaker" "连续 $CIRCUIT_BREAKER_THRESHOLD 次迭代无进展"
+      # 发送错误通知
+      send_error_notification "circuit_breaker" "连续 $CIRCUIT_BREAKER_THRESHOLD 次迭代无进展"
       update_status "circuit_breaker" "Circuit Breaker 触发 - 连续无进展停止"
       exit 1
     fi
@@ -1761,6 +1904,9 @@ echo "请查看 $PROGRESS_FILE 了解状态。"
 
 # 执行 onError hook（达到最大迭代次数）
 run_on_error_hook "max_iterations" "已达到最大迭代次数 $MAX_ITERATIONS，但未完成所有任务"
+
+# 发送错误通知
+send_error_notification "max_iterations" "已达到最大迭代次数 $MAX_ITERATIONS，但未完成所有任务"
 
 update_status "max_iterations" "已达到最大迭代次数，但未完成所有任务"
 exit 1

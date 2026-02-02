@@ -119,10 +119,26 @@ NETWORK_NO_ACTIVITY_THRESHOLD=300
 # ============================================================================
 # 通知配置（可选）
 # ============================================================================
+# 在任务完成或发生错误时发送 macOS 系统通知
+# 目前仅支持 macOS 系统
 
 # 是否启用系统通知
+# 启用后会在以下情况发送通知：
+#   - 所有任务完成时（成功通知）
+#   - 迭代失败时（错误通知）
+#   - Circuit Breaker 触发时（错误通知）
+#   - 达到最大迭代次数时（错误通知）
 # 默认: false
-# NOTIFICATION_ENABLED=false
+NOTIFICATION_ENABLED=false
+
+# 通知时是否播放声音
+# 不同类型的通知会播放不同的声音：
+#   - 成功: Glass
+#   - 错误: Basso
+#   - 警告: Sosumi
+#   - 信息: Pop
+# 默认: true
+NOTIFICATION_SOUND=true
 
 # ============================================================================
 # 环境变量覆盖
@@ -144,6 +160,8 @@ NETWORK_NO_ACTIVITY_THRESHOLD=300
 #   BOTOOL_HOOK_POST_ITERATION="./my-hooks/post.sh"
 #   BOTOOL_HOOK_ON_COMPLETE="./my-hooks/complete.sh"
 #   BOTOOL_HOOK_ON_ERROR="./my-hooks/error.sh"
+#   BOTOOL_NOTIFICATION_ENABLED=true
+#   BOTOOL_NOTIFICATION_SOUND=false
 
 # ============================================================================
 # Hook 示例脚本
