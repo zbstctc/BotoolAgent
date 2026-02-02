@@ -85,17 +85,35 @@ NETWORK_NO_ACTIVITY_THRESHOLD=300
 # ============================================================================
 # Hooks 配置（可选）
 # ============================================================================
+# Hooks 允许你在关键节点执行自定义脚本
+# 脚本路径可以是绝对路径或相对于 BotoolAgent.sh 所在目录的相对路径
+# Hook 执行失败不会影响主流程
+# 每个 Hook 最多执行 60 秒，超时将被终止
 
 # 每次迭代开始前执行的脚本
+# 用途：准备工作、清理缓存、发送开始通知等
+# 环境变量：BOTOOL_HOOK_TYPE, BOTOOL_ITERATION, BOTOOL_MAX_ITERATIONS,
+#           BOTOOL_PRD_FILE, BOTOOL_PROGRESS_FILE, BOTOOL_LOG_DIR,
+#           BOTOOL_COMPLETED_TASKS, BOTOOL_TOTAL_TASKS
+# 参数：$1 = 当前迭代次数
 # HOOK_PRE_ITERATION="./hooks/pre-iteration.sh"
 
 # 每次迭代完成后执行的脚本
+# 用途：记录日志、发送进度通知、清理临时文件等
+# 环境变量：同上
+# 参数：$1 = 当前迭代次数, $2 = 是否成功 (true/false)
 # HOOK_POST_ITERATION="./hooks/post-iteration.sh"
 
 # 所有任务完成时执行的脚本
+# 用途：发送完成通知、生成报告、触发 CI/CD 等
+# 环境变量：同上
 # HOOK_ON_COMPLETE="./hooks/on-complete.sh"
 
 # 发生错误时执行的脚本
+# 用途：发送错误通知、记录错误日志、触发告警等
+# 环境变量：同上
+# 参数：$1 = 错误类型 (iteration_failed/circuit_breaker/max_iterations)
+#       $2 = 错误消息
 # HOOK_ON_ERROR="./hooks/on-error.sh"
 
 # ============================================================================
@@ -122,3 +140,30 @@ NETWORK_NO_ACTIVITY_THRESHOLD=300
 #   BOTOOL_NETWORK_HEALTH_CHECK_ENABLED=false
 #   BOTOOL_NETWORK_HEALTH_CHECK_INTERVAL=120
 #   BOTOOL_NETWORK_NO_ACTIVITY_THRESHOLD=600
+#   BOTOOL_HOOK_PRE_ITERATION="./my-hooks/pre.sh"
+#   BOTOOL_HOOK_POST_ITERATION="./my-hooks/post.sh"
+#   BOTOOL_HOOK_ON_COMPLETE="./my-hooks/complete.sh"
+#   BOTOOL_HOOK_ON_ERROR="./my-hooks/error.sh"
+
+# ============================================================================
+# Hook 示例脚本
+# ============================================================================
+# 下面是一些常见的 Hook 使用场景示例:
+#
+# pre-iteration.sh - 发送 Slack 通知
+# #!/bin/bash
+# curl -X POST -H 'Content-type: application/json' \
+#   --data "{\"text\":\"BotoolAgent 开始第 $1 次迭代\"}" \
+#   $SLACK_WEBHOOK_URL
+#
+# post-iteration.sh - 记录日志
+# #!/bin/bash
+# echo "[$(date)] Iteration $1 completed (success=$2)" >> /var/log/botool.log
+#
+# on-complete.sh - macOS 系统通知
+# #!/bin/bash
+# osascript -e 'display notification "所有任务已完成！" with title "BotoolAgent"'
+#
+# on-error.sh - 发送邮件告警
+# #!/bin/bash
+# echo "错误类型: $1\n错误消息: $2" | mail -s "BotoolAgent 错误" admin@example.com

@@ -66,6 +66,12 @@ NETWORK_HEALTH_CHECK_ENABLED=true   # 是否启用运行时网络检查
 NETWORK_HEALTH_CHECK_INTERVAL=60    # 检查间隔（秒）
 NETWORK_NO_ACTIVITY_THRESHOLD=300   # 无网络活动阈值（秒），超过则重启
 
+# Hooks 配置
+HOOK_PRE_ITERATION=""      # 每次迭代开始前执行的脚本
+HOOK_POST_ITERATION=""     # 每次迭代完成后执行的脚本
+HOOK_ON_COMPLETE=""        # 所有任务完成时执行的脚本
+HOOK_ON_ERROR=""           # 发生错误时执行的脚本
+
 # ============================================================================
 # 加载 .botoolrc 配置文件（如果存在）
 # ============================================================================
@@ -103,6 +109,12 @@ load_config() {
   [ -n "$BOTOOL_NETWORK_HEALTH_CHECK_ENABLED" ] && NETWORK_HEALTH_CHECK_ENABLED="$BOTOOL_NETWORK_HEALTH_CHECK_ENABLED"
   [ -n "$BOTOOL_NETWORK_HEALTH_CHECK_INTERVAL" ] && NETWORK_HEALTH_CHECK_INTERVAL="$BOTOOL_NETWORK_HEALTH_CHECK_INTERVAL"
   [ -n "$BOTOOL_NETWORK_NO_ACTIVITY_THRESHOLD" ] && NETWORK_NO_ACTIVITY_THRESHOLD="$BOTOOL_NETWORK_NO_ACTIVITY_THRESHOLD"
+
+  # Hooks 配置
+  [ -n "$BOTOOL_HOOK_PRE_ITERATION" ] && HOOK_PRE_ITERATION="$BOTOOL_HOOK_PRE_ITERATION"
+  [ -n "$BOTOOL_HOOK_POST_ITERATION" ] && HOOK_POST_ITERATION="$BOTOOL_HOOK_POST_ITERATION"
+  [ -n "$BOTOOL_HOOK_ON_COMPLETE" ] && HOOK_ON_COMPLETE="$BOTOOL_HOOK_ON_COMPLETE"
+  [ -n "$BOTOOL_HOOK_ON_ERROR" ] && HOOK_ON_ERROR="$BOTOOL_HOOK_ON_ERROR"
 }
 
 # ============================================================================
@@ -265,6 +277,160 @@ wait_for_network() {
 
   echo ">>> 网络已恢复，继续执行..."
   return 0
+}
+
+# ============================================================================
+# Hooks 功能 - 在关键节点执行自定义脚本
+# ============================================================================
+
+# 执行 Hook 脚本
+# 参数:
+#   $1 - hook 类型 (pre_iteration, post_iteration, on_complete, on_error)
+#   $2 - hook 脚本路径
+#   $3+ - 传递给 hook 的额外参数
+# 返回: 0 = 执行成功或无需执行, 1 = 执行失败（但不影响主流程）
+# 注意: Hook 执行失败不会影响主流程
+execute_hook() {
+  local hook_type="$1"
+  local hook_script="$2"
+  shift 2
+  local hook_args=("$@")
+
+  # 如果没有配置 hook，直接返回
+  if [ -z "$hook_script" ]; then
+    return 0
+  fi
+
+  # 解析相对路径（相对于 SCRIPT_DIR）
+  if [[ "$hook_script" != /* ]]; then
+    hook_script="$SCRIPT_DIR/$hook_script"
+  fi
+
+  # 检查脚本是否存在
+  if [ ! -f "$hook_script" ]; then
+    echo ">>> [Hooks] 警告: $hook_type hook 脚本不存在: $hook_script"
+    return 0  # 脚本不存在不视为错误，只是警告
+  fi
+
+  # 检查脚本是否可执行
+  if [ ! -x "$hook_script" ]; then
+    echo ">>> [Hooks] 警告: $hook_type hook 脚本不可执行: $hook_script"
+    echo ">>> [Hooks] 提示: 运行 chmod +x $hook_script 使其可执行"
+    return 0
+  fi
+
+  echo ">>> [Hooks] 执行 $hook_type hook: $hook_script"
+
+  # 设置 hook 环境变量
+  local hook_env=(
+    "BOTOOL_HOOK_TYPE=$hook_type"
+    "BOTOOL_ITERATION=$CURRENT_ITERATION"
+    "BOTOOL_MAX_ITERATIONS=$MAX_ITERATIONS"
+    "BOTOOL_PRD_FILE=$PRD_FILE"
+    "BOTOOL_PROGRESS_FILE=$PROGRESS_FILE"
+    "BOTOOL_LOG_DIR=$LOG_DIR"
+    "BOTOOL_STATUS_FILE=$STATUS_FILE"
+  )
+
+  # 添加完成任务数（如果 PRD 文件存在）
+  if [ -f "$PRD_FILE" ]; then
+    local completed=$(grep -c '"passes": true' "$PRD_FILE" 2>/dev/null || echo "0")
+    local total=$(grep -c '"id": "DT-' "$PRD_FILE" 2>/dev/null || echo "0")
+    hook_env+=("BOTOOL_COMPLETED_TASKS=$completed")
+    hook_env+=("BOTOOL_TOTAL_TASKS=$total")
+  fi
+
+  # 执行 hook（带超时保护，最多 60 秒）
+  local hook_output
+  local hook_exit_code
+
+  # 使用 timeout 执行 hook，防止 hook 阻塞主流程
+  if command -v gtimeout &> /dev/null; then
+    hook_output=$(env "${hook_env[@]}" gtimeout 60 "$hook_script" "${hook_args[@]}" 2>&1)
+    hook_exit_code=$?
+  elif command -v timeout &> /dev/null; then
+    hook_output=$(env "${hook_env[@]}" timeout 60 "$hook_script" "${hook_args[@]}" 2>&1)
+    hook_exit_code=$?
+  else
+    # 没有 timeout 命令，直接执行
+    hook_output=$(env "${hook_env[@]}" "$hook_script" "${hook_args[@]}" 2>&1)
+    hook_exit_code=$?
+  fi
+
+  # 处理 hook 执行结果
+  if [ $hook_exit_code -eq 0 ]; then
+    echo ">>> [Hooks] $hook_type hook 执行成功"
+    if [ -n "$hook_output" ]; then
+      echo ">>> [Hooks] 输出:"
+      echo "$hook_output" | sed 's/^/    /'
+    fi
+    return 0
+  elif [ $hook_exit_code -eq 124 ]; then
+    echo ">>> [Hooks] ⚠️ $hook_type hook 执行超时（60秒）"
+    return 1
+  else
+    echo ">>> [Hooks] ⚠️ $hook_type hook 执行失败（退出码: $hook_exit_code）"
+    if [ -n "$hook_output" ]; then
+      echo ">>> [Hooks] 错误输出:"
+      echo "$hook_output" | sed 's/^/    /'
+    fi
+    return 1
+  fi
+}
+
+# 执行 preIteration hook
+# 在每次迭代开始前调用
+run_pre_iteration_hook() {
+  execute_hook "preIteration" "$HOOK_PRE_ITERATION" "$CURRENT_ITERATION"
+}
+
+# 执行 postIteration hook
+# 在每次迭代完成后调用
+# 参数: $1 - 迭代是否成功 (true/false)
+run_post_iteration_hook() {
+  local success="$1"
+  execute_hook "postIteration" "$HOOK_POST_ITERATION" "$CURRENT_ITERATION" "$success"
+}
+
+# 执行 onComplete hook
+# 在所有任务完成时调用
+run_on_complete_hook() {
+  execute_hook "onComplete" "$HOOK_ON_COMPLETE"
+}
+
+# 执行 onError hook
+# 在发生错误时调用
+# 参数: $1 - 错误类型, $2 - 错误消息
+run_on_error_hook() {
+  local error_type="$1"
+  local error_message="$2"
+  execute_hook "onError" "$HOOK_ON_ERROR" "$error_type" "$error_message"
+}
+
+# 显示 Hooks 配置状态
+show_hooks_config() {
+  local has_hooks=false
+
+  if [ -n "$HOOK_PRE_ITERATION" ]; then
+    echo "  preIteration Hook: $HOOK_PRE_ITERATION"
+    has_hooks=true
+  fi
+  if [ -n "$HOOK_POST_ITERATION" ]; then
+    echo "  postIteration Hook: $HOOK_POST_ITERATION"
+    has_hooks=true
+  fi
+  if [ -n "$HOOK_ON_COMPLETE" ]; then
+    echo "  onComplete Hook: $HOOK_ON_COMPLETE"
+    has_hooks=true
+  fi
+  if [ -n "$HOOK_ON_ERROR" ]; then
+    echo "  onError Hook: $HOOK_ON_ERROR"
+    has_hooks=true
+  fi
+
+  if [ "$has_hooks" = "false" ]; then
+    echo "  Hooks: 未配置"
+  fi
 }
 
 # ============================================================================
@@ -1398,6 +1564,7 @@ if [ "$NETWORK_HEALTH_CHECK_ENABLED" = "true" ]; then
 else
   echo "  网络健康检查: 已禁用"
 fi
+show_hooks_config
 echo ""
 
 # 初始化 Rate Limiting
@@ -1425,6 +1592,9 @@ for i in $(seq 1 $MAX_ITERATIONS); do
 
   # 开始前检查网络
   wait_for_network
+
+  # 执行 preIteration hook
+  run_pre_iteration_hook
 
   # 本次迭代的重试循环
   iteration_success=false
@@ -1510,6 +1680,10 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo ">>> 第 $i 次迭代的所有 $MAX_RETRIES 次重试都失败了"
     update_status "failed" "第 $i 次迭代的所有重试都失败"
     LAST_OUTPUT_FILE=""
+    # 执行 onError hook
+    run_on_error_hook "iteration_failed" "第 $i 次迭代的所有 $MAX_RETRIES 次重试都失败"
+    # 执行 postIteration hook（失败情况）
+    run_post_iteration_hook "false"
     # 继续下一次迭代
   else
     # 迭代成功，执行响应分析
@@ -1527,6 +1701,12 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   if verify_dual_exit_conditions "$LAST_OUTPUT_FILE"; then
     # 清理临时文件
     [ -n "$LAST_OUTPUT_FILE" ] && rm -f "$LAST_OUTPUT_FILE"
+
+    # 执行 postIteration hook（成功情况）
+    run_post_iteration_hook "true"
+
+    # 执行 onComplete hook
+    run_on_complete_hook
 
     echo ""
     echo "==============================================================="
@@ -1560,7 +1740,12 @@ for i in $(seq 1 $MAX_ITERATIONS); do
 
   # 检查 Circuit Breaker（只在迭代成功时检查）
   if [ "$iteration_success" = true ]; then
+    # 执行 postIteration hook（成功但未完成所有任务）
+    run_post_iteration_hook "true"
+
     if ! check_circuit_breaker; then
+      # 执行 onError hook（Circuit Breaker 触发）
+      run_on_error_hook "circuit_breaker" "连续 $CIRCUIT_BREAKER_THRESHOLD 次迭代无进展"
       update_status "circuit_breaker" "Circuit Breaker 触发 - 连续无进展停止"
       exit 1
     fi
@@ -1573,5 +1758,9 @@ done
 echo ""
 echo "Botool 开发代理已达到最大迭代次数（$MAX_ITERATIONS），但未完成所有任务。"
 echo "请查看 $PROGRESS_FILE 了解状态。"
+
+# 执行 onError hook（达到最大迭代次数）
+run_on_error_hook "max_iterations" "已达到最大迭代次数 $MAX_ITERATIONS，但未完成所有任务"
+
 update_status "max_iterations" "已达到最大迭代次数，但未完成所有任务"
 exit 1
