@@ -5,13 +5,41 @@ import { useCallback } from 'react';
 interface SessionResumeDialogProps {
   isOpen: boolean;
   prdName?: string;
+  /** Number of questions answered */
+  answeredCount?: number;
+  /** Total number of questions */
+  totalCount?: number;
+  /** Last updated timestamp */
+  lastUpdated?: number;
+  /** Current time for relative time formatting (optional, provided by parent) */
+  currentTime?: number;
   onResume: () => void;
   onStartNew: () => void;
+}
+
+/**
+ * Format a timestamp as a relative time string.
+ * This is a pure function that takes both timestamps as arguments.
+ */
+function formatRelativeTime(timestamp: number, currentTime: number): string {
+  const diff = currentTime - timestamp;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes} 分钟前`;
+  if (hours < 24) return `${hours} 小时前`;
+  return `${days} 天前`;
 }
 
 export function SessionResumeDialog({
   isOpen,
   prdName,
+  answeredCount,
+  totalCount,
+  lastUpdated,
+  currentTime,
   onResume,
   onStartNew,
 }: SessionResumeDialogProps) {
@@ -25,6 +53,13 @@ export function SessionResumeDialog({
   );
 
   if (!isOpen) return null;
+
+  // Compute formatted time only when rendering (after isOpen check)
+  // Use provided currentTime or default to 0 (will show reasonable fallback)
+  const formattedLastUpdated =
+    lastUpdated !== undefined && currentTime !== undefined
+      ? formatRelativeTime(lastUpdated, currentTime)
+      : null;
 
   return (
     <div
@@ -50,17 +85,36 @@ export function SessionResumeDialog({
           </div>
           <div>
             <h3 className="text-lg font-semibold text-neutral-900">
-              Resume Previous Conversation?
+              发现未完成的会话
             </h3>
             {prdName && (
-              <p className="text-sm text-neutral-500">for {prdName}</p>
+              <p className="text-sm text-neutral-500">{prdName}</p>
             )}
           </div>
         </div>
 
+        {/* Progress info */}
+        {(answeredCount !== undefined || lastUpdated !== undefined) && (
+          <div className="bg-neutral-50 rounded-lg p-4 mb-4 space-y-2">
+            {answeredCount !== undefined && totalCount !== undefined && totalCount > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-neutral-600">回答进度</span>
+                <span className="font-medium text-neutral-900">
+                  {answeredCount}/{totalCount} 个问题
+                </span>
+              </div>
+            )}
+            {formattedLastUpdated !== null && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-neutral-600">上次更新</span>
+                <span className="text-neutral-500">{formattedLastUpdated}</span>
+              </div>
+            )}
+          </div>
+        )}
+
         <p className="text-sm text-neutral-600 mb-6">
-          A previous conversation session was found for this PRD. Would you like
-          to resume where you left off, or start a new conversation?
+          您有一个未完成的 PRD 创建会话。是否继续上次的进度，还是重新开始？
         </p>
 
         <div className="flex gap-3">
@@ -68,13 +122,13 @@ export function SessionResumeDialog({
             onClick={onStartNew}
             className="flex-1 px-4 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors"
           >
-            Start New
+            重新开始
           </button>
           <button
             onClick={onResume}
             className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Resume Session
+            继续
           </button>
         </div>
       </div>

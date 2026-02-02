@@ -3,6 +3,11 @@
 import { useState, useCallback, useEffect } from 'react';
 import { AskUserQuestionToolInput, isAskUserQuestionInput, isTextInputQuestion } from '@/lib/tool-types';
 import { OptionCard, Option } from './OptionCard';
+import {
+  saveQuestionAnswers,
+  getQuestionAnswers,
+  QuestionAnswer,
+} from '@/lib/prd-session-storage';
 
 export interface ToolUseData {
   toolId: string;
@@ -14,13 +19,15 @@ export interface ToolRendererProps {
   tool: ToolUseData;
   onRespond: (toolId: string, response: Record<string, unknown>) => void;
   disabled?: boolean;
+  /** Project name for session storage */
+  projectName?: string;
 }
 
 /**
  * Renders interactive tool UI based on tool type.
  * Currently supports AskUserQuestion tool.
  */
-export function ToolRenderer({ tool, onRespond, disabled = false }: ToolRendererProps) {
+export function ToolRenderer({ tool, onRespond, disabled = false, projectName }: ToolRendererProps) {
   if (tool.toolName === 'AskUserQuestion' && isAskUserQuestionInput(tool.toolInput)) {
     return (
       <AskUserQuestionRenderer
@@ -28,6 +35,7 @@ export function ToolRenderer({ tool, onRespond, disabled = false }: ToolRenderer
         input={tool.toolInput}
         onRespond={onRespond}
         disabled={disabled}
+        projectName={projectName}
       />
     );
   }
@@ -51,6 +59,8 @@ interface AskUserQuestionRendererProps {
   input: AskUserQuestionToolInput;
   onRespond: (toolId: string, response: Record<string, unknown>) => void;
   disabled?: boolean;
+  /** Project name for session storage */
+  projectName?: string;
 }
 
 /**
@@ -61,24 +71,29 @@ function AskUserQuestionRenderer({
   input,
   onRespond,
   disabled = false,
+  projectName,
 }: AskUserQuestionRendererProps) {
-  // Modal visibility state
-  const [isModalOpen, setIsModalOpen] = useState(true);
+  // Modal visibility state - initialize based on whether we should auto-open
+  const [isModalOpen, setIsModalOpen] = useState(() => !disabled);
 
-  // Track answers for each question
+  // Track answers for each question - initialize from localStorage if available
   const [answers, setAnswers] = useState<Record<string, string[]>>(() => {
+    const savedAnswers = getQuestionAnswers(toolId);
     const initial: Record<string, string[]> = {};
     input.questions.forEach((_, idx) => {
-      initial[`q${idx}`] = [];
+      const key = `q${idx}`;
+      initial[key] = savedAnswers?.[key]?.selected || [];
     });
     return initial;
   });
 
-  // Track "other" text input for each question
+  // Track "other" text input for each question - initialize from localStorage if available
   const [otherValues, setOtherValues] = useState<Record<string, string>>(() => {
+    const savedAnswers = getQuestionAnswers(toolId);
     const initial: Record<string, string> = {};
     input.questions.forEach((_, idx) => {
-      initial[`q${idx}`] = '';
+      const key = `q${idx}`;
+      initial[key] = savedAnswers?.[key]?.otherValue || '';
     });
     return initial;
   });
@@ -86,12 +101,26 @@ function AskUserQuestionRenderer({
   // Track submission state
   const [submitted, setSubmitted] = useState(false);
 
-  // Auto-open modal when tool appears
+  // Save answers to localStorage whenever they change
   useEffect(() => {
-    if (!submitted && !disabled) {
-      setIsModalOpen(true);
-    }
-  }, [submitted, disabled]);
+    if (submitted) return; // Don't save after submission
+
+    const combinedAnswers: Record<string, QuestionAnswer> = {};
+    input.questions.forEach((_, idx) => {
+      const key = `q${idx}`;
+      combinedAnswers[key] = {
+        selected: answers[key] || [],
+        otherValue: otherValues[key] || '',
+      };
+    });
+
+    saveQuestionAnswers(
+      toolId,
+      combinedAnswers,
+      input.questions.length,
+      projectName
+    );
+  }, [answers, otherValues, toolId, input.questions, projectName, submitted]);
 
   const handleAnswerChange = useCallback((questionKey: string, selected: string[]) => {
     setAnswers((prev) => ({

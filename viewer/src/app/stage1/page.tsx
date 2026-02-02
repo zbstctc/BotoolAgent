@@ -4,6 +4,12 @@ import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator, ChatInterface, PRDPreview, SessionResumeDialog, ToolRenderer } from '@/components';
 import { useCliChat, CliChatMessage, ToolUse } from '@/hooks';
+import {
+  getSavedPrdSession,
+  clearPrdSession,
+  updateSessionMessages,
+  SavedPrdSession,
+} from '@/lib/prd-session-storage';
 
 const INITIAL_MESSAGE: CliChatMessage = {
   id: '1',
@@ -31,10 +37,17 @@ export default function Stage1Page() {
   const [loadedPrdName, setLoadedPrdName] = useState<string>('');
   const [isLoadingPrd, setIsLoadingPrd] = useState(false);
 
-  // Session resume state
+  // Session resume state (server-side session for PRD editing)
   const [showResumeDialog, setShowResumeDialog] = useState(false);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const [sessionDecisionMade, setSessionDecisionMade] = useState(false);
+
+  // localStorage session state (for new PRD creation without prdId)
+  const [localSession, setLocalSession] = useState<SavedPrdSession | null>(null);
+  const [showLocalResumeDialog, setShowLocalResumeDialog] = useState(false);
+  const [localSessionDecisionMade, setLocalSessionDecisionMade] = useState(false);
+  // Store current time when dialog is shown (for pure rendering)
+  const [dialogOpenTime, setDialogOpenTime] = useState<number | undefined>(undefined);
 
   // Store session ID for saving with PRD
   const sessionIdRef = useRef<string | undefined>(undefined);
@@ -82,6 +95,47 @@ export default function Stage1Page() {
   if (sessionId && sessionIdRef.current !== sessionId) {
     sessionIdRef.current = sessionId;
   }
+
+  // Check for localStorage session when no prdId (new PRD creation)
+  useEffect(() => {
+    if (prdId || localSessionDecisionMade) return;
+
+    const savedSession = getSavedPrdSession();
+    if (savedSession && Object.keys(savedSession.questionAnswers).length > 0) {
+      // Found incomplete session in localStorage
+      setLocalSession(savedSession);
+      setDialogOpenTime(Date.now());
+      setShowLocalResumeDialog(true);
+    } else {
+      setLocalSessionDecisionMade(true);
+    }
+  }, [prdId, localSessionDecisionMade]);
+
+  // Handle localStorage session resume
+  const handleLocalResume = useCallback(() => {
+    // Keep the localStorage data, just close the dialog
+    setShowLocalResumeDialog(false);
+    setLocalSessionDecisionMade(true);
+  }, []);
+
+  // Handle localStorage session start new
+  const handleLocalStartNew = useCallback(() => {
+    // Clear localStorage and start fresh
+    clearPrdSession();
+    setLocalSession(null);
+    setShowLocalResumeDialog(false);
+    setLocalSessionDecisionMade(true);
+  }, []);
+
+  // Save messages to localStorage for context (only for new PRD creation)
+  useEffect(() => {
+    if (prdId) return; // Don't save if editing existing PRD
+
+    // Only save if we have more than the initial message
+    if (messages.length > 1) {
+      updateSessionMessages(messages);
+    }
+  }, [messages, prdId]);
 
   // Load PRD content and check for existing session when prdId is provided
   useEffect(() => {
@@ -169,6 +223,21 @@ export default function Stage1Page() {
     return loadedPrdContent;
   }, [messages, loadedPrdContent]);
 
+  // Extract project name from first user message
+  const projectName = useMemo(() => {
+    // First check localStorage session
+    if (localSession?.projectName) {
+      return localSession.projectName;
+    }
+    // Fall back to extracting from messages
+    const firstUserMessage = messages.find((m) => m.role === 'user');
+    if (firstUserMessage) {
+      const name = firstUserMessage.content.substring(0, 50).trim();
+      return name.length < firstUserMessage.content.length ? name + '...' : name;
+    }
+    return loadedPrdName || undefined;
+  }, [messages, localSession, loadedPrdName]);
+
   const handleSendMessage = (content: string) => {
     sendMessage(content);
   };
@@ -210,6 +279,9 @@ export default function Stage1Page() {
       // Update current PRD ID ref
       currentPrdIdRef.current = data.id;
 
+      // Clear localStorage session after successful save
+      clearPrdSession();
+
       setSaveSuccess(true);
 
       // Auto-navigate to stage2 after a short delay
@@ -228,12 +300,24 @@ export default function Stage1Page() {
       {/* Stage Indicator */}
       <StageIndicator currentStage={1} completedStages={[]} />
 
-      {/* Session Resume Dialog */}
+      {/* Session Resume Dialog (server-side session for existing PRD) */}
       <SessionResumeDialog
         isOpen={showResumeDialog}
         prdName={loadedPrdName}
         onResume={handleResumeSession}
         onStartNew={handleStartNewSession}
+      />
+
+      {/* LocalStorage Session Resume Dialog (for new PRD creation) */}
+      <SessionResumeDialog
+        isOpen={showLocalResumeDialog}
+        prdName={localSession?.projectName}
+        answeredCount={localSession?.answeredQuestions}
+        totalCount={localSession?.totalQuestions}
+        lastUpdated={localSession?.updatedAt}
+        currentTime={dialogOpenTime}
+        onResume={handleLocalResume}
+        onStartNew={handleLocalStartNew}
       />
 
       {/* Loading Overlay */}
@@ -272,6 +356,7 @@ export default function Stage1Page() {
                 }}
                 onRespond={handleToolRespond}
                 disabled={!pendingToolUse}
+                projectName={projectName}
               />
             </div>
           )}
