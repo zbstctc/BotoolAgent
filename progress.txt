@@ -5,6 +5,7 @@
 - PRD 模式的 System Prompt 在 `viewer/src/app/api/cli/chat/route.ts` 的 `PRD_SYSTEM_PROMPT` 常量中定义
 - 该文件支持三种模式：prd、convert、default，通过 `getSystemPrompt()` 函数切换
 - AskUserQuestion 工具的 questions 数组可以一次包含 2-4 个问题
+- AskUserQuestion 问题类型：有 options 的选择题，无 options 的文本输入题（通过 `isTextInputQuestion()` 判断）
 
 ---
 
@@ -36,4 +37,18 @@
   - System Prompt 使用模板字符串，修改时注意 JSON 示例中的转义
   - AskUserQuestion 的 questions 数组是核心机制，每个问题需要 question、header、options、multiSelect 字段
   - 问题分组建议按主题：基础信息、功能范围、技术方案、验收标准
+---
+
+## 2026-02-03 00:XX - DT-004
+- 实现了什么：支持文本输入类型问题（无预设选项）
+- 修改了哪些文件：
+  - `viewer/src/lib/tool-types.ts` - 让 options 变为可选，添加 inputType、placeholder 字段，添加 isTextInputQuestion 辅助函数
+  - `viewer/src/components/OptionCard.tsx` - 添加 textInputOnly 模式，支持单行 (text) 和多行 (textarea) 文本输入
+  - `viewer/src/components/ToolRenderer.tsx` - 处理没有预设选项的文本输入问题
+- **未来迭代的经验教训：**
+  - `isTextInputQuestion()` 辅助函数判断问题是否为纯文本输入（没有 options 或 options 为空数组）
+  - OptionCard 的 `textInputOnly` prop 控制是否只显示文本输入框
+  - 文本输入类型通过 `inputType` 属性控制：'text' 单行，'textarea' 多行
+  - 当 options 可选时，TypeScript 需要额外的空值检查（使用 `!` 断言或条件判断）
+  - 需要手动浏览器验证
 ---
