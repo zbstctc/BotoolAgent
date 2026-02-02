@@ -17,3 +17,5 @@ export { ManualChecklist, extractChecklistFromPRD } from "./ManualChecklist";
 export type { ChecklistItem, ManualChecklistProps } from "./ManualChecklist";
 export { ChangeSummary } from "./ChangeSummary";
 export type { FileDiff, DiffHunk, DiffLine, DiffSummary, ChangeSummaryProps } from "./ChangeSummary";
+export { CompletionSummary, parseProgressContent } from "./CompletionSummary";
+export type { CompletedTask, CodebasePattern, ProgressSummary, CompletionSummaryProps } from "./CompletionSummary";
