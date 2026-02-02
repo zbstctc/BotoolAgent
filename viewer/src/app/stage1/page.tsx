@@ -2,8 +2,8 @@
 
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { StageIndicator, ChatInterface, PRDPreview, SessionResumeDialog } from '@/components';
-import { useCliChat, CliChatMessage } from '@/hooks';
+import { StageIndicator, ChatInterface, PRDPreview, SessionResumeDialog, ToolRenderer } from '@/components';
+import { useCliChat, CliChatMessage, ToolUse } from '@/hooks';
 
 const INITIAL_MESSAGE: CliChatMessage = {
   id: '1',
@@ -41,14 +41,19 @@ export default function Stage1Page() {
   // Track current PRD ID for session mapping
   const currentPrdIdRef = useRef<string | undefined>(prdId || undefined);
 
+  // Track current tool use for rendering
+  const [currentToolUse, setCurrentToolUse] = useState<ToolUse | null>(null);
+
   const {
     messages,
     isLoading,
     error,
     sessionId,
+    pendingToolUse,
     sendMessage,
     setSessionId,
     setMessages,
+    respondToTool,
   } = useCliChat({
     initialMessages: [INITIAL_MESSAGE],
     mode: 'prd',
@@ -66,6 +71,10 @@ export default function Stage1Page() {
           }),
         }).catch(console.error);
       }
+    },
+    onToolUse: (toolUse) => {
+      // Track tool use for rendering
+      setCurrentToolUse(toolUse);
     },
   });
 
@@ -164,6 +173,16 @@ export default function Stage1Page() {
     sendMessage(content);
   };
 
+  // Handle tool response from ToolRenderer
+  const handleToolRespond = useCallback(
+    (toolId: string, response: Record<string, unknown>) => {
+      respondToTool(toolId, response);
+      // Clear the current tool use after responding
+      setCurrentToolUse(null);
+    },
+    [respondToTool]
+  );
+
   const handleSavePRD = useCallback(async () => {
     if (!prdContent || isSaving) return;
 
@@ -239,9 +258,23 @@ export default function Stage1Page() {
           <ChatInterface
             messages={messages}
             onSendMessage={handleSendMessage}
-            isLoading={isLoading}
+            isLoading={isLoading && !pendingToolUse}
             placeholder="Describe what you want to build..."
           />
+          {/* Tool Renderer for interactive tool calls */}
+          {currentToolUse && (
+            <div className="px-4 pb-4">
+              <ToolRenderer
+                tool={{
+                  toolId: currentToolUse.id,
+                  toolName: currentToolUse.name,
+                  toolInput: currentToolUse.input,
+                }}
+                onRespond={handleToolRespond}
+                disabled={!pendingToolUse}
+              />
+            </div>
+          )}
         </div>
 
         {/* Right: PRD Preview Area */}
