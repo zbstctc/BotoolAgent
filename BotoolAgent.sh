@@ -175,6 +175,14 @@ update_status() {
   local api_rate_limit_until="${API_RATE_LIMIT_UNTIL:-0}"
   local api_rate_limit_remaining="${API_RATE_LIMIT_REMAINING:-0}"
 
+  # 响应分析状态（使用全局变量，如果已设置）
+  local resp_has_code_changes="${RESPONSE_HAS_CODE_CHANGES:-false}"
+  local resp_has_git_commit="${RESPONSE_HAS_GIT_COMMIT:-false}"
+  local resp_has_file_edits="${RESPONSE_HAS_FILE_EDITS:-false}"
+  local resp_has_tool_calls="${RESPONSE_HAS_TOOL_CALLS:-false}"
+  local resp_confidence="${RESPONSE_CONFIDENCE:-unknown}"
+  local resp_warnings="${RESPONSE_WARNING_FLAGS:-}"
+
   cat > "$STATUS_FILE" << EOF
 {
   "status": "$status",
@@ -206,6 +214,14 @@ update_status() {
     "waiting": $( [ "$api_rate_limit_remaining" -gt 0 ] && echo "true" || echo "false" ),
     "resetAt": $api_rate_limit_until,
     "remainingSeconds": $api_rate_limit_remaining
+  },
+  "responseAnalysis": {
+    "hasCodeChanges": $( [ "$resp_has_code_changes" = "true" ] && echo "true" || echo "false" ),
+    "hasGitCommit": $( [ "$resp_has_git_commit" = "true" ] && echo "true" || echo "false" ),
+    "hasFileEdits": $( [ "$resp_has_file_edits" = "true" ] && echo "true" || echo "false" ),
+    "hasToolCalls": $( [ "$resp_has_tool_calls" = "true" ] && echo "true" || echo "false" ),
+    "confidence": "$resp_confidence",
+    "warnings": "$resp_warnings"
   }
 }
 EOF
@@ -946,6 +962,293 @@ if [ -f "$PRD_FILE" ]; then
 fi
 
 # ============================================================================
+# 响应分析器 - 语义分析 Claude 输出判断任务完成
+# ============================================================================
+
+# 响应分析结果 - 全局变量
+RESPONSE_ANALYSIS_LOG=""
+RESPONSE_HAS_CODE_CHANGES="false"
+RESPONSE_HAS_GIT_COMMIT="false"
+RESPONSE_HAS_FILE_EDITS="false"
+RESPONSE_HAS_TOOL_CALLS="false"
+RESPONSE_CONFIDENCE="low"  # low, medium, high
+RESPONSE_WARNING_FLAGS=""
+
+# 记录分析结果到日志
+log_analysis() {
+  local message="$1"
+  local timestamp=$(date '+%H:%M:%S')
+  RESPONSE_ANALYSIS_LOG="${RESPONSE_ANALYSIS_LOG}[$timestamp] $message\n"
+}
+
+# 检测是否有实际的代码修改（通过工具调用）
+# 参数: $1 - 输出文件路径
+# 返回: 0 = 检测到修改, 1 = 未检测到
+detect_code_changes() {
+  local output_file="$1"
+
+  if [ ! -f "$output_file" ]; then
+    log_analysis "无法读取输出文件"
+    return 1
+  fi
+
+  local changes_detected=false
+
+  # 检测 Edit 工具调用（实际编辑文件）
+  # Claude CLI 输出格式: 会包含 "Edit" 或 "edited" 等关键词
+  if grep -qiE '(Edit|edited|Editing|修改了|编辑了).*\.(ts|js|tsx|jsx|py|sh|json|md|css|html)' "$output_file" 2>/dev/null; then
+    log_analysis "检测到文件编辑操作"
+    RESPONSE_HAS_FILE_EDITS="true"
+    changes_detected=true
+  fi
+
+  # 检测 Write 工具调用（创建新文件）
+  if grep -qiE '(Write|wrote|Writing|created|Creating|创建了|写入了).*\.(ts|js|tsx|jsx|py|sh|json|md|css|html)' "$output_file" 2>/dev/null; then
+    log_analysis "检测到文件创建操作"
+    RESPONSE_HAS_FILE_EDITS="true"
+    changes_detected=true
+  fi
+
+  # 检测工具调用的 JSON 格式（stream-json 输出）
+  if grep -qE '"type":\s*"tool_use"' "$output_file" 2>/dev/null; then
+    log_analysis "检测到工具调用 (JSON 格式)"
+    RESPONSE_HAS_TOOL_CALLS="true"
+    changes_detected=true
+  fi
+
+  # 检测 Bash 工具调用（可能包含代码操作）
+  if grep -qiE '(Bash|执行命令|运行命令|bash command)' "$output_file" 2>/dev/null; then
+    log_analysis "检测到 Bash 工具调用"
+    RESPONSE_HAS_TOOL_CALLS="true"
+    changes_detected=true
+  fi
+
+  if [ "$changes_detected" = "true" ]; then
+    RESPONSE_HAS_CODE_CHANGES="true"
+    return 0
+  fi
+
+  log_analysis "未检测到代码修改操作"
+  return 1
+}
+
+# 检测是否有 git commit
+# 参数: $1 - 输出文件路径
+# 返回: 0 = 检测到 commit, 1 = 未检测到
+detect_git_commit() {
+  local output_file="$1"
+
+  if [ ! -f "$output_file" ]; then
+    return 1
+  fi
+
+  # 检测 git commit 相关输出
+  # 常见模式：
+  # - "git commit -m" 命令
+  # - "committed" 关键词
+  # - "Created commit" 消息
+  # - commit hash 格式 [xxx abc1234]
+
+  if grep -qiE 'git\s+commit\s+-m' "$output_file" 2>/dev/null; then
+    log_analysis "检测到 git commit 命令"
+    RESPONSE_HAS_GIT_COMMIT="true"
+    return 0
+  fi
+
+  if grep -qiE '(committed|提交了|已提交|commit.*created|created.*commit)' "$output_file" 2>/dev/null; then
+    log_analysis "检测到 commit 确认消息"
+    RESPONSE_HAS_GIT_COMMIT="true"
+    return 0
+  fi
+
+  # 检测 commit hash 格式 (例如: [main abc1234] 或 abc1234)
+  if grep -qE '\[[a-z/-]+\s+[a-f0-9]{7,}\]' "$output_file" 2>/dev/null; then
+    log_analysis "检测到 commit hash"
+    RESPONSE_HAS_GIT_COMMIT="true"
+    return 0
+  fi
+
+  log_analysis "未检测到 git commit"
+  return 1
+}
+
+# 检测可能的误判信号 - 意图但未行动
+# 参数: $1 - 输出文件路径
+# 返回: 警告标志字符串
+detect_false_positive_signals() {
+  local output_file="$1"
+  local warnings=""
+
+  if [ ! -f "$output_file" ]; then
+    return
+  fi
+
+  # 检测"将要做"但可能没做的模式
+  # 中文模式
+  if grep -qE '(我将|我会|我要|让我|接下来我|下一步我).*(修改|编辑|创建|添加|实现)' "$output_file" 2>/dev/null; then
+    # 检查是否实际执行了（查找后续的工具调用或结果）
+    local line_count=$(wc -l < "$output_file" | tr -d ' ')
+    local intent_line=$(grep -nE '(我将|我会|我要|让我|接下来我|下一步我).*(修改|编辑|创建|添加|实现)' "$output_file" 2>/dev/null | head -1 | cut -d: -f1)
+
+    if [ -n "$intent_line" ] && [ "$line_count" -lt $((intent_line + 20)) ]; then
+      warnings="${warnings}INTENT_WITHOUT_ACTION;"
+      log_analysis "⚠️ 警告: 检测到意图表达但输出过短，可能未实际执行"
+    fi
+  fi
+
+  # 英文模式
+  if grep -qiE "(I will|I'm going to|Let me|I'll).*(edit|modify|create|add|implement)" "$output_file" 2>/dev/null; then
+    local line_count=$(wc -l < "$output_file" | tr -d ' ')
+    local intent_line=$(grep -niE "(I will|I'm going to|Let me|I'll).*(edit|modify|create|add|implement)" "$output_file" 2>/dev/null | head -1 | cut -d: -f1)
+
+    if [ -n "$intent_line" ] && [ "$line_count" -lt $((intent_line + 20)) ]; then
+      warnings="${warnings}INTENT_WITHOUT_ACTION_EN;"
+      log_analysis "⚠️ Warning: Intent expression detected but output too short"
+    fi
+  fi
+
+  # 检测错误或中断信号
+  if grep -qiE '(error|failed|失败|错误|异常|Exception|无法|cannot|could not)' "$output_file" 2>/dev/null; then
+    warnings="${warnings}ERROR_DETECTED;"
+    log_analysis "⚠️ 警告: 检测到错误或失败信息"
+  fi
+
+  # 检测超时或中断
+  if grep -qiE '(timeout|timed out|超时|中断|interrupted)' "$output_file" 2>/dev/null; then
+    warnings="${warnings}TIMEOUT_DETECTED;"
+    log_analysis "⚠️ 警告: 检测到超时或中断"
+  fi
+
+  # 检测"无法完成"或"需要帮助"的信号
+  if grep -qiE '(无法完成|cannot complete|need help|需要帮助|stuck|卡住|blocked)' "$output_file" 2>/dev/null; then
+    warnings="${warnings}BLOCKED_DETECTED;"
+    log_analysis "⚠️ 警告: 检测到任务阻塞信号"
+  fi
+
+  RESPONSE_WARNING_FLAGS="$warnings"
+}
+
+# 计算置信度
+# 基于检测到的信号综合判断
+calculate_confidence() {
+  local confidence_score=0
+
+  # 正面信号加分
+  [ "$RESPONSE_HAS_CODE_CHANGES" = "true" ] && confidence_score=$((confidence_score + 30))
+  [ "$RESPONSE_HAS_GIT_COMMIT" = "true" ] && confidence_score=$((confidence_score + 40))
+  [ "$RESPONSE_HAS_FILE_EDITS" = "true" ] && confidence_score=$((confidence_score + 20))
+  [ "$RESPONSE_HAS_TOOL_CALLS" = "true" ] && confidence_score=$((confidence_score + 10))
+
+  # 警告信号减分
+  if echo "$RESPONSE_WARNING_FLAGS" | grep -q "INTENT_WITHOUT_ACTION"; then
+    confidence_score=$((confidence_score - 30))
+  fi
+  if echo "$RESPONSE_WARNING_FLAGS" | grep -q "ERROR_DETECTED"; then
+    confidence_score=$((confidence_score - 20))
+  fi
+  if echo "$RESPONSE_WARNING_FLAGS" | grep -q "TIMEOUT_DETECTED"; then
+    confidence_score=$((confidence_score - 25))
+  fi
+  if echo "$RESPONSE_WARNING_FLAGS" | grep -q "BLOCKED_DETECTED"; then
+    confidence_score=$((confidence_score - 35))
+  fi
+
+  # 确定置信度等级
+  if [ $confidence_score -ge 60 ]; then
+    RESPONSE_CONFIDENCE="high"
+  elif [ $confidence_score -ge 30 ]; then
+    RESPONSE_CONFIDENCE="medium"
+  else
+    RESPONSE_CONFIDENCE="low"
+  fi
+
+  log_analysis "置信度得分: $confidence_score -> $RESPONSE_CONFIDENCE"
+}
+
+# 主分析函数 - 综合分析 Claude 输出
+# 参数: $1 - 输出文件路径
+# 返回: 0 = 分析完成
+analyze_response() {
+  local output_file="$1"
+  local log_file="$2"
+
+  # 重置分析状态
+  RESPONSE_ANALYSIS_LOG=""
+  RESPONSE_HAS_CODE_CHANGES="false"
+  RESPONSE_HAS_GIT_COMMIT="false"
+  RESPONSE_HAS_FILE_EDITS="false"
+  RESPONSE_HAS_TOOL_CALLS="false"
+  RESPONSE_CONFIDENCE="low"
+  RESPONSE_WARNING_FLAGS=""
+
+  log_analysis "========== 响应分析开始 =========="
+
+  if [ ! -f "$output_file" ]; then
+    log_analysis "错误: 输出文件不存在"
+    echo ">>> [响应分析器] 无法分析 - 输出文件不存在"
+    return 1
+  fi
+
+  local file_size=$(stat -f%z "$output_file" 2>/dev/null || echo "0")
+  local line_count=$(wc -l < "$output_file" 2>/dev/null | tr -d ' ' || echo "0")
+  log_analysis "输出文件大小: $file_size bytes, 行数: $line_count"
+
+  # 执行各项检测
+  detect_code_changes "$output_file"
+  detect_git_commit "$output_file"
+  detect_false_positive_signals "$output_file"
+
+  # 计算置信度
+  calculate_confidence
+
+  log_analysis "========== 响应分析结束 =========="
+
+  # 输出分析结果
+  echo ""
+  echo ">>> [响应分析器] 分析结果:"
+  echo "    代码修改: $([ "$RESPONSE_HAS_CODE_CHANGES" = "true" ] && echo "✓ 是" || echo "✗ 否")"
+  echo "    Git Commit: $([ "$RESPONSE_HAS_GIT_COMMIT" = "true" ] && echo "✓ 是" || echo "✗ 否")"
+  echo "    文件编辑: $([ "$RESPONSE_HAS_FILE_EDITS" = "true" ] && echo "✓ 是" || echo "✗ 否")"
+  echo "    工具调用: $([ "$RESPONSE_HAS_TOOL_CALLS" = "true" ] && echo "✓ 是" || echo "✗ 否")"
+  echo "    置信度: $RESPONSE_CONFIDENCE"
+
+  if [ -n "$RESPONSE_WARNING_FLAGS" ]; then
+    echo "    ⚠️  警告标志: $RESPONSE_WARNING_FLAGS"
+  fi
+
+  # 如果提供了日志文件，将分析日志追加到其中
+  if [ -n "$log_file" ] && [ -f "$log_file" ]; then
+    echo "" >> "$log_file"
+    echo "========== 响应分析日志 ==========" >> "$log_file"
+    echo -e "$RESPONSE_ANALYSIS_LOG" >> "$log_file"
+    log_analysis "分析日志已追加到: $log_file"
+  fi
+
+  return 0
+}
+
+# 显示分析摘要（用于状态更新）
+get_analysis_summary() {
+  local summary=""
+
+  if [ "$RESPONSE_HAS_GIT_COMMIT" = "true" ]; then
+    summary="有 commit"
+  elif [ "$RESPONSE_HAS_CODE_CHANGES" = "true" ]; then
+    summary="有代码修改"
+  elif [ "$RESPONSE_HAS_TOOL_CALLS" = "true" ]; then
+    summary="有工具调用"
+  else
+    summary="无明显操作"
+  fi
+
+  if [ -n "$RESPONSE_WARNING_FLAGS" ]; then
+    summary="$summary (有警告)"
+  fi
+
+  echo "$summary [$RESPONSE_CONFIDENCE]"
+}
+
+# ============================================================================
 # 双条件退出验证 - 检测 <promise>COMPLETE</promise> 和 prd.json 状态
 # ============================================================================
 
@@ -1192,6 +1495,13 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     update_status "failed" "第 $i 次迭代的所有重试都失败"
     LAST_OUTPUT_FILE=""
     # 继续下一次迭代
+  else
+    # 迭代成功，执行响应分析
+    echo ""
+    echo ">>> 执行响应分析..."
+    analyze_response "$LAST_OUTPUT_FILE" "$LOG_FILE"
+    ANALYSIS_SUMMARY=$(get_analysis_summary)
+    echo ">>> 分析摘要: $ANALYSIS_SUMMARY"
   fi
 
   # 检查是否完成 - 使用双条件验证
