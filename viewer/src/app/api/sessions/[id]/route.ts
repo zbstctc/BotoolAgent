@@ -112,3 +112,36 @@ export async function GET(
     );
   }
 }
+
+/**
+ * DELETE /api/sessions/[id]
+ * Delete a session from the archive
+ */
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const sessionDir = path.join(ARCHIVE_DIR, id);
+
+    // Check if session directory exists
+    if (!fs.existsSync(sessionDir)) {
+      return NextResponse.json(
+        { error: 'Session not found' },
+        { status: 404 }
+      );
+    }
+
+    // Delete the directory recursively
+    fs.rmSync(sessionDir, { recursive: true, force: true });
+
+    return NextResponse.json({ success: true, deleted: id });
+  } catch (error) {
+    console.error('Error deleting session:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete session' },
+      { status: 500 }
+    );
+  }
+}

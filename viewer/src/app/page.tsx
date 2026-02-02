@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { TaskHistory, type TaskHistoryItem, type TaskStatus, type TaskStage } from '@/components';
 
 interface PRDItem {
   id: string;
@@ -21,6 +22,16 @@ interface SessionItem {
   tasksTotal: number;
   branchName?: string;
   description?: string;
+}
+
+// Extended session item from API
+interface ExtendedSessionItem extends SessionItem {
+  taskStatus: TaskStatus;
+  stage: TaskStage;
+  startTime: string;
+  endTime?: string;
+  isMerged: boolean;
+  prUrl?: string;
 }
 
 interface SessionDetails {
@@ -52,19 +63,53 @@ const activeProject: {
 export default function Dashboard() {
   const [prds, setPrds] = useState<PRDItem[]>([]);
   const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [taskHistory, setTaskHistory] = useState<TaskHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [taskHistoryLoading, setTaskHistoryLoading] = useState(true);
   const [selectedPRD, setSelectedPRD] = useState<PRDItem | null>(null);
   const [prdContent, setPrdContent] = useState<string>('');
   const [loadingContent, setLoadingContent] = useState(false);
   const [selectedSession, setSelectedSession] = useState<SessionItem | null>(null);
   const [sessionDetails, setSessionDetails] = useState<SessionDetails | null>(null);
   const [loadingSessionDetails, setLoadingSessionDetails] = useState(false);
+  const [viewMode, setViewMode] = useState<'timeline' | 'list'>('timeline');
+
+  const fetchTaskHistory = useCallback(async () => {
+    setTaskHistoryLoading(true);
+    try {
+      const response = await fetch('/api/sessions?extended=true');
+      const data = await response.json();
+      if (data.extended && data.sessions) {
+        // Convert ExtendedSessionItem to TaskHistoryItem
+        const historyItems: TaskHistoryItem[] = data.sessions.map((s: ExtendedSessionItem) => ({
+          id: s.id,
+          name: s.name,
+          description: s.description,
+          branchName: s.branchName,
+          status: s.taskStatus,
+          stage: s.stage,
+          tasksCompleted: s.tasksCompleted,
+          tasksTotal: s.tasksTotal,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          isMerged: s.isMerged,
+          prUrl: s.prUrl,
+        }));
+        setTaskHistory(historyItems);
+      }
+    } catch (error) {
+      console.error('Failed to fetch task history:', error);
+    } finally {
+      setTaskHistoryLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchPRDs();
     fetchSessions();
-  }, []);
+    fetchTaskHistory();
+  }, [fetchTaskHistory]);
 
   async function fetchPRDs() {
     try {
@@ -87,6 +132,44 @@ export default function Dashboard() {
       console.error('Failed to fetch sessions:', error);
     } finally {
       setSessionsLoading(false);
+    }
+  }
+
+  // Handle continue task
+  function handleContinueTask(task: TaskHistoryItem) {
+    // Navigate to the appropriate stage
+    window.location.href = `/stage${task.stage}?session=${task.id}`;
+  }
+
+  // Handle merge task
+  async function handleMergeTask(task: TaskHistoryItem) {
+    if (!task.branchName) return;
+    // Navigate to stage 5 for merge
+    window.location.href = `/stage5?session=${task.id}`;
+  }
+
+  // Handle delete task
+  async function handleDeleteTask(task: TaskHistoryItem) {
+    if (!confirm(`确定要删除任务 "${task.name}" 吗？此操作不可撤销。`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/sessions/${task.id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        // Refresh the task history
+        fetchTaskHistory();
+        fetchSessions();
+      } else {
+        const error = await response.json();
+        alert(`删除失败: ${error.error || '未知错误'}`);
+      }
+    } catch (error) {
+      console.error('Failed to delete task:', error);
+      alert('删除失败，请稍后重试');
     }
   }
 
@@ -233,44 +316,78 @@ export default function Dashboard() {
           )}
         </section>
 
-        {/* Right: History Sessions */}
+        {/* Right: Task History */}
         <section className="flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-neutral-900">
-              History Sessions
+              任务历史
             </h2>
-            <span className="text-sm text-neutral-500">
-              {sessions.length} sessions
-            </span>
+            <div className="flex items-center gap-2">
+              {/* View mode toggle */}
+              <div className="flex items-center bg-neutral-100 rounded-md p-0.5">
+                <button
+                  onClick={() => setViewMode('timeline')}
+                  className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                    viewMode === 'timeline'
+                      ? 'bg-white text-neutral-900 shadow-sm'
+                      : 'text-neutral-500 hover:text-neutral-700'
+                  }`}
+                >
+                  时间线
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-white text-neutral-900 shadow-sm'
+                      : 'text-neutral-500 hover:text-neutral-700'
+                  }`}
+                >
+                  列表
+                </button>
+              </div>
+            </div>
           </div>
 
-          {sessionsLoading ? (
-            <div className="flex flex-col gap-2">
-              {[1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="animate-pulse rounded-lg border border-neutral-200 bg-white p-4"
-                >
-                  <div className="h-4 bg-neutral-200 rounded w-3/4 mb-2" />
-                  <div className="h-3 bg-neutral-100 rounded w-1/3" />
-                </div>
-              ))}
-            </div>
-          ) : sessions.length > 0 ? (
-            <div className="flex flex-col gap-2">
-              {sessions.map((session) => (
-                <SessionCard
-                  key={session.id}
-                  session={session}
-                  onClick={() => handleSessionClick(session)}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              title="No sessions yet"
-              description="Completed development sessions will appear here."
+          {viewMode === 'timeline' ? (
+            <TaskHistory
+              tasks={taskHistory}
+              loading={taskHistoryLoading}
+              onContinue={handleContinueTask}
+              onMerge={handleMergeTask}
+              onDelete={handleDeleteTask}
+              onRefresh={fetchTaskHistory}
             />
+          ) : (
+            // Legacy list view
+            sessionsLoading ? (
+              <div className="flex flex-col gap-2">
+                {[1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="animate-pulse rounded-lg border border-neutral-200 bg-white p-4"
+                  >
+                    <div className="h-4 bg-neutral-200 rounded w-3/4 mb-2" />
+                    <div className="h-3 bg-neutral-100 rounded w-1/3" />
+                  </div>
+                ))}
+              </div>
+            ) : sessions.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                {sessions.map((session) => (
+                  <SessionCard
+                    key={session.id}
+                    session={session}
+                    onClick={() => handleSessionClick(session)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title="No sessions yet"
+                description="Completed development sessions will appear here."
+              />
+            )
           )}
         </section>
       </div>

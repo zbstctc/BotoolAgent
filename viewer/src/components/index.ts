@@ -19,3 +19,5 @@ export { ChangeSummary } from "./ChangeSummary";
 export type { FileDiff, DiffHunk, DiffLine, DiffSummary, ChangeSummaryProps } from "./ChangeSummary";
 export { CompletionSummary, parseProgressContent } from "./CompletionSummary";
 export type { CompletedTask, CodebasePattern, ProgressSummary, CompletionSummaryProps } from "./CompletionSummary";
+export { TaskHistory } from "./TaskHistory";
+export type { TaskHistoryItem, TaskHistoryProps, TaskStatus, TaskStage } from "./TaskHistory";
