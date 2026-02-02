@@ -12,8 +12,9 @@
 6. 运行质量检查（如 typecheck、lint、test - 使用项目所需的检查工具）
 7. 如果发现可复用的模式，更新 CLAUDE.md 文件（见下文）
 8. 如果检查通过，提交所有更改，提交信息格式：`feat: [任务ID] - [任务标题]`
-9. 更新 PRD，将已完成任务的 `passes` 设为 `true`
-10. 将进度追加到 `progress.txt`
+9. **推送到远程**：`git push origin <branchName>` - 确保进度同步到 GitHub
+10. 更新 PRD，将已完成任务的 `passes` 设为 `true`
+11. 将进度追加到 `progress.txt`
 
 ## 进度报告格式
 

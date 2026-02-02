@@ -203,19 +203,19 @@ function TaskCard({
         </div>
 
         {/* Info row */}
-        <div className="flex items-center gap-4 text-xs text-neutral-500">
+        <div className="flex items-center gap-4 text-xs text-neutral-500 flex-nowrap overflow-x-auto">
           {/* Stage */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-neutral-400">阶段:</span>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="text-neutral-400 whitespace-nowrap">阶段:</span>
             <StageProgress stage={task.stage} status={task.status} />
-            <span>{stageInfo[task.stage].shortName}</span>
+            <span className="whitespace-nowrap">{stageInfo[task.stage].shortName}</span>
           </div>
 
           {/* Progress */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-neutral-400">任务:</span>
-            <span className="font-medium">{task.tasksCompleted}/{task.tasksTotal}</span>
-            <div className="w-16 h-1.5 rounded-full bg-neutral-200 overflow-hidden">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="text-neutral-400 whitespace-nowrap">任务:</span>
+            <span className="font-medium whitespace-nowrap">{task.tasksCompleted}/{task.tasksTotal}</span>
+            <div className="w-16 h-1.5 rounded-full bg-neutral-200 overflow-hidden flex-shrink-0">
               <div
                 className={`h-full transition-all ${
                   task.status === 'completed' || task.status === 'waiting_merge'
@@ -230,17 +230,17 @@ function TaskCard({
           </div>
 
           {/* Time */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-neutral-400">时间:</span>
-            <span>{formatRelativeTime(task.startTime)}</span>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="text-neutral-400 whitespace-nowrap">时间:</span>
+            <span className="whitespace-nowrap">{formatRelativeTime(task.startTime)}</span>
             <span className="text-neutral-300">·</span>
-            <span>{calculateDuration(task.startTime, task.endTime)}</span>
+            <span className="whitespace-nowrap">{calculateDuration(task.startTime, task.endTime)}</span>
           </div>
 
           {/* Branch */}
           {task.branchName && (
-            <div className="flex items-center gap-1.5">
-              <span className="font-mono text-[10px] bg-neutral-100 px-1.5 py-0.5 rounded">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <span className="font-mono text-[10px] bg-neutral-100 px-1.5 py-0.5 rounded whitespace-nowrap">
                 {task.branchName}
               </span>
             </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { AskUserQuestionToolInput, isAskUserQuestionInput } from '@/lib/tool-types';
 import { OptionCard, Option } from './OptionCard';
 
@@ -54,7 +54,7 @@ interface AskUserQuestionRendererProps {
 }
 
 /**
- * Renders AskUserQuestion tool with interactive options
+ * Renders AskUserQuestion tool as a modal dialog
  */
 function AskUserQuestionRenderer({
   toolId,
@@ -62,6 +62,9 @@ function AskUserQuestionRenderer({
   onRespond,
   disabled = false,
 }: AskUserQuestionRendererProps) {
+  // Modal visibility state
+  const [isModalOpen, setIsModalOpen] = useState(true);
+
   // Track answers for each question
   const [answers, setAnswers] = useState<Record<string, string[]>>(() => {
     const initial: Record<string, string[]> = {};
@@ -83,6 +86,13 @@ function AskUserQuestionRenderer({
   // Track submission state
   const [submitted, setSubmitted] = useState(false);
 
+  // Auto-open modal when tool appears
+  useEffect(() => {
+    if (!submitted && !disabled) {
+      setIsModalOpen(true);
+    }
+  }, [submitted, disabled]);
+
   const handleAnswerChange = useCallback((questionKey: string, selected: string[]) => {
     setAnswers((prev) => ({
       ...prev,
@@ -98,10 +108,9 @@ function AskUserQuestionRenderer({
   }, []);
 
   const handleSubmit = useCallback(() => {
-    if (disabled || submitted) return;
+    if (submitted) return;
 
     // Build response in the expected format
-    // Format: { answers: { "question_key": "answer_value" } }
     const responseAnswers: Record<string, string> = {};
 
     input.questions.forEach((question, idx) => {
@@ -110,10 +119,8 @@ function AskUserQuestionRenderer({
       const otherValue = otherValues[`q${idx}`];
 
       if (otherValue) {
-        // User provided custom "other" input
         responseAnswers[questionKey] = otherValue;
       } else if (selectedOptions.length > 0) {
-        // Map selected option IDs back to labels
         const selectedLabels = selectedOptions
           .map((optId) => {
             const option = question.options.find((_, i) => `opt${i}` === optId);
@@ -125,8 +132,9 @@ function AskUserQuestionRenderer({
     });
 
     setSubmitted(true);
+    setIsModalOpen(false);
     onRespond(toolId, { answers: responseAnswers });
-  }, [disabled, submitted, input.questions, answers, otherValues, toolId, onRespond]);
+  }, [submitted, input.questions, answers, otherValues, toolId, onRespond]);
 
   // Check if we can submit (at least one answer per question)
   const canSubmit = input.questions.every((_, idx) => {
@@ -134,73 +142,119 @@ function AskUserQuestionRenderer({
     return answers[questionKey].length > 0 || otherValues[questionKey].trim() !== '';
   });
 
+  // Get first question's header for the trigger button
+  const firstQuestionHeader = input.questions[0]?.header || '问题';
+
+  // If submitted, show completion message
+  if (submitted) {
+    return (
+      <div className="flex items-center gap-2 text-green-700 bg-green-50 rounded-lg p-3 border border-green-200">
+        <CheckIcon />
+        <span className="text-sm font-medium">已提交答案</span>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
-      {/* Header */}
-      <div className="flex items-center gap-2 text-blue-700">
+    <>
+      {/* Trigger Button in Chat */}
+      <button
+        onClick={() => setIsModalOpen(true)}
+        className="flex items-center gap-2 text-blue-700 bg-blue-50 rounded-lg px-4 py-3 border border-blue-200 hover:bg-blue-100 transition-colors w-full"
+      >
         <QuestionIcon />
         <span className="font-medium text-sm">Claude 需要你的输入</span>
-      </div>
+        <span className="text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded ml-auto">
+          {firstQuestionHeader}
+        </span>
+        <svg className="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
 
-      {/* Questions */}
-      {input.questions.map((question, idx) => {
-        const questionKey = `q${idx}`;
-        const options: Option[] = question.options.map((opt, optIdx) => ({
-          id: `opt${optIdx}`,
-          label: opt.label,
-          description: opt.description,
-        }));
+      {/* Modal Overlay */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setIsModalOpen(false)}
+          />
 
-        return (
-          <div key={questionKey} className="space-y-3">
-            {/* Question header badge */}
-            {question.header && (
-              <span className="inline-block px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
-                {question.header}
-              </span>
-            )}
+          {/* Modal Content */}
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+              <div className="flex items-center gap-2 text-blue-700">
+                <QuestionIcon />
+                <span className="font-semibold">Claude 需要你的输入</span>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded-lg hover:bg-neutral-100"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
 
-            {/* Question text */}
-            <p className="text-sm font-medium text-neutral-900">{question.question}</p>
+            {/* Questions - Scrollable */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+              {input.questions.map((question, idx) => {
+                const questionKey = `q${idx}`;
+                const options: Option[] = question.options.map((opt, optIdx) => ({
+                  id: `opt${optIdx}`,
+                  label: opt.label,
+                  description: opt.description,
+                }));
 
-            {/* Options */}
-            <OptionCard
-              options={options}
-              mode={question.multiSelect ? 'multi' : 'single'}
-              selected={answers[questionKey]}
-              onChange={(selected) => handleAnswerChange(questionKey, selected)}
-              showOther={true}
-              otherValue={otherValues[questionKey]}
-              onOtherChange={(value) => handleOtherChange(questionKey, value)}
-              disabled={disabled || submitted}
-            />
+                return (
+                  <div key={questionKey} className="space-y-3">
+                    {/* Question header badge */}
+                    {question.header && (
+                      <span className="inline-block px-2.5 py-1 text-xs font-semibold bg-blue-100 text-blue-700 rounded-full">
+                        {question.header}
+                      </span>
+                    )}
+
+                    {/* Question text */}
+                    <p className="text-base font-medium text-neutral-900">{question.question}</p>
+
+                    {/* Options */}
+                    <OptionCard
+                      options={options}
+                      mode={question.multiSelect ? 'multi' : 'single'}
+                      selected={answers[questionKey]}
+                      onChange={(selected) => handleAnswerChange(questionKey, selected)}
+                      showOther={true}
+                      otherValue={otherValues[questionKey]}
+                      onOtherChange={(value) => handleOtherChange(questionKey, value)}
+                      disabled={false}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+              <button
+                onClick={handleSubmit}
+                disabled={!canSubmit}
+                className={`w-full rounded-xl px-4 py-3 text-sm font-semibold transition-all ${
+                  canSubmit
+                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200'
+                    : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                }`}
+              >
+                确认并继续
+              </button>
+            </div>
           </div>
-        );
-      })}
-
-      {/* Submit button */}
-      {!submitted && (
-        <button
-          onClick={handleSubmit}
-          disabled={!canSubmit || disabled}
-          className={`w-full rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
-            canSubmit && !disabled
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
-              : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-          }`}
-        >
-          确认并继续
-        </button>
-      )}
-
-      {/* Submitted state */}
-      {submitted && (
-        <div className="flex items-center gap-2 text-green-700 bg-green-50 rounded-lg p-3">
-          <CheckIcon />
-          <span className="text-sm font-medium">已提交答案</span>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
