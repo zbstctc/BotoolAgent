@@ -1,11 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import {
-  AskUserQuestionToolInput,
-  AskUserQuestion,
-  isAskUserQuestionInput,
-} from '@/lib/tool-types';
+import { AskUserQuestionToolInput, isAskUserQuestionInput } from '@/lib/tool-types';
 import { OptionCard, Option } from './OptionCard';
 
 export interface ToolUseData {
