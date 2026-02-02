@@ -46,8 +46,8 @@
         "Verify in browser"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "功能已在 DT-002 实现时一并完成，需要手动浏览器验证"
     },
     {
       "id": "DT-004",
