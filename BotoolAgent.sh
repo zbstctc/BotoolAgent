@@ -171,6 +171,10 @@ update_status() {
   local dual_check_promise="${DUAL_CHECK_PROMISE:-false}"
   local dual_check_tasks="${DUAL_CHECK_TASKS:-false}"
 
+  # API Rate Limit 状态（使用全局变量，如果已设置）
+  local api_rate_limit_until="${API_RATE_LIMIT_UNTIL:-0}"
+  local api_rate_limit_remaining="${API_RATE_LIMIT_REMAINING:-0}"
+
   cat > "$STATUS_FILE" << EOF
 {
   "status": "$status",
@@ -197,6 +201,11 @@ update_status() {
   "dualExitCheck": {
     "promiseDetected": $( [ "$dual_check_promise" = "true" ] && echo "true" || echo "false" ),
     "allTasksComplete": $( [ "$dual_check_tasks" = "true" ] && echo "true" || echo "false" )
+  },
+  "apiRateLimit": {
+    "waiting": $( [ "$api_rate_limit_remaining" -gt 0 ] && echo "true" || echo "false" ),
+    "resetAt": $api_rate_limit_until,
+    "remainingSeconds": $api_rate_limit_remaining
   }
 }
 EOF
@@ -496,6 +505,185 @@ check_circuit_breaker() {
 
     return 0
   fi
+}
+
+# ============================================================================
+# Anthropic API Rate Limit 处理（5小时限制）
+# ============================================================================
+
+# 全局变量用于 API rate limit 状态
+API_RATE_LIMIT_UNTIL=0
+API_RATE_LIMIT_REMAINING=0
+
+# 检测 Claude 输出是否包含 API rate limit 错误
+# 参数: $1 - 输出文件路径
+# 返回: 0 = 检测到限制, 1 = 未检测到
+# 设置全局变量: API_RATE_LIMIT_UNTIL（解除时间戳）
+check_api_rate_limit() {
+  local output_file="$1"
+
+  if [ ! -f "$output_file" ]; then
+    return 1
+  fi
+
+  # 检测常见的 rate limit 错误消息
+  # Anthropic API 返回的错误格式示例:
+  # - "rate_limit_error" / "rate limit exceeded"
+  # - "You've exceeded your current usage limit"
+  # - "Request was throttled"
+  # - "Too many requests"
+  # - 包含 "retry after" 或 "try again in" 的消息
+
+  local rate_limit_detected=false
+  local retry_seconds=0
+
+  # 检查各种 rate limit 错误模式
+  if grep -qi "rate.limit\|rate_limit\|usage.limit\|too.many.requests\|throttled" "$output_file" 2>/dev/null; then
+    rate_limit_detected=true
+
+    # 尝试提取重试时间
+    # 模式1: "retry after X seconds" 或 "try again in X seconds"
+    local retry_match=$(grep -oiE "(retry|try).*(after|in)[^0-9]*([0-9]+)" "$output_file" 2>/dev/null | grep -oE "[0-9]+" | head -1)
+    if [ -n "$retry_match" ]; then
+      retry_seconds=$retry_match
+    fi
+
+    # 模式2: "X seconds" 或 "X minutes" 或 "X hours" 紧跟在 rate limit 消息后
+    if [ "$retry_seconds" -eq 0 ]; then
+      local time_match=$(grep -oiE "[0-9]+\s*(second|minute|hour)" "$output_file" 2>/dev/null | head -1)
+      if [ -n "$time_match" ]; then
+        local value=$(echo "$time_match" | grep -oE "[0-9]+")
+        local unit=$(echo "$time_match" | grep -oiE "(second|minute|hour)")
+        case "$unit" in
+          second|Second|SECOND)
+            retry_seconds=$value
+            ;;
+          minute|Minute|MINUTE)
+            retry_seconds=$((value * 60))
+            ;;
+          hour|Hour|HOUR)
+            retry_seconds=$((value * 3600))
+            ;;
+        esac
+      fi
+    fi
+
+    # 模式3: 检测 Anthropic 特定的 5 小时限制消息
+    if grep -qi "5.hour\|five.hour" "$output_file" 2>/dev/null; then
+      retry_seconds=$((5 * 3600))  # 5 小时 = 18000 秒
+    fi
+
+    # 如果没有检测到具体时间，使用默认值（30 分钟）
+    if [ "$retry_seconds" -eq 0 ]; then
+      retry_seconds=1800  # 默认 30 分钟
+      echo ">>> [API Rate Limit] 无法解析具体等待时间，使用默认值 30 分钟"
+    fi
+  fi
+
+  if [ "$rate_limit_detected" = "true" ]; then
+    local now=$(date +%s)
+    API_RATE_LIMIT_UNTIL=$((now + retry_seconds))
+    API_RATE_LIMIT_REMAINING=$retry_seconds
+    return 0
+  fi
+
+  return 1
+}
+
+# 格式化时间显示
+format_duration() {
+  local seconds=$1
+  local hours=$((seconds / 3600))
+  local minutes=$(((seconds % 3600) / 60))
+  local secs=$((seconds % 60))
+
+  if [ $hours -gt 0 ]; then
+    printf "%d小时%02d分%02d秒" $hours $minutes $secs
+  elif [ $minutes -gt 0 ]; then
+    printf "%d分%02d秒" $minutes $secs
+  else
+    printf "%d秒" $secs
+  fi
+}
+
+# 等待 API rate limit 解除
+# 参数: $1 - 等待秒数
+wait_for_api_rate_limit() {
+  local wait_seconds=$1
+
+  if [ "$wait_seconds" -le 0 ]; then
+    return 0
+  fi
+
+  echo ""
+  echo "╔══════════════════════════════════════════════════════════════════╗"
+  echo "║  ⏳ Anthropic API Rate Limit - 等待限制解除                      ║"
+  echo "╠══════════════════════════════════════════════════════════════════╣"
+  echo "║  检测到 API 调用频率限制（可能是 5 小时限制）                   ║"
+  echo "║  预计等待时间: $(format_duration $wait_seconds)                                         "
+  echo "║  解除时间: $(date -r $API_RATE_LIMIT_UNTIL '+%Y-%m-%d %H:%M:%S')                        "
+  echo "╠══════════════════════════════════════════════════════════════════╣"
+  echo "║  脚本将自动等待并在限制解除后继续...                            ║"
+  echo "║  按 Ctrl+C 可中断等待                                            ║"
+  echo "╚══════════════════════════════════════════════════════════════════╝"
+  echo ""
+
+  # 更新状态为 waiting_rate_limit
+  update_status "waiting_rate_limit" "API 限制等待中，预计 $(format_duration $wait_seconds) 后继续"
+
+  local remaining=$wait_seconds
+  local update_interval=60  # 每分钟更新一次状态
+
+  while [ $remaining -gt 0 ]; do
+    # 显示倒计时
+    printf "\r>>> 等待中... $(format_duration $remaining)          "
+
+    # 计算本次睡眠时间（最多 60 秒）
+    local sleep_time=$update_interval
+    if [ $remaining -lt $update_interval ]; then
+      sleep_time=$remaining
+    fi
+
+    sleep $sleep_time
+    remaining=$((remaining - sleep_time))
+
+    # 更新全局状态变量
+    API_RATE_LIMIT_REMAINING=$remaining
+
+    # 每分钟更新状态文件
+    if [ $((remaining % 60)) -eq 0 ] && [ $remaining -gt 0 ]; then
+      update_status "waiting_rate_limit" "API 限制等待中，剩余 $(format_duration $remaining)"
+    fi
+  done
+
+  echo ""
+  echo ">>> API Rate Limit 等待完成，继续执行..."
+
+  # 重置状态
+  API_RATE_LIMIT_UNTIL=0
+  API_RATE_LIMIT_REMAINING=0
+
+  return 0
+}
+
+# 处理 API rate limit（检测并等待）
+# 参数: $1 - 输出文件路径
+# 返回: 0 = 已处理（等待完成或无限制）, 1 = 应该重试
+handle_api_rate_limit() {
+  local output_file="$1"
+
+  if check_api_rate_limit "$output_file"; then
+    echo ""
+    echo ">>> [API Rate Limit] 检测到 API 限制错误"
+    echo ">>> [API Rate Limit] 需要等待 $(format_duration $API_RATE_LIMIT_REMAINING)"
+
+    # 等待限制解除
+    wait_for_api_rate_limit $API_RATE_LIMIT_REMAINING
+
+    return 1  # 返回 1 表示应该重试
+  fi
+
+  return 0  # 无限制
 }
 
 # 后台监控进程健康
@@ -957,19 +1145,41 @@ for i in $(seq 1 $MAX_ITERATIONS); do
       continue
     elif [ $EXIT_CODE -ne 0 ]; then
       echo ">>> Claude 退出，退出码: $EXIT_CODE"
-      update_status "error" "Claude 退出，退出码 $EXIT_CODE"
-      ((RETRY_COUNT++))
 
-      if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-        echo ">>> 正在重试...（第 $RETRY_COUNT 次，共 $MAX_RETRIES 次）"
+      # 检查是否是 API rate limit 错误
+      if handle_api_rate_limit "$OUTPUT_FILE"; then
+        # 不是 rate limit 错误，按正常错误处理
+        update_status "error" "Claude 退出，退出码 $EXIT_CODE"
+        ((RETRY_COUNT++))
+
+        if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+          echo ">>> 正在重试...（第 $RETRY_COUNT 次，共 $MAX_RETRIES 次）"
+          wait_for_network
+          sleep 5
+        fi
+        rm -f "$OUTPUT_FILE"
+        continue
+      else
+        # 是 rate limit 错误，已经等待完成，重试但不增加计数
+        echo ">>> API Rate Limit 等待完成，重试当前迭代..."
+        rm -f "$OUTPUT_FILE"
+        # 重新检查网络
         wait_for_network
-        sleep 5
+        continue
       fi
+    fi
+
+    # 成功退出，但仍需检查输出中是否包含 rate limit 错误
+    # （有时 API 限制错误会在部分输出后发生）
+    if ! handle_api_rate_limit "$OUTPUT_FILE"; then
+      # 检测到 rate limit 错误并已等待完成，重试
+      echo ">>> 输出中检测到 API Rate Limit 错误，等待后重试..."
       rm -f "$OUTPUT_FILE"
+      wait_for_network
       continue
     fi
 
-    # 成功 - 显示输出
+    # 真正成功 - 显示输出
     cat "$OUTPUT_FILE"
     # 保存输出文件路径用于双条件验证（稍后删除）
     LAST_OUTPUT_FILE="$OUTPUT_FILE"
