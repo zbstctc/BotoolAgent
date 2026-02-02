@@ -11,3 +11,5 @@ export { TaskEditor } from "./TaskEditor";
 export { SessionResumeDialog } from "./SessionResumeDialog";
 export { ToolRenderer } from "./ToolRenderer";
 export type { ToolUseData, ToolRendererProps } from "./ToolRenderer";
+export { TestResults } from "./TestResults";
+export type { TestResult, TestSummary, TestResultsProps, TestType } from "./TestResults";
