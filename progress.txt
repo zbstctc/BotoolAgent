@@ -6,6 +6,8 @@
 - 该文件支持三种模式：prd、convert、default，通过 `getSystemPrompt()` 函数切换
 - AskUserQuestion 工具的 questions 数组可以一次包含 2-4 个问题
 - AskUserQuestion 问题类型：有 options 的选择题，无 options 的文本输入题（通过 `isTextInputQuestion()` 判断）
+- localStorage 会话进度保存在 `viewer/src/lib/prd-session-storage.ts`，键为 `botool-prd-session`
+- Stage 1 页面有两种会话恢复机制：服务端 session（通过 prdId）和 localStorage 本地会话
 
 ---
 
@@ -50,5 +52,22 @@
   - OptionCard 的 `textInputOnly` prop 控制是否只显示文本输入框
   - 文本输入类型通过 `inputType` 属性控制：'text' 单行，'textarea' 多行
   - 当 options 可选时，TypeScript 需要额外的空值检查（使用 `!` 断言或条件判断）
+  - 需要手动浏览器验证
+---
+
+## 2026-02-03 01:XX - DT-005 & DT-006
+- 实现了什么：问答进度保存到 localStorage，支持会话恢复（DT-005 和 DT-006 一并实现）
+- 修改了哪些文件：
+  - `viewer/src/lib/prd-session-storage.ts` - 新文件，管理 localStorage 保存和读取
+  - `viewer/src/components/ToolRenderer.tsx` - 从 localStorage 初始化状态，答案变化时自动保存
+  - `viewer/src/components/SessionResumeDialog.tsx` - 扩展支持显示进度信息（回答 X/Y 个问题、上次更新时间）
+  - `viewer/src/app/stage1/page.tsx` - 检测 localStorage 中未完成会话并显示恢复对话框
+- **未来迭代的经验教训：**
+  - localStorage 键为 `botool-prd-session`，存储 `SavedPrdSession` 对象
+  - `getSavedPrdSession()` 和 `saveQuestionAnswers()` 是核心函数
+  - 在 ToolRenderer 中使用 useEffect 保存，但需注意依赖数组避免无限循环
+  - 移除了 set-state-in-effect 问题，改用初始化函数计算 modal 状态
+  - SessionResumeDialog 需要传入 `currentTime` 来避免 render 期间调用 Date.now() 的纯度问题
+  - DT-005 和 DT-006 功能紧密相关，一并实现更高效
   - 需要手动浏览器验证
 ---
