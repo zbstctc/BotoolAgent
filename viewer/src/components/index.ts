@@ -22,3 +22,4 @@ export type { CompletedTask, CodebasePattern, ProgressSummary, CompletionSummary
 export { TaskHistory } from "./TaskHistory";
 export type { TaskHistoryItem, TaskHistoryProps, TaskStatus, TaskStage } from "./TaskHistory";
 export { NewPrdDialog } from "./NewPrdDialog";
+export { PrdSessionList } from "./PrdSessionList";

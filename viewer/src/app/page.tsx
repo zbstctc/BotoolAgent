@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect, useCallback } from 'react';
-import { TaskHistory, NewPrdDialog, type TaskHistoryItem, type TaskStatus, type TaskStage } from '@/components';
+import { TaskHistory, NewPrdDialog, PrdSessionList, type TaskHistoryItem, type TaskStatus, type TaskStage } from '@/components';
 
 interface PRDItem {
   id: string;
@@ -317,8 +317,20 @@ export default function Dashboard() {
           )}
         </section>
 
-        {/* Right: Task History */}
-        <section className="flex flex-col">
+        {/* Right: In-progress PRD Sessions + Task History */}
+        <section className="flex flex-col gap-6">
+          {/* In-progress PRD Sessions */}
+          <div className="flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-neutral-900">
+                进行中的 PRD
+              </h2>
+            </div>
+            <PrdSessionList />
+          </div>
+
+          {/* Task History */}
+          <div className="flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-neutral-900">
               任务历史
@@ -390,6 +402,7 @@ export default function Dashboard() {
               />
             )
           )}
+          </div>
         </section>
       </div>
 
