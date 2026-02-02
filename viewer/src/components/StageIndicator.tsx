@@ -1,8 +1,11 @@
 'use client';
 
+import Link from 'next/link';
+
 interface StageIndicatorProps {
   currentStage: 1 | 2 | 3 | 4 | 5;
   completedStages?: number[];
+  showBackButton?: boolean;
 }
 
 const stages = [
@@ -13,11 +16,36 @@ const stages = [
   { id: 5, name: 'Review', available: true },
 ];
 
-export function StageIndicator({ currentStage, completedStages = [] }: StageIndicatorProps) {
+export function StageIndicator({ currentStage, completedStages = [], showBackButton = true }: StageIndicatorProps) {
   return (
     <div className="w-full bg-white border-b border-neutral-200">
       <div className="mx-auto max-w-5xl px-4 py-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          {/* Back to Dashboard button */}
+          {showBackButton && (
+            <Link
+              href="/"
+              className="flex items-center gap-1.5 text-sm text-neutral-600 hover:text-neutral-900 transition-colors -ml-1 px-2 py-1 rounded-md hover:bg-neutral-100"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                />
+              </svg>
+              <span>Dashboard</span>
+            </Link>
+          )}
+
+          {/* Stage indicators */}
+          <div className="flex items-center justify-between flex-1">
           {stages.map((stage, index) => {
             const isCompleted = completedStages.includes(stage.id);
             const isCurrent = stage.id === currentStage;
@@ -101,6 +129,7 @@ export function StageIndicator({ currentStage, completedStages = [] }: StageIndi
               </div>
             );
           })}
+          </div>
         </div>
       </div>
     </div>
