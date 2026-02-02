@@ -300,7 +300,7 @@ export default function Stage1Page() {
   if (!prdId && !localSessionId) {
     return (
       <div className="flex flex-col h-[calc(100vh-64px)]">
-        <StageIndicator currentStage={1} completedStages={[]} />
+        <StageIndicator currentStage={1} completedStages={[]} projectName={projectName} />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-neutral-500">Redirecting to Dashboard...</p>
         </div>
@@ -311,7 +311,7 @@ export default function Stage1Page() {
   return (
     <div className="flex flex-col h-[calc(100vh-64px)]">
       {/* Stage Indicator */}
-      <StageIndicator currentStage={1} completedStages={[]} />
+      <StageIndicator currentStage={1} completedStages={[]} projectName={projectName} />
 
       {/* Session Resume Dialog (server-side session for existing PRD) */}
       <SessionResumeDialog

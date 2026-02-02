@@ -117,7 +117,7 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
               placeholder="例如：待办事项应用、电商后台系统"
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
               disabled={isCreating}
             />
             <p className="mt-2 text-xs text-neutral-500">
