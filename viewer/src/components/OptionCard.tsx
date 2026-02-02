@@ -17,6 +17,12 @@ export interface OptionCardProps {
   otherValue?: string;
   onOtherChange?: (value: string) => void;
   disabled?: boolean;
+  /** For text-only questions (no predefined options) */
+  textInputOnly?: boolean;
+  /** Input type: 'text' for single line, 'textarea' for multiline */
+  inputType?: 'text' | 'textarea';
+  /** Placeholder for text input */
+  placeholder?: string;
 }
 
 export function OptionCard({
@@ -28,8 +34,41 @@ export function OptionCard({
   otherValue = '',
   onOtherChange,
   disabled = false,
+  textInputOnly = false,
+  inputType = 'text',
+  placeholder,
 }: OptionCardProps) {
   const [isOtherSelected, setIsOtherSelected] = useState(false);
+
+  // For text-only questions, render just the input field
+  if (textInputOnly) {
+    return (
+      <div className="space-y-2">
+        {inputType === 'textarea' ? (
+          <textarea
+            value={otherValue}
+            onChange={(e) => onOtherChange?.(e.target.value)}
+            placeholder={placeholder || '请输入您的答案...'}
+            disabled={disabled}
+            rows={4}
+            className="w-full rounded-lg border-2 border-neutral-200 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:bg-neutral-50 disabled:cursor-not-allowed resize-none transition-all"
+          />
+        ) : (
+          <input
+            type="text"
+            value={otherValue}
+            onChange={(e) => onOtherChange?.(e.target.value)}
+            placeholder={placeholder || '请输入您的答案...'}
+            disabled={disabled}
+            className="w-full rounded-lg border-2 border-neutral-200 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:bg-neutral-50 disabled:cursor-not-allowed transition-all"
+          />
+        )}
+        <p className="text-xs text-neutral-400">
+          {inputType === 'textarea' ? '可输入多行文本' : '请输入文本回答'}
+        </p>
+      </div>
+    );
+  }
 
   const handleOptionClick = (optionId: string) => {
     if (disabled) return;

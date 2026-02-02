@@ -12,8 +12,12 @@ export interface AskUserQuestionOption {
 export interface AskUserQuestion {
   question: string;
   header?: string;
-  options: AskUserQuestionOption[];
+  options?: AskUserQuestionOption[];
   multiSelect?: boolean;
+  /** For text input questions without predefined options */
+  inputType?: 'text' | 'textarea';
+  /** Placeholder text for text input */
+  placeholder?: string;
 }
 
 export interface AskUserQuestionToolInput {
@@ -33,8 +37,15 @@ export function isAskUserQuestionInput(
         typeof q === 'object' &&
         q !== null &&
         'question' in q &&
-        'options' in q &&
-        Array.isArray((q as AskUserQuestion).options)
+        // options can be optional for text input questions
+        (('options' in q && Array.isArray((q as AskUserQuestion).options)) ||
+          !('options' in q) ||
+          (q as AskUserQuestion).options === undefined)
     )
   );
+}
+
+// Helper to check if a question is text-input only (no options)
+export function isTextInputQuestion(question: AskUserQuestion): boolean {
+  return !question.options || question.options.length === 0;
 }

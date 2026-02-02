@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { AskUserQuestionToolInput, isAskUserQuestionInput } from '@/lib/tool-types';
+import { AskUserQuestionToolInput, isAskUserQuestionInput, isTextInputQuestion } from '@/lib/tool-types';
 import { OptionCard, Option } from './OptionCard';
 
 export interface ToolUseData {
@@ -120,10 +120,10 @@ function AskUserQuestionRenderer({
 
       if (otherValue) {
         responseAnswers[questionKey] = otherValue;
-      } else if (selectedOptions.length > 0) {
+      } else if (selectedOptions.length > 0 && question.options) {
         const selectedLabels = selectedOptions
           .map((optId) => {
-            const option = question.options.find((_, i) => `opt${i}` === optId);
+            const option = question.options!.find((_, i) => `opt${i}` === optId);
             return option?.label || optId;
           })
           .join(', ');
@@ -141,6 +141,12 @@ function AskUserQuestionRenderer({
     const questionKey = `q${idx}`;
     return answers[questionKey].length > 0 || otherValues[questionKey].trim() !== '';
   });
+
+  // Count answered questions
+  const answeredCount = input.questions.filter((_, idx) => {
+    const questionKey = `q${idx}`;
+    return answers[questionKey].length > 0 || otherValues[questionKey].trim() !== '';
+  }).length;
 
   // Get question count and all unique headers for the trigger button
   const questionCount = input.questions.length;
@@ -197,7 +203,7 @@ function AskUserQuestionRenderer({
             <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
               <div className="flex items-center gap-2 text-blue-700">
                 <QuestionIcon />
-                <span className="font-semibold">Claude 需要你的输入</span>
+                <span className="font-semibold">请回答 {questionCount} 个问题</span>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -213,34 +219,73 @@ function AskUserQuestionRenderer({
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
               {input.questions.map((question, idx) => {
                 const questionKey = `q${idx}`;
-                const options: Option[] = question.options.map((opt, optIdx) => ({
-                  id: `opt${optIdx}`,
-                  label: opt.label,
-                  description: opt.description,
-                }));
+                const isTextOnly = isTextInputQuestion(question);
+                const options: Option[] = isTextOnly
+                  ? []
+                  : (question.options || []).map((opt, optIdx) => ({
+                      id: `opt${optIdx}`,
+                      label: opt.label,
+                      description: opt.description,
+                    }));
+
+                // Check if this question has been answered
+                const isAnswered =
+                  answers[questionKey].length > 0 || otherValues[questionKey].trim() !== '';
 
                 return (
                   <div key={questionKey} className="space-y-3">
-                    {/* Question header badge */}
-                    {question.header && (
-                      <span className="inline-block px-2.5 py-1 text-xs font-semibold bg-blue-100 text-blue-700 rounded-full">
-                        {question.header}
+                    {/* Question number and header */}
+                    <div className="flex items-center gap-2">
+                      {/* Question number with answered indicator */}
+                      <span
+                        className={`inline-flex items-center justify-center w-6 h-6 text-sm font-semibold rounded-full ${
+                          isAnswered
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-neutral-100 text-neutral-600'
+                        }`}
+                      >
+                        {isAnswered ? (
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        ) : (
+                          idx + 1
+                        )}
                       </span>
-                    )}
+                      {/* Question header badge */}
+                      {question.header && (
+                        <span className="inline-block px-2.5 py-1 text-xs font-semibold bg-blue-100 text-blue-700 rounded-full">
+                          {question.header}
+                        </span>
+                      )}
+                    </div>
 
                     {/* Question text */}
                     <p className="text-base font-medium text-neutral-900">{question.question}</p>
 
-                    {/* Options */}
+                    {/* Options or Text Input */}
                     <OptionCard
                       options={options}
                       mode={question.multiSelect ? 'multi' : 'single'}
                       selected={answers[questionKey]}
                       onChange={(selected) => handleAnswerChange(questionKey, selected)}
-                      showOther={true}
+                      showOther={!isTextOnly}
                       otherValue={otherValues[questionKey]}
                       onOtherChange={(value) => handleOtherChange(questionKey, value)}
                       disabled={false}
+                      textInputOnly={isTextOnly}
+                      inputType={question.inputType || 'text'}
+                      placeholder={question.placeholder}
                     />
                   </div>
                 );
@@ -248,7 +293,31 @@ function AskUserQuestionRenderer({
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 border-t border-neutral-100 bg-neutral-50">
+            <div className="px-6 py-4 border-t border-neutral-100 bg-neutral-50 space-y-3">
+              {/* Progress indicator */}
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-neutral-500">
+                  已回答 {answeredCount}/{questionCount}
+                </span>
+                {canSubmit && (
+                  <span className="text-green-600 font-medium flex items-center gap-1">
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    全部完成
+                  </span>
+                )}
+              </div>
               <button
                 onClick={handleSubmit}
                 disabled={!canSubmit}
