@@ -1,9 +1,10 @@
 /**
  * Local storage management for PRD session progress.
- * Saves and restores user answers to questions during PRD creation.
+ * Supports multiple concurrent PRD sessions with progress tracking.
  */
 
-const STORAGE_KEY = 'botool-prd-session';
+const STORAGE_KEY = 'botool-prd-sessions';
+const OLD_STORAGE_KEY = 'botool-prd-session'; // For migration
 
 export interface QuestionAnswer {
   /** Selected option IDs (for multiple choice) */
@@ -12,13 +13,13 @@ export interface QuestionAnswer {
   otherValue: string;
 }
 
-export interface SavedPrdSession {
-  /** Session identifier - can be project name or timestamp */
-  sessionKey: string;
-  /** Project name/description extracted from first user message */
-  projectName: string;
-  /** Timestamp when session was started */
-  startedAt: number;
+export interface PrdSession {
+  /** Unique session ID (UUID) */
+  id: string;
+  /** User-provided project name */
+  name: string;
+  /** Timestamp when session was created */
+  createdAt: number;
   /** Timestamp when session was last updated */
   updatedAt: number;
   /** Total number of questions encountered */
@@ -35,66 +36,210 @@ export interface SavedPrdSession {
   }>;
 }
 
+interface PrdSessionsStorage {
+  version: number;
+  sessions: Record<string, PrdSession>;
+}
+
+// Keep SavedPrdSession with projectName alias for backward compatibility
+export interface SavedPrdSession extends Omit<PrdSession, 'name'> {
+  name: string;
+  /** @deprecated Use 'name' instead */
+  projectName: string;
+}
+
 /**
- * Get saved PRD session from localStorage
+ * Generate a UUID for session IDs
  */
-export function getSavedPrdSession(): SavedPrdSession | null {
-  if (typeof window === 'undefined') return null;
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/**
+ * Get all sessions storage from localStorage
+ */
+function getStorage(): PrdSessionsStorage {
+  if (typeof window === 'undefined') {
+    return { version: 2, sessions: {} };
+  }
 
   try {
+    // First, try to migrate old data if it exists
+    migrateOldSession();
+
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return null;
-
-    const session = JSON.parse(stored) as SavedPrdSession;
-
-    // Validate session structure
-    if (!session.sessionKey || !session.projectName || !session.startedAt) {
-      return null;
+    if (!stored) {
+      return { version: 2, sessions: {} };
     }
 
-    return session;
+    const storage = JSON.parse(stored) as PrdSessionsStorage;
+    return storage;
   } catch {
-    return null;
+    return { version: 2, sessions: {} };
   }
 }
 
 /**
- * Save PRD session to localStorage
+ * Save sessions storage to localStorage
  */
-export function savePrdSession(session: SavedPrdSession): void {
+function saveStorage(storage: PrdSessionsStorage): void {
   if (typeof window === 'undefined') return;
 
   try {
-    session.updatedAt = Date.now();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(storage));
   } catch (err) {
-    console.error('Failed to save PRD session:', err);
+    console.error('Failed to save PRD sessions:', err);
   }
 }
 
 /**
- * Clear saved PRD session from localStorage
+ * Migrate old single-session data to new multi-session format
  */
-export function clearPrdSession(): void {
+function migrateOldSession(): void {
   if (typeof window === 'undefined') return;
 
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    const oldData = localStorage.getItem(OLD_STORAGE_KEY);
+    if (!oldData) return;
+
+    const oldSession = JSON.parse(oldData) as {
+      sessionKey: string;
+      projectName: string;
+      startedAt: number;
+      updatedAt: number;
+      totalQuestions: number;
+      answeredQuestions: number;
+      questionAnswers: Record<string, Record<string, QuestionAnswer>>;
+      messages?: Array<{ id: string; role: 'user' | 'assistant'; content: string }>;
+    };
+
+    // Check if already migrated
+    const existingStorage = localStorage.getItem(STORAGE_KEY);
+    if (existingStorage) {
+      // Storage exists, just remove old key
+      localStorage.removeItem(OLD_STORAGE_KEY);
+      return;
+    }
+
+    // Create new session from old data
+    const sessionId = generateUUID();
+    const newSession: PrdSession = {
+      id: sessionId,
+      name: oldSession.projectName || '未命名项目',
+      createdAt: oldSession.startedAt || Date.now(),
+      updatedAt: oldSession.updatedAt || Date.now(),
+      totalQuestions: oldSession.totalQuestions || 0,
+      answeredQuestions: oldSession.answeredQuestions || 0,
+      questionAnswers: oldSession.questionAnswers || {},
+      messages: oldSession.messages,
+    };
+
+    // Save to new format
+    const newStorage: PrdSessionsStorage = {
+      version: 2,
+      sessions: { [sessionId]: newSession },
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newStorage));
+
+    // Remove old key
+    localStorage.removeItem(OLD_STORAGE_KEY);
+
+    console.log('Migrated old PRD session to new multi-session format');
   } catch (err) {
-    console.error('Failed to clear PRD session:', err);
+    console.error('Failed to migrate old session:', err);
   }
 }
 
 /**
- * Save answers for a specific tool/question set
+ * Create a new PRD session
+ * @param name - User-provided project name
+ * @returns The session ID
  */
-export function saveQuestionAnswers(
+export function createSession(name: string): string {
+  const storage = getStorage();
+  const sessionId = generateUUID();
+
+  const session: PrdSession = {
+    id: sessionId,
+    name: name.trim() || '未命名项目',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    totalQuestions: 0,
+    answeredQuestions: 0,
+    questionAnswers: {},
+  };
+
+  storage.sessions[sessionId] = session;
+  saveStorage(storage);
+
+  return sessionId;
+}
+
+/**
+ * Get a specific session by ID
+ */
+export function getSession(sessionId: string): PrdSession | null {
+  const storage = getStorage();
+  return storage.sessions[sessionId] || null;
+}
+
+/**
+ * Get all sessions, sorted by updatedAt (most recent first)
+ */
+export function getAllSessions(): PrdSession[] {
+  const storage = getStorage();
+  return Object.values(storage.sessions).sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/**
+ * Delete a session by ID
+ */
+export function deleteSession(sessionId: string): void {
+  const storage = getStorage();
+  delete storage.sessions[sessionId];
+  saveStorage(storage);
+}
+
+/**
+ * Update a session with partial data
+ */
+export function updateSession(
+  sessionId: string,
+  data: Partial<Omit<PrdSession, 'id' | 'createdAt'>>
+): void {
+  const storage = getStorage();
+  const session = storage.sessions[sessionId];
+
+  if (!session) {
+    console.warn(`Session ${sessionId} not found`);
+    return;
+  }
+
+  // Merge the update
+  Object.assign(session, data, { updatedAt: Date.now() });
+  saveStorage(storage);
+}
+
+/**
+ * Save answers for a specific tool/question set within a session
+ */
+export function saveSessionAnswers(
+  sessionId: string,
   toolId: string,
   answers: Record<string, QuestionAnswer>,
-  totalQuestions: number,
-  projectName?: string
+  totalQuestions: number
 ): void {
-  const session = getSavedPrdSession() || createNewSession(projectName);
+  const storage = getStorage();
+  const session = storage.sessions[sessionId];
+
+  if (!session) {
+    console.warn(`Session ${sessionId} not found`);
+    return;
+  }
 
   // Update session with new answers
   session.questionAnswers[toolId] = answers;
@@ -111,15 +256,137 @@ export function saveQuestionAnswers(
 
   session.answeredQuestions = answeredCount;
   session.totalQuestions = Math.max(session.totalQuestions, totalQuestions);
+  session.updatedAt = Date.now();
 
-  if (projectName) {
-    session.projectName = projectName;
-  }
-
-  savePrdSession(session);
+  saveStorage(storage);
 }
 
 /**
+ * Update session with chat messages
+ * @param sessionIdOrMessages - Session ID (new API) or messages array (deprecated)
+ * @param messagesArg - Messages array when using new API with sessionId
+ */
+export function updateSessionMessages(
+  sessionIdOrMessages: string | Array<{ id: string; role: 'user' | 'assistant'; content: string }>,
+  messagesArg?: Array<{ id: string; role: 'user' | 'assistant'; content: string }>
+): void {
+  let sessionId: string;
+  let messages: Array<{ id: string; role: 'user' | 'assistant'; content: string }>;
+
+  // Support both old API (just messages) and new API (sessionId, messages)
+  if (typeof sessionIdOrMessages === 'string') {
+    // New API: updateSessionMessages(sessionId, messages)
+    sessionId = sessionIdOrMessages;
+    messages = messagesArg!;
+  } else {
+    // Old API (deprecated): updateSessionMessages(messages)
+    // Use the most recent session
+    const currentSession = getSavedPrdSession();
+    if (!currentSession) {
+      // Create a new session if none exists
+      sessionId = createSession('未命名项目');
+    } else {
+      sessionId = currentSession.id;
+    }
+    messages = sessionIdOrMessages;
+  }
+
+  const storage = getStorage();
+  const session = storage.sessions[sessionId];
+
+  if (!session) {
+    console.warn(`Session ${sessionId} not found`);
+    return;
+  }
+
+  session.messages = messages;
+
+  // Extract project name from first user message if not set or default
+  if (session.name === '未命名项目') {
+    const firstUserMessage = messages.find((m) => m.role === 'user');
+    if (firstUserMessage) {
+      const name = firstUserMessage.content.substring(0, 50).trim();
+      session.name = name.length < firstUserMessage.content.length ? name + '...' : name;
+    }
+  }
+
+  session.updatedAt = Date.now();
+  saveStorage(storage);
+}
+
+// ============================================================
+// BACKWARD COMPATIBILITY FUNCTIONS
+// These maintain the old API for existing code that hasn't been updated yet
+// ============================================================
+
+/**
+ * @deprecated Use getSession or getAllSessions instead
+ * Get saved PRD session from localStorage (returns first/most recent session)
+ */
+export function getSavedPrdSession(): SavedPrdSession | null {
+  const sessions = getAllSessions();
+  if (sessions.length === 0) return null;
+
+  const session = sessions[0];
+  // Add projectName alias for backward compatibility
+  return {
+    ...session,
+    projectName: session.name,
+  };
+}
+
+/**
+ * @deprecated Use updateSession instead
+ * Save PRD session to localStorage
+ */
+export function savePrdSession(session: SavedPrdSession): void {
+  if (!session.id) {
+    // Old code might not have an ID, create one
+    const sessionId = createSession(session.name || '未命名项目');
+    session.id = sessionId;
+  }
+  updateSession(session.id, session);
+}
+
+/**
+ * @deprecated Use deleteSession instead
+ * Clear saved PRD session from localStorage
+ */
+export function clearPrdSession(): void {
+  const session = getSavedPrdSession();
+  if (session) {
+    deleteSession(session.id);
+  }
+}
+
+/**
+ * @deprecated Use saveSessionAnswers instead
+ * Save answers for a specific tool/question set
+ */
+export function saveQuestionAnswers(
+  toolId: string,
+  answers: Record<string, QuestionAnswer>,
+  totalQuestions: number,
+  projectName?: string
+): void {
+  // Get or create the first/current session
+  let savedSession = getSavedPrdSession();
+  let sessionId: string;
+
+  if (!savedSession) {
+    sessionId = createSession(projectName || '未命名项目');
+  } else {
+    sessionId = savedSession.id;
+    if (projectName && savedSession.name !== projectName) {
+      updateSession(sessionId, { name: projectName });
+    }
+  }
+
+  saveSessionAnswers(sessionId, toolId, answers, totalQuestions);
+}
+
+/**
+ * @deprecated Use getSession(id).questionAnswers[toolId] instead
  * Get saved answers for a specific tool/question set
  */
 export function getQuestionAnswers(
@@ -127,69 +394,30 @@ export function getQuestionAnswers(
 ): Record<string, QuestionAnswer> | null {
   const session = getSavedPrdSession();
   if (!session) return null;
-
   return session.questionAnswers[toolId] || null;
 }
 
 /**
- * Update session with chat messages for context
+ * @deprecated Use createSession instead
+ * Initialize a new PRD session
  */
-export function updateSessionMessages(
-  messages: Array<{ id: string; role: 'user' | 'assistant'; content: string }>
-): void {
-  const session = getSavedPrdSession();
-  if (!session) return;
-
-  session.messages = messages;
-
-  // Extract project name from first user message if not set
-  if (!session.projectName || session.projectName === '未命名项目') {
-    const firstUserMessage = messages.find((m) => m.role === 'user');
-    if (firstUserMessage) {
-      // Extract first 50 chars as project name
-      const name = firstUserMessage.content.substring(0, 50).trim();
-      session.projectName = name.length < firstUserMessage.content.length
-        ? name + '...'
-        : name;
-    }
-  }
-
-  savePrdSession(session);
-}
-
-/**
- * Create a new session object
- */
-function createNewSession(projectName?: string): SavedPrdSession {
+export function initPrdSession(projectName?: string): SavedPrdSession {
+  const sessionId = createSession(projectName || '未命名项目');
+  const session = getSession(sessionId)!;
   return {
-    sessionKey: `session-${Date.now()}`,
-    projectName: projectName || '未命名项目',
-    startedAt: Date.now(),
-    updatedAt: Date.now(),
-    totalQuestions: 0,
-    answeredQuestions: 0,
-    questionAnswers: {},
+    ...session,
+    projectName: session.name,
   };
 }
 
 /**
- * Initialize a new PRD session
- */
-export function initPrdSession(projectName?: string): SavedPrdSession {
-  const session = createNewSession(projectName);
-  savePrdSession(session);
-  return session;
-}
-
-/**
- * Check if there's an incomplete session (has some but not all answers)
+ * @deprecated Check getAllSessions().length > 0 instead
+ * Check if there's an incomplete session
  */
 export function hasIncompleteSession(): boolean {
   const session = getSavedPrdSession();
   if (!session) return false;
 
-  // Consider session incomplete if it has any saved answers
-  // and was updated in the last 24 hours
   const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
   return (
     Object.keys(session.questionAnswers).length > 0 &&
