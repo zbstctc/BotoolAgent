@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+  updateTaskHistoryEntry,
+  determineStage,
+  determineTaskStatus,
+  type TaskStatus as HistoryTaskStatus,
+  type TaskStage,
+} from '@/lib/task-history';
 
 // File paths
 const PROJECT_ROOT = path.join(process.cwd(), '..');
 const STATUS_FILE = path.join(PROJECT_ROOT, '.agent-status');
 const PRD_FILE = path.join(PROJECT_ROOT, 'prd.json');
-const PROGRESS_FILE = path.join(PROJECT_ROOT, 'progress.txt');
 
 interface AgentStatus {
   status: 'idle' | 'running' | 'waiting_network' | 'timeout' | 'error' | 'failed' | 'complete' | 'iteration_complete' | 'max_iterations';
@@ -18,6 +24,13 @@ interface AgentStatus {
   total: number;
   currentTask: string;
   retryCount: number;
+}
+
+interface PRDJson {
+  project?: string;
+  description?: string;
+  branchName?: string;
+  devTasks?: Array<{ id: string; passes: boolean }>;
 }
 
 function readStatusFile(): AgentStatus | null {
@@ -44,6 +57,79 @@ function getProgressFromFiles(): { completed: number; total: number } {
     // Ignore errors
   }
   return { completed: 0, total: 0 };
+}
+
+function readPRD(): PRDJson | null {
+  try {
+    if (fs.existsSync(PRD_FILE)) {
+      return JSON.parse(fs.readFileSync(PRD_FILE, 'utf-8'));
+    }
+  } catch {
+    // Ignore
+  }
+  return null;
+}
+
+/**
+ * Update task history based on agent status
+ */
+function syncTaskHistory(agentStatus: AgentStatus): void {
+  try {
+    const prd = readPRD();
+    if (!prd || !prd.branchName) return;
+
+    const tasks = prd.devTasks || [];
+    const tasksCompleted = tasks.filter(t => t.passes).length;
+    const tasksTotal = tasks.length;
+
+    // Map agent status to task history status
+    let historyStatus: HistoryTaskStatus = 'running';
+    let endTime: string | undefined;
+
+    const baseStatus = tasksCompleted === tasksTotal
+      ? 'completed'
+      : tasksCompleted === 0
+        ? 'failed'
+        : 'partial';
+
+    switch (agentStatus.status) {
+      case 'complete':
+        historyStatus = determineTaskStatus(baseStatus, false, tasksCompleted, tasksTotal);
+        endTime = new Date().toISOString();
+        break;
+      case 'failed':
+      case 'error':
+        historyStatus = 'failed';
+        endTime = new Date().toISOString();
+        break;
+      case 'max_iterations':
+        historyStatus = tasksCompleted === tasksTotal ? 'waiting_merge' : 'partial';
+        endTime = new Date().toISOString();
+        break;
+      case 'idle':
+        // Don't update on idle
+        return;
+      default:
+        historyStatus = 'running';
+    }
+
+    // Determine stage
+    const stage: TaskStage = determineStage(tasksCompleted, tasksTotal, baseStatus);
+
+    updateTaskHistoryEntry({
+      id: prd.branchName,
+      name: prd.project || 'Unknown Task',
+      description: prd.description,
+      branchName: prd.branchName,
+      status: historyStatus,
+      stage,
+      tasksCompleted,
+      tasksTotal,
+      endTime,
+    });
+  } catch (error) {
+    console.error('Error syncing task history:', error);
+  }
 }
 
 function getDefaultStatus(): AgentStatus {
@@ -106,6 +192,11 @@ export async function GET(request: NextRequest) {
             };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
             lastStatus = currentStatus;
+
+            // Sync task history on status change
+            if (currentStatus) {
+              syncTaskHistory(currentStatus);
+            }
           }
         } catch {
           // Ignore errors during polling

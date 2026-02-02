@@ -2,11 +2,32 @@ import { NextRequest, NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
+import fs from 'fs';
+import { updateTaskHistoryEntry } from '@/lib/task-history';
 
 const execAsync = promisify(exec);
 
 // Get project root (parent of viewer directory)
 const PROJECT_ROOT = path.join(process.cwd(), '..');
+const PRD_FILE = path.join(PROJECT_ROOT, 'prd.json');
+
+interface PRDJson {
+  project?: string;
+  description?: string;
+  branchName?: string;
+  devTasks?: Array<{ id: string; passes: boolean }>;
+}
+
+function readPRD(): PRDJson | null {
+  try {
+    if (fs.existsSync(PRD_FILE)) {
+      return JSON.parse(fs.readFileSync(PRD_FILE, 'utf-8'));
+    }
+  } catch {
+    // Ignore
+  }
+  return null;
+}
 
 interface MergeResult {
   success: boolean;
@@ -136,7 +157,7 @@ export async function POST(request: NextRequest) {
 
     try {
       // Execute merge
-      const { stdout: mergeOutput } = await execAsync(
+      await execAsync(
         `gh pr merge ${prInfo.number} ${methodFlag} ${deleteFlag}`,
         { cwd: PROJECT_ROOT }
       );
@@ -178,6 +199,28 @@ export async function POST(request: NextRequest) {
         commitSha,
         message: `Successfully merged PR #${prInfo.number} via ${method}${deleteBranch ? ' and deleted branch' : ''}`,
       };
+
+      // Update task history to mark as completed (merged)
+      const prd = readPRD();
+      if (prd && prd.branchName) {
+        const tasks = prd.devTasks || [];
+        const tasksCompleted = tasks.filter(t => t.passes).length;
+        const tasksTotal = tasks.length;
+
+        updateTaskHistoryEntry({
+          id: prd.branchName,
+          name: prd.project || 'Unknown Task',
+          description: prd.description,
+          branchName: prd.branchName,
+          status: 'completed',
+          stage: 5,
+          tasksCompleted,
+          tasksTotal,
+          isMerged: true,
+          prUrl: prInfo.url,
+          endTime: new Date().toISOString(),
+        });
+      }
 
       return NextResponse.json(result);
     } catch (mergeError) {
