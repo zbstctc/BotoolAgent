@@ -271,53 +271,7 @@ export default function Dashboard() {
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Left: PRD List */}
-        <section className="flex flex-col">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-neutral-900">
-              PRD Documents
-            </h2>
-            <button
-              onClick={() => setShowNewPrdDialog(true)}
-              className="text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors"
-            >
-              + New PRD
-            </button>
-          </div>
-
-          {loading ? (
-            <div className="flex flex-col gap-2">
-              {[1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="animate-pulse rounded-lg border border-neutral-200 bg-white p-4"
-                >
-                  <div className="h-4 bg-neutral-200 rounded w-3/4 mb-2" />
-                  <div className="h-3 bg-neutral-100 rounded w-1/3" />
-                </div>
-              ))}
-            </div>
-          ) : prds.length > 0 ? (
-            <div className="flex flex-col gap-2">
-              {prds.map((prd) => (
-                <PRDCard
-                  key={prd.id}
-                  prd={prd}
-                  onClick={() => handlePRDClick(prd)}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              title="No PRD documents yet"
-              description="Create your first PRD to start the autonomous development process."
-              actionLabel="Create PRD"
-              onAction={() => setShowNewPrdDialog(true)}
-            />
-          )}
-        </section>
-
-        {/* Right: In-progress PRD Sessions + Task History */}
+        {/* Left: In-progress PRD + PRD Documents */}
         <section className="flex flex-col gap-6">
           {/* In-progress PRD Sessions */}
           <div className="flex flex-col">
@@ -329,8 +283,55 @@ export default function Dashboard() {
             <PrdSessionList />
           </div>
 
-          {/* Task History */}
+          {/* PRD Documents */}
           <div className="flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-neutral-900">
+                PRD Documents
+              </h2>
+              <button
+                onClick={() => setShowNewPrdDialog(true)}
+                className="text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors"
+              >
+                + New PRD
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="flex flex-col gap-2">
+                {[1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="animate-pulse rounded-lg border border-neutral-200 bg-white p-4"
+                  >
+                    <div className="h-4 bg-neutral-200 rounded w-3/4 mb-2" />
+                    <div className="h-3 bg-neutral-100 rounded w-1/3" />
+                  </div>
+                ))}
+              </div>
+            ) : prds.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                {prds.map((prd) => (
+                  <PRDCard
+                    key={prd.id}
+                    prd={prd}
+                    onClick={() => handlePRDClick(prd)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title="No PRD documents yet"
+                description="Create your first PRD to start the autonomous development process."
+                actionLabel="Create PRD"
+                onAction={() => setShowNewPrdDialog(true)}
+              />
+            )}
+          </div>
+        </section>
+
+        {/* Right: Task History */}
+        <section className="flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-neutral-900">
               任务历史
@@ -402,7 +403,6 @@ export default function Dashboard() {
               />
             )
           )}
-          </div>
         </section>
       </div>
 
