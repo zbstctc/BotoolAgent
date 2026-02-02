@@ -15,3 +15,5 @@ export { TestResults } from "./TestResults";
 export type { TestResult, TestSummary, TestResultsProps, TestType } from "./TestResults";
 export { ManualChecklist, extractChecklistFromPRD } from "./ManualChecklist";
 export type { ChecklistItem, ManualChecklistProps } from "./ManualChecklist";
+export { ChangeSummary } from "./ChangeSummary";
+export type { FileDiff, DiffHunk, DiffLine, DiffSummary, ChangeSummaryProps } from "./ChangeSummary";
