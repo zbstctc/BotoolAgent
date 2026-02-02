@@ -142,8 +142,11 @@ function AskUserQuestionRenderer({
     return answers[questionKey].length > 0 || otherValues[questionKey].trim() !== '';
   });
 
-  // Get first question's header for the trigger button
-  const firstQuestionHeader = input.questions[0]?.header || '问题';
+  // Get question count and all unique headers for the trigger button
+  const questionCount = input.questions.length;
+  const questionHeaders = input.questions
+    .map((q) => q.header)
+    .filter((h): h is string => Boolean(h));
 
   // If submitted, show completion message
   if (submitted) {
@@ -163,10 +166,17 @@ function AskUserQuestionRenderer({
         className="flex items-center gap-2 text-blue-700 bg-blue-50 rounded-lg px-4 py-3 border border-blue-200 hover:bg-blue-100 transition-colors w-full"
       >
         <QuestionIcon />
-        <span className="font-medium text-sm">Claude 需要你的输入</span>
-        <span className="text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded ml-auto">
-          {firstQuestionHeader}
-        </span>
+        <span className="font-medium text-sm">请回答 {questionCount} 个问题</span>
+        <div className="flex items-center gap-1.5 ml-auto">
+          {questionHeaders.map((header, idx) => (
+            <span
+              key={idx}
+              className="text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded"
+            >
+              {header}
+            </span>
+          ))}
+        </div>
         <svg className="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
