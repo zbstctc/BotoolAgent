@@ -6,8 +6,12 @@
 - 该文件支持三种模式：prd、convert、default，通过 `getSystemPrompt()` 函数切换
 - AskUserQuestion 工具的 questions 数组可以一次包含 2-4 个问题
 - AskUserQuestion 问题类型：有 options 的选择题，无 options 的文本输入题（通过 `isTextInputQuestion()` 判断）
-- localStorage 会话进度保存在 `viewer/src/lib/prd-session-storage.ts`，键为 `botool-prd-session`
-- Stage 1 页面有两种会话恢复机制：服务端 session（通过 prdId）和 localStorage 本地会话
+- localStorage 多会话存储在 `viewer/src/lib/prd-session-storage.ts`，键为 `botool-prd-sessions`（复数）
+- 多会话 API：`createSession()`, `getSession()`, `getAllSessions()`, `deleteSession()`, `updateSession()`
+- Stage 1 页面通过 URL 参数 `?session={id}` 加载指定会话，无参数重定向到 Dashboard
+- StageIndicator 组件包含返回 Dashboard 的按钮（showBackButton prop）
+- NewPrdDialog 组件用于在 Dashboard 创建新会话并命名
+- PrdSessionList 组件用于在 Dashboard 显示和管理进行中的会话
 
 ---
 
@@ -70,4 +74,60 @@
   - SessionResumeDialog 需要传入 `currentTime` 来避免 render 期间调用 Date.now() 的纯度问题
   - DT-005 和 DT-006 功能紧密相关，一并实现更高效
   - 需要手动浏览器验证
+---
+
+## 2026-02-03 08:XX - PRD 多会话管理系统
+
+### DT-001: 添加 Stage 页面返回按钮
+- 实现了什么：在 StageIndicator 组件添加返回 Dashboard 的按钮
+- 修改了哪些文件：`viewer/src/components/StageIndicator.tsx`
+- **未来迭代的经验教训：**
+  - 返回按钮通过 `showBackButton` prop 控制，默认为 true
+  - 使用 Next.js Link 组件导航到 `/`
+
+### DT-002: 改造 localStorage 支持多会话
+- 实现了什么：将单会话存储改为多会话存储，自动迁移旧数据
+- 修改了哪些文件：`viewer/src/lib/prd-session-storage.ts`
+- **未来迭代的经验教训：**
+  - 新存储键为 `botool-prd-sessions`（复数），旧键为 `botool-prd-session`
+  - `migrateOldSession()` 在 `getStorage()` 中自动调用，实现透明迁移
+  - 向后兼容：保留 `getSavedPrdSession()`, `saveQuestionAnswers()` 等旧 API
+  - PrdSession 接口使用 `name` 字段，SavedPrdSession 保留 `projectName` 别名
+
+### DT-003: Dashboard 添加新建 PRD 对话框
+- 实现了什么：创建 NewPrdDialog 组件，在 Dashboard 点击新建时弹出
+- 修改了哪些文件：
+  - `viewer/src/components/NewPrdDialog.tsx` - 新文件
+  - `viewer/src/components/index.ts` - 导出新组件
+  - `viewer/src/app/page.tsx` - 集成对话框
+- **未来迭代的经验教训：**
+  - 对话框创建会话后跳转到 `/stage1?session={id}`
+  - 按照 CLAUDE.md 要求，对话框背景为白色
+
+### DT-004: Dashboard 显示进行中的 PRD 列表
+- 实现了什么：创建 PrdSessionList 组件显示所有未完成会话
+- 修改了哪些文件：
+  - `viewer/src/components/PrdSessionList.tsx` - 新文件
+  - `viewer/src/components/index.ts` - 导出新组件
+  - `viewer/src/app/page.tsx` - 在 Task History 上方添加进行中会话列表
+- **未来迭代的经验教训：**
+  - 只显示有 questionAnswers 的会话（有实际进度）
+  - 支持继续（跳转到 Stage 1）和删除操作
+  - 使用相对时间显示更新时间
+
+### DT-005: Stage 1 适配多会话
+- 实现了什么：Stage 1 页面支持通过 URL 参数加载指定会话
+- 修改了哪些文件：
+  - `viewer/src/app/stage1/page.tsx` - 添加 ?session={id} 参数支持
+  - `viewer/src/components/ToolRenderer.tsx` - 添加 sessionId prop
+- **未来迭代的经验教训：**
+  - 无参数时重定向到 Dashboard，强制用户先命名项目
+  - ToolRenderer 支持 sessionId，优先保存到指定会话
+  - 移除了旧的 localStorage 单会话恢复对话框
+
+### DT-006: 数据迁移与清理
+- 实现了什么：确认迁移正常，评估 SessionResumeDialog
+- **未来迭代的经验教训：**
+  - 数据迁移在 DT-002 中已实现，首次访问时自动执行
+  - SessionResumeDialog 仍用于服务端会话（编辑现有 PRD 时）
 ---

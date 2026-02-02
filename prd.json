@@ -1,99 +1,94 @@
 {
-  "project": "Stage 1 批量问答系统",
+  "project": "PRD 多会话管理系统",
   "branchName": "botool/batch-questions",
-  "description": "改进 Stage 1 PRD 生成流程，支持批量问答、进度保存、中文化",
+  "description": "支持多个 PRD 会话并存管理，添加返回按钮，新建时命名，Dashboard 统一管理",
   "devTasks": [
     {
       "id": "DT-001",
-      "title": "更新 System Prompt 支持批量中文问题",
-      "description": "修改 /api/cli/chat/route.ts 的 PRD_SYSTEM_PROMPT，让 Claude 一次生成一组中文问题。",
+      "title": "添加 Stage 页面返回按钮",
+      "description": "在所有 Stage 页面左上角添加返回 Dashboard 的按钮",
       "acceptanceCriteria": [
-        "指示 Claude 使用 AskUserQuestion 的 questions 数组（支持多个问题）",
-        "每批 2-4 个相关问题，按主题分组",
-        "明确要求所有问题和选项使用中文",
-        "包含批次指示（这是第 X 组问题）",
-        "Typecheck passes"
-      ],
-      "priority": 1,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "DT-002",
-      "title": "改进触发按钮显示问题数量",
-      "description": "修改 ToolRenderer 组件的触发按钮，显示当前批次的问题数量和主题。",
-      "acceptanceCriteria": [
-        "按钮显示「请回答 X 个问题」",
-        "显示问题主题标签（如：基础信息、技术方案）",
-        "点击打开 Modal",
+        "所有 Stage 页面左上角有返回按钮",
+        "点击能返回 Dashboard",
         "Typecheck passes",
         "Verify in browser"
       ],
+      "priority": 1,
+      "passes": true,
+      "notes": "已在 StageIndicator 组件中添加返回按钮"
+    },
+    {
+      "id": "DT-002",
+      "title": "改造 localStorage 支持多会话",
+      "description": "将 localStorage 从单会话改为多会话存储",
+      "acceptanceCriteria": [
+        "能创建多个会话",
+        "每个会话独立存储",
+        "旧数据自动迁移",
+        "Typecheck passes"
+      ],
       "priority": 2,
       "passes": true,
-      "notes": "需要手动浏览器验证"
+      "notes": "已实现多会话支持，自动迁移旧数据"
     },
     {
       "id": "DT-003",
-      "title": "改进 Modal 显示进度和编号",
-      "description": "改进 AskUserQuestion Modal，添加问题编号和回答进度。",
+      "title": "Dashboard 添加新建 PRD 对话框",
+      "description": "点击新建按钮时弹出命名对话框",
       "acceptanceCriteria": [
-        "Modal 标题显示问题数量",
-        "每个问题显示编号（1、2、3...）",
-        "已回答的问题显示绿色勾选标记",
-        "底部显示「已回答 X/Y」进度",
+        "点击新建弹出对话框",
+        "输入名称后跳转到 Stage 1",
+        "对话框背景为白色",
         "Typecheck passes",
         "Verify in browser"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "功能已在 DT-002 实现时一并完成，需要手动浏览器验证"
+      "notes": "已实现 NewPrdDialog 组件"
     },
     {
       "id": "DT-004",
-      "title": "支持文本输入类型问题",
-      "description": "扩展 OptionCard 组件，支持纯文本输入类型的问题（无预设选项）。",
+      "title": "Dashboard 显示进行中的 PRD 列表",
+      "description": "在 Dashboard 显示所有未完成的 PRD 会话",
       "acceptanceCriteria": [
-        "当问题没有 options 时，显示文本输入框",
-        "支持单行和多行文本输入",
-        "输入框有占位符提示",
+        "显示所有未完成会话",
+        "能继续任意会话",
+        "能删除会话",
         "Typecheck passes",
         "Verify in browser"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "需要手动浏览器验证"
+      "notes": "已实现 PrdSessionList 组件"
     },
     {
       "id": "DT-005",
-      "title": "实现问答进度保存",
-      "description": "保存用户的回答进度，刷新页面或中途退出后可以继续。",
+      "title": "Stage 1 适配多会话",
+      "description": "Stage 1 页面适配新的多会话系统",
       "acceptanceCriteria": [
-        "使用 localStorage 保存当前 PRD 会话的回答",
-        "回到 Stage 1 时检测是否有未完成的会话",
-        "提示用户「继续上次的回答」或「重新开始」",
+        "带 session 参数能恢复会话",
+        "无参数重定向到 Dashboard",
+        "进度自动保存",
         "Typecheck passes",
         "Verify in browser"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "需要手动浏览器验证"
+      "notes": "支持 ?session={id} 参数，无参数重定向"
     },
     {
       "id": "DT-006",
-      "title": "添加会话恢复对话框",
-      "description": "创建对话框组件，让用户选择继续或重新开始。",
+      "title": "数据迁移与清理",
+      "description": "迁移旧数据，清理废弃代码",
       "acceptanceCriteria": [
-        "检测到未完成会话时显示对话框",
-        "显示上次的项目名称和进度",
-        "提供「继续」和「重新开始」按钮",
-        "「重新开始」清除保存的进度",
-        "Typecheck passes",
-        "Verify in browser"
+        "旧数据自动迁移",
+        "迁移后功能正常",
+        "无数据丢失",
+        "Typecheck passes"
       ],
       "priority": 6,
       "passes": true,
-      "notes": "功能已在 DT-005 实现时一并完成，需要手动浏览器验证"
+      "notes": "迁移已在 DT-002 中实现，SessionResumeDialog 仍用于服务端会话"
     }
   ]
 }
