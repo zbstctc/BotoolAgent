@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect, useCallback } from 'react';
-import { TaskHistory, type TaskHistoryItem, type TaskStatus, type TaskStage } from '@/components';
+import { TaskHistory, NewPrdDialog, type TaskHistoryItem, type TaskStatus, type TaskStage } from '@/components';
 
 interface PRDItem {
   id: string;
@@ -74,6 +74,7 @@ export default function Dashboard() {
   const [sessionDetails, setSessionDetails] = useState<SessionDetails | null>(null);
   const [loadingSessionDetails, setLoadingSessionDetails] = useState(false);
   const [viewMode, setViewMode] = useState<'timeline' | 'list'>('timeline');
+  const [showNewPrdDialog, setShowNewPrdDialog] = useState(false);
 
   const fetchTaskHistory = useCallback(async () => {
     setTaskHistoryLoading(true);
@@ -258,12 +259,12 @@ export default function Dashboard() {
                 No active project running
               </p>
             </div>
-            <Link
-              href="/stage1"
+            <button
+              onClick={() => setShowNewPrdDialog(true)}
               className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-800 transition-colors"
             >
               + Create New PRD
-            </Link>
+            </button>
           </div>
         </div>
       )}
@@ -276,12 +277,12 @@ export default function Dashboard() {
             <h2 className="text-lg font-semibold text-neutral-900">
               PRD Documents
             </h2>
-            <Link
-              href="/stage1"
+            <button
+              onClick={() => setShowNewPrdDialog(true)}
               className="text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors"
             >
               + New PRD
-            </Link>
+            </button>
           </div>
 
           {loading ? (
@@ -311,7 +312,7 @@ export default function Dashboard() {
               title="No PRD documents yet"
               description="Create your first PRD to start the autonomous development process."
               actionLabel="Create PRD"
-              actionHref="/stage1"
+              onAction={() => setShowNewPrdDialog(true)}
             />
           )}
         </section>
@@ -411,6 +412,12 @@ export default function Dashboard() {
           onClose={closeSessionDetails}
         />
       )}
+
+      {/* New PRD Dialog */}
+      <NewPrdDialog
+        isOpen={showNewPrdDialog}
+        onClose={() => setShowNewPrdDialog(false)}
+      />
     </div>
   );
 }
@@ -827,24 +834,35 @@ function EmptyState({
   description,
   actionLabel,
   actionHref,
+  onAction,
 }: {
   title: string;
   description: string;
   actionLabel?: string;
   actionHref?: string;
+  onAction?: () => void;
 }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-neutral-300 bg-neutral-50/50 p-8 text-center">
       <div className="mb-2 text-3xl text-neutral-300">📄</div>
       <h3 className="text-sm font-medium text-neutral-700">{title}</h3>
       <p className="mt-1 text-xs text-neutral-500 max-w-xs">{description}</p>
-      {actionLabel && actionHref && (
-        <Link
-          href={actionHref}
-          className="mt-4 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 transition-colors"
-        >
-          {actionLabel}
-        </Link>
+      {actionLabel && (onAction || actionHref) && (
+        onAction ? (
+          <button
+            onClick={onAction}
+            className="mt-4 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 transition-colors"
+          >
+            {actionLabel}
+          </button>
+        ) : actionHref ? (
+          <Link
+            href={actionHref}
+            className="mt-4 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 transition-colors"
+          >
+            {actionLabel}
+          </Link>
+        ) : null
       )}
     </div>
   );
