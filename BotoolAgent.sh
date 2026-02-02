@@ -10,10 +10,32 @@
 # - 自动重试机制（每次迭代最多 3 次重试）
 # - 迭代日志保存到文件
 
-set -e
+# 注意：不使用 set -e，因为我们需要手动处理错误
+# 特别是 timeout 返回非零退出码时不应该导致脚本退出
 
 # ============================================================================
-# 配置
+# 进程管理 - 确保脚本退出时清理它启动的进程
+# ============================================================================
+CLAUDE_PID=""
+
+cleanup() {
+  echo ""
+  echo ">>> 收到退出信号，正在清理..."
+  if [ -n "$CLAUDE_PID" ] && kill -0 "$CLAUDE_PID" 2>/dev/null; then
+    echo ">>> 终止 Claude 进程 (PID: $CLAUDE_PID)"
+    kill "$CLAUDE_PID" 2>/dev/null
+    wait "$CLAUDE_PID" 2>/dev/null
+  fi
+  update_status "stopped" "用户停止或脚本退出"
+  echo ">>> 清理完成"
+  exit 0
+}
+
+# 捕获退出信号
+trap cleanup SIGINT SIGTERM EXIT
+
+# ============================================================================
+# 默认配置
 # ============================================================================
 MAX_ITERATIONS=10
 ITERATION_TIMEOUT=1800  # 每次迭代 30 分钟
@@ -21,6 +43,33 @@ MAX_RETRIES=3           # 每次迭代的重试次数
 HEALTH_CHECK_INTERVAL=10  # 健康检查间隔（秒）
 STALL_THRESHOLD=30      # 连续 0% CPU 检查次数阈值（5 分钟）
 NETWORK_RETRY_INTERVAL=30  # 网络检查重试间隔（秒）
+
+# Rate Limiting 配置
+RATE_LIMIT_ENABLED=true     # 是否启用 Rate Limiting
+RATE_LIMIT_MAX_CALLS=100    # 时间窗口内最大调用次数
+RATE_LIMIT_WINDOW=3600      # 时间窗口（秒），默认 1 小时
+RATE_LIMIT_STATE_FILE=""    # Rate Limiting 状态文件（启动时设置）
+
+# ============================================================================
+# 加载 .botoolrc 配置文件（如果存在）
+# ============================================================================
+load_config() {
+  local config_file="$SCRIPT_DIR/.botoolrc"
+
+  if [ -f "$config_file" ]; then
+    echo ">>> 加载配置文件: $config_file"
+    # shellcheck source=/dev/null
+    source "$config_file"
+  fi
+
+  # 环境变量覆盖配置文件
+  [ -n "$BOTOOL_MAX_ITERATIONS" ] && MAX_ITERATIONS="$BOTOOL_MAX_ITERATIONS"
+  [ -n "$BOTOOL_TIMEOUT" ] && ITERATION_TIMEOUT="$BOTOOL_TIMEOUT"
+  [ -n "$BOTOOL_RETRIES" ] && MAX_RETRIES="$BOTOOL_RETRIES"
+  [ -n "$BOTOOL_RATE_LIMIT_ENABLED" ] && RATE_LIMIT_ENABLED="$BOTOOL_RATE_LIMIT_ENABLED"
+  [ -n "$BOTOOL_RATE_LIMIT_MAX_CALLS" ] && RATE_LIMIT_MAX_CALLS="$BOTOOL_RATE_LIMIT_MAX_CALLS"
+  [ -n "$BOTOOL_RATE_LIMIT_WINDOW" ] && RATE_LIMIT_WINDOW="$BOTOOL_RATE_LIMIT_WINDOW"
+}
 
 # ============================================================================
 # 解析参数
@@ -55,9 +104,13 @@ ARCHIVE_DIR="$SCRIPT_DIR/archive"
 LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch"
 LOG_DIR="$SCRIPT_DIR/logs"
 STATUS_FILE="$SCRIPT_DIR/.agent-status"
+RATE_LIMIT_STATE_FILE="$SCRIPT_DIR/.rate-limit-state"
 
 # 创建日志目录
 mkdir -p "$LOG_DIR"
+
+# 加载配置
+load_config
 
 # ============================================================================
 # 工具函数
@@ -74,6 +127,19 @@ update_status() {
   local total=$(grep -c '"id": "DT-' "$PRD_FILE" 2>/dev/null || echo "0")
   local current_task=$(grep -o '## [0-9-]* - DT-[0-9]*' "$PROGRESS_FILE" 2>/dev/null | tail -1 | grep -o 'DT-[0-9]*' || echo "无")
 
+  # Rate Limiting 状态
+  local rate_limit_calls=0
+  local rate_limit_max=$RATE_LIMIT_MAX_CALLS
+  local rate_limit_window_remaining=0
+  if [ "$RATE_LIMIT_ENABLED" = "true" ] && [ -f "$RATE_LIMIT_STATE_FILE" ]; then
+    rate_limit_calls=$(grep -o '"callCount": [0-9]*' "$RATE_LIMIT_STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
+    local window_start=$(grep -o '"windowStart": [0-9]*' "$RATE_LIMIT_STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
+    local now=$(date +%s)
+    local elapsed=$((now - window_start))
+    rate_limit_window_remaining=$((RATE_LIMIT_WINDOW - elapsed))
+    [ $rate_limit_window_remaining -lt 0 ] && rate_limit_window_remaining=0
+  fi
+
   cat > "$STATUS_FILE" << EOF
 {
   "status": "$status",
@@ -84,7 +150,13 @@ update_status() {
   "completed": $completed,
   "total": $total,
   "currentTask": "$current_task",
-  "retryCount": ${RETRY_COUNT:-0}
+  "retryCount": ${RETRY_COUNT:-0},
+  "rateLimit": {
+    "enabled": $( [ "$RATE_LIMIT_ENABLED" = "true" ] && echo "true" || echo "false" ),
+    "calls": $rate_limit_calls,
+    "maxCalls": $rate_limit_max,
+    "windowRemaining": $rate_limit_window_remaining
+  }
 }
 EOF
 }
@@ -111,6 +183,163 @@ wait_for_network() {
 
   echo ">>> 网络已恢复，继续执行..."
   return 0
+}
+
+# ============================================================================
+# Rate Limiting 功能
+# ============================================================================
+
+# 获取当前时间戳（秒）
+get_timestamp() {
+  date +%s
+}
+
+# 初始化 Rate Limiting 状态
+init_rate_limit() {
+  if [ "$RATE_LIMIT_ENABLED" != "true" ]; then
+    return 0
+  fi
+
+  # 如果状态文件不存在，创建初始状态
+  if [ ! -f "$RATE_LIMIT_STATE_FILE" ]; then
+    local now=$(get_timestamp)
+    cat > "$RATE_LIMIT_STATE_FILE" << EOF
+{
+  "windowStart": $now,
+  "callCount": 0,
+  "lastCall": 0
+}
+EOF
+    echo ">>> Rate Limiting 已初始化: 每 ${RATE_LIMIT_WINDOW}秒 最多 ${RATE_LIMIT_MAX_CALLS} 次调用"
+  fi
+}
+
+# 读取 Rate Limiting 状态
+read_rate_limit_state() {
+  if [ ! -f "$RATE_LIMIT_STATE_FILE" ]; then
+    init_rate_limit
+  fi
+
+  # 解析 JSON 状态文件
+  RATE_WINDOW_START=$(grep -o '"windowStart": [0-9]*' "$RATE_LIMIT_STATE_FILE" | grep -o '[0-9]*')
+  RATE_CALL_COUNT=$(grep -o '"callCount": [0-9]*' "$RATE_LIMIT_STATE_FILE" | grep -o '[0-9]*')
+  RATE_LAST_CALL=$(grep -o '"lastCall": [0-9]*' "$RATE_LIMIT_STATE_FILE" | grep -o '[0-9]*')
+}
+
+# 更新 Rate Limiting 状态
+update_rate_limit_state() {
+  local window_start=$1
+  local call_count=$2
+  local last_call=$3
+
+  cat > "$RATE_LIMIT_STATE_FILE" << EOF
+{
+  "windowStart": $window_start,
+  "callCount": $call_count,
+  "lastCall": $last_call
+}
+EOF
+}
+
+# 显示 Rate Limiting 状态
+show_rate_limit_status() {
+  if [ "$RATE_LIMIT_ENABLED" != "true" ]; then
+    return 0
+  fi
+
+  read_rate_limit_state
+  local now=$(get_timestamp)
+  local window_elapsed=$((now - RATE_WINDOW_START))
+  local window_remaining=$((RATE_LIMIT_WINDOW - window_elapsed))
+  local calls_remaining=$((RATE_LIMIT_MAX_CALLS - RATE_CALL_COUNT))
+
+  if [ $window_remaining -lt 0 ]; then
+    window_remaining=0
+  fi
+
+  echo ">>> Rate Limiting 状态:"
+  echo "    已使用: $RATE_CALL_COUNT/$RATE_LIMIT_MAX_CALLS 次调用"
+  echo "    剩余: $calls_remaining 次调用"
+  echo "    窗口重置: $((window_remaining / 60))分$((window_remaining % 60))秒后"
+}
+
+# 检查并等待 Rate Limit（如果需要）
+# 返回 0 表示可以继续，返回 1 表示被阻止
+check_rate_limit() {
+  if [ "$RATE_LIMIT_ENABLED" != "true" ]; then
+    return 0
+  fi
+
+  read_rate_limit_state
+  local now=$(get_timestamp)
+  local window_elapsed=$((now - RATE_WINDOW_START))
+
+  # 检查是否需要重置时间窗口
+  if [ $window_elapsed -ge $RATE_LIMIT_WINDOW ]; then
+    echo ">>> Rate Limiting 时间窗口已重置"
+    RATE_WINDOW_START=$now
+    RATE_CALL_COUNT=0
+    update_rate_limit_state $RATE_WINDOW_START 0 $RATE_LAST_CALL
+    return 0
+  fi
+
+  # 检查是否超过限制
+  if [ $RATE_CALL_COUNT -ge $RATE_LIMIT_MAX_CALLS ]; then
+    local wait_time=$((RATE_LIMIT_WINDOW - window_elapsed))
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════════╗"
+    echo "║  ⏳ Rate Limit 已达到上限                                         ║"
+    echo "╠══════════════════════════════════════════════════════════════════╣"
+    echo "║  已使用 $RATE_CALL_COUNT/$RATE_LIMIT_MAX_CALLS 次调用                           "
+    echo "║  需要等待 $((wait_time / 60))分$((wait_time % 60))秒 后继续                      "
+    echo "╚══════════════════════════════════════════════════════════════════╝"
+    echo ""
+
+    update_status "rate_limited" "Rate Limit 等待中，剩余 $wait_time 秒"
+
+    # 显示倒计时
+    while [ $wait_time -gt 0 ]; do
+      printf "\r>>> 等待中... %02d:%02d " $((wait_time / 60)) $((wait_time % 60))
+      sleep 10
+      wait_time=$((wait_time - 10))
+
+      # 每分钟更新一次状态
+      if [ $((wait_time % 60)) -eq 0 ]; then
+        update_status "rate_limited" "Rate Limit 等待中，剩余 $wait_time 秒"
+      fi
+    done
+    echo ""
+
+    # 重置时间窗口
+    RATE_WINDOW_START=$(get_timestamp)
+    RATE_CALL_COUNT=0
+    update_rate_limit_state $RATE_WINDOW_START 0 $RATE_LAST_CALL
+    echo ">>> Rate Limiting 时间窗口已重置，继续执行..."
+  fi
+
+  return 0
+}
+
+# 记录一次 API 调用
+record_api_call() {
+  if [ "$RATE_LIMIT_ENABLED" != "true" ]; then
+    return 0
+  fi
+
+  read_rate_limit_state
+  local now=$(get_timestamp)
+
+  # 如果窗口已过期，重置
+  local window_elapsed=$((now - RATE_WINDOW_START))
+  if [ $window_elapsed -ge $RATE_LIMIT_WINDOW ]; then
+    RATE_WINDOW_START=$now
+    RATE_CALL_COUNT=1
+  else
+    RATE_CALL_COUNT=$((RATE_CALL_COUNT + 1))
+  fi
+
+  RATE_LAST_CALL=$now
+  update_rate_limit_state $RATE_WINDOW_START $RATE_CALL_COUNT $RATE_LAST_CALL
 }
 
 # 后台监控进程健康
@@ -147,26 +376,37 @@ monitor_health() {
   return 0
 }
 
-# 运行 claude 并带有超时和健康监控
+# 运行 claude 并带有超时（简化版，更可靠）
 run_claude_with_monitoring() {
   local output_file=$1
   local log_file=$2
 
-  # 在后台启动带超时的 claude
-  timeout $ITERATION_TIMEOUT claude --dangerously-skip-permissions --print < "$SCRIPT_DIR/CLAUDE.md" > "$output_file" 2>&1 &
-  local claude_pid=$!
+  # 查找 claude 命令的完整路径
+  local CLAUDE_CMD=$(which claude 2>/dev/null || echo "$HOME/.claude/local/claude")
 
-  # 在后台启动健康监控
-  monitor_health $claude_pid "$output_file" &
-  local monitor_pid=$!
-
-  # 等待 claude 完成
-  wait $claude_pid 2>/dev/null
+  # 检查 timeout 命令是否可用
+  if command -v gtimeout &> /dev/null; then
+    # macOS with coreutils - 后台运行并记录 PID
+    gtimeout $ITERATION_TIMEOUT "$CLAUDE_CMD" --dangerously-skip-permissions --print < "$SCRIPT_DIR/CLAUDE.md" > "$output_file" 2>&1 &
+    CLAUDE_PID=$!
+    wait $CLAUDE_PID
+  elif command -v timeout &> /dev/null; then
+    # Linux or macOS with timeout
+    timeout $ITERATION_TIMEOUT "$CLAUDE_CMD" --dangerously-skip-permissions --print < "$SCRIPT_DIR/CLAUDE.md" > "$output_file" 2>&1 &
+    CLAUDE_PID=$!
+    wait $CLAUDE_PID
+  else
+    # 没有 timeout 命令，直接运行（依赖 Claude 自己的机制）
+    echo ">>> 警告：未找到 timeout 命令，直接运行 Claude（建议安装: brew install coreutils）"
+    "$CLAUDE_CMD" --dangerously-skip-permissions --print < "$SCRIPT_DIR/CLAUDE.md" > "$output_file" 2>&1 &
+    CLAUDE_PID=$!
+    echo ">>> Claude PID: $CLAUDE_PID"
+    wait $CLAUDE_PID
+  fi
   local exit_code=$?
 
-  # 停止健康监控
-  kill $monitor_pid 2>/dev/null || true
-  wait $monitor_pid 2>/dev/null || true
+  # 清除 PID 记录
+  CLAUDE_PID=""
 
   return $exit_code
 }
@@ -311,7 +551,15 @@ echo "启动 Botool 开发代理 v2.0"
 echo "  最大迭代次数: $MAX_ITERATIONS"
 echo "  迭代超时时间: ${ITERATION_TIMEOUT}秒"
 echo "  最大重试次数: $MAX_RETRIES"
+if [ "$RATE_LIMIT_ENABLED" = "true" ]; then
+  echo "  Rate Limiting: ${RATE_LIMIT_MAX_CALLS}次/${RATE_LIMIT_WINDOW}秒"
+else
+  echo "  Rate Limiting: 已禁用"
+fi
 echo ""
+
+# 初始化 Rate Limiting
+init_rate_limit
 
 CURRENT_ITERATION=0
 
@@ -323,6 +571,12 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   echo "==============================================================="
   echo "  Botool 开发代理 - 第 $i 次迭代（共 $MAX_ITERATIONS 次）"
   echo "==============================================================="
+
+  # 开始前检查 Rate Limiting
+  check_rate_limit
+
+  # 显示 Rate Limiting 状态
+  show_rate_limit_status
 
   # 开始前检查网络
   wait_for_network
@@ -338,6 +592,9 @@ for i in $(seq 1 $MAX_ITERATIONS); do
 
     echo ">>> 启动 Claude（第 $((RETRY_COUNT + 1)) 次尝试，共 $MAX_RETRIES 次）..."
     echo ">>> 日志文件: $LOG_FILE"
+
+    # 记录 API 调用（Rate Limiting）
+    record_api_call
 
     # 运行带监控的 claude
     run_claude_with_monitoring "$OUTPUT_FILE" "$LOG_FILE"
