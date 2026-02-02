@@ -109,6 +109,14 @@ export class CLIManager extends EventEmitter {
       this.sessionId = options.sessionId;
     }
 
+    // Add system prompt if provided (use CLI's native --system-prompt flag)
+    if (options.systemPrompt && !options.sessionId) {
+      args.push('--system-prompt', options.systemPrompt);
+    }
+
+    // Ensure AskUserQuestion tool is available
+    args.push('--allowedTools', 'AskUserQuestion');
+
     this.process = spawn(this.cliPath, args, {
       cwd: this.workingDir,
       stdio: ['pipe', 'pipe', 'pipe'],

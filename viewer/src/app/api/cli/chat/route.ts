@@ -374,21 +374,14 @@ export async function POST(request: NextRequest) {
     // Start CLI and send message
     const systemPrompt = getSystemPrompt(mode);
 
-    // Start the CLI process
+    // Start the CLI process (system prompt is passed via --system-prompt flag)
     await cliManager.start({
       sessionId,
       systemPrompt,
     });
 
-    // Prepare the message with system prompt if it's a new session
-    let fullMessage = message;
-    if (!sessionId && systemPrompt) {
-      // For new sessions, prepend the system prompt context
-      fullMessage = `[System Context]\n${systemPrompt}\n\n[User Message]\n${message}`;
-    }
-
-    // Send the message to CLI
-    await cliManager.sendMessage(fullMessage);
+    // Send the message to CLI (system prompt is already set via CLI args)
+    await cliManager.sendMessage(message);
 
     return new Response(stream, {
       headers: {
