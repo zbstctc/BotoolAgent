@@ -103,3 +103,48 @@
 - 频繁提交
 - 保持 CI 绿色
 - 开始前先阅读 progress.txt 中的 Codebase Patterns 部分
+
+## 前端代码规范
+
+当编写 React / React Native / Expo / Next.js 代码时，**必须先读取并遵循相应的规范文件**：
+
+### React Native / Expo 项目
+
+在编写任何 React Native 代码之前，使用 Read 工具读取：
+```
+~/.claude/commands/vercel-react-native-skills/AGENTS.md
+```
+
+**必须严格遵守的关键规则：**
+
+1. **CRITICAL - 违反会崩溃：**
+   - 不要用 `{value && <Component />}` 当 value 可能是 0 或空字符串，用三元表达式
+   - 字符串必须包裹在 `<Text>` 组件中
+
+2. **HIGH - 性能关键：**
+   - 列表必须使用 FlashList 或 LegendList，禁止 `ScrollView + map`
+   - 列表项必须使用 `memo()`
+   - 动画只能用 `transform` 和 `opacity`，禁止动画 width/height/margin
+   - 使用 `createNativeStackNavigator`，禁止 JS stack
+   - 使用 `Pressable`，禁止 `TouchableOpacity`
+   - 使用 `expo-image` 而非 `react-native` 的 Image
+
+3. **MEDIUM - 推荐：**
+   - 使用 `gap` 而非 margin 来控制间距
+   - 使用 `borderCurve: 'continuous'` 配合 borderRadius
+   - 列表项只传递原始值（primitives），不传对象
+
+### Web UI 项目 (Next.js / React)
+
+完成 UI 代码后，使用 Read 工具读取：
+```
+~/.claude/commands/web-design-guidelines/SKILL.md
+```
+
+然后按照其中的说明获取最新规则并审查你的代码。
+
+### 如何应用规范
+
+1. **开始写前端代码前**：先读取对应的规范文件
+2. **写代码时**：遵循规范中的 Correct 模式，避免 Incorrect 模式
+3. **提交前**：检查代码是否符合 CRITICAL 和 HIGH 级别的规则
