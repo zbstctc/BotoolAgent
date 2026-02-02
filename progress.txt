@@ -1,0 +1,29 @@
+# Botool 开发代理进度日志
+开始时间: Mon Feb  2 22:52:48 CST 2026
+
+## Codebase Patterns
+- PRD 模式的 System Prompt 在 `viewer/src/app/api/cli/chat/route.ts` 的 `PRD_SYSTEM_PROMPT` 常量中定义
+- 该文件支持三种模式：prd、convert、default，通过 `getSystemPrompt()` 函数切换
+- AskUserQuestion 工具的 questions 数组可以一次包含 2-4 个问题
+
+---
+
+## 2026-02-02 23:01 - DT-002
+- 实现了什么：改进触发按钮显示问题数量和主题标签
+- 修改了哪些文件：`viewer/src/components/ToolRenderer.tsx`
+- **未来迭代的经验教训：**
+  - ToolRenderer 组件在 `viewer/src/components/ToolRenderer.tsx`
+  - 触发按钮和 Modal 都在 `AskUserQuestionRenderer` 函数组件内
+  - `input.questions` 包含所有问题，每个问题有 `header` 属性表示主题
+  - 现有 lint 错误 (set-state-in-effect) 是遗留问题，不阻塞开发
+  - 需要手动浏览器验证，因为 Playwright 无法启动（Chrome 已有运行实例）
+---
+
+## 2026-02-02 23:XX - DT-001
+- 实现了什么：更新 PRD_SYSTEM_PROMPT 支持批量中文问题
+- 修改了哪些文件：`viewer/src/app/api/cli/chat/route.ts`
+- **未来迭代的经验教训：**
+  - System Prompt 使用模板字符串，修改时注意 JSON 示例中的转义
+  - AskUserQuestion 的 questions 数组是核心机制，每个问题需要 question、header、options、multiSelect 字段
+  - 问题分组建议按主题：基础信息、功能范围、技术方案、验收标准
+---
