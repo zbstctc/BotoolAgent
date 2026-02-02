@@ -248,9 +248,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Start CLI and send message
-    await cliManager.start({
-      systemPrompt: SYSTEM_PROMPT,
-    });
+    await cliManager.start({});
 
     // Build context from conversation history for the CLI
     const conversationContext = messages

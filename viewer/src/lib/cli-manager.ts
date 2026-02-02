@@ -94,7 +94,6 @@ export class CLIManager extends EventEmitter {
    */
   async start(options: {
     sessionId?: string;
-    systemPrompt?: string;
     timeout?: number;
   } = {}): Promise<void> {
     if (this.isActive) {
@@ -108,14 +107,6 @@ export class CLIManager extends EventEmitter {
       args.push('--resume', options.sessionId);
       this.sessionId = options.sessionId;
     }
-
-    // Add system prompt if provided (use CLI's native --system-prompt flag)
-    if (options.systemPrompt && !options.sessionId) {
-      args.push('--system-prompt', options.systemPrompt);
-    }
-
-    // Ensure AskUserQuestion tool is available
-    args.push('--allowedTools', 'AskUserQuestion');
 
     this.process = spawn(this.cliPath, args, {
       cwd: this.workingDir,
@@ -435,7 +426,6 @@ export class CLIManager extends EventEmitter {
 export async function runCLI(options: {
   message: string;
   sessionId?: string;
-  systemPrompt?: string;
   workingDir?: string;
   timeout?: number;
   onMessage?: (msg: CLIMessage) => void;
@@ -469,7 +459,6 @@ export async function runCLI(options: {
     manager
       .start({
         sessionId: options.sessionId,
-        systemPrompt: options.systemPrompt,
         timeout: options.timeout,
       })
       .then(() => manager.sendMessage(options.message))

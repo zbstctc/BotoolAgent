@@ -197,9 +197,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Start CLI and send message
-    await cliManager.start({
-      systemPrompt: SYSTEM_PROMPT,
-    });
+    await cliManager.start({});
 
     // Prepare the conversion request
     const fullMessage = `[System Context]\n${SYSTEM_PROMPT}\n\n[User Message]\nConvert this PRD to JSON:\n\n${prdContent}`;
