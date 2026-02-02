@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useMemo, useRef, useEffect, useState } from 'react';
 
 // Types for checklist items
 export interface ChecklistItem {
@@ -16,6 +16,27 @@ export interface ManualChecklistProps {
   onItemToggle?: (itemId: string, checked: boolean) => void;
   onAllComplete?: () => void;
   storageKey?: string;
+}
+
+// Helper to get saved state from localStorage
+function getSavedState(storageKey: string): Record<string, boolean> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return {};
+}
+
+// Helper to save state to localStorage
+function saveState(storageKey: string, state: Record<string, boolean>) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(storageKey, JSON.stringify(state));
+  }
 }
 
 // Checkmark icon
@@ -133,75 +154,41 @@ export function ManualChecklist({
   onAllComplete,
   storageKey = 'botool-manual-checklist',
 }: ManualChecklistProps) {
-  const [items, setItems] = useState<ChecklistItem[]>(initialItems);
-  const [isAllComplete, setIsAllComplete] = useState(false);
+  // State for checked items - initialized lazily from localStorage
+  const [checkedState, setCheckedState] = useState<Record<string, boolean>>(() =>
+    getSavedState(storageKey)
+  );
 
-  // Load saved state from localStorage
+  // Compute items with saved state merged
+  const items = useMemo(() => {
+    return initialItems.map((item) => ({
+      ...item,
+      checked: checkedState[item.id] ?? item.checked,
+    }));
+  }, [initialItems, checkedState]);
+
+  // Derive isAllComplete from items
+  const isAllComplete = useMemo(
+    () => items.length > 0 && items.every((item) => item.checked),
+    [items]
+  );
+
+  // Call onAllComplete when all items are checked - using ref to track previous state
+  const prevAllCompleteRef = useRef(false);
   useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-      try {
-        const savedState = JSON.parse(saved) as Record<string, boolean>;
-        setItems((prev) =>
-          prev.map((item) => ({
-            ...item,
-            checked: savedState[item.id] ?? item.checked,
-          }))
-        );
-      } catch {
-        // Invalid saved state, use default
-      }
-    }
-  }, [storageKey]);
-
-  // Update items when initialItems change (but preserve checked state)
-  useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
-    let savedState: Record<string, boolean> = {};
-    if (saved) {
-      try {
-        savedState = JSON.parse(saved);
-      } catch {
-        // Ignore parse errors
-      }
-    }
-
-    setItems(
-      initialItems.map((item) => ({
-        ...item,
-        checked: savedState[item.id] ?? item.checked,
-      }))
-    );
-  }, [initialItems, storageKey]);
-
-  // Check if all items are complete
-  useEffect(() => {
-    const allComplete = items.length > 0 && items.every((item) => item.checked);
-    setIsAllComplete(allComplete);
-    if (allComplete && onAllComplete) {
+    if (isAllComplete && !prevAllCompleteRef.current && onAllComplete) {
       onAllComplete();
     }
-  }, [items, onAllComplete]);
+    prevAllCompleteRef.current = isAllComplete;
+  }, [isAllComplete, onAllComplete]);
 
   // Handle item toggle
   const handleToggle = useCallback(
     (itemId: string, checked: boolean) => {
-      setItems((prev) => {
-        const newItems = prev.map((item) =>
-          item.id === itemId ? { ...item, checked } : item
-        );
-
-        // Save to localStorage
-        const state = newItems.reduce(
-          (acc, item) => {
-            acc[item.id] = item.checked;
-            return acc;
-          },
-          {} as Record<string, boolean>
-        );
-        localStorage.setItem(storageKey, JSON.stringify(state));
-
-        return newItems;
+      setCheckedState((prev) => {
+        const newState = { ...prev, [itemId]: checked };
+        saveState(storageKey, newState);
+        return newState;
       });
 
       if (onItemToggle) {

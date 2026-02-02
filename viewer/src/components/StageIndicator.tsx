@@ -9,7 +9,7 @@ const stages = [
   { id: 1, name: 'PRD 需求确认', available: true },
   { id: 2, name: '开发规划', available: true },
   { id: 3, name: 'Coding', available: true },
-  { id: 4, name: '测试', available: false },
+  { id: 4, name: '测试', available: true },
   { id: 5, name: 'Review', available: false },
 ];
 
