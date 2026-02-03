@@ -3,7 +3,7 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator, ChatInterface, PRDPreview, SessionResumeDialog, ToolRenderer, StageTransitionModal } from '@/components';
-import { useCliChat, CliChatMessage, ToolUse } from '@/hooks';
+import { useCliChat, CliChatMessage, ToolUse, useProjectValidation } from '@/hooks';
 import { useProject } from '@/contexts/ProjectContext';
 import {
   getSession,
@@ -40,6 +40,10 @@ export default function Stage1Page() {
 
   // Project context
   const { createProject, updateProject, activeProject, setActiveProject } = useProject();
+
+  // Project validation - skip if we have URL params (prdId or session)
+  const hasUrlContext = Boolean(prdId || localSessionId);
+  useProjectValidation({ currentStage: 1, skipValidation: hasUrlContext });
 
   // PRD loading state (for editing existing PRD)
   const [loadedPrdContent, setLoadedPrdContent] = useState<string>('');

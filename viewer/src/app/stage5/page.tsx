@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { StageIndicator, ChangeSummary, CompletionSummary, StageTransitionModal } from '@/components';
-import { useFileWatcher, parsePrdJson } from '@/hooks';
+import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
 import { useProject } from '@/contexts/ProjectContext';
 import type { DiffSummary } from '@/components/ChangeSummary';
 
@@ -31,6 +31,9 @@ type PageState = 'loading' | 'creating_pr' | 'ready' | 'merging' | 'merged' | 'e
 export default function Stage5Page() {
   const router = useRouter();
   const { activeProject, updateProject, setActiveProject } = useProject();
+
+  // Project validation
+  useProjectValidation({ currentStage: 5 });
 
   // Data states
   const [diffSummary, setDiffSummary] = useState<DiffSummary | null>(null);

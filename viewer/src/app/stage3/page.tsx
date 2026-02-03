@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { StageIndicator, StageTransitionModal } from '@/components';
-import { useFileWatcher, parsePrdJson } from '@/hooks';
+import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
 import type { DevTask, PrdData } from '@/hooks';
 import { FlowChart, type AgentPhase } from '@/components/FlowChart';
 import { useProject } from '@/contexts/ProjectContext';
@@ -80,6 +80,9 @@ export default function Stage3Page() {
 
   // Project context
   const { activeProject, updateProject } = useProject();
+
+  // Project validation
+  useProjectValidation({ currentStage: 3 });
 
   const [prdData, setPrdData] = useState<PrdData | null>(null);
   const [progressLog, setProgressLog] = useState<string>('');

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { StageIndicator, TaskEditor, ChatInterface, SessionResumeDialog, StageTransitionModal } from '@/components';
-import { useCliChat, CliChatMessage } from '@/hooks';
+import { useCliChat, CliChatMessage, useProjectValidation } from '@/hooks';
 import { useProject } from '@/contexts/ProjectContext';
 
 interface PRDItem {
@@ -53,6 +53,10 @@ export default function Stage2Page() {
 
   // Project context
   const { activeProject, updateProject } = useProject();
+
+  // Project validation - skip if we have URL params (preselectedPrdId provides context)
+  const hasUrlContext = Boolean(preselectedPrdId);
+  useProjectValidation({ currentStage: 2, skipValidation: hasUrlContext });
 
   const [prds, setPrds] = useState<PRDItem[]>([]);
   const [loading, setLoading] = useState(true);

@@ -4,3 +4,4 @@ export { useCliChat } from './useCliChat';
 export type { CliChatMessage, CliChatMode, ToolUse } from './useCliChat';
 export { useAgentStatus } from './useAgentStatus';
 export type { AgentStatus, AgentStatusType } from './useAgentStatus';
+export { useProjectValidation } from './useProjectValidation';

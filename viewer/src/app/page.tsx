@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { TaskHistory, NewPrdDialog, ProjectCard, type TaskHistoryItem, type TaskStatus, type TaskStage } from '@/components';
 import { useProject, type ProjectState } from '@/contexts/ProjectContext';
@@ -86,6 +86,26 @@ export default function Dashboard() {
   const allProjects = getAllProjects();
   // Filter out archived projects for the active list
   const visibleProjects = allProjects.filter((p) => p.status !== 'archived');
+
+  // Auto-redirect to active project's stage (only once on initial load)
+  const hasRedirectedRef = useRef(false);
+  useEffect(() => {
+    // Only redirect if:
+    // 1. Projects finished loading
+    // 2. Haven't redirected yet in this session
+    // 3. There's an active project with a valid stage
+    if (
+      !projectsLoading &&
+      !hasRedirectedRef.current &&
+      activeProject &&
+      activeProject.status === 'active' &&
+      activeProject.currentStage >= 1 &&
+      activeProject.currentStage <= 5
+    ) {
+      hasRedirectedRef.current = true;
+      router.push(`/stage${activeProject.currentStage}`);
+    }
+  }, [projectsLoading, activeProject, router]);
 
   const fetchTaskHistory = useCallback(async () => {
     setTaskHistoryLoading(true);

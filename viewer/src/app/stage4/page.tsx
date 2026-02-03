@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { StageIndicator, TestResults, ManualChecklist, extractChecklistFromPRD, StageTransitionModal } from '@/components';
-import { useFileWatcher, parsePrdJson } from '@/hooks';
+import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
 import { useProject } from '@/contexts/ProjectContext';
 import type { ChecklistItem } from '@/components/ManualChecklist';
 import type { TestResult, TestSummary } from '@/components/TestResults';
@@ -16,6 +16,9 @@ interface TestCommand {
 export default function Stage4Page() {
   const router = useRouter();
   const { activeProject, updateProject } = useProject();
+
+  // Project validation
+  useProjectValidation({ currentStage: 4 });
 
   // PRD data state
   const [prdData, setPrdData] = useState<{ devTasks: Array<{ id: string; title: string; acceptanceCriteria: string[]; passes?: boolean }> } | null>(null);
