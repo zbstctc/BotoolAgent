@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSession } from '@/lib/prd-session-storage';
+import { useProject } from '@/contexts/ProjectContext';
 
 interface NewPrdDialogProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface NewPrdDialogProps {
 
 export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
   const router = useRouter();
+  const { createProject } = useProject();
   const [projectName, setProjectName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -40,8 +42,11 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
       setIsCreating(true);
 
       try {
-        // Create a new session with the project name
+        // Create a new session with the project name (legacy storage)
         const sessionId = createSession(trimmedName);
+
+        // Also create a project in ProjectContext (new storage)
+        createProject(trimmedName, sessionId);
 
         // Navigate to Stage 1 with the session ID
         router.push(`/stage1?session=${sessionId}`);
@@ -51,7 +56,7 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
         setIsCreating(false);
       }
     },
-    [projectName, router, onClose]
+    [projectName, router, onClose, createProject]
   );
 
   const handleKeyDown = useCallback(
