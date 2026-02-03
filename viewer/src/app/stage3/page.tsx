@@ -262,6 +262,11 @@ export default function Stage3Page() {
         currentStage={3}
         completedStages={[1, 2]}
         projectName={activeProject?.name}
+        stageStatus={
+          totalTasks > 0
+            ? `${completedTasks}/${totalTasks} 完成`
+            : undefined
+        }
       />
 
       {/* Stage Transition Modal */}

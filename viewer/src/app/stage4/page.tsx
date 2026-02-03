@@ -226,7 +226,22 @@ export default function Stage4Page() {
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white">
       {/* Stage Indicator */}
-      <StageIndicator currentStage={4} completedStages={[1, 2, 3]} />
+      <StageIndicator
+        currentStage={4}
+        completedStages={[1, 2, 3]}
+        projectName={activeProject?.name}
+        stageStatus={
+          canProceedToReview
+            ? '验证完成'
+            : allTestsPassed && !isManualCheckComplete
+              ? '待手动验证'
+              : hasTestResults && !allTestsPassed
+                ? '测试失败'
+                : isRunningTests
+                  ? '测试中...'
+                  : '待测试'
+        }
+      />
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">

@@ -7,6 +7,7 @@ interface StageIndicatorProps {
   completedStages?: number[];
   showBackButton?: boolean;
   projectName?: string;
+  stageStatus?: string;
 }
 
 const stages = [
@@ -17,7 +18,7 @@ const stages = [
   { id: 5, name: 'Review', available: true },
 ];
 
-export function StageIndicator({ currentStage, completedStages = [], showBackButton = true, projectName }: StageIndicatorProps) {
+export function StageIndicator({ currentStage, completedStages = [], showBackButton = true, projectName, stageStatus }: StageIndicatorProps) {
   return (
     <div className="w-full bg-white border-b border-neutral-200">
       <div className="px-6 py-4">
@@ -50,6 +51,14 @@ export function StageIndicator({ currentStage, completedStages = [], showBackBut
                 <span className="text-neutral-300">/</span>
                 <span className="text-sm font-medium text-neutral-900 truncate max-w-[200px]">
                   {projectName}
+                </span>
+              </>
+            )}
+            {stageStatus && (
+              <>
+                <span className="text-neutral-300">·</span>
+                <span className="text-xs text-neutral-500 whitespace-nowrap">
+                  {stageStatus}
                 </span>
               </>
             )}

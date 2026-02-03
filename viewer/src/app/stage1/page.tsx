@@ -361,10 +361,22 @@ export default function Stage1Page() {
     );
   }
 
+  // Stage status for StageIndicator
+  const stageStatus = prdContent
+    ? '已生成 PRD'
+    : messages.length > 1
+      ? `${messages.length - 1} 条对话`
+      : undefined;
+
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white">
       {/* Stage Indicator */}
-      <StageIndicator currentStage={1} completedStages={[]} projectName={projectName} />
+      <StageIndicator
+        currentStage={1}
+        completedStages={[]}
+        projectName={projectName}
+        stageStatus={stageStatus}
+      />
 
       {/* Session Resume Dialog (server-side session for existing PRD) */}
       <SessionResumeDialog

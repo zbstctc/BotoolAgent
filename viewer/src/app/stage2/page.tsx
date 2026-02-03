@@ -461,6 +461,15 @@ Output the result as a JSON code block with the following structure:
         currentStage={2}
         completedStages={[1]}
         projectName={activeProject?.name}
+        stageStatus={
+          conversionStatus === 'success'
+            ? `${editableTasks.length} 个任务`
+            : conversionStatus === 'converting'
+              ? '转换中...'
+              : selectedPrd
+                ? '待转换'
+                : undefined
+        }
       />
 
       {/* Session Resume Dialog */}

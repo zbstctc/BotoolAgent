@@ -262,7 +262,24 @@ export default function Stage5Page() {
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white">
       {/* Stage Indicator */}
-      <StageIndicator currentStage={5} completedStages={[1, 2, 3, 4]} />
+      <StageIndicator
+        currentStage={5}
+        completedStages={[1, 2, 3, 4]}
+        projectName={activeProject?.name}
+        stageStatus={
+          pageState === 'merged'
+            ? '已合并'
+            : pageState === 'merging'
+              ? '合并中...'
+              : pageState === 'ready'
+                ? 'PR 就绪'
+                : pageState === 'creating_pr'
+                  ? '创建 PR...'
+                  : pageState === 'error'
+                    ? '出错'
+                    : '加载中...'
+        }
+      />
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
