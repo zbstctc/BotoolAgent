@@ -33,3 +33,5 @@ export { PyramidNavigation } from "./pyramid/PyramidNavigation";
 export type { LevelInfo, CollectedSummaryItem } from "./pyramid/PyramidNavigation";
 export { DimensionCard } from "./pyramid/DimensionCard";
 export type { Question, Answer } from "./pyramid/DimensionCard";
+export { QuestionItem } from "./pyramid/QuestionItem";
+export type { QuestionData, AnswerData } from "./pyramid/QuestionItem";
