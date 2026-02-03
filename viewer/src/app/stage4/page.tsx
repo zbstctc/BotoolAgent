@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { StageIndicator, TestResults, ManualChecklist, extractChecklistFromPRD } from '@/components';
+import { StageIndicator, TestResults, ManualChecklist, extractChecklistFromPRD, StageTransitionModal } from '@/components';
 import { useFileWatcher, parsePrdJson } from '@/hooks';
+import { useProject } from '@/contexts/ProjectContext';
 import type { ChecklistItem } from '@/components/ManualChecklist';
 import type { TestResult, TestSummary } from '@/components/TestResults';
 
@@ -14,6 +15,7 @@ interface TestCommand {
 
 export default function Stage4Page() {
   const router = useRouter();
+  const { activeProject, updateProject } = useProject();
 
   // PRD data state
   const [prdData, setPrdData] = useState<{ devTasks: Array<{ id: string; title: string; acceptanceCriteria: string[]; passes?: boolean }> } | null>(null);
@@ -31,6 +33,9 @@ export default function Stage4Page() {
 
   // Overall state
   const [canProceedToReview, setCanProceedToReview] = useState(false);
+
+  // Transition modal state
+  const [showTransitionModal, setShowTransitionModal] = useState(false);
 
   // SSE event source reference
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -192,9 +197,23 @@ export default function Stage4Page() {
     setIsManualCheckComplete(true);
   }, []);
 
-  // Navigate to Review (Stage 5)
+  // Navigate to Review (Stage 5) - show transition modal instead of direct navigation
   const handleProceedToReview = useCallback(() => {
+    setShowTransitionModal(true);
+  }, []);
+
+  // Handle transition modal confirm
+  const handleTransitionConfirm = useCallback(() => {
+    if (activeProject) {
+      updateProject(activeProject.id, { currentStage: 5 });
+    }
     router.push('/stage5');
+  }, [activeProject, updateProject, router]);
+
+  // Handle transition modal later
+  const handleTransitionLater = useCallback(() => {
+    setShowTransitionModal(false);
+    router.push('/');
   }, [router]);
 
   // Calculate test summary status
@@ -355,6 +374,16 @@ export default function Stage4Page() {
           </button>
         </div>
       </div>
+
+      {/* Stage Transition Modal */}
+      <StageTransitionModal
+        isOpen={showTransitionModal}
+        fromStage={4}
+        toStage={5}
+        summary={`自动化测试全部通过，手动验证已完成。测试覆盖 ${testResults.length} 个测试用例，${checklistItems.filter(item => item.checked !== false).length} 项手动检查已确认。`}
+        onConfirm={handleTransitionConfirm}
+        onLater={handleTransitionLater}
+      />
     </div>
   );
 }

@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { StageIndicator, ChangeSummary, CompletionSummary } from '@/components';
+import { useRouter } from 'next/navigation';
+import { StageIndicator, ChangeSummary, CompletionSummary, StageTransitionModal } from '@/components';
 import { useFileWatcher, parsePrdJson } from '@/hooks';
+import { useProject } from '@/contexts/ProjectContext';
 import type { DiffSummary } from '@/components/ChangeSummary';
 
 interface PRInfo {
@@ -27,6 +29,9 @@ interface MergeStatus {
 type PageState = 'loading' | 'creating_pr' | 'ready' | 'merging' | 'merged' | 'error';
 
 export default function Stage5Page() {
+  const router = useRouter();
+  const { activeProject, updateProject, setActiveProject } = useProject();
+
   // Data states
   const [diffSummary, setDiffSummary] = useState<DiffSummary | null>(null);
   const [progressContent, setProgressContent] = useState<string | null>(null);
@@ -39,6 +44,9 @@ export default function Stage5Page() {
   const [isLoadingDiff, setIsLoadingDiff] = useState(true);
   const [isLoadingProgress, setIsLoadingProgress] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Completion modal state
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
 
   // Use file watcher for PRD and progress
   const { prd, progress } = useFileWatcher({
@@ -174,6 +182,11 @@ export default function Stage5Page() {
         const data = await response.json();
         if (data.success) {
           setPageState('merged');
+          // Update project status to completed and show completion modal
+          if (activeProject) {
+            updateProject(activeProject.id, { status: 'completed' });
+          }
+          setShowCompletionModal(true);
         } else {
           setError(data.error || '合并失败');
           setPageState('error');
@@ -188,7 +201,7 @@ export default function Stage5Page() {
       setError('网络错误，合并失败');
       setPageState('error');
     }
-  }, [prInfo]);
+  }, [prInfo, activeProject, updateProject]);
 
   // Retry creating PR
   const handleRetry = useCallback(async () => {
@@ -227,6 +240,18 @@ export default function Stage5Page() {
     };
     initializePR();
   }, [fetchMergeStatus]);
+
+  // Handle completion modal confirm - return to dashboard
+  const handleCompletionConfirm = useCallback(() => {
+    // Clear active project since it's completed
+    setActiveProject(null);
+    router.push('/');
+  }, [setActiveProject, router]);
+
+  // Handle completion modal later - stay on page
+  const handleCompletionLater = useCallback(() => {
+    setShowCompletionModal(false);
+  }, []);
 
   // Determine if merge button should be enabled
   const canMerge = pageState === 'ready' && mergeStatus?.canMerge && prInfo;
@@ -385,6 +410,16 @@ export default function Stage5Page() {
           )}
         </div>
       </div>
+
+      {/* Completion Modal */}
+      <StageTransitionModal
+        isOpen={showCompletionModal}
+        fromStage={5}
+        toStage={0}
+        summary={`项目 "${projectName || activeProject?.name || '未命名项目'}" 已成功完成！代码已合并到 main 分支。`}
+        onConfirm={handleCompletionConfirm}
+        onLater={handleCompletionLater}
+      />
     </div>
   );
 }
