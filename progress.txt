@@ -1,5 +1,7 @@
 # Botool 开发代理进度日志
-开始时间: Tue Feb  3 13:12:05 CST 2026
+开始时间: 2026-02-03
+项目: Stage 1/2 金字塔问答优化
+分支: botool/stage1-pyramid-optimization
 ---
 
 ## Codebase Patterns
@@ -7,158 +9,77 @@
 - hooks 导出统一通过 `hooks/index.ts`
 - localStorage 持久化参考 `lib/prd-session-storage.ts` 的模式
 - Context 放在 `contexts/` 目录，在 `layout.tsx` 中包裹 Provider
-
 - project-storage.ts 提供独立的存储 API，便于测试和复用
 
 ---
 
-## 2026-02-03 21:00 - DT-012
-- 实现了什么：StageIndicator 增强显示
+## 2026-02-03 - DT-001
+- 实现了什么：改造创建需求弹窗为多行需求描述输入
 - 修改了哪些文件：
-  - 修改 `viewer/src/components/StageIndicator.tsx` 添加 stageStatus prop
-  - 修改 `viewer/src/app/stage1/page.tsx` 传入状态（对话数量/PRD状态）
-  - 修改 `viewer/src/app/stage2/page.tsx` 传入状态（转换状态/任务数量）
-  - 修改 `viewer/src/app/stage3/page.tsx` 传入状态（x/y 完成）
-  - 修改 `viewer/src/app/stage4/page.tsx` 传入状态（测试/验证状态）+ projectName
-  - 修改 `viewer/src/app/stage5/page.tsx` 传入状态（PR状态）+ projectName
+  - 修改 `viewer/src/components/NewPrdDialog.tsx`
 - **未来迭代的经验教训：**
-  - 发现的模式：StageIndicator 的 stageStatus 使用三元运算符链条来处理多种状态
-  - 发现的模式：Stage 4 和 Stage 5 之前没有传入 projectName，需要补充
-  - 有用的上下文：stageStatus 显示在 projectName 后面，用 `·` 分隔
-  - 注意：状态文字应该简洁明了，便于用户快速了解当前进度
+  - 发现的模式：使用 `sessionStorage.setItem()` 在页面间传递临时数据
+  - 有用的上下文：description 存储 key 格式为 `botool-initial-description-{sessionId}`
+  - 有用的上下文：临时项目名使用描述前30字符 + "..."
 ---
 
-## 2026-02-03 20:30 - DT-011
-- 实现了什么：更新 CLAUDE.md 添加 BotoolAgent Viewer 产品定位说明
+## 2026-02-03 - DT-002
+- 实现了什么：添加需求类型选择器
 - 修改了哪些文件：
-  - 修改 `CLAUDE.md` 添加 BotoolAgent Viewer 章节
+  - 修改 `viewer/src/components/NewPrdDialog.tsx`
 - **未来迭代的经验教训：**
-  - 有用的上下文：CLAUDE.md 的 Viewer 章节描述了产品定位、目标用户和与 CLI Skills 的关系
-  - 有用的上下文：Viewer 的 5 阶段工作流是整个产品的核心流程
-  - 发现的模式：文档更新类任务只需修改 CLAUDE.md，运行 typecheck 确保不影响代码即可
+  - 发现的模式：chip 样式按钮使用 `rounded-full` + `ring-2` 实现选中高亮
+  - 有用的上下文：需求类型存储 key 为 `botool-requirement-type-{sessionId}`
+  - 有用的上下文：REQUIREMENT_TYPES 常量定义了预设类型
 ---
 
-## 2026-02-03 19:45 - DT-010
-- 实现了什么：页面加载时自动恢复项目状态
+## 2026-02-03 - DT-003
+- 实现了什么：自动生成标题功能
 - 修改了哪些文件：
-  - 新建 `viewer/src/hooks/useProjectValidation.ts`
-  - 修改 `viewer/src/hooks/index.ts` 导出新 hook
-  - 修改 `viewer/src/app/page.tsx` 添加自动跳转逻辑
-  - 修改 `viewer/src/app/stage1/page.tsx` 集成项目验证
-  - 修改 `viewer/src/app/stage2/page.tsx` 集成项目验证
-  - 修改 `viewer/src/app/stage3/page.tsx` 集成项目验证
-  - 修改 `viewer/src/app/stage4/page.tsx` 集成项目验证
-  - 修改 `viewer/src/app/stage5/page.tsx` 集成项目验证
+  - 修改 `viewer/src/components/NewPrdDialog.tsx`
+  - 新建 `viewer/src/app/api/generate-title/route.ts`
 - **未来迭代的经验教训：**
-  - 发现的模式：使用 `useRef` + `hasRedirectedRef.current` 防止多次重定向
-  - 发现的模式：验证 hook 支持 `skipValidation` 参数，用于有 URL 参数时跳过验证
-  - 发现的模式：Stage 1 允许无活动项目（入口点），其他 Stage 需要活动项目
-  - 有用的上下文：验证逻辑：不能越级访问（currentStage > activeProject.currentStage 时重定向）
-  - 有用的上下文：归档/已完成的项目会重定向到 Dashboard
+  - 发现的坑：/api/cli/chat 是 SSE 流式 API，不能用 response.json() 解析
+  - 发现的模式：创建独立的简单 API 端点比复用 SSE API 更简单
+  - 发现的模式：使用 useRef + setTimeout 实现 debounce
+  - 有用的上下文：Anthropic API 可直接用 fetch 调用，无需 SDK
 ---
 
-## 2026-02-03 19:05 - DT-009
-- 实现了什么：Dashboard 集成项目列表
+## 2026-02-03 - DT-004~010
+- 实现了什么：金字塔问答核心组件和 API
 - 修改了哪些文件：
-  - 修改 `viewer/src/app/page.tsx`
+  - 新建 `viewer/src/components/pyramid/` 目录
+  - 新建 `PyramidNavigation.tsx`, `DimensionCard.tsx`, `QuestionItem.tsx`, `LevelPanel.tsx`
+  - 新建 `viewer/src/lib/dimension-framework.ts`
+  - 新建 `viewer/src/lib/skill-parser.ts`
+  - 新建 `viewer/src/lib/pyramid-session-storage.ts`
+  - 新建 `viewer/src/app/api/pyramid/questions/route.ts`
 - **未来迭代的经验教训：**
-  - 发现的模式：使用 `useProject` hook 获取 `getAllProjects`、`deleteProject`、`archiveProject` 等方法
-  - 发现的模式：`visibleProjects = allProjects.filter((p) => p.status !== 'archived')` 过滤已归档项目
-  - 发现的模式：活动项目 Banner 使用 `activeProject` 直接显示进度（stage/5）
-  - 有用的上下文：`ProjectCard` 组件的 `isActive` prop 通过 `project.id === activeProjectId` 判断
-  - 有用的上下文：点击查看时需要先调用 `setActiveProject(project.id)` 然后再跳转
-  - 注意：替换了 `PrdSessionList` 为 `ProjectCard` 列表，但 `PrdSessionList` 组件仍保留（可能被其他地方使用）
+  - 发现的模式：组件按功能分组到子目录（pyramid/）
+  - 发现的模式：skill-parser 使用 fallback prompts 确保无 skill 文件时也能工作
+  - 发现的模式：pyramid-session-storage 使用 Partial<Record<>> 允许渐进填充
+  - 有用的上下文：L2_DIMENSIONS 包含 triggerKeywords 用于自动激活维度
 ---
 
-## 2026-02-03 18:25 - DT-008
-- 实现了什么：Dashboard 项目卡片组件
+## 2026-02-03 - DT-011
+- 实现了什么：重写 Stage 1 页面为金字塔界面
 - 修改了哪些文件：
-  - 新建 `viewer/src/components/ProjectCard.tsx`
-  - 修改 `viewer/src/components/index.ts` 导出组件
+  - 重写 `viewer/src/app/stage1/page.tsx`
 - **未来迭代的经验教训：**
-  - 发现的模式：ProjectCard 使用 `useState` + `onMouseEnter/onMouseLeave` 实现悬浮展开效果
-  - 发现的模式：删除操作使用二次确认机制（点一次显示"确认删除"，再点一次执行删除）
-  - 发现的模式：STAGE_INFO 和 STATUS_STYLES 常量管理 Stage/Status 的显示信息
-  - 有用的上下文：isActive 属性用于标识当前活动项目，显示蓝色边框和顶部条带
-  - 有用的上下文：不同状态的操作按钮：进行中(1-4)显示删除、待合并(5)显示归档、已完成显示归档
+  - 发现的模式：三栏布局使用 w-64 + flex-1 + w-96 固定两侧
+  - 发现的模式：从 sessionStorage 获取 Dashboard 传递的初始数据
+  - 有用的上下文：autoSaveStatus 状态显示 '保存中...' / '已自动保存'
 ---
 
-## 2026-02-03 17:45 - DT-007
-- 实现了什么：Stage 4 和 Stage 5 集成项目状态
+## 2026-02-03 - DT-012~016
+- 实现了什么：设计确认组件和 API
 - 修改了哪些文件：
-  - 修改 `viewer/src/app/stage4/page.tsx`
-  - 修改 `viewer/src/app/stage5/page.tsx`
+  - 新建 `viewer/src/components/design-confirm/` 目录
+  - 新建 `LayoutPreview.tsx`, `VersionHistory.tsx`, `DesignConfirmPage.tsx`
+  - 新建 `viewer/src/app/api/pyramid/layout/route.ts`
+  - 新建 `viewer/src/app/api/pyramid/iterate/route.ts`
 - **未来迭代的经验教训：**
-  - 发现的模式：Stage 4 的过渡弹窗在点击"进入 Review"按钮时触发（条件：测试通过 + 手动验证完成）
-  - 发现的模式：Stage 5 合并成功后需要同时更新项目状态为 `completed` 并显示完成弹窗
-  - 发现的模式：完成弹窗使用 `toStage=0` 表示项目结束
-  - 有用的上下文：Stage 5 完成后清除 `activeProject`（设为 null），让用户可以开始新项目
-  - 有用的上下文：Stage 4 的弹窗 summary 包含测试用例数量和手动检查项数量
+  - 发现的模式：iterate API 使用关键词分析确定受影响层级
+  - 有用的上下文：LayoutPreview 使用 Header/Sidebar/Main/Footer 四区块
 ---
 
-## 2026-02-03 17:15 - DT-006
-- 实现了什么：Stage 3 集成项目状态和过渡弹窗
-- 修改了哪些文件：
-  - 修改 `viewer/src/app/stage3/page.tsx`
-- **未来迭代的经验教训：**
-  - 发现的模式：Stage 3 使用 `allTasksCompleted` 变量检测所有任务完成 (`totalTasks > 0 && completedTasks === totalTasks`)
-  - 发现的模式：使用 `hasShownCompletionModal` 状态防止弹窗重复显示
-  - 发现的模式：Stage 3 页面已使用 `useFileWatcher` 监控 prd.json 变化，任务完成后自动检测
-  - 有用的上下文：Stage 3 的过渡弹窗是自动触发的（任务全部完成时），不像 Stage 1/2 是用户操作后触发
----
-
-## 2026-02-03 16:45 - DT-005
-- 实现了什么：Stage 2 集成项目状态和过渡弹窗
-- 修改了哪些文件：
-  - 修改 `viewer/src/app/stage2/page.tsx`
-- **未来迭代的经验教训：**
-  - 发现的模式：Stage 页面自动加载 PRD 逻辑：优先使用 URL 参数，其次使用 activeProject.prdId
-  - 发现的模式：handleStartDevelopment 先更新 branchName，再显示过渡弹窗，handleTransitionConfirm 负责跳转
-  - 有用的上下文：Header 中可以根据 activeProject 是否存在显示不同的项目来源信息
-  - 注意：StageTransitionModal 的 summary 使用模板字符串显示任务数量
----
-
-## 2026-02-03 16:05 - DT-004
-- 实现了什么：Stage 1 集成项目状态和过渡弹窗
-- 修改了哪些文件：
-  - 修改 `viewer/src/app/stage1/page.tsx`
-- **未来迭代的经验教训：**
-  - 发现的模式：Stage 页面需要引入 `useProject` hook 和 `StageTransitionModal` 组件
-  - 发现的模式：保存成功后的流程：创建/更新项目 → 显示过渡弹窗 → 用户确认后更新 stage 并跳转
-  - 有用的上下文：`savedPrdId` 需要单独存储，因为在 callback 中无法直接使用 data.id
-  - 注意：`setActiveProject` 被导入但未使用（用于未来可能需要的场景）
----
-
-## 2026-02-03 15:30 - DT-003
-- 实现了什么：创建 StageTransitionModal 组件
-- 修改了哪些文件：
-  - 新建 `viewer/src/components/StageTransitionModal.tsx`
-  - 修改 `viewer/src/components/index.ts` 导出组件
-- **未来迭代的经验教训：**
-  - 发现的模式：Dialog/Modal 组件使用固定的 UI 结构：backdrop(bg-black/50) + 白色卡片 + header/content/footer
-  - 发现的模式：使用 STAGE_NAMES 和 STAGE_ICONS 常量来管理 Stage 元数据
-  - 有用的上下文：组件设计支持 toStage=0 表示项目完成，显示不同的完成 UI
-  - 注意：浏览器测试工具可能因 Chrome 实例冲突无法使用，需手动验证
----
-
-## 2026-02-03 14:15 - DT-002
-- 实现了什么：创建项目状态持久化存储模块
-- 修改了哪些文件：
-  - 新建 `viewer/src/lib/project-storage.ts`
-  - 重构 `viewer/src/contexts/ProjectContext.tsx` 使用 project-storage 模块
-- **未来迭代的经验教训：**
-  - 发现的模式：存储模块应独立于 Context，保持关注点分离
-  - 发现的模式：project-storage 和 prd-session-storage 使用相同的设计模式
-  - 有用的上下文：DT-001 的实现已包含持久化功能，DT-002 主要是将其抽取为独立模块
----
-
-## 2026-02-03 13:25 - DT-001
-- 实现了什么：创建 ProjectContext 全局状态管理
-- 修改了哪些文件：
-  - 新建 `viewer/src/contexts/ProjectContext.tsx`
-  - 修改 `viewer/src/app/layout.tsx` 添加 ProjectProvider
-- **未来迭代的经验教训：**
-  - 发现的模式：Context 文件使用 'use client' 指令
-  - 发现的模式：generateUUID 可以复用，已有 prd-session-storage.ts 中的实现
-  - 有用的上下文：ProjectContext 已集成 localStorage 持久化，DT-002 可能可以简化
----
