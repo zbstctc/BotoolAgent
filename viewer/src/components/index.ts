@@ -25,3 +25,5 @@ export { NewPrdDialog } from "./NewPrdDialog";
 export { PrdSessionList } from "./PrdSessionList";
 export { StageTransitionModal } from "./StageTransitionModal";
 export type { StageTransitionModalProps } from "./StageTransitionModal";
+export { ProjectCard } from "./ProjectCard";
+export type { ProjectCardProps } from "./ProjectCard";
