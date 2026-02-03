@@ -31,3 +31,5 @@ export type { ProjectCardProps } from "./ProjectCard";
 // Pyramid components
 export { PyramidNavigation } from "./pyramid/PyramidNavigation";
 export type { LevelInfo, CollectedSummaryItem } from "./pyramid/PyramidNavigation";
+export { DimensionCard } from "./pyramid/DimensionCard";
+export type { Question, Answer } from "./pyramid/DimensionCard";
