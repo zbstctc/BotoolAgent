@@ -23,3 +23,5 @@ export { TaskHistory } from "./TaskHistory";
 export type { TaskHistoryItem, TaskHistoryProps, TaskStatus, TaskStage } from "./TaskHistory";
 export { NewPrdDialog } from "./NewPrdDialog";
 export { PrdSessionList } from "./PrdSessionList";
+export { StageTransitionModal } from "./StageTransitionModal";
+export type { StageTransitionModalProps } from "./StageTransitionModal";
