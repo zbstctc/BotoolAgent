@@ -103,7 +103,16 @@ export default function Dashboard() {
       activeProject.currentStage <= 5
     ) {
       hasRedirectedRef.current = true;
-      router.push(`/stage${activeProject.currentStage}`);
+      // Build URL with appropriate parameters based on stage
+      const stage = activeProject.currentStage;
+      let url = `/stage${stage}`;
+
+      // Stage 1 needs session parameter to load the correct localStorage session
+      if (stage === 1 && activeProject.prdId) {
+        url += `?session=${activeProject.prdId}`;
+      }
+
+      router.push(url);
     }
   }, [projectsLoading, activeProject, router]);
 
