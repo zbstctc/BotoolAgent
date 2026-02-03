@@ -10,10 +10,22 @@ interface NewPrdDialogProps {
   onClose: () => void;
 }
 
+// Requirement type options
+type RequirementType = 'new-feature' | 'enhancement' | 'bugfix' | 'other';
+
+const REQUIREMENT_TYPES: { value: RequirementType; label: string }[] = [
+  { value: 'new-feature', label: '新功能' },
+  { value: 'enhancement', label: '改功能' },
+  { value: 'bugfix', label: '修bug' },
+  { value: 'other', label: '其他' },
+];
+
 export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
   const router = useRouter();
   const { createProject } = useProject();
   const [description, setDescription] = useState('');
+  const [requirementType, setRequirementType] = useState<RequirementType>('new-feature');
+  const [customType, setCustomType] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -28,6 +40,8 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
   useEffect(() => {
     if (!isOpen) {
       setDescription('');
+      setRequirementType('new-feature');
+      setCustomType('');
       setIsCreating(false);
     }
   }, [isOpen]);
@@ -52,8 +66,10 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
         // Store description in metadata for Stage 1 to use
         createProject(tempName, sessionId);
 
-        // Store description in sessionStorage for Stage 1 to pick up
+        // Store description and requirement type in sessionStorage for Stage 1 to pick up
         sessionStorage.setItem(`botool-initial-description-${sessionId}`, trimmedDescription);
+        const typeToStore = requirementType === 'other' ? customType.trim() || '其他' : REQUIREMENT_TYPES.find(t => t.value === requirementType)?.label || '新功能';
+        sessionStorage.setItem(`botool-requirement-type-${sessionId}`, typeToStore);
 
         // Navigate to Stage 1 with the session ID
         router.push(`/stage1?session=${sessionId}`);
@@ -115,14 +131,50 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
 
         {/* Content */}
         <form onSubmit={handleSubmit}>
-          <div className="p-4">
-            <label
-              htmlFor="requirement-description"
-              className="block text-sm font-medium text-neutral-700 mb-2"
-            >
-              需求描述
-            </label>
-            <textarea
+          <div className="p-4 space-y-4">
+            {/* Requirement Type Selector */}
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-2">
+                需求类型
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {REQUIREMENT_TYPES.map((type) => (
+                  <button
+                    key={type.value}
+                    type="button"
+                    onClick={() => setRequirementType(type.value)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      requirementType === type.value
+                        ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500'
+                        : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                    }`}
+                    disabled={isCreating}
+                  >
+                    {type.label}
+                  </button>
+                ))}
+              </div>
+              {requirementType === 'other' && (
+                <input
+                  type="text"
+                  value={customType}
+                  onChange={(e) => setCustomType(e.target.value)}
+                  placeholder="请输入需求类型..."
+                  className="mt-2 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                  disabled={isCreating}
+                />
+              )}
+            </div>
+
+            {/* Description Input */}
+            <div>
+              <label
+                htmlFor="requirement-description"
+                className="block text-sm font-medium text-neutral-700 mb-2"
+              >
+                需求描述
+              </label>
+              <textarea
               ref={textareaRef}
               id="requirement-description"
               value={description}
@@ -133,13 +185,14 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
               className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all resize-none"
               disabled={isCreating}
             />
-            <div className="mt-2 flex items-center justify-between">
-              <p className="text-xs text-neutral-500">
-                描述你想要的功能，系统会引导你完善需求
-              </p>
-              <span className="text-xs text-neutral-400">
-                {description.length}/500
-              </span>
+              <div className="mt-2 flex items-center justify-between">
+                <p className="text-xs text-neutral-500">
+                  描述你想要的功能，系统会引导你完善需求
+                </p>
+                <span className="text-xs text-neutral-400">
+                  {description.length}/500
+                </span>
+              </div>
             </div>
           </div>
 
