@@ -37,3 +37,10 @@ export { QuestionItem } from "./pyramid/QuestionItem";
 export type { QuestionData, AnswerData } from "./pyramid/QuestionItem";
 export { LevelPanel } from "./pyramid/LevelPanel";
 export type { Dimension } from "./pyramid/LevelPanel";
+
+// Design confirm components
+export { LayoutPreview } from "./design-confirm/LayoutPreview";
+export type { LayoutData, LayoutArea } from "./design-confirm/LayoutPreview";
+export { VersionHistory } from "./design-confirm/VersionHistory";
+export type { Version } from "./design-confirm/VersionHistory";
+export { DesignConfirmPage } from "./design-confirm/DesignConfirmPage";
