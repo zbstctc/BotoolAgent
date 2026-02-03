@@ -83,6 +83,12 @@ export default function Stage1Page() {
           }),
         }).catch(console.error);
       }
+      // Save CLI session ID to localStorage for session resume
+      if (localSessionIdRef.current && newSessionId) {
+        updateSession(localSessionIdRef.current, {
+          cliSessionId: newSessionId,
+        });
+      }
     },
     onToolUse: (toolUse) => {
       // Track tool use for rendering
@@ -111,14 +117,23 @@ export default function Stage1Page() {
     if (session) {
       setCurrentLocalSession(session);
       localSessionIdRef.current = localSessionId;
-      // If session has messages, we could restore them here
-      // For now, just mark session as loaded
+
+      // Restore messages if available
+      if (session.messages && session.messages.length > 0) {
+        setMessages(session.messages);
+      }
+
+      // Restore CLI session ID for resuming Claude conversation
+      if (session.cliSessionId) {
+        setSessionId(session.cliSessionId);
+        sessionIdRef.current = session.cliSessionId;
+      }
     } else {
       // Session not found, redirect to Dashboard
       console.warn(`Session ${localSessionId} not found, redirecting to Dashboard`);
       router.replace('/');
     }
-  }, [localSessionId, router]);
+  }, [localSessionId, router, setMessages, setSessionId]);
 
   // Save messages to localStorage for context (only for local session)
   useEffect(() => {

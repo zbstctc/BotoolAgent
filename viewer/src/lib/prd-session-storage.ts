@@ -34,6 +34,8 @@ export interface PrdSession {
     role: 'user' | 'assistant';
     content: string;
   }>;
+  /** CLI session ID for resuming Claude conversation */
+  cliSessionId?: string;
 }
 
 interface PrdSessionsStorage {
