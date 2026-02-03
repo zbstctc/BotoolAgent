@@ -81,6 +81,7 @@ export default function Dashboard() {
   const [loadingSessionDetails, setLoadingSessionDetails] = useState(false);
   const [viewMode, setViewMode] = useState<'timeline' | 'list'>('timeline');
   const [showNewPrdDialog, setShowNewPrdDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState<'projects' | 'rules'>('projects');
 
   // Get all projects from context
   const allProjects = getAllProjects();
@@ -252,7 +253,40 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col gap-6 py-6 px-4 mx-auto max-w-7xl h-full overflow-y-auto bg-neutral-50">
-      {/* Main Content Grid */}
+      {/* Tab Navigation */}
+      <div className="flex items-center gap-1 bg-neutral-100 p-1 rounded-lg w-fit">
+        <button
+          onClick={() => setActiveTab('projects')}
+          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            activeTab === 'projects'
+              ? 'bg-white text-neutral-900 shadow-sm'
+              : 'text-neutral-600 hover:text-neutral-900'
+          }`}
+        >
+          项目列表
+        </button>
+        <button
+          onClick={() => setActiveTab('rules')}
+          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            activeTab === 'rules'
+              ? 'bg-white text-neutral-900 shadow-sm'
+              : 'text-neutral-600 hover:text-neutral-900'
+          }`}
+        >
+          规范管理
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'rules' ? (
+        <div className="flex-1 flex items-center justify-center text-neutral-500">
+          <div className="text-center">
+            <p className="text-lg mb-2">规范管理</p>
+            <p className="text-sm">即将推出...</p>
+          </div>
+        </div>
+      ) : (
+      /* Main Content Grid */
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Left: Active Projects + PRD Documents */}
         <section className="flex flex-col gap-6">
@@ -423,6 +457,7 @@ export default function Dashboard() {
           )}
         </section>
       </div>
+      )}
 
       {/* PRD Preview Modal */}
       {selectedPRD && (
