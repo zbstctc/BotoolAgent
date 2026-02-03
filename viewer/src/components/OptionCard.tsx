@@ -226,7 +226,7 @@ export function OptionCard({
                 onChange={(e) => onOtherChange?.(e.target.value)}
                 placeholder="请输入..."
                 disabled={disabled}
-                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-neutral-50 disabled:cursor-not-allowed"
+                className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-neutral-50 disabled:cursor-not-allowed"
                 autoFocus
               />
             </div>
