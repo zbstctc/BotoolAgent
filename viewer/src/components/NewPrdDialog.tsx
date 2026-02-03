@@ -26,8 +26,11 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
   const [description, setDescription] = useState('');
   const [requirementType, setRequirementType] = useState<RequirementType>('new-feature');
   const [customType, setCustomType] = useState('');
+  const [generatedTitle, setGeneratedTitle] = useState('');
+  const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const generateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Focus textarea when dialog opens
   useEffect(() => {
@@ -42,9 +45,62 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
       setDescription('');
       setRequirementType('new-feature');
       setCustomType('');
+      setGeneratedTitle('');
+      setIsGeneratingTitle(false);
       setIsCreating(false);
+      if (generateTimeoutRef.current) {
+        clearTimeout(generateTimeoutRef.current);
+      }
     }
   }, [isOpen]);
+
+  // Generate title when description changes (debounced)
+  const generateTitle = useCallback(async (desc: string) => {
+    if (desc.trim().length < 10) return; // Need at least 10 chars
+
+    setIsGeneratingTitle(true);
+    try {
+      const response = await fetch('/api/generate-title', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: desc }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const title = data.title?.trim() || '';
+        // Clean up the title - remove quotes, markdown, etc.
+        const cleanTitle = title
+          .replace(/^["'`]+|["'`]+$/g, '')
+          .replace(/\*\*/g, '')
+          .slice(0, 30);
+        if (cleanTitle) {
+          setGeneratedTitle(cleanTitle);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to generate title:', error);
+    } finally {
+      setIsGeneratingTitle(false);
+    }
+  }, []);
+
+  // Debounced title generation
+  const handleDescriptionChange = useCallback((value: string) => {
+    setDescription(value);
+
+    // Clear previous timeout
+    if (generateTimeoutRef.current) {
+      clearTimeout(generateTimeoutRef.current);
+    }
+
+    // Set new timeout for title generation
+    if (value.trim().length >= 20) {
+      generateTimeoutRef.current = setTimeout(() => {
+        generateTitle(value);
+      }, 1000); // Wait 1 second after typing stops
+    }
+  }, [generateTitle]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -56,15 +112,15 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
       setIsCreating(true);
 
       try {
-        // Use first 30 characters of description as temporary name
-        const tempName = trimmedDescription.slice(0, 30) + (trimmedDescription.length > 30 ? '...' : '');
+        // Use generated title or fallback to first 30 chars of description
+        const projectName = generatedTitle.trim() ||
+          (trimmedDescription.slice(0, 30) + (trimmedDescription.length > 30 ? '...' : ''));
 
-        // Create a new session with the temp name (legacy storage)
-        const sessionId = createSession(tempName);
+        // Create a new session with the project name (legacy storage)
+        const sessionId = createSession(projectName);
 
         // Also create a project in ProjectContext (new storage)
-        // Store description in metadata for Stage 1 to use
-        createProject(tempName, sessionId);
+        createProject(projectName, sessionId);
 
         // Store description and requirement type in sessionStorage for Stage 1 to pick up
         sessionStorage.setItem(`botool-initial-description-${sessionId}`, trimmedDescription);
@@ -79,7 +135,7 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
         setIsCreating(false);
       }
     },
-    [description, router, onClose, createProject]
+    [description, generatedTitle, requirementType, customType, router, onClose, createProject]
   );
 
   const handleKeyDown = useCallback(
@@ -178,7 +234,7 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
               ref={textareaRef}
               id="requirement-description"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => handleDescriptionChange(e.target.value)}
               placeholder="请描述你想要构建的功能或解决的问题..."
               maxLength={500}
               rows={5}
@@ -193,6 +249,33 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
                   {description.length}/500
                 </span>
               </div>
+            </div>
+
+            {/* Generated Title */}
+            <div>
+              <label
+                htmlFor="project-title"
+                className="block text-sm font-medium text-neutral-700 mb-2"
+              >
+                项目标题
+                {isGeneratingTitle && (
+                  <span className="ml-2 text-xs text-blue-500 font-normal">
+                    生成中...
+                  </span>
+                )}
+              </label>
+              <input
+                id="project-title"
+                type="text"
+                value={generatedTitle}
+                onChange={(e) => setGeneratedTitle(e.target.value)}
+                placeholder={description.trim().length >= 20 ? '自动生成中...' : '输入描述后自动生成'}
+                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                disabled={isCreating || isGeneratingTitle}
+              />
+              <p className="mt-1 text-xs text-neutral-500">
+                标题会自动生成，你也可以手动修改
+              </p>
             </div>
           </div>
 
