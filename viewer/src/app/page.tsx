@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useState, useEffect, useCallback } from 'react';
-import { TaskHistory, NewPrdDialog, PrdSessionList, type TaskHistoryItem, type TaskStatus, type TaskStage } from '@/components';
+import { useRouter } from 'next/navigation';
+import { TaskHistory, NewPrdDialog, ProjectCard, type TaskHistoryItem, type TaskStatus, type TaskStage } from '@/components';
+import { useProject, type ProjectState } from '@/contexts/ProjectContext';
 
 interface PRDItem {
   id: string;
@@ -53,14 +55,18 @@ interface SessionDetails {
   progressLog?: string;
 }
 
-// Active project status (null when no project is running)
-const activeProject: {
-  name: string;
-  currentTask: string;
-  progress: number;
-} | null = null;
-
 export default function Dashboard() {
+  const router = useRouter();
+  const {
+    activeProject,
+    activeProjectId,
+    getAllProjects,
+    deleteProject,
+    archiveProject,
+    setActiveProject,
+    isLoading: projectsLoading,
+  } = useProject();
+
   const [prds, setPrds] = useState<PRDItem[]>([]);
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [taskHistory, setTaskHistory] = useState<TaskHistoryItem[]>([]);
@@ -75,6 +81,11 @@ export default function Dashboard() {
   const [loadingSessionDetails, setLoadingSessionDetails] = useState(false);
   const [viewMode, setViewMode] = useState<'timeline' | 'list'>('timeline');
   const [showNewPrdDialog, setShowNewPrdDialog] = useState(false);
+
+  // Get all projects from context
+  const allProjects = getAllProjects();
+  // Filter out archived projects for the active list
+  const visibleProjects = allProjects.filter((p) => p.status !== 'archived');
 
   const fetchTaskHistory = useCallback(async () => {
     setTaskHistoryLoading(true);
@@ -147,6 +158,22 @@ export default function Dashboard() {
     if (!task.branchName) return;
     // Navigate to stage 5 for merge
     window.location.href = `/stage5?session=${task.id}`;
+  }
+
+  // Handle view project - navigate to corresponding stage
+  function handleViewProject(project: ProjectState) {
+    setActiveProject(project.id);
+    router.push(`/stage${project.currentStage}`);
+  }
+
+  // Handle delete project
+  function handleDeleteProject(projectId: string) {
+    deleteProject(projectId);
+  }
+
+  // Handle archive project
+  function handleArchiveProject(projectId: string) {
+    archiveProject(projectId);
   }
 
   // Handle delete task
@@ -227,7 +254,7 @@ export default function Dashboard() {
                   {activeProject.name}
                 </p>
                 <p className="text-xs text-blue-700">
-                  Current: {activeProject.currentTask}
+                  Stage {activeProject.currentStage} · {getStageLabel(activeProject.currentStage)}
                 </p>
               </div>
             </div>
@@ -235,17 +262,17 @@ export default function Dashboard() {
               <div className="w-32 h-2 rounded-full bg-blue-200 overflow-hidden">
                 <div
                   className="h-full bg-blue-500 transition-all"
-                  style={{ width: `${activeProject.progress}%` }}
+                  style={{ width: `${(activeProject.currentStage / 5) * 100}%` }}
                 />
               </div>
               <span className="text-sm font-medium text-blue-700">
-                {activeProject.progress}%
+                {activeProject.currentStage}/5
               </span>
               <Link
-                href="/stage3"
+                href={`/stage${activeProject.currentStage}`}
                 className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
               >
-                View Progress
+                继续工作
               </Link>
             </div>
           </div>
@@ -256,14 +283,14 @@ export default function Dashboard() {
             <div className="flex items-center gap-3">
               <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
               <p className="text-sm text-neutral-600">
-                No active project running
+                暂无进行中的项目
               </p>
             </div>
             <button
               onClick={() => setShowNewPrdDialog(true)}
               className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-800 transition-colors"
             >
-              + Create New PRD
+              + 新建 PRD
             </button>
           </div>
         </div>
@@ -271,16 +298,51 @@ export default function Dashboard() {
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Left: In-progress PRD + PRD Documents */}
+        {/* Left: Active Projects + PRD Documents */}
         <section className="flex flex-col gap-6">
-          {/* In-progress PRD Sessions */}
+          {/* Active Projects */}
           <div className="flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-neutral-900">
-                进行中的 PRD
+                我的项目
               </h2>
+              <span className="text-xs text-neutral-400">
+                {visibleProjects.length} 个项目
+              </span>
             </div>
-            <PrdSessionList />
+            {projectsLoading ? (
+              <div className="space-y-2">
+                {[1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="animate-pulse rounded-lg border border-neutral-200 bg-white p-4"
+                  >
+                    <div className="h-4 bg-neutral-200 rounded w-3/4 mb-2" />
+                    <div className="h-3 bg-neutral-100 rounded w-1/3" />
+                  </div>
+                ))}
+              </div>
+            ) : visibleProjects.length > 0 ? (
+              <div className="space-y-2">
+                {visibleProjects.map((project) => (
+                  <ProjectCard
+                    key={project.id}
+                    project={project}
+                    isActive={project.id === activeProjectId}
+                    onView={handleViewProject}
+                    onDelete={handleDeleteProject}
+                    onArchive={handleArchiveProject}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title="暂无进行中的项目"
+                description="创建你的第一个 PRD，开始自主开发流程。"
+                actionLabel="新建 PRD"
+                onAction={() => setShowNewPrdDialog(true)}
+              />
+            )}
           </div>
 
           {/* PRD Documents */}
@@ -840,6 +902,18 @@ function SessionDetailsModal({
       </div>
     </div>
   );
+}
+
+// Helper to get stage label
+function getStageLabel(stage: number): string {
+  const labels: Record<number, string> = {
+    1: 'PRD 需求确认',
+    2: '开发规划',
+    3: 'Coding',
+    4: '测试',
+    5: 'Review',
+  };
+  return labels[stage] || `Stage ${stage}`;
 }
 
 function EmptyState({
