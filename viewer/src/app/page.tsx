@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { TaskHistory, NewPrdDialog, ProjectCard, type TaskHistoryItem, type TaskStatus, type TaskStage } from '@/components';
 import { useProject, type ProjectState } from '@/contexts/ProjectContext';
@@ -87,34 +87,8 @@ export default function Dashboard() {
   // Filter out archived projects for the active list
   const visibleProjects = allProjects.filter((p) => p.status !== 'archived');
 
-  // Auto-redirect to active project's stage (only once on initial load)
-  const hasRedirectedRef = useRef(false);
-  useEffect(() => {
-    // Only redirect if:
-    // 1. Projects finished loading
-    // 2. Haven't redirected yet in this session
-    // 3. There's an active project with a valid stage
-    if (
-      !projectsLoading &&
-      !hasRedirectedRef.current &&
-      activeProject &&
-      activeProject.status === 'active' &&
-      activeProject.currentStage >= 1 &&
-      activeProject.currentStage <= 5
-    ) {
-      hasRedirectedRef.current = true;
-      // Build URL with appropriate parameters based on stage
-      const stage = activeProject.currentStage;
-      let url = `/stage${stage}`;
-
-      // Stage 1 needs session parameter to load the correct localStorage session
-      if (stage === 1 && activeProject.prdId) {
-        url += `?session=${activeProject.prdId}`;
-      }
-
-      router.push(url);
-    }
-  }, [projectsLoading, activeProject, router]);
+  // Note: Auto-redirect removed - user can freely navigate Dashboard
+  // and choose which project to continue via the "继续工作" button or project cards
 
   const fetchTaskHistory = useCallback(async () => {
     setTaskHistoryLoading(true);
