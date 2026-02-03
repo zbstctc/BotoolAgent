@@ -13,21 +13,21 @@ interface NewPrdDialogProps {
 export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
   const router = useRouter();
   const { createProject } = useProject();
-  const [projectName, setProjectName] = useState('');
+  const [description, setDescription] = useState('');
   const [isCreating, setIsCreating] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Focus input when dialog opens
+  // Focus textarea when dialog opens
   useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus();
+    if (isOpen && textareaRef.current) {
+      textareaRef.current.focus();
     }
   }, [isOpen]);
 
   // Reset state when dialog closes
   useEffect(() => {
     if (!isOpen) {
-      setProjectName('');
+      setDescription('');
       setIsCreating(false);
     }
   }, [isOpen]);
@@ -36,17 +36,24 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
     (e: React.FormEvent) => {
       e.preventDefault();
 
-      const trimmedName = projectName.trim();
-      if (!trimmedName) return;
+      const trimmedDescription = description.trim();
+      if (!trimmedDescription) return;
 
       setIsCreating(true);
 
       try {
-        // Create a new session with the project name (legacy storage)
-        const sessionId = createSession(trimmedName);
+        // Use first 30 characters of description as temporary name
+        const tempName = trimmedDescription.slice(0, 30) + (trimmedDescription.length > 30 ? '...' : '');
+
+        // Create a new session with the temp name (legacy storage)
+        const sessionId = createSession(tempName);
 
         // Also create a project in ProjectContext (new storage)
-        createProject(trimmedName, sessionId);
+        // Store description in metadata for Stage 1 to use
+        createProject(tempName, sessionId);
+
+        // Store description in sessionStorage for Stage 1 to pick up
+        sessionStorage.setItem(`botool-initial-description-${sessionId}`, trimmedDescription);
 
         // Navigate to Stage 1 with the session ID
         router.push(`/stage1?session=${sessionId}`);
@@ -56,7 +63,7 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
         setIsCreating(false);
       }
     },
-    [projectName, router, onClose, createProject]
+    [description, router, onClose, createProject]
   );
 
   const handleKeyDown = useCallback(
@@ -110,24 +117,30 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
         <form onSubmit={handleSubmit}>
           <div className="p-4">
             <label
-              htmlFor="project-name"
+              htmlFor="requirement-description"
               className="block text-sm font-medium text-neutral-700 mb-2"
             >
-              项目名称
+              需求描述
             </label>
-            <input
-              ref={inputRef}
-              id="project-name"
-              type="text"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              placeholder="例如：待办事项应用、电商后台系统"
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+            <textarea
+              ref={textareaRef}
+              id="requirement-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="请描述你想要构建的功能或解决的问题..."
+              maxLength={500}
+              rows={5}
+              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all resize-none"
               disabled={isCreating}
             />
-            <p className="mt-2 text-xs text-neutral-500">
-              给你的项目起一个名字，方便后续识别和管理
-            </p>
+            <div className="mt-2 flex items-center justify-between">
+              <p className="text-xs text-neutral-500">
+                描述你想要的功能，系统会引导你完善需求
+              </p>
+              <span className="text-xs text-neutral-400">
+                {description.length}/500
+              </span>
+            </div>
           </div>
 
           {/* Footer */}
@@ -142,7 +155,7 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
             </button>
             <button
               type="submit"
-              disabled={!projectName.trim() || isCreating}
+              disabled={!description.trim() || isCreating}
               className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
             >
               {isCreating ? '创建中...' : '开始创建'}
