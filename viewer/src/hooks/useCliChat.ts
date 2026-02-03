@@ -244,6 +244,8 @@ export function useCliChat(options: UseCliChatOptions = {}) {
 
       // Create abort controller for this request
       abortControllerRef.current = new AbortController();
+      // Reset tool use tracking for new stream
+      hasToolUseInStreamRef.current = false;
 
       try {
         const responseData = await fetch('/api/cli/respond', {
@@ -307,14 +309,19 @@ export function useCliChat(options: UseCliChatOptions = {}) {
                     input: parsed.toolInput || {},
                   };
                   setPendingToolUse(toolUse);
+                  hasToolUseInStreamRef.current = true;
                   currentAssistantMessageIdRef.current = assistantMessageId;
                   onToolUse?.(toolUse);
                 } else if (parsed.type === 'error') {
                   throw new Error(parsed.error);
                 } else if (parsed.type === 'done') {
                   // Stream finished
-                  setPendingToolUse(null);
-                  currentAssistantMessageIdRef.current = null;
+                  // DON'T clear pendingToolUse if we received a tool_use in this stream
+                  // User needs to respond to the tool first
+                  if (!hasToolUseInStreamRef.current) {
+                    setPendingToolUse(null);
+                    currentAssistantMessageIdRef.current = null;
+                  }
                   break;
                 }
               } catch (parseError) {
