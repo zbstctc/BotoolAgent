@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { StageIndicator } from '@/components';
+import { useRouter } from 'next/navigation';
+import { StageIndicator, StageTransitionModal } from '@/components';
 import { useFileWatcher, parsePrdJson } from '@/hooks';
 import type { DevTask, PrdData } from '@/hooks';
 import { FlowChart, type AgentPhase } from '@/components/FlowChart';
+import { useProject } from '@/contexts/ProjectContext';
 
 type TaskStatus = 'pending' | 'in-progress' | 'completed' | 'failed';
 type RightPanelTab = 'flowchart' | 'log' | 'changes' | 'commits';
@@ -74,6 +76,11 @@ function getStatusLabel(status: TaskStatus): string {
 }
 
 export default function Stage3Page() {
+  const router = useRouter();
+
+  // Project context
+  const { activeProject, updateProject } = useProject();
+
   const [prdData, setPrdData] = useState<PrdData | null>(null);
   const [progressLog, setProgressLog] = useState<string>('');
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
@@ -84,6 +91,11 @@ export default function Stage3Page() {
   const [gitCommits, setGitCommits] = useState<GitCommitsData | null>(null);
   const [gitCommitsLoading, setGitCommitsLoading] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
+
+  // Stage transition modal state
+  const [showTransitionModal, setShowTransitionModal] = useState(false);
+  // Track if we've already shown the modal for this completion
+  const [hasShownCompletionModal, setHasShownCompletionModal] = useState(false);
 
   // Use file watcher to get real-time updates
   const { prd, progress, isConnected, lastUpdated } = useFileWatcher({
@@ -213,10 +225,51 @@ export default function Stage3Page() {
     ? 'done'
     : 'running';
 
+  // All tasks completed check
+  const allTasksCompleted = totalTasks > 0 && completedTasks === totalTasks;
+
+  // Show transition modal when all tasks are completed
+  useEffect(() => {
+    if (allTasksCompleted && !hasShownCompletionModal && !showTransitionModal) {
+      setShowTransitionModal(true);
+      setHasShownCompletionModal(true);
+    }
+  }, [allTasksCompleted, hasShownCompletionModal, showTransitionModal]);
+
+  // Handle transition modal confirm (continue to Stage 4)
+  const handleTransitionConfirm = useCallback(() => {
+    // Update project stage
+    if (activeProject) {
+      updateProject(activeProject.id, { currentStage: 4 });
+    }
+    // Navigate to Stage 4
+    router.push('/stage4');
+  }, [router, activeProject, updateProject]);
+
+  // Handle transition modal later (go back to Dashboard)
+  const handleTransitionLater = useCallback(() => {
+    setShowTransitionModal(false);
+    router.push('/');
+  }, [router]);
+
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white">
       {/* Stage Indicator */}
-      <StageIndicator currentStage={3} completedStages={[1, 2]} />
+      <StageIndicator
+        currentStage={3}
+        completedStages={[1, 2]}
+        projectName={activeProject?.name}
+      />
+
+      {/* Stage Transition Modal */}
+      <StageTransitionModal
+        isOpen={showTransitionModal}
+        fromStage={3}
+        toStage={4}
+        summary={`全部 ${totalTasks} 个开发任务已完成，准备进入质量验证阶段。`}
+        onConfirm={handleTransitionConfirm}
+        onLater={handleTransitionLater}
+      />
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
