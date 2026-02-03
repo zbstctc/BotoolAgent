@@ -166,7 +166,13 @@ export default function Dashboard() {
   // Handle view project - navigate to corresponding stage
   function handleViewProject(project: ProjectState) {
     setActiveProject(project.id);
-    router.push(`/stage${project.currentStage}`);
+    // Stage 1 needs session parameter to load the correct localStorage session
+    const stage = project.currentStage;
+    let url = `/stage${stage}`;
+    if (stage === 1 && project.prdId) {
+      url += `?session=${project.prdId}`;
+    }
+    router.push(url);
   }
 
   // Handle delete project
