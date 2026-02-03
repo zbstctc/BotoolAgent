@@ -1,295 +1,266 @@
 'use client';
 
-import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { StageIndicator, ChatInterface, PRDPreview, SessionResumeDialog, ToolRenderer, StageTransitionModal } from '@/components';
-import { useCliChat, CliChatMessage, ToolUse, useProjectValidation } from '@/hooks';
-import { useProject } from '@/contexts/ProjectContext';
 import {
-  getSession,
-  updateSession,
-  deleteSession,
-  type PrdSession,
-} from '@/lib/prd-session-storage';
-
-const INITIAL_MESSAGE: CliChatMessage = {
-  id: '1',
-  role: 'assistant',
-  content: 'Hi! I\'m here to help you create a **PRD** (Product Requirements Document).\n\nWhat would you like to build? Tell me about your project idea.',
-};
-
-const RESUME_MESSAGE: CliChatMessage = {
-  id: '1',
-  role: 'assistant',
-  content: 'Welcome back! I\'ve loaded your previous conversation. Feel free to continue where we left off, or let me know if you\'d like to make any changes to your PRD.',
-};
+  StageIndicator,
+  PyramidNavigation,
+  LevelPanel,
+  PRDPreview,
+  StageTransitionModal,
+  type LevelInfo,
+  type CollectedSummaryItem,
+  type Dimension,
+  type Question,
+  type Answer,
+} from '@/components';
+import { useProject } from '@/contexts/ProjectContext';
+import { useProjectValidation } from '@/hooks';
+import {
+  loadPyramidProgress,
+  savePyramidProgress,
+  savePyramidProgressImmediate,
+  type PyramidSession,
+} from '@/lib/pyramid-session-storage';
+import { type LevelId, getActiveDimensions, L2_DIMENSIONS } from '@/lib/dimension-framework';
 
 export default function Stage1Page() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const prdId = searchParams.get('prd');
-  const localSessionId = searchParams.get('session');
+  const sessionId = searchParams.get('session');
 
+  // Project context
+  const { activeProject, updateProject, isLoading: projectsLoading } = useProject();
+
+  // Project validation
+  const hasUrlContext = Boolean(sessionId);
+  useProjectValidation({ currentStage: 1, skipValidation: hasUrlContext });
+
+  // Pyramid state
+  const [currentLevel, setCurrentLevel] = useState<LevelId>(1);
+  const [answers, setAnswers] = useState<Record<string, Answer>>({});
+  const [generatedQuestions, setGeneratedQuestions] = useState<Partial<Record<LevelId, Question[]>>>({});
+  const [activeDimensions, setActiveDimensions] = useState<string[]>([]);
+  const [prdDraft, setPrdDraft] = useState<string>('');
+
+  // UI state
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
-
-  // Stage transition modal state
   const [showTransitionModal, setShowTransitionModal] = useState(false);
   const [savedPrdId, setSavedPrdId] = useState<string | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
-  // Project context
-  const { createProject, updateProject, activeProject, setActiveProject, isLoading: projectsLoading } = useProject();
+  // Initial description from Dashboard
+  const [initialDescription, setInitialDescription] = useState<string>('');
+  const [requirementType, setRequirementType] = useState<string>('新功能');
 
-  // Project validation - skip if we have URL params (prdId or session)
-  const hasUrlContext = Boolean(prdId || localSessionId);
-  useProjectValidation({ currentStage: 1, skipValidation: hasUrlContext });
+  // Load saved progress and initial description
+  useEffect(() => {
+    if (!sessionId) return;
 
-  // PRD loading state (for editing existing PRD)
-  const [loadedPrdContent, setLoadedPrdContent] = useState<string>('');
-  const [loadedPrdName, setLoadedPrdName] = useState<string>('');
-  const [isLoadingPrd, setIsLoadingPrd] = useState(false);
+    // Load initial description from sessionStorage
+    const desc = sessionStorage.getItem(`botool-initial-description-${sessionId}`);
+    const type = sessionStorage.getItem(`botool-requirement-type-${sessionId}`);
+    if (desc) setInitialDescription(desc);
+    if (type) setRequirementType(type);
 
-  // Session resume state (server-side session for PRD editing)
-  const [showResumeDialog, setShowResumeDialog] = useState(false);
-  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
-  const [sessionDecisionMade, setSessionDecisionMade] = useState(false);
+    // Load saved pyramid progress
+    const saved = loadPyramidProgress(sessionId);
+    if (saved) {
+      setCurrentLevel(saved.currentLevel);
+      // Convert answers to proper format
+      const convertedAnswers: Record<string, Answer> = {};
+      Object.entries(saved.answers).forEach(([key, value]) => {
+        convertedAnswers[key] = { questionId: key, value };
+      });
+      setAnswers(convertedAnswers);
+      setGeneratedQuestions(saved.generatedQuestions as Partial<Record<LevelId, Question[]>>);
+      setActiveDimensions(saved.activeDimensions);
+      setPrdDraft(saved.prdDraft);
+    }
+  }, [sessionId]);
 
-  // Local session (from multi-session storage)
-  const [currentLocalSession, setCurrentLocalSession] = useState<PrdSession | null>(null);
+  // Generate L1 questions on first load
+  useEffect(() => {
+    if (!sessionId || !initialDescription) return;
+    if (generatedQuestions[1] && generatedQuestions[1].length > 0) return;
 
-  // Store session ID for saving with PRD
-  const sessionIdRef = useRef<string | undefined>(undefined);
-  // Track current PRD ID for session mapping
-  const currentPrdIdRef = useRef<string | undefined>(prdId || undefined);
-  // Track the localStorage session ID
-  const localSessionIdRef = useRef<string | undefined>(localSessionId || undefined);
+    generateQuestions(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, initialDescription]);
 
-  // Track current tool use for rendering
-  const [currentToolUse, setCurrentToolUse] = useState<ToolUse | null>(null);
+  // Generate questions for a level
+  const generateQuestions = useCallback(async (level: LevelId) => {
+    if (!sessionId) return;
 
-  const {
-    messages,
-    isLoading,
-    error,
-    sessionId,
-    pendingToolUse,
-    sendMessage,
-    setSessionId,
-    setMessages,
-    respondToTool,
-  } = useCliChat({
-    initialMessages: [INITIAL_MESSAGE],
-    mode: 'prd',
-    onError: (err) => console.error('Chat error:', err),
-    onSessionIdChange: (newSessionId) => {
-      sessionIdRef.current = newSessionId;
-      // Update session mapping if we have a PRD ID
-      if (currentPrdIdRef.current && newSessionId) {
-        fetch('/api/prd-sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prdId: currentPrdIdRef.current,
-            sessionId: newSessionId,
-          }),
-        }).catch(console.error);
-      }
-      // Save CLI session ID to localStorage for session resume
-      if (localSessionIdRef.current && newSessionId) {
-        updateSession(localSessionIdRef.current, {
-          cliSessionId: newSessionId,
+    setIsLoadingQuestions(true);
+    try {
+      const response = await fetch('/api/pyramid/questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          level,
+          collectedAnswers: Object.fromEntries(
+            Object.entries(answers).map(([k, v]) => [k, v.value])
+          ),
+          activeDimensions,
+          requirementType,
+          initialDescription,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setGeneratedQuestions(prev => ({
+          ...prev,
+          [level]: data.questions,
+        }));
+
+        // Update active dimensions if suggested
+        if (data.suggestedDimensions && level === 2) {
+          setActiveDimensions(data.suggestedDimensions);
+        }
+
+        // Save to localStorage
+        savePyramidProgressImmediate(sessionId, {
+          generatedQuestions: {
+            ...generatedQuestions,
+            [level]: data.questions,
+          },
         });
       }
-    },
-    onToolUse: (toolUse) => {
-      // Track tool use for rendering
-      setCurrentToolUse(toolUse);
-    },
-  });
-
-  // Keep ref in sync with sessionId state
-  if (sessionId && sessionIdRef.current !== sessionId) {
-    sessionIdRef.current = sessionId;
-  }
-
-  // Redirect to Dashboard only if:
-  // 1. No URL parameters (prd or session)
-  // 2. No active project (meaning user shouldn't be on Stage 1)
-  // 3. Projects have finished loading
-  useEffect(() => {
-    // Wait for projects to finish loading
-    if (projectsLoading) return;
-
-    // If we have URL context, don't redirect
-    if (prdId || localSessionId) return;
-
-    // If we have an active project on Stage 1, allow staying
-    if (activeProject && activeProject.currentStage === 1) return;
-
-    // No context at all, redirect to Dashboard
-    router.replace('/');
-  }, [prdId, localSessionId, router, projectsLoading, activeProject]);
-
-  // Load local session from localStorage when session param is provided
-  useEffect(() => {
-    if (!localSessionId) return;
-
-    const session = getSession(localSessionId);
-    if (session) {
-      setCurrentLocalSession(session);
-      localSessionIdRef.current = localSessionId;
-
-      // Restore messages if available
-      if (session.messages && session.messages.length > 0) {
-        setMessages(session.messages);
-      }
-
-      // Restore CLI session ID for resuming Claude conversation
-      if (session.cliSessionId) {
-        setSessionId(session.cliSessionId);
-        sessionIdRef.current = session.cliSessionId;
-      }
-    } else {
-      // Session not found, redirect to Dashboard
-      console.warn(`Session ${localSessionId} not found, redirecting to Dashboard`);
-      router.replace('/');
+    } catch (error) {
+      console.error('Failed to generate questions:', error);
+    } finally {
+      setIsLoadingQuestions(false);
     }
-  }, [localSessionId, router, setMessages, setSessionId]);
+  }, [sessionId, answers, activeDimensions, requirementType, initialDescription, generatedQuestions]);
 
-  // Save messages to localStorage for context (only for local session)
-  useEffect(() => {
-    if (!localSessionIdRef.current) return;
+  // Handle answer
+  const handleAnswer = useCallback((questionId: string, value: string | string[]) => {
+    if (!sessionId) return;
 
-    // Only save if we have more than the initial message
-    if (messages.length > 1) {
-      updateSession(localSessionIdRef.current, {
-        messages: messages.map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-        })),
-      });
-    }
-  }, [messages]);
-
-  // Load PRD content and check for existing session when prdId is provided
-  useEffect(() => {
-    if (!prdId || sessionDecisionMade) return;
-
-    const loadPrdAndSession = async () => {
-      setIsLoadingPrd(true);
-      try {
-        // Load PRD content
-        const prdResponse = await fetch(`/api/prd/${prdId}`);
-        if (prdResponse.ok) {
-          const prdData = await prdResponse.json();
-          setLoadedPrdContent(prdData.content || '');
-          // Extract name from content or use filename
-          const nameMatch = prdData.content?.match(/^#\s*PRD:\s*(.+)$/m);
-          setLoadedPrdName(nameMatch ? nameMatch[1] : prdId);
-          currentPrdIdRef.current = prdId;
-        }
-
-        // Check for existing session
-        const sessionResponse = await fetch(`/api/prd-sessions?prdId=${prdId}`);
-        if (sessionResponse.ok) {
-          const sessionData = await sessionResponse.json();
-          if (sessionData.sessionId) {
-            setPendingSessionId(sessionData.sessionId);
-            setShowResumeDialog(true);
-          } else {
-            // No existing session, proceed normally
-            setSessionDecisionMade(true);
-          }
-        } else {
-          setSessionDecisionMade(true);
-        }
-      } catch (err) {
-        console.error('Error loading PRD or session:', err);
-        setSessionDecisionMade(true);
-      } finally {
-        setIsLoadingPrd(false);
-      }
+    const newAnswers = {
+      ...answers,
+      [questionId]: { questionId, value },
     };
+    setAnswers(newAnswers);
 
-    loadPrdAndSession();
-  }, [prdId, sessionDecisionMade]);
+    // Auto-save (debounced)
+    setAutoSaveStatus('saving');
+    savePyramidProgress(sessionId, {
+      answers: Object.fromEntries(
+        Object.entries(newAnswers).map(([k, v]) => [k, v.value])
+      ),
+    });
+    setTimeout(() => setAutoSaveStatus('saved'), 600);
+  }, [sessionId, answers]);
 
-  // Handle resume session
-  const handleResumeSession = useCallback(() => {
-    if (pendingSessionId) {
-      setSessionId(pendingSessionId);
-      sessionIdRef.current = pendingSessionId;
-      setMessages([RESUME_MESSAGE]);
+  // Handle level complete
+  const handleLevelComplete = useCallback(async () => {
+    if (!sessionId) return;
+
+    if (currentLevel < 4) {
+      const nextLevel = (currentLevel + 1) as LevelId;
+      setCurrentLevel(nextLevel);
+      savePyramidProgressImmediate(sessionId, { currentLevel: nextLevel });
+
+      // Generate questions for next level
+      await generateQuestions(nextLevel);
+    } else {
+      // L4 complete - generate PRD
+      await generatePrd();
     }
-    setShowResumeDialog(false);
-    setSessionDecisionMade(true);
-  }, [pendingSessionId, setSessionId, setMessages]);
+  }, [sessionId, currentLevel, generateQuestions]);
 
-  // Handle start new session
-  const handleStartNewSession = useCallback(() => {
-    // Clear the session mapping for this PRD
-    if (currentPrdIdRef.current) {
-      fetch(`/api/prd-sessions?prdId=${currentPrdIdRef.current}`, {
-        method: 'DELETE',
-      }).catch(console.error);
+  // Generate PRD from collected answers
+  const generatePrd = useCallback(async () => {
+    if (!sessionId) return;
+
+    setIsLoadingQuestions(true);
+    try {
+      // For now, create a basic PRD from answers
+      const prd = buildPrdFromAnswers();
+      setPrdDraft(prd);
+      savePyramidProgressImmediate(sessionId, { prdDraft: prd });
+    } finally {
+      setIsLoadingQuestions(false);
     }
-    setShowResumeDialog(false);
-    setSessionDecisionMade(true);
-  }, []);
+  }, [sessionId, answers, initialDescription, requirementType]);
 
-  // Extract PRD content from messages when a PRD markdown block is detected
-  const prdContent = useMemo(() => {
-    // If we have loaded PRD content, prioritize messages for any updates
-    // Look through all messages for the most recent PRD content
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const message = messages[i];
-      if (message.role === 'assistant') {
-        // Look for PRD markdown blocks with various patterns
-        const prdMatch = message.content.match(/```markdown\n(# PRD:[\s\S]*?)```/) ||
-                         message.content.match(/```\n(# PRD:[\s\S]*?)```/) ||
-                         message.content.match(/(# PRD:[\s\S]+)/);
-        if (prdMatch) {
-          return prdMatch[1].trim();
-        }
-      }
+  // Build PRD from answers
+  const buildPrdFromAnswers = useCallback(() => {
+    const projectName = activeProject?.name || '未命名项目';
+    const lines: string[] = [];
+
+    lines.push(`# PRD: ${projectName}`);
+    lines.push('');
+    lines.push('## 项目概述');
+    lines.push('');
+    lines.push(initialDescription);
+    lines.push('');
+    lines.push(`**需求类型**: ${requirementType}`);
+    lines.push('');
+
+    // Extract key info from answers
+    const targetUser = answers['l1-q1']?.value;
+    const coreProblem = answers['l1-q2']?.value;
+    const successCriteria = answers['l1-q3']?.value;
+
+    if (targetUser) {
+      lines.push('## 目标用户');
+      lines.push('');
+      lines.push(Array.isArray(targetUser) ? targetUser.join('、') : String(targetUser));
+      lines.push('');
     }
-    // Fall back to loaded PRD content if no PRD in messages
-    return loadedPrdContent;
-  }, [messages, loadedPrdContent]);
 
-  // Extract project name
-  const projectName = useMemo(() => {
-    // First check local session name
-    if (currentLocalSession?.name) {
-      return currentLocalSession.name;
+    if (coreProblem) {
+      lines.push('## 核心问题');
+      lines.push('');
+      lines.push(String(coreProblem));
+      lines.push('');
     }
-    // Fall back to extracting from messages
-    const firstUserMessage = messages.find((m) => m.role === 'user');
-    if (firstUserMessage) {
-      const name = firstUserMessage.content.substring(0, 50).trim();
-      return name.length < firstUserMessage.content.length ? name + '...' : name;
+
+    if (successCriteria) {
+      lines.push('## 成功标准');
+      lines.push('');
+      lines.push(String(successCriteria));
+      lines.push('');
     }
-    return loadedPrdName || undefined;
-  }, [messages, currentLocalSession, loadedPrdName]);
 
-  const handleSendMessage = (content: string) => {
-    sendMessage(content);
-  };
+    // Add more sections based on L2-L4 answers
+    lines.push('## 功能需求');
+    lines.push('');
+    lines.push('_根据问答收集的信息生成..._');
+    lines.push('');
 
-  // Handle tool response from ToolRenderer
-  const handleToolRespond = useCallback(
-    (toolId: string, response: Record<string, unknown>) => {
-      respondToTool(toolId, response);
-      // Clear the current tool use after responding
-      setCurrentToolUse(null);
-    },
-    [respondToTool]
-  );
+    lines.push('## 非目标（Out of Scope）');
+    lines.push('');
+    const outScope = answers['l4-q1']?.value;
+    if (outScope && Array.isArray(outScope)) {
+      outScope.forEach(item => lines.push(`- ${item}`));
+    } else {
+      lines.push('_待补充_');
+    }
+    lines.push('');
 
+    lines.push('## 验收标准');
+    lines.push('');
+    const acceptance = answers['l4-q2']?.value;
+    if (acceptance) {
+      lines.push(String(acceptance));
+    } else {
+      lines.push('_待补充_');
+    }
+
+    return lines.join('\n');
+  }, [answers, initialDescription, requirementType, activeProject]);
+
+  // Handle save PRD
   const handleSavePRD = useCallback(async () => {
-    if (!prdContent || isSaving) return;
+    if (!prdDraft || isSaving) return;
 
     setIsSaving(true);
     setSaveError(undefined);
@@ -297,13 +268,8 @@ export default function Stage1Page() {
     try {
       const response = await fetch('/api/prd/save', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          content: prdContent,
-          sessionId: sessionIdRef.current,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: prdDraft }),
       });
 
       const data = await response.json();
@@ -312,40 +278,21 @@ export default function Stage1Page() {
         throw new Error(data.error || 'Failed to save PRD');
       }
 
-      // Update current PRD ID ref
-      currentPrdIdRef.current = data.id;
-
-      // Delete the localStorage session after successful save
-      if (localSessionIdRef.current) {
-        deleteSession(localSessionIdRef.current);
-      }
-
-      // Create or update project state
       if (activeProject) {
-        // Update existing project
-        updateProject(activeProject.id, {
-          prdId: data.id,
-          name: projectName || activeProject.name,
-        });
-      } else {
-        // Create new project
-        createProject(projectName || '未命名项目', data.id);
+        updateProject(activeProject.id, { prdId: data.id });
       }
 
-      // Store the saved PRD ID for navigation
       setSavedPrdId(data.id);
       setSaveSuccess(true);
-
-      // Show transition modal instead of auto-navigating
       setShowTransitionModal(true);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save PRD');
     } finally {
       setIsSaving(false);
     }
-  }, [prdContent, isSaving, projectName, activeProject, updateProject, createProject]);
+  }, [prdDraft, isSaving, activeProject, updateProject]);
 
-  // Handle transition modal confirm (continue to Stage 2)
+  // Handle transition
   const handleTransitionConfirm = useCallback(() => {
     if (activeProject) {
       updateProject(activeProject.id, { currentStage: 2 });
@@ -353,33 +300,121 @@ export default function Stage1Page() {
     router.push(`/stage2?prd=${savedPrdId}`);
   }, [activeProject, updateProject, router, savedPrdId]);
 
-  // Handle transition modal later (go back to Dashboard)
   const handleTransitionLater = useCallback(() => {
     setShowTransitionModal(false);
     router.push('/');
   }, [router]);
 
-  // Don't render if we should redirect
-  if (!prdId && !localSessionId) {
+  // Build level info for navigation
+  const levels: LevelInfo[] = useMemo(() => {
+    return [1, 2, 3, 4].map((level) => {
+      const questions = generatedQuestions[level as LevelId] || [];
+      const answered = questions.filter(q => answers[q.id]).length;
+      const isCompleted = level < currentLevel;
+      const isCurrent = level === currentLevel;
+      const isLocked = level > currentLevel;
+
+      return {
+        id: level,
+        name: `L${level}`,
+        status: isCompleted ? 'completed' : isCurrent ? 'current' : 'locked',
+        questionsTotal: questions.length,
+        questionsAnswered: answered,
+        summary: isCompleted ? `${answered} 个问题已回答` : undefined,
+      };
+    }) as LevelInfo[];
+  }, [currentLevel, generatedQuestions, answers]);
+
+  // Build collected summary
+  const collectedSummary: CollectedSummaryItem[] = useMemo(() => {
+    const items: CollectedSummaryItem[] = [];
+
+    // Extract key summaries from answers
+    if (answers['l1-q1']) {
+      const val = answers['l1-q1'].value;
+      items.push({
+        dimension: '目标用户',
+        summary: Array.isArray(val) ? val.join('、') : String(val),
+      });
+    }
+
+    if (activeDimensions.length > 0) {
+      items.push({
+        dimension: '涉及领域',
+        summary: activeDimensions.map(d =>
+          L2_DIMENSIONS.find(dim => dim.id === d)?.name || d
+        ).join('、'),
+      });
+    }
+
+    return items;
+  }, [answers, activeDimensions]);
+
+  // Build dimensions for current level
+  const currentDimensions: Dimension[] = useMemo(() => {
+    if (currentLevel === 1 || currentLevel === 4) {
+      // L1 and L4 have single "default" dimension
+      return [{ id: 'default', name: '核心问题', isLocked: false }];
+    }
+
+    // L2 and L3 have multiple dimensions
+    return activeDimensions.length > 0
+      ? activeDimensions.map(id => {
+          const dim = L2_DIMENSIONS.find(d => d.id === id);
+          return {
+            id,
+            name: dim?.name || id,
+            isLocked: false,
+          };
+        })
+      : L2_DIMENSIONS.slice(0, 2).map(d => ({
+          id: d.id,
+          name: d.name,
+          isLocked: false,
+        }));
+  }, [currentLevel, activeDimensions]);
+
+  // Group questions by dimension
+  const questionsByDimension: Record<string, Question[]> = useMemo(() => {
+    const questions = generatedQuestions[currentLevel] || [];
+    const grouped: Record<string, Question[]> = {};
+
+    questions.forEach(q => {
+      const dim = (q as Question & { dimension?: string }).dimension || 'default';
+      if (!grouped[dim]) grouped[dim] = [];
+      grouped[dim].push(q);
+    });
+
+    // Ensure all dimensions have entries
+    currentDimensions.forEach(d => {
+      if (!grouped[d.id]) grouped[d.id] = [];
+    });
+
+    return grouped;
+  }, [currentLevel, generatedQuestions, currentDimensions]);
+
+  // Project name
+  const projectName = activeProject?.name || '新项目';
+
+  // Stage status
+  const stageStatus = prdDraft
+    ? '已生成 PRD'
+    : `L${currentLevel} 进行中`;
+
+  // Redirect if no session
+  if (!sessionId && !projectsLoading) {
     return (
       <div className="flex flex-col h-full bg-white">
-        <StageIndicator currentStage={1} completedStages={[]} projectName={projectName} />
+        <StageIndicator currentStage={1} completedStages={[]} />
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-neutral-500">Redirecting to Dashboard...</p>
+          <p className="text-neutral-500">正在跳转...</p>
         </div>
       </div>
     );
   }
 
-  // Stage status for StageIndicator
-  const stageStatus = prdContent
-    ? '已生成 PRD'
-    : messages.length > 1
-      ? `${messages.length - 1} 条对话`
-      : undefined;
-
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-white">
+    <div className="flex flex-col h-full overflow-hidden bg-neutral-50">
       {/* Stage Indicator */}
       <StageIndicator
         currentStage={1}
@@ -388,74 +423,77 @@ export default function Stage1Page() {
         stageStatus={stageStatus}
       />
 
-      {/* Session Resume Dialog (server-side session for existing PRD) */}
-      <SessionResumeDialog
-        isOpen={showResumeDialog}
-        prdName={loadedPrdName}
-        onResume={handleResumeSession}
-        onStartNew={handleStartNewSession}
-      />
-
       {/* Stage Transition Modal */}
       <StageTransitionModal
         isOpen={showTransitionModal}
         fromStage={1}
         toStage={2}
-        summary="PRD 已保存成功，可以开始将需求转换为开发任务。"
+        summary="PRD 已生成，可以开始将需求转换为开发任务。"
         onConfirm={handleTransitionConfirm}
         onLater={handleTransitionLater}
       />
 
-      {/* Loading Overlay */}
-      {isLoadingPrd && (
-        <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-40">
-          <div className="text-center">
-            <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-2"></div>
-            <p className="text-sm text-neutral-600">Loading PRD...</p>
-          </div>
+      {/* Auto-save indicator */}
+      {autoSaveStatus !== 'idle' && (
+        <div className="absolute top-16 right-4 z-10">
+          <span className={`text-xs px-2 py-1 rounded ${
+            autoSaveStatus === 'saving'
+              ? 'bg-yellow-100 text-yellow-700'
+              : 'bg-green-100 text-green-700'
+          }`}>
+            {autoSaveStatus === 'saving' ? '保存中...' : '已自动保存'}
+          </span>
         </div>
       )}
 
-      {/* Main Content */}
+      {/* Main Content - Three Column Layout */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left: Chat Area */}
-        <div className="flex-1 flex flex-col min-h-0 border-r border-neutral-200">
-          {error && (
-            <div className="mx-4 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-              {error}
-            </div>
-          )}
-          <ChatInterface
-            messages={messages}
-            onSendMessage={handleSendMessage}
-            isLoading={isLoading && !pendingToolUse}
-            placeholder="Describe what you want to build..."
-            toolRenderer={
-              currentToolUse && (
-                <ToolRenderer
-                  tool={{
-                    toolId: currentToolUse.id,
-                    toolName: currentToolUse.name,
-                    toolInput: currentToolUse.input,
-                  }}
-                  onRespond={handleToolRespond}
-                  disabled={!pendingToolUse}
-                  projectName={projectName}
-                  sessionId={localSessionIdRef.current}
-                />
-              )
-            }
+        {/* Left: Pyramid Navigation */}
+        <div className="w-64 flex-shrink-0">
+          <PyramidNavigation
+            currentLevel={currentLevel}
+            levels={levels}
+            collectedSummary={collectedSummary}
+            onLevelClick={(level) => {
+              if (level <= currentLevel) {
+                setCurrentLevel(level as LevelId);
+              }
+            }}
           />
         </div>
 
-        {/* Right: PRD Preview Area */}
-        <PRDPreview
-          content={prdContent}
-          onSave={handleSavePRD}
-          isSaving={isSaving}
-          saveSuccess={saveSuccess}
-          saveError={saveError}
-        />
+        {/* Center: Level Panel */}
+        <div className="flex-1 min-w-0 border-x border-neutral-200 bg-white">
+          {isLoadingQuestions ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-2"></div>
+                <p className="text-sm text-neutral-600">正在生成问题...</p>
+              </div>
+            </div>
+          ) : (
+            <LevelPanel
+              level={currentLevel}
+              levelName={`L${currentLevel}`}
+              dimensions={currentDimensions}
+              questions={questionsByDimension}
+              answers={answers}
+              onAnswer={handleAnswer}
+              onComplete={handleLevelComplete}
+            />
+          )}
+        </div>
+
+        {/* Right: PRD Preview */}
+        <div className="w-96 flex-shrink-0">
+          <PRDPreview
+            content={prdDraft || '完成所有层级的问答后，这里将显示生成的 PRD 预览。'}
+            onSave={handleSavePRD}
+            isSaving={isSaving}
+            saveSuccess={saveSuccess}
+            saveError={saveError}
+          />
+        </div>
       </div>
     </div>
   );
