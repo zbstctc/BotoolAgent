@@ -1,6 +1,12 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
+import {
+  loadProjects,
+  saveProjects,
+  generateProjectId,
+  type ProjectStorage,
+} from '../lib/project-storage';
 
 /**
  * Project stage in the development workflow
@@ -64,58 +70,6 @@ interface ProjectContextValue {
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
 
-// Storage key for localStorage
-const STORAGE_KEY = 'botool-projects';
-
-interface ProjectStorage {
-  version: number;
-  projects: Record<string, ProjectState>;
-  activeProjectId: string | null;
-}
-
-/**
- * Generate a UUID for project IDs
- */
-function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
-
-/**
- * Load projects from localStorage
- */
-function loadFromStorage(): ProjectStorage {
-  if (typeof window === 'undefined') {
-    return { version: 1, projects: {}, activeProjectId: null };
-  }
-
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-      return { version: 1, projects: {}, activeProjectId: null };
-    }
-    return JSON.parse(stored) as ProjectStorage;
-  } catch {
-    return { version: 1, projects: {}, activeProjectId: null };
-  }
-}
-
-/**
- * Save projects to localStorage
- */
-function saveToStorage(data: ProjectStorage): void {
-  if (typeof window === 'undefined') return;
-
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (err) {
-    console.error('Failed to save projects:', err);
-  }
-}
-
 /**
  * Project Provider component
  */
@@ -124,18 +78,19 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [activeProjectId, setActiveProjectIdState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load from localStorage on mount
+  // Load from localStorage on mount (using project-storage module)
   useEffect(() => {
-    const storage = loadFromStorage();
+    const storage = loadProjects();
     setProjects(storage.projects);
     setActiveProjectIdState(storage.activeProjectId);
     setIsLoading(false);
   }, []);
 
-  // Save to localStorage when state changes
+  // Save to localStorage when state changes (using project-storage module)
   useEffect(() => {
     if (isLoading) return;
-    saveToStorage({ version: 1, projects, activeProjectId });
+    const storage: ProjectStorage = { version: 1, projects, activeProjectId };
+    saveProjects(storage);
   }, [projects, activeProjectId, isLoading]);
 
   // Get active project
@@ -146,7 +101,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
   // Create a new project
   const createProject = useCallback((name: string, prdId?: string): string => {
-    const id = generateUUID();
+    const id = generateProjectId();
     const now = Date.now();
 
     const newProject: ProjectState = {
