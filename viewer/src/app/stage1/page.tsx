@@ -2,8 +2,9 @@
 
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { StageIndicator, ChatInterface, PRDPreview, SessionResumeDialog, ToolRenderer } from '@/components';
+import { StageIndicator, ChatInterface, PRDPreview, SessionResumeDialog, ToolRenderer, StageTransitionModal } from '@/components';
 import { useCliChat, CliChatMessage, ToolUse } from '@/hooks';
+import { useProject } from '@/contexts/ProjectContext';
 import {
   getSession,
   updateSession,
@@ -32,6 +33,13 @@ export default function Stage1Page() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
+
+  // Stage transition modal state
+  const [showTransitionModal, setShowTransitionModal] = useState(false);
+  const [savedPrdId, setSavedPrdId] = useState<string | null>(null);
+
+  // Project context
+  const { createProject, updateProject, activeProject, setActiveProject } = useProject();
 
   // PRD loading state (for editing existing PRD)
   const [loadedPrdContent, setLoadedPrdContent] = useState<string>('');
@@ -298,18 +306,44 @@ export default function Stage1Page() {
         deleteSession(localSessionIdRef.current);
       }
 
+      // Create or update project state
+      if (activeProject) {
+        // Update existing project
+        updateProject(activeProject.id, {
+          prdId: data.id,
+          name: projectName || activeProject.name,
+        });
+      } else {
+        // Create new project
+        createProject(projectName || '未命名项目', data.id);
+      }
+
+      // Store the saved PRD ID for navigation
+      setSavedPrdId(data.id);
       setSaveSuccess(true);
 
-      // Auto-navigate to stage2 after a short delay
-      setTimeout(() => {
-        router.push(`/stage2?prd=${data.id}`);
-      }, 1500);
+      // Show transition modal instead of auto-navigating
+      setShowTransitionModal(true);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save PRD');
     } finally {
       setIsSaving(false);
     }
-  }, [prdContent, isSaving, router]);
+  }, [prdContent, isSaving, projectName, activeProject, updateProject, createProject]);
+
+  // Handle transition modal confirm (continue to Stage 2)
+  const handleTransitionConfirm = useCallback(() => {
+    if (activeProject) {
+      updateProject(activeProject.id, { currentStage: 2 });
+    }
+    router.push(`/stage2?prd=${savedPrdId}`);
+  }, [activeProject, updateProject, router, savedPrdId]);
+
+  // Handle transition modal later (go back to Dashboard)
+  const handleTransitionLater = useCallback(() => {
+    setShowTransitionModal(false);
+    router.push('/');
+  }, [router]);
 
   // Don't render if we should redirect
   if (!prdId && !localSessionId) {
@@ -334,6 +368,16 @@ export default function Stage1Page() {
         prdName={loadedPrdName}
         onResume={handleResumeSession}
         onStartNew={handleStartNewSession}
+      />
+
+      {/* Stage Transition Modal */}
+      <StageTransitionModal
+        isOpen={showTransitionModal}
+        fromStage={1}
+        toStage={2}
+        summary="PRD 已保存成功，可以开始将需求转换为开发任务。"
+        onConfirm={handleTransitionConfirm}
+        onLater={handleTransitionLater}
       />
 
       {/* Loading Overlay */}
