@@ -27,3 +27,7 @@ export { StageTransitionModal } from "./StageTransitionModal";
 export type { StageTransitionModalProps } from "./StageTransitionModal";
 export { ProjectCard } from "./ProjectCard";
 export type { ProjectCardProps } from "./ProjectCard";
+
+// Pyramid components
+export { PyramidNavigation } from "./pyramid/PyramidNavigation";
+export type { LevelInfo, CollectedSummaryItem } from "./pyramid/PyramidNavigation";
