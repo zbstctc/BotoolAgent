@@ -109,3 +109,30 @@
   - 有用的上下文：规范存储在 `rules/{category}/{name}.md`
 ---
 
+## 2026-02-03 - DT-022
+- 实现了什么：规范转 Skill 功能
+- 修改了哪些文件：
+  - 新建 `viewer/src/lib/rules-to-skill.ts`
+- **未来迭代的经验教训：**
+  - 发现的模式：Skill 名称格式 `botool-rules:{category}:{name}`
+  - 有用的上下文：Skill 目录 `~/.claude/skills/botool-rules/`
+  - 发现的模式：使用 frontmatter 格式定义 Skill 元数据
+---
+
+## 2026-02-03 - DT-023~028
+- 实现了什么：Stage 2 流水线界面完整功能
+- 修改了哪些文件：
+  - 新建 `viewer/src/components/pipeline/PipelineProgress.tsx`
+  - 新建 `viewer/src/components/pipeline/RuleCheckStep.tsx`
+  - 新建 `viewer/src/components/pipeline/CodeExampleStep.tsx`
+  - 新建 `viewer/src/components/pipeline/TestCaseStep.tsx`
+  - 新建 `viewer/src/components/pipeline/JsonConvertStep.tsx`
+  - 重写 `viewer/src/app/stage2/page.tsx`
+- **未来迭代的经验教训：**
+  - 发现的模式：流水线组件使用统一的 status 类型 `pending | accepted | modified | skipped`
+  - 发现的模式：每个步骤组件接收 `onComplete` 和 `onBack` 回调
+  - 发现的模式：进度条使用绿色(已完成)、蓝色(当前)、灰色(待处理)区分状态
+  - 有用的上下文：TestCaseStep 区分单元测试(unit)和端到端测试(e2e)
+  - 有用的上下文：JsonConvertStep 支持 JSON 格式验证和实时编辑
+---
+

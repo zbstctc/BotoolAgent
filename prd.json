@@ -395,8 +395,8 @@
         "Typecheck passes"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "生成 Skill 前缀 botool-rules:，支持预览和保存"
     },
     {
       "id": "DT-023",
@@ -413,8 +413,8 @@
         "Verify in browser"
       ],
       "priority": 23,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "四步进度条，绿色已完成、蓝色当前、灰色待处理"
     },
     {
       "id": "DT-024",
@@ -432,8 +432,8 @@
         "Verify in browser"
       ],
       "priority": 24,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "ViolationCard 支持三种操作状态"
     },
     {
       "id": "DT-025",
@@ -450,8 +450,8 @@
         "Verify in browser"
       ],
       "priority": 25,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "深色代码编辑器，支持内联修改"
     },
     {
       "id": "DT-026",
@@ -467,8 +467,8 @@
         "Verify in browser"
       ],
       "priority": 26,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "区分单元测试(紫色)和E2E测试(橙色)"
     },
     {
       "id": "DT-027",
@@ -485,8 +485,8 @@
         "Verify in browser"
       ],
       "priority": 27,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "深色JSON编辑器，支持格式化和复制"
     },
     {
       "id": "DT-028",
@@ -503,8 +503,8 @@
         "Verify in browser"
       ],
       "priority": 28,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "四步流水线界面，步骤间数据传递"
     }
   ]
 }

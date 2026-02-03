@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { CategoryTree, type RuleDocument, type RuleCategory, DEFAULT_CATEGORIES } from './CategoryTree';
 import { MarkdownEditor } from './MarkdownEditor';
+import { SkillPreviewModal } from './SkillPreviewModal';
 
 interface RulesManagerProps {
   className?: string;
@@ -20,6 +21,11 @@ export function RulesManager({ className }: RulesManagerProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [newDocCategory, setNewDocCategory] = useState<string>('');
   const [newDocName, setNewDocName] = useState<string>('');
+
+  // Skill preview state
+  const [showSkillPreview, setShowSkillPreview] = useState(false);
+  const [isGeneratingSkill, setIsGeneratingSkill] = useState(false);
+  const [skillStatus, setSkillStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle');
 
   // Load categories and documents
   const loadRules = useCallback(async () => {
@@ -121,6 +127,44 @@ export function RulesManager({ className }: RulesManagerProps) {
     }
   }, [isCreating, newDocCategory, newDocName, selectedDoc, content, loadRules]);
 
+  // Handle generate skill
+  const handleGenerateSkill = useCallback(async () => {
+    const category = isCreating ? newDocCategory : selectedDoc?.category;
+    const name = isCreating ? newDocName.trim() : selectedDoc?.name;
+
+    if (!category || !name) {
+      alert('请先选择或创建规范');
+      return;
+    }
+
+    setIsGeneratingSkill(true);
+    setSkillStatus('generating');
+
+    try {
+      const response = await fetch('/api/rules/skill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category, name, content }),
+      });
+
+      if (response.ok) {
+        setSkillStatus('success');
+        setTimeout(() => setSkillStatus('idle'), 3000);
+      } else {
+        setSkillStatus('error');
+      }
+    } catch (error) {
+      console.error('Failed to generate skill:', error);
+      setSkillStatus('error');
+    } finally {
+      setIsGeneratingSkill(false);
+    }
+  }, [isCreating, newDocCategory, newDocName, selectedDoc, content]);
+
+  // Get current document info for skill preview
+  const currentCategory = isCreating ? newDocCategory : selectedDoc?.category;
+  const currentName = isCreating ? newDocName.trim() : selectedDoc?.name;
+
   return (
     <div className={`flex h-full ${className}`}>
       {/* Left: Category Tree */}
@@ -171,6 +215,10 @@ export function RulesManager({ className }: RulesManagerProps) {
               onSave={handleSave}
               isSaving={isSaving}
               saveStatus={saveStatus}
+              onPreviewSkill={() => setShowSkillPreview(true)}
+              onGenerateSkill={handleGenerateSkill}
+              isGeneratingSkill={isGeneratingSkill}
+              skillStatus={skillStatus}
             />
           </>
         ) : selectedDoc ? (
@@ -190,6 +238,10 @@ export function RulesManager({ className }: RulesManagerProps) {
               onSave={handleSave}
               isSaving={isSaving}
               saveStatus={saveStatus}
+              onPreviewSkill={() => setShowSkillPreview(true)}
+              onGenerateSkill={handleGenerateSkill}
+              isGeneratingSkill={isGeneratingSkill}
+              skillStatus={skillStatus}
             />
           </>
         ) : (
@@ -201,6 +253,18 @@ export function RulesManager({ className }: RulesManagerProps) {
           </div>
         )}
       </div>
+
+      {/* Skill Preview Modal */}
+      {showSkillPreview && currentCategory && currentName && (
+        <SkillPreviewModal
+          category={currentCategory}
+          name={currentName}
+          content={content}
+          onClose={() => setShowSkillPreview(false)}
+          onGenerate={handleGenerateSkill}
+          isGenerating={isGeneratingSkill}
+        />
+      )}
     </div>
   );
 }

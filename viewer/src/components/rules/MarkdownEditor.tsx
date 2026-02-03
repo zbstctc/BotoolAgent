@@ -8,6 +8,10 @@ interface MarkdownEditorProps {
   onSave: () => void;
   isSaving?: boolean;
   saveStatus?: 'idle' | 'saving' | 'saved' | 'error';
+  onPreviewSkill?: () => void;
+  onGenerateSkill?: () => void;
+  isGeneratingSkill?: boolean;
+  skillStatus?: 'idle' | 'generating' | 'success' | 'error';
 }
 
 export function MarkdownEditor({
@@ -16,6 +20,10 @@ export function MarkdownEditor({
   onSave,
   isSaving,
   saveStatus = 'idle',
+  onPreviewSkill,
+  onGenerateSkill,
+  isGeneratingSkill,
+  skillStatus = 'idle',
 }: MarkdownEditorProps) {
   const [showPreview, setShowPreview] = useState(true);
 
@@ -82,6 +90,43 @@ export function MarkdownEditor({
           >
             {showPreview ? '隐藏预览' : '显示预览'}
           </button>
+
+          {/* Skill Preview Button */}
+          {onPreviewSkill && (
+            <button
+              onClick={onPreviewSkill}
+              className="px-3 py-1.5 text-xs font-medium rounded transition-colors bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+            >
+              预览 Skill
+            </button>
+          )}
+
+          {/* Generate Skill Button */}
+          {onGenerateSkill && (
+            <button
+              onClick={onGenerateSkill}
+              disabled={isGeneratingSkill}
+              className="px-3 py-1.5 text-xs font-medium rounded transition-colors bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:bg-purple-50 disabled:text-purple-400 disabled:cursor-not-allowed"
+            >
+              {isGeneratingSkill ? '生成中...' : '生成 Skill'}
+            </button>
+          )}
+
+          {/* Skill Status */}
+          {skillStatus !== 'idle' && (
+            <span className={`text-xs ${
+              skillStatus === 'generating' ? 'text-purple-600' :
+              skillStatus === 'success' ? 'text-green-600' :
+              'text-red-600'
+            }`}>
+              {skillStatus === 'generating' ? '生成中...' :
+               skillStatus === 'success' ? 'Skill 已生成' :
+               '生成失败'}
+            </span>
+          )}
+
+          {/* Divider */}
+          <div className="w-px h-4 bg-neutral-300" />
 
           {/* Save Status */}
           {saveStatus !== 'idle' && (
