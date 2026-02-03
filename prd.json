@@ -308,8 +308,8 @@
         "Verify in browser"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "使用状态控制 Tab 切换，规范管理显示占位符"
     },
     {
       "id": "DT-018",
@@ -326,8 +326,8 @@
         "Verify in browser"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "6 个分类使用 emoji 图标，支持展开/折叠"
     },
     {
       "id": "DT-019",
@@ -344,8 +344,8 @@
         "Verify in browser"
       ],
       "priority": 19,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "工具栏支持快捷插入，预览支持显示/隐藏切换"
     },
     {
       "id": "DT-020",
@@ -360,8 +360,8 @@
         "Typecheck passes"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "支持 GET/POST/DELETE，含 [id] 动态路由"
     },
     {
       "id": "DT-021",
@@ -378,8 +378,8 @@
         "Verify in browser"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "集成 CategoryTree 和 MarkdownEditor，支持新建和编辑"
     },
     {
       "id": "DT-022",
