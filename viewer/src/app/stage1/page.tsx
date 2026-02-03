@@ -39,7 +39,7 @@ export default function Stage1Page() {
   const [savedPrdId, setSavedPrdId] = useState<string | null>(null);
 
   // Project context
-  const { createProject, updateProject, activeProject, setActiveProject } = useProject();
+  const { createProject, updateProject, activeProject, setActiveProject, isLoading: projectsLoading } = useProject();
 
   // Project validation - skip if we have URL params (prdId or session)
   const hasUrlContext = Boolean(prdId || localSessionId);
@@ -113,13 +113,23 @@ export default function Stage1Page() {
     sessionIdRef.current = sessionId;
   }
 
-  // Redirect to Dashboard if no session or prd parameter
+  // Redirect to Dashboard only if:
+  // 1. No URL parameters (prd or session)
+  // 2. No active project (meaning user shouldn't be on Stage 1)
+  // 3. Projects have finished loading
   useEffect(() => {
-    if (!prdId && !localSessionId) {
-      // No session specified, redirect to Dashboard
-      router.replace('/');
-    }
-  }, [prdId, localSessionId, router]);
+    // Wait for projects to finish loading
+    if (projectsLoading) return;
+
+    // If we have URL context, don't redirect
+    if (prdId || localSessionId) return;
+
+    // If we have an active project on Stage 1, allow staying
+    if (activeProject && activeProject.currentStage === 1) return;
+
+    // No context at all, redirect to Dashboard
+    router.replace('/');
+  }, [prdId, localSessionId, router, projectsLoading, activeProject]);
 
   // Load local session from localStorage when session param is provided
   useEffect(() => {
