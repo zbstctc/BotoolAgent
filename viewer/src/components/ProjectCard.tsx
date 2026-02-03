@@ -84,14 +84,7 @@ export function ProjectCard({
   onDelete,
   onArchive,
 }: ProjectCardProps) {
-  const [isHovered, setIsHovered] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
-  const handleMouseEnter = useCallback(() => setIsHovered(true), []);
-  const handleMouseLeave = useCallback(() => {
-    setIsHovered(false);
-    setShowDeleteConfirm(false);
-  }, []);
 
   const handleView = useCallback(() => {
     onView(project);
@@ -120,142 +113,75 @@ export function ProjectCard({
   return (
     <div
       className={`
-        relative bg-white rounded-lg border transition-all duration-200 overflow-hidden
+        group flex items-center justify-between rounded-lg border bg-white p-4 transition-all cursor-pointer
         ${isActive
           ? 'border-blue-300 ring-2 ring-blue-100'
-          : 'border-neutral-200 hover:border-neutral-300'
+          : 'border-neutral-200 hover:border-neutral-300 hover:shadow-sm'
         }
-        ${isHovered ? 'shadow-md' : 'shadow-sm'}
       `}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onClick={handleView}
+      onMouseLeave={() => setShowDeleteConfirm(false)}
     >
-      {/* Active indicator */}
-      {isActive && (
-        <div className="absolute top-0 left-0 right-0 h-1 bg-blue-500" />
-      )}
-
-      {/* Main card content */}
-      <div className="p-4">
-        <div className="flex items-start gap-3">
-          {/* Stage icon */}
-          <div className={`
-            w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0
-            ${isCompleted || isArchived
-              ? 'bg-emerald-100 text-emerald-600'
-              : 'bg-blue-100 text-blue-600'
-            }
-          `}>
-            {isCompleted || isArchived ? (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              <StageIcon stage={project.currentStage} className="w-5 h-5" />
-            )}
-          </div>
-
-          {/* Project info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-neutral-900 truncate">
-                {project.name}
-              </h3>
-              {isActive && (
-                <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-500 text-white rounded">
-                  当前
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 mt-1">
-              <span className={`
-                px-2 py-0.5 text-xs font-medium rounded-full
-                ${statusStyle.bg} ${statusStyle.text}
-              `}>
-                {isCompleted || isArchived
-                  ? statusStyle.label
-                  : `Stage ${project.currentStage} · ${stageInfo.shortName}`
-                }
-              </span>
-              <span className="text-xs text-neutral-400">
-                {formatRelativeTime(project.updatedAt)}
-              </span>
-            </div>
-          </div>
+      {/* Left: Project info */}
+      <div className="flex flex-col gap-1 min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="font-medium text-neutral-900 truncate">{project.name}</p>
+          {isActive && (
+            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-500 text-white rounded flex-shrink-0">
+              当前
+            </span>
+          )}
         </div>
+        <p className="text-xs text-neutral-500">
+          {isCompleted || isArchived
+            ? statusStyle.label
+            : `Stage ${project.currentStage} · ${stageInfo.name}`
+          }
+        </p>
+        <p className="text-xs text-neutral-400 mt-0.5">
+          {formatRelativeTime(project.updatedAt)} · 进度 {project.currentStage}/5
+        </p>
+      </div>
 
-        {/* Hover details panel */}
-        {isHovered && (
-          <div className="mt-4 pt-3 border-t border-neutral-100 space-y-2 animate-in fade-in duration-150">
-            {/* Full stage info */}
-            <div className="flex items-center gap-2 text-xs text-neutral-600">
-              <span className="font-medium">阶段：</span>
-              <span>{stageInfo.name}</span>
-              <span className="text-neutral-300">|</span>
-              <span className="font-medium">进度：</span>
-              <span>{project.currentStage}/5</span>
-            </div>
+      {/* Right: Status and actions */}
+      <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+        <span
+          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}
+        >
+          {isCompleted || isArchived
+            ? statusStyle.label
+            : stageInfo.shortName
+          }
+        </span>
 
-            {/* Branch name */}
-            {project.branchName && (
-              <div className="flex items-center gap-2 text-xs text-neutral-600">
-                <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2" />
-                </svg>
-                <span className="font-mono text-neutral-500 truncate">{project.branchName}</span>
-              </div>
-            )}
+        {/* Action buttons - show on hover */}
+        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+          {/* Show archive button for completed or pending merge projects */}
+          {(isCompleted || isPendingMerge) && !isArchived && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleArchive(); }}
+              className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-all"
+            >
+              归档
+            </button>
+          )}
 
-            {/* Update time */}
-            <div className="flex items-center gap-2 text-xs text-neutral-600">
-              <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>更新于 {new Date(project.updatedAt).toLocaleString('zh-CN', {
-                month: 'numeric',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: 'numeric'
-              })}</span>
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex items-center gap-2 pt-2">
-              <button
-                onClick={handleView}
-                className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
-              >
-                查看
-              </button>
-
-              {/* Show archive button for completed or pending merge projects */}
-              {(isCompleted || isPendingMerge) && !isArchived && (
-                <button
-                  onClick={handleArchive}
-                  className="px-3 py-1.5 text-xs font-medium text-neutral-600 bg-neutral-100 rounded-md hover:bg-neutral-200 transition-colors"
-                >
-                  归档
-                </button>
-              )}
-
-              {/* Show delete button for in-progress projects */}
-              {isInProgress && (
-                <button
-                  onClick={handleDelete}
-                  className={`
-                    px-3 py-1.5 text-xs font-medium rounded-md transition-colors
-                    ${showDeleteConfirm
-                      ? 'text-white bg-red-600 hover:bg-red-700'
-                      : 'text-neutral-600 bg-neutral-100 hover:bg-neutral-200'
-                    }
-                  `}
-                >
-                  {showDeleteConfirm ? '确认删除' : '删除'}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+          {/* Show delete button for in-progress projects */}
+          {isInProgress && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleDelete(); }}
+              className={`
+                rounded-md border px-3 py-1.5 text-xs font-medium transition-all
+                ${showDeleteConfirm
+                  ? 'border-red-200 bg-red-600 text-white hover:bg-red-700'
+                  : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'
+                }
+              `}
+            >
+              {showDeleteConfirm ? '确认删除' : '删除'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

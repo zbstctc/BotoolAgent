@@ -246,59 +246,6 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col gap-6 py-6 px-4 mx-auto max-w-7xl h-full overflow-y-auto bg-neutral-50">
-      {/* Active Project Status Banner */}
-      {activeProject ? (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-blue-500" />
-              <div>
-                <p className="text-sm font-medium text-blue-900">
-                  {activeProject.name}
-                </p>
-                <p className="text-xs text-blue-700">
-                  Stage {activeProject.currentStage} · {getStageLabel(activeProject.currentStage)}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-32 h-2 rounded-full bg-blue-200 overflow-hidden">
-                <div
-                  className="h-full bg-blue-500 transition-all"
-                  style={{ width: `${(activeProject.currentStage / 5) * 100}%` }}
-                />
-              </div>
-              <span className="text-sm font-medium text-blue-700">
-                {activeProject.currentStage}/5
-              </span>
-              <Link
-                href={`/stage${activeProject.currentStage}`}
-                className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
-              >
-                继续工作
-              </Link>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
-              <p className="text-sm text-neutral-600">
-                暂无进行中的项目
-              </p>
-            </div>
-            <button
-              onClick={() => setShowNewPrdDialog(true)}
-              className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-800 transition-colors"
-            >
-              + 新建 PRD
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Left: Active Projects + PRD Documents */}
@@ -905,18 +852,6 @@ function SessionDetailsModal({
       </div>
     </div>
   );
-}
-
-// Helper to get stage label
-function getStageLabel(stage: number): string {
-  const labels: Record<number, string> = {
-    1: 'PRD 需求确认',
-    2: '开发规划',
-    3: 'Coding',
-    4: '测试',
-    5: 'Review',
-  };
-  return labels[stage] || `Stage ${stage}`;
 }
 
 function EmptyState({

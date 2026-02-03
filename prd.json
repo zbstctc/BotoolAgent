@@ -1,94 +1,210 @@
 {
-  "project": "PRD 多会话管理系统",
-  "branchName": "botool/batch-questions",
-  "description": "支持多个 PRD 会话并存管理，添加返回按钮，新建时命名，Dashboard 统一管理",
+  "project": "Viewer 工作流优化",
+  "branchName": "botool/viewer-workflow-optimization",
+  "description": "建立统一的项目状态管理，实现流畅的 Stage 过渡体验，支持多项目并行",
   "devTasks": [
     {
       "id": "DT-001",
-      "title": "添加 Stage 页面返回按钮",
-      "description": "在所有 Stage 页面左上角添加返回 Dashboard 的按钮",
+      "title": "创建 ProjectContext 全局状态管理",
+      "description": "创建全局项目状态 Context，支持多项目管理",
       "acceptanceCriteria": [
-        "所有 Stage 页面左上角有返回按钮",
-        "点击能返回 Dashboard",
-        "Typecheck passes",
-        "Verify in browser"
+        "创建 viewer/src/contexts/ProjectContext.tsx",
+        "包含 ProjectState 接口：id, name, currentStage, prdId, branchName, status, createdAt, updatedAt",
+        "提供 ProjectProvider 组件",
+        "提供 useProject hook 获取和更新项目状态",
+        "支持多项目：projects: Record<string, ProjectState>, activeProjectId: string | null",
+        "在 layout.tsx 中包裹 ProjectProvider",
+        "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "已在 StageIndicator 组件中添加返回按钮"
+      "notes": ""
     },
     {
       "id": "DT-002",
-      "title": "改造 localStorage 支持多会话",
-      "description": "将 localStorage 从单会话改为多会话存储",
+      "title": "创建项目状态持久化存储",
+      "description": "创建 localStorage 持久化层，与 ProjectContext 集成",
       "acceptanceCriteria": [
-        "能创建多个会话",
-        "每个会话独立存储",
-        "旧数据自动迁移",
+        "创建 viewer/src/lib/project-storage.ts",
+        "使用 localStorage key: botool-projects",
+        "提供 saveProject, getProject, getAllProjects, deleteProject, archiveProject 方法",
+        "在 ProjectContext 中集成，状态变化时自动保存",
+        "页面加载时自动从 localStorage 恢复",
         "Typecheck passes"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "已实现多会话支持，自动迁移旧数据"
+      "notes": ""
     },
     {
       "id": "DT-003",
-      "title": "Dashboard 添加新建 PRD 对话框",
-      "description": "点击新建按钮时弹出命名对话框",
+      "title": "创建 StageTransitionModal 组件",
+      "description": "创建 Stage 完成后的确认弹窗组件",
       "acceptanceCriteria": [
-        "点击新建弹出对话框",
-        "输入名称后跳转到 Stage 1",
-        "对话框背景为白色",
+        "创建 viewer/src/components/StageTransitionModal.tsx",
+        "Props: isOpen, fromStage, toStage, summary, onConfirm, onLater",
+        "显示完成摘要（如 PRD 已保存）",
+        "继续按钮跳转到下一 Stage",
+        "稍后按钮回到 Dashboard",
+        "简洁设计，与现有 UI 风格一致",
+        "导出到 components/index.ts",
         "Typecheck passes",
         "Verify in browser"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "已实现 NewPrdDialog 组件"
+      "notes": "浏览器测试工具暂不可用，需手动验证"
     },
     {
       "id": "DT-004",
-      "title": "Dashboard 显示进行中的 PRD 列表",
-      "description": "在 Dashboard 显示所有未完成的 PRD 会话",
+      "title": "Stage 1 集成项目状态和过渡弹窗",
+      "description": "Stage 1 使用 ProjectContext 并显示过渡弹窗",
       "acceptanceCriteria": [
-        "显示所有未完成会话",
-        "能继续任意会话",
-        "能删除会话",
+        "Stage 1 使用 useProject hook",
+        "PRD 保存成功后创建/更新项目状态",
+        "显示 StageTransitionModal 而非直接跳转",
+        "移除 setTimeout 自动跳转逻辑",
+        "点击继续后更新项目 stage 并跳转 Stage 2",
         "Typecheck passes",
         "Verify in browser"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "已实现 PrdSessionList 组件"
+      "notes": "需手动浏览器验证"
     },
     {
       "id": "DT-005",
-      "title": "Stage 1 适配多会话",
-      "description": "Stage 1 页面适配新的多会话系统",
+      "title": "Stage 2 集成项目状态和过渡弹窗",
+      "description": "Stage 2 显示项目上下文并使用过渡弹窗",
       "acceptanceCriteria": [
-        "带 session 参数能恢复会话",
-        "无参数重定向到 Dashboard",
-        "进度自动保存",
+        "Stage 2 使用 useProject hook",
+        "如果有活动项目，自动加载对应 PRD",
+        "Header 显示项目名称和来源信息",
+        "转换完成并点击开始开发后显示过渡弹窗",
+        "点击继续后更新项目 stage 并跳转 Stage 3",
         "Typecheck passes",
         "Verify in browser"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "支持 ?session={id} 参数，无参数重定向"
+      "notes": "需手动浏览器验证"
     },
     {
       "id": "DT-006",
-      "title": "数据迁移与清理",
-      "description": "迁移旧数据，清理废弃代码",
+      "title": "Stage 3 集成项目状态和过渡弹窗",
+      "description": "Stage 3 任务全部完成时显示过渡弹窗",
       "acceptanceCriteria": [
-        "旧数据自动迁移",
-        "迁移后功能正常",
-        "无数据丢失",
-        "Typecheck passes"
+        "Stage 3 使用 useProject hook",
+        "所有任务完成时显示过渡弹窗",
+        "弹窗显示完成任务数量摘要",
+        "点击继续后更新项目 stage 并跳转 Stage 4",
+        "Typecheck passes",
+        "Verify in browser"
       ],
       "priority": 6,
       "passes": true,
-      "notes": "迁移已在 DT-002 中实现，SessionResumeDialog 仍用于服务端会话"
+      "notes": "需手动浏览器验证"
+    },
+    {
+      "id": "DT-007",
+      "title": "Stage 4 和 Stage 5 集成项目状态",
+      "description": "Stage 4 和 5 完成工作流闭环",
+      "acceptanceCriteria": [
+        "Stage 4 使用 useProject hook",
+        "Stage 4 测试通过后显示过渡弹窗，跳转 Stage 5",
+        "Stage 5 使用 useProject hook",
+        "Stage 5 合并完成后更新项目状态为 completed",
+        "合并完成后显示完成弹窗，返回 Dashboard",
+        "Typecheck passes",
+        "Verify in browser"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "需手动浏览器验证"
+    },
+    {
+      "id": "DT-008",
+      "title": "Dashboard 项目卡片组件",
+      "description": "创建项目卡片组件，简洁展示悬浮详情",
+      "acceptanceCriteria": [
+        "创建 viewer/src/components/ProjectCard.tsx",
+        "卡片简洁显示：项目名、当前 Stage 图标、状态文字",
+        "悬浮时显示完整信息：进度、分支名、更新时间",
+        "不同状态显示不同操作按钮",
+        "Stage 1-4 进行中：查看、删除",
+        "Stage 5 待合并：查看、归档",
+        "已完成：查看、归档",
+        "导出到 components/index.ts",
+        "Typecheck passes",
+        "Verify in browser"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "需手动浏览器验证"
+    },
+    {
+      "id": "DT-009",
+      "title": "Dashboard 集成项目列表",
+      "description": "Dashboard 使用 ProjectContext 显示项目卡片",
+      "acceptanceCriteria": [
+        "Dashboard 使用 useProject hook 获取所有项目",
+        "替换现有的 PrdSessionList 为 ProjectCard 列表",
+        "活动项目（有 activeProjectId）显示在顶部突出位置",
+        "点击项目卡片查看按钮跳转到对应 Stage",
+        "归档和删除操作调用 ProjectContext 方法",
+        "保留现有的 TaskHistory 组件",
+        "Typecheck passes",
+        "Verify in browser"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "需手动浏览器验证"
+    },
+    {
+      "id": "DT-010",
+      "title": "页面加载时自动恢复项目状态",
+      "description": "刷新或重新打开浏览器时恢复到上次 Stage",
+      "acceptanceCriteria": [
+        "ProjectProvider 加载时读取 localStorage",
+        "如果有 activeProjectId，获取该项目的 currentStage",
+        "在 Dashboard 判断：如果有活动项目，自动跳转到对应 Stage",
+        "Stage 页面加载时验证项目状态有效性",
+        "Typecheck passes",
+        "Verify in browser"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "需手动浏览器验证"
+    },
+    {
+      "id": "DT-011",
+      "title": "更新 CLAUDE.md 产品定位",
+      "description": "在 CLAUDE.md 添加 Viewer 产品定位说明",
+      "acceptanceCriteria": [
+        "在 CLAUDE.md 添加 ## BotoolAgent Viewer 章节",
+        "说明目标用户：非开发者（业务员/工程师）",
+        "说明使用场景：用于开发自己的工具",
+        "说明与 CLI Skills 的关系",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "DT-012",
+      "title": "StageIndicator 增强显示",
+      "description": "StageIndicator 显示更多进度上下文",
+      "acceptanceCriteria": [
+        "StageIndicator 新增 projectName 显示（已有，确认正常工作）",
+        "新增可选的 stageStatus prop 显示当前状态（如已回答 3/5 问题）",
+        "各 Stage 页面传入对应的状态文字",
+        "Typecheck passes",
+        "Verify in browser"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "需手动浏览器验证"
     }
   ]
 }

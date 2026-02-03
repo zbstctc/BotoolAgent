@@ -534,8 +534,8 @@ send_error_notification() {
 
   case "$error_type" in
     iteration_failed)
-      title="⚠️ $project_name 迭代失败"
-      message="迭代重试次数已用尽"
+      title="⛔ $project_name 已停止"
+      message="迭代重试次数已用尽，脚本已停止。请检查问题后手动重启。"
       ;;
     circuit_breaker)
       title="⛔ $project_name 停止"
@@ -1054,39 +1054,77 @@ monitor_health() {
 }
 
 # ============================================================================
-# 运行时网络健康检查
+# 运行时进程健康检查（改进版：检测输出文件增长而非网络活动）
 # ============================================================================
 
-# 检查进程是否有活跃的网络连接
-check_process_network() {
+# 检查进程是否有活动（输出文件是否增长）
+check_process_activity() {
   local pid=$1
-  # 检查进程是否有 TCP 连接（排除 CLOSE_WAIT 等非活跃状态）
-  lsof -p $pid 2>/dev/null | grep -E "TCP.*ESTABLISHED" > /dev/null 2>&1
-  return $?
+  local output_file=$2
+  local last_size=$3
+
+  # 如果进程不存在，返回失败
+  if ! kill -0 $pid 2>/dev/null; then
+    return 1
+  fi
+
+  # 获取当前输出文件大小
+  local current_size=0
+  if [ -f "$output_file" ]; then
+    current_size=$(stat -f%z "$output_file" 2>/dev/null || stat -c%s "$output_file" 2>/dev/null || echo "0")
+  fi
+
+  # 如果文件大小增长了，说明有活动
+  if [ "$current_size" -gt "$last_size" ]; then
+    return 0  # 有活动
+  fi
+
+  # 也检查 CPU 是否 > 0（进程在思考）
+  local cpu=$(ps -p $pid -o %cpu= 2>/dev/null | tr -d ' ' | cut -d. -f1)
+  if [ -n "$cpu" ] && [ "$cpu" -gt 0 ]; then
+    return 0  # 有 CPU 活动
+  fi
+
+  return 1  # 无活动
 }
 
-# 后台网络健康监控
-# 如果进程长时间没有网络活动，返回 1
+# 后台进程健康监控（改进版）
+# 如果进程长时间没有任何活动（输出文件不增长 + CPU 为 0），返回 1
 NETWORK_MONITOR_PID=""
 
 monitor_network_health() {
   local pid=$1
-  local no_network_count=0
+  local output_file="${2:-}"
+  local no_activity_count=0
   local checks_needed=$((NETWORK_NO_ACTIVITY_THRESHOLD / NETWORK_HEALTH_CHECK_INTERVAL))
+  local last_file_size=0
+
+  # 获取初始文件大小
+  if [ -n "$output_file" ] && [ -f "$output_file" ]; then
+    last_file_size=$(stat -f%z "$output_file" 2>/dev/null || stat -c%s "$output_file" 2>/dev/null || echo "0")
+  fi
 
   while kill -0 $pid 2>/dev/null; do
     sleep $NETWORK_HEALTH_CHECK_INTERVAL
 
-    if check_process_network $pid; then
-      # 有网络活动，重置计数
-      no_network_count=0
-    else
-      # 没有网络活动
-      ((no_network_count++))
-      echo ">>> [网络监控] Claude PID $pid 无网络活动 ($((no_network_count * NETWORK_HEALTH_CHECK_INTERVAL))秒)"
+    # 获取当前文件大小
+    local current_size=0
+    if [ -n "$output_file" ] && [ -f "$output_file" ]; then
+      current_size=$(stat -f%z "$output_file" 2>/dev/null || stat -c%s "$output_file" 2>/dev/null || echo "0")
+    fi
 
-      if [ $no_network_count -ge $checks_needed ]; then
-        echo ">>> [网络监控] ⚠️  超过 ${NETWORK_NO_ACTIVITY_THRESHOLD}秒 无网络活动，终止进程"
+    if check_process_activity $pid "$output_file" "$last_file_size"; then
+      # 有活动，重置计数
+      no_activity_count=0
+      last_file_size=$current_size
+    else
+      # 没有活动
+      ((no_activity_count++))
+      local elapsed=$((no_activity_count * NETWORK_HEALTH_CHECK_INTERVAL))
+      echo ">>> [健康检查] Claude PID $pid 无活动 (${elapsed}秒) - 文件大小: ${current_size} bytes"
+
+      if [ $no_activity_count -ge $checks_needed ]; then
+        echo ">>> [健康检查] ⚠️  超过 ${NETWORK_NO_ACTIVITY_THRESHOLD}秒 无活动（文件不增长 + CPU 为 0），终止进程"
         kill -9 $pid 2>/dev/null
         return 1
       fi
@@ -1122,10 +1160,10 @@ run_claude_with_monitoring() {
     CLAUDE_PID=$!
     echo ">>> Claude PID: $CLAUDE_PID"
 
-    # 启动网络健康监控（如果启用）
+    # 启动进程健康监控（如果启用）
     if [ "$NETWORK_HEALTH_CHECK_ENABLED" = "true" ]; then
-      echo ">>> 启动网络健康监控（${NETWORK_NO_ACTIVITY_THRESHOLD}秒无活动将重启）"
-      monitor_network_health $CLAUDE_PID &
+      echo ">>> 启动进程健康监控（${NETWORK_NO_ACTIVITY_THRESHOLD}秒无活动将重启）"
+      monitor_network_health $CLAUDE_PID "$output_file" &
       NETWORK_MONITOR_PID=$!
     fi
 
@@ -1814,15 +1852,19 @@ for i in $(seq 1 $MAX_ITERATIONS); do
 
   if [ "$iteration_success" = false ]; then
     echo ">>> 第 $i 次迭代的所有 $MAX_RETRIES 次重试都失败了"
-    update_status "failed" "第 $i 次迭代的所有重试都失败"
+    echo ">>> ⛔ 由于任务可能有依赖关系，停止脚本以避免级联失败"
+    update_status "failed" "第 $i 次迭代的所有重试都失败，脚本已停止"
     LAST_OUTPUT_FILE=""
     # 执行 onError hook
     run_on_error_hook "iteration_failed" "第 $i 次迭代的所有 $MAX_RETRIES 次重试都失败"
     # 发送错误通知
-    send_error_notification "iteration_failed" "第 $i 次迭代的所有 $MAX_RETRIES 次重试都失败"
+    send_error_notification "iteration_failed" "第 $i 次迭代的所有 $MAX_RETRIES 次重试都失败，脚本已停止"
     # 执行 postIteration hook（失败情况）
     run_post_iteration_hook "false"
-    # 继续下一次迭代
+    # 停止脚本，而不是继续下一次迭代（因为任务可能有依赖关系）
+    echo ""
+    echo ">>> 请检查问题后手动重启: ./BotoolAgent.sh $((MAX_ITERATIONS - i + 1))"
+    exit 1
   else
     # 迭代成功，执行响应分析
     echo ""

@@ -1,133 +1,164 @@
 # Botool 开发代理进度日志
-开始时间: Mon Feb  2 22:52:48 CST 2026
+开始时间: Tue Feb  3 13:12:05 CST 2026
+---
 
 ## Codebase Patterns
-- PRD 模式的 System Prompt 在 `viewer/src/app/api/cli/chat/route.ts` 的 `PRD_SYSTEM_PROMPT` 常量中定义
-- 该文件支持三种模式：prd、convert、default，通过 `getSystemPrompt()` 函数切换
-- AskUserQuestion 工具的 questions 数组可以一次包含 2-4 个问题
-- AskUserQuestion 问题类型：有 options 的选择题，无 options 的文本输入题（通过 `isTextInputQuestion()` 判断）
-- localStorage 多会话存储在 `viewer/src/lib/prd-session-storage.ts`，键为 `botool-prd-sessions`（复数）
-- 多会话 API：`createSession()`, `getSession()`, `getAllSessions()`, `deleteSession()`, `updateSession()`
-- Stage 1 页面通过 URL 参数 `?session={id}` 加载指定会话，无参数重定向到 Dashboard
-- StageIndicator 组件包含返回 Dashboard 的按钮（showBackButton prop）
-- NewPrdDialog 组件用于在 Dashboard 创建新会话并命名
-- PrdSessionList 组件用于在 Dashboard 显示和管理进行中的会话
+- 项目使用 Next.js App Router，组件放在 `viewer/src/components/`
+- hooks 导出统一通过 `hooks/index.ts`
+- localStorage 持久化参考 `lib/prd-session-storage.ts` 的模式
+- Context 放在 `contexts/` 目录，在 `layout.tsx` 中包裹 Provider
+
+- project-storage.ts 提供独立的存储 API，便于测试和复用
 
 ---
 
-## 2026-02-02 23:01 - DT-002
-- 实现了什么：改进触发按钮显示问题数量和主题标签
-- 修改了哪些文件：`viewer/src/components/ToolRenderer.tsx`
-- **未来迭代的经验教训：**
-  - ToolRenderer 组件在 `viewer/src/components/ToolRenderer.tsx`
-  - 触发按钮和 Modal 都在 `AskUserQuestionRenderer` 函数组件内
-  - `input.questions` 包含所有问题，每个问题有 `header` 属性表示主题
-  - 现有 lint 错误 (set-state-in-effect) 是遗留问题，不阻塞开发
-  - 需要手动浏览器验证，因为 Playwright 无法启动（Chrome 已有运行实例）
----
-
-## 2026-02-02 23:15 - DT-003
-- 实现了什么：确认 Modal 进度和编号功能已在 DT-002 中实现
-- 修改了哪些文件：无代码修改，仅更新 prd.json
-- **未来迭代的经验教训：**
-  - DT-002 和 DT-003 的功能紧密相关，在 DT-002 实现时一并完成了 Modal 内的所有改进
-  - Modal 内的功能包括：标题显示问题数、问题编号、绿色勾选标记、底部进度「已回答 X/Y」
-  - 验证 typecheck 通过
-  - 需要手动浏览器验证
----
-
-## 2026-02-02 23:XX - DT-001
-- 实现了什么：更新 PRD_SYSTEM_PROMPT 支持批量中文问题
-- 修改了哪些文件：`viewer/src/app/api/cli/chat/route.ts`
-- **未来迭代的经验教训：**
-  - System Prompt 使用模板字符串，修改时注意 JSON 示例中的转义
-  - AskUserQuestion 的 questions 数组是核心机制，每个问题需要 question、header、options、multiSelect 字段
-  - 问题分组建议按主题：基础信息、功能范围、技术方案、验收标准
----
-
-## 2026-02-03 00:XX - DT-004
-- 实现了什么：支持文本输入类型问题（无预设选项）
+## 2026-02-03 21:00 - DT-012
+- 实现了什么：StageIndicator 增强显示
 - 修改了哪些文件：
-  - `viewer/src/lib/tool-types.ts` - 让 options 变为可选，添加 inputType、placeholder 字段，添加 isTextInputQuestion 辅助函数
-  - `viewer/src/components/OptionCard.tsx` - 添加 textInputOnly 模式，支持单行 (text) 和多行 (textarea) 文本输入
-  - `viewer/src/components/ToolRenderer.tsx` - 处理没有预设选项的文本输入问题
+  - 修改 `viewer/src/components/StageIndicator.tsx` 添加 stageStatus prop
+  - 修改 `viewer/src/app/stage1/page.tsx` 传入状态（对话数量/PRD状态）
+  - 修改 `viewer/src/app/stage2/page.tsx` 传入状态（转换状态/任务数量）
+  - 修改 `viewer/src/app/stage3/page.tsx` 传入状态（x/y 完成）
+  - 修改 `viewer/src/app/stage4/page.tsx` 传入状态（测试/验证状态）+ projectName
+  - 修改 `viewer/src/app/stage5/page.tsx` 传入状态（PR状态）+ projectName
 - **未来迭代的经验教训：**
-  - `isTextInputQuestion()` 辅助函数判断问题是否为纯文本输入（没有 options 或 options 为空数组）
-  - OptionCard 的 `textInputOnly` prop 控制是否只显示文本输入框
-  - 文本输入类型通过 `inputType` 属性控制：'text' 单行，'textarea' 多行
-  - 当 options 可选时，TypeScript 需要额外的空值检查（使用 `!` 断言或条件判断）
-  - 需要手动浏览器验证
+  - 发现的模式：StageIndicator 的 stageStatus 使用三元运算符链条来处理多种状态
+  - 发现的模式：Stage 4 和 Stage 5 之前没有传入 projectName，需要补充
+  - 有用的上下文：stageStatus 显示在 projectName 后面，用 `·` 分隔
+  - 注意：状态文字应该简洁明了，便于用户快速了解当前进度
 ---
 
-## 2026-02-03 01:XX - DT-005 & DT-006
-- 实现了什么：问答进度保存到 localStorage，支持会话恢复（DT-005 和 DT-006 一并实现）
+## 2026-02-03 20:30 - DT-011
+- 实现了什么：更新 CLAUDE.md 添加 BotoolAgent Viewer 产品定位说明
 - 修改了哪些文件：
-  - `viewer/src/lib/prd-session-storage.ts` - 新文件，管理 localStorage 保存和读取
-  - `viewer/src/components/ToolRenderer.tsx` - 从 localStorage 初始化状态，答案变化时自动保存
-  - `viewer/src/components/SessionResumeDialog.tsx` - 扩展支持显示进度信息（回答 X/Y 个问题、上次更新时间）
-  - `viewer/src/app/stage1/page.tsx` - 检测 localStorage 中未完成会话并显示恢复对话框
+  - 修改 `CLAUDE.md` 添加 BotoolAgent Viewer 章节
 - **未来迭代的经验教训：**
-  - localStorage 键为 `botool-prd-session`，存储 `SavedPrdSession` 对象
-  - `getSavedPrdSession()` 和 `saveQuestionAnswers()` 是核心函数
-  - 在 ToolRenderer 中使用 useEffect 保存，但需注意依赖数组避免无限循环
-  - 移除了 set-state-in-effect 问题，改用初始化函数计算 modal 状态
-  - SessionResumeDialog 需要传入 `currentTime` 来避免 render 期间调用 Date.now() 的纯度问题
-  - DT-005 和 DT-006 功能紧密相关，一并实现更高效
-  - 需要手动浏览器验证
+  - 有用的上下文：CLAUDE.md 的 Viewer 章节描述了产品定位、目标用户和与 CLI Skills 的关系
+  - 有用的上下文：Viewer 的 5 阶段工作流是整个产品的核心流程
+  - 发现的模式：文档更新类任务只需修改 CLAUDE.md，运行 typecheck 确保不影响代码即可
 ---
 
-## 2026-02-03 08:XX - PRD 多会话管理系统
-
-### DT-001: 添加 Stage 页面返回按钮
-- 实现了什么：在 StageIndicator 组件添加返回 Dashboard 的按钮
-- 修改了哪些文件：`viewer/src/components/StageIndicator.tsx`
-- **未来迭代的经验教训：**
-  - 返回按钮通过 `showBackButton` prop 控制，默认为 true
-  - 使用 Next.js Link 组件导航到 `/`
-
-### DT-002: 改造 localStorage 支持多会话
-- 实现了什么：将单会话存储改为多会话存储，自动迁移旧数据
-- 修改了哪些文件：`viewer/src/lib/prd-session-storage.ts`
-- **未来迭代的经验教训：**
-  - 新存储键为 `botool-prd-sessions`（复数），旧键为 `botool-prd-session`
-  - `migrateOldSession()` 在 `getStorage()` 中自动调用，实现透明迁移
-  - 向后兼容：保留 `getSavedPrdSession()`, `saveQuestionAnswers()` 等旧 API
-  - PrdSession 接口使用 `name` 字段，SavedPrdSession 保留 `projectName` 别名
-
-### DT-003: Dashboard 添加新建 PRD 对话框
-- 实现了什么：创建 NewPrdDialog 组件，在 Dashboard 点击新建时弹出
+## 2026-02-03 19:45 - DT-010
+- 实现了什么：页面加载时自动恢复项目状态
 - 修改了哪些文件：
-  - `viewer/src/components/NewPrdDialog.tsx` - 新文件
-  - `viewer/src/components/index.ts` - 导出新组件
-  - `viewer/src/app/page.tsx` - 集成对话框
+  - 新建 `viewer/src/hooks/useProjectValidation.ts`
+  - 修改 `viewer/src/hooks/index.ts` 导出新 hook
+  - 修改 `viewer/src/app/page.tsx` 添加自动跳转逻辑
+  - 修改 `viewer/src/app/stage1/page.tsx` 集成项目验证
+  - 修改 `viewer/src/app/stage2/page.tsx` 集成项目验证
+  - 修改 `viewer/src/app/stage3/page.tsx` 集成项目验证
+  - 修改 `viewer/src/app/stage4/page.tsx` 集成项目验证
+  - 修改 `viewer/src/app/stage5/page.tsx` 集成项目验证
 - **未来迭代的经验教训：**
-  - 对话框创建会话后跳转到 `/stage1?session={id}`
-  - 按照 CLAUDE.md 要求，对话框背景为白色
+  - 发现的模式：使用 `useRef` + `hasRedirectedRef.current` 防止多次重定向
+  - 发现的模式：验证 hook 支持 `skipValidation` 参数，用于有 URL 参数时跳过验证
+  - 发现的模式：Stage 1 允许无活动项目（入口点），其他 Stage 需要活动项目
+  - 有用的上下文：验证逻辑：不能越级访问（currentStage > activeProject.currentStage 时重定向）
+  - 有用的上下文：归档/已完成的项目会重定向到 Dashboard
+---
 
-### DT-004: Dashboard 显示进行中的 PRD 列表
-- 实现了什么：创建 PrdSessionList 组件显示所有未完成会话
+## 2026-02-03 19:05 - DT-009
+- 实现了什么：Dashboard 集成项目列表
 - 修改了哪些文件：
-  - `viewer/src/components/PrdSessionList.tsx` - 新文件
-  - `viewer/src/components/index.ts` - 导出新组件
-  - `viewer/src/app/page.tsx` - 在 Task History 上方添加进行中会话列表
+  - 修改 `viewer/src/app/page.tsx`
 - **未来迭代的经验教训：**
-  - 只显示有 questionAnswers 的会话（有实际进度）
-  - 支持继续（跳转到 Stage 1）和删除操作
-  - 使用相对时间显示更新时间
+  - 发现的模式：使用 `useProject` hook 获取 `getAllProjects`、`deleteProject`、`archiveProject` 等方法
+  - 发现的模式：`visibleProjects = allProjects.filter((p) => p.status !== 'archived')` 过滤已归档项目
+  - 发现的模式：活动项目 Banner 使用 `activeProject` 直接显示进度（stage/5）
+  - 有用的上下文：`ProjectCard` 组件的 `isActive` prop 通过 `project.id === activeProjectId` 判断
+  - 有用的上下文：点击查看时需要先调用 `setActiveProject(project.id)` 然后再跳转
+  - 注意：替换了 `PrdSessionList` 为 `ProjectCard` 列表，但 `PrdSessionList` 组件仍保留（可能被其他地方使用）
+---
 
-### DT-005: Stage 1 适配多会话
-- 实现了什么：Stage 1 页面支持通过 URL 参数加载指定会话
+## 2026-02-03 18:25 - DT-008
+- 实现了什么：Dashboard 项目卡片组件
 - 修改了哪些文件：
-  - `viewer/src/app/stage1/page.tsx` - 添加 ?session={id} 参数支持
-  - `viewer/src/components/ToolRenderer.tsx` - 添加 sessionId prop
+  - 新建 `viewer/src/components/ProjectCard.tsx`
+  - 修改 `viewer/src/components/index.ts` 导出组件
 - **未来迭代的经验教训：**
-  - 无参数时重定向到 Dashboard，强制用户先命名项目
-  - ToolRenderer 支持 sessionId，优先保存到指定会话
-  - 移除了旧的 localStorage 单会话恢复对话框
+  - 发现的模式：ProjectCard 使用 `useState` + `onMouseEnter/onMouseLeave` 实现悬浮展开效果
+  - 发现的模式：删除操作使用二次确认机制（点一次显示"确认删除"，再点一次执行删除）
+  - 发现的模式：STAGE_INFO 和 STATUS_STYLES 常量管理 Stage/Status 的显示信息
+  - 有用的上下文：isActive 属性用于标识当前活动项目，显示蓝色边框和顶部条带
+  - 有用的上下文：不同状态的操作按钮：进行中(1-4)显示删除、待合并(5)显示归档、已完成显示归档
+---
 
-### DT-006: 数据迁移与清理
-- 实现了什么：确认迁移正常，评估 SessionResumeDialog
+## 2026-02-03 17:45 - DT-007
+- 实现了什么：Stage 4 和 Stage 5 集成项目状态
+- 修改了哪些文件：
+  - 修改 `viewer/src/app/stage4/page.tsx`
+  - 修改 `viewer/src/app/stage5/page.tsx`
 - **未来迭代的经验教训：**
-  - 数据迁移在 DT-002 中已实现，首次访问时自动执行
-  - SessionResumeDialog 仍用于服务端会话（编辑现有 PRD 时）
+  - 发现的模式：Stage 4 的过渡弹窗在点击"进入 Review"按钮时触发（条件：测试通过 + 手动验证完成）
+  - 发现的模式：Stage 5 合并成功后需要同时更新项目状态为 `completed` 并显示完成弹窗
+  - 发现的模式：完成弹窗使用 `toStage=0` 表示项目结束
+  - 有用的上下文：Stage 5 完成后清除 `activeProject`（设为 null），让用户可以开始新项目
+  - 有用的上下文：Stage 4 的弹窗 summary 包含测试用例数量和手动检查项数量
+---
+
+## 2026-02-03 17:15 - DT-006
+- 实现了什么：Stage 3 集成项目状态和过渡弹窗
+- 修改了哪些文件：
+  - 修改 `viewer/src/app/stage3/page.tsx`
+- **未来迭代的经验教训：**
+  - 发现的模式：Stage 3 使用 `allTasksCompleted` 变量检测所有任务完成 (`totalTasks > 0 && completedTasks === totalTasks`)
+  - 发现的模式：使用 `hasShownCompletionModal` 状态防止弹窗重复显示
+  - 发现的模式：Stage 3 页面已使用 `useFileWatcher` 监控 prd.json 变化，任务完成后自动检测
+  - 有用的上下文：Stage 3 的过渡弹窗是自动触发的（任务全部完成时），不像 Stage 1/2 是用户操作后触发
+---
+
+## 2026-02-03 16:45 - DT-005
+- 实现了什么：Stage 2 集成项目状态和过渡弹窗
+- 修改了哪些文件：
+  - 修改 `viewer/src/app/stage2/page.tsx`
+- **未来迭代的经验教训：**
+  - 发现的模式：Stage 页面自动加载 PRD 逻辑：优先使用 URL 参数，其次使用 activeProject.prdId
+  - 发现的模式：handleStartDevelopment 先更新 branchName，再显示过渡弹窗，handleTransitionConfirm 负责跳转
+  - 有用的上下文：Header 中可以根据 activeProject 是否存在显示不同的项目来源信息
+  - 注意：StageTransitionModal 的 summary 使用模板字符串显示任务数量
+---
+
+## 2026-02-03 16:05 - DT-004
+- 实现了什么：Stage 1 集成项目状态和过渡弹窗
+- 修改了哪些文件：
+  - 修改 `viewer/src/app/stage1/page.tsx`
+- **未来迭代的经验教训：**
+  - 发现的模式：Stage 页面需要引入 `useProject` hook 和 `StageTransitionModal` 组件
+  - 发现的模式：保存成功后的流程：创建/更新项目 → 显示过渡弹窗 → 用户确认后更新 stage 并跳转
+  - 有用的上下文：`savedPrdId` 需要单独存储，因为在 callback 中无法直接使用 data.id
+  - 注意：`setActiveProject` 被导入但未使用（用于未来可能需要的场景）
+---
+
+## 2026-02-03 15:30 - DT-003
+- 实现了什么：创建 StageTransitionModal 组件
+- 修改了哪些文件：
+  - 新建 `viewer/src/components/StageTransitionModal.tsx`
+  - 修改 `viewer/src/components/index.ts` 导出组件
+- **未来迭代的经验教训：**
+  - 发现的模式：Dialog/Modal 组件使用固定的 UI 结构：backdrop(bg-black/50) + 白色卡片 + header/content/footer
+  - 发现的模式：使用 STAGE_NAMES 和 STAGE_ICONS 常量来管理 Stage 元数据
+  - 有用的上下文：组件设计支持 toStage=0 表示项目完成，显示不同的完成 UI
+  - 注意：浏览器测试工具可能因 Chrome 实例冲突无法使用，需手动验证
+---
+
+## 2026-02-03 14:15 - DT-002
+- 实现了什么：创建项目状态持久化存储模块
+- 修改了哪些文件：
+  - 新建 `viewer/src/lib/project-storage.ts`
+  - 重构 `viewer/src/contexts/ProjectContext.tsx` 使用 project-storage 模块
+- **未来迭代的经验教训：**
+  - 发现的模式：存储模块应独立于 Context，保持关注点分离
+  - 发现的模式：project-storage 和 prd-session-storage 使用相同的设计模式
+  - 有用的上下文：DT-001 的实现已包含持久化功能，DT-002 主要是将其抽取为独立模块
+---
+
+## 2026-02-03 13:25 - DT-001
+- 实现了什么：创建 ProjectContext 全局状态管理
+- 修改了哪些文件：
+  - 新建 `viewer/src/contexts/ProjectContext.tsx`
+  - 修改 `viewer/src/app/layout.tsx` 添加 ProjectProvider
+- **未来迭代的经验教训：**
+  - 发现的模式：Context 文件使用 'use client' 指令
+  - 发现的模式：generateUUID 可以复用，已有 prd-session-storage.ts 中的实现
+  - 有用的上下文：ProjectContext 已集成 localStorage 持久化，DT-002 可能可以简化
 ---
