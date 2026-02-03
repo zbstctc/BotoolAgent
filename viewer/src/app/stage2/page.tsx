@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { StageIndicator, TaskEditor, ChatInterface, SessionResumeDialog } from '@/components';
+import { StageIndicator, TaskEditor, ChatInterface, SessionResumeDialog, StageTransitionModal } from '@/components';
 import { useCliChat, CliChatMessage } from '@/hooks';
+import { useProject } from '@/contexts/ProjectContext';
 
 interface PRDItem {
   id: string;
@@ -50,6 +51,9 @@ export default function Stage2Page() {
   const searchParams = useSearchParams();
   const preselectedPrdId = searchParams.get('prd');
 
+  // Project context
+  const { activeProject, updateProject } = useProject();
+
   const [prds, setPrds] = useState<PRDItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPrd, setSelectedPrd] = useState<PRDItem | null>(null);
@@ -73,6 +77,9 @@ export default function Stage2Page() {
   const [showResumeDialog, setShowResumeDialog] = useState(false);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const [pendingPrd, setPendingPrd] = useState<PRDItem | null>(null);
+
+  // Stage transition modal state
+  const [showTransitionModal, setShowTransitionModal] = useState(false);
 
   // Store session ID for continuing conversation
   const sessionIdRef = useRef<string | undefined>(undefined);
@@ -179,15 +186,18 @@ export default function Stage2Page() {
     fetchPRDs();
   }, []);
 
-  // Auto-select PRD from URL query param
+  // Auto-select PRD from URL query param or active project
   useEffect(() => {
-    if (preselectedPrdId && prds.length > 0) {
-      const prd = prds.find((p) => p.id === preselectedPrdId);
+    // Determine which PRD to auto-select
+    const targetPrdId = preselectedPrdId || activeProject?.prdId;
+
+    if (targetPrdId && prds.length > 0) {
+      const prd = prds.find((p) => p.id === targetPrdId);
       if (prd && !selectedPrd) {
         handlePrdSelect(prd);
       }
     }
-  }, [preselectedPrdId, prds, selectedPrd]);
+  }, [preselectedPrdId, activeProject?.prdId, prds, selectedPrd]);
 
   async function fetchPRDs() {
     try {
@@ -316,11 +326,28 @@ Output the result as a JSON code block with the following structure:
     sendMessage(content);
   }, [sendMessage]);
 
-  const handleProceedToStage3 = useCallback(async () => {
+  // Show transition modal instead of directly proceeding to Stage 3
+  const handleStartDevelopment = useCallback(() => {
+    // Update project state with branchName if available
+    if (activeProject && convertedPrd?.branchName) {
+      updateProject(activeProject.id, {
+        branchName: convertedPrd.branchName,
+      });
+    }
+    setShowTransitionModal(true);
+  }, [activeProject, updateProject, convertedPrd?.branchName]);
+
+  // Handle transition modal confirm (continue to Stage 3)
+  const handleTransitionConfirm = useCallback(async () => {
     if (isStartingAgent) return;
 
     setIsStartingAgent(true);
     try {
+      // Update project stage
+      if (activeProject) {
+        updateProject(activeProject.id, { currentStage: 3 });
+      }
+
       // Start the BotoolAgent in background
       const response = await fetch('/api/agent/start', {
         method: 'POST',
@@ -355,7 +382,13 @@ Output the result as a JSON code block with the following structure:
     } finally {
       setIsStartingAgent(false);
     }
-  }, [router, isStartingAgent]);
+  }, [router, isStartingAgent, activeProject, updateProject]);
+
+  // Handle transition modal later (go back to Dashboard)
+  const handleTransitionLater = useCallback(() => {
+    setShowTransitionModal(false);
+    router.push('/');
+  }, [router]);
 
   const handleTasksChange = useCallback((tasks: DevTask[]) => {
     setEditableTasks(tasks);
@@ -420,7 +453,11 @@ Output the result as a JSON code block with the following structure:
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white">
       {/* Stage Indicator */}
-      <StageIndicator currentStage={2} completedStages={[1]} />
+      <StageIndicator
+        currentStage={2}
+        completedStages={[1]}
+        projectName={activeProject?.name}
+      />
 
       {/* Session Resume Dialog */}
       <SessionResumeDialog
@@ -428,6 +465,16 @@ Output the result as a JSON code block with the following structure:
         prdName={pendingPrd?.name}
         onResume={handleResumeSession}
         onStartNew={handleStartNewSession}
+      />
+
+      {/* Stage Transition Modal */}
+      <StageTransitionModal
+        isOpen={showTransitionModal}
+        fromStage={2}
+        toStage={3}
+        summary={`prd.json 已生成，包含 ${editableTasks.length} 个开发任务，代码开发即将开始。`}
+        onConfirm={handleTransitionConfirm}
+        onLater={handleTransitionLater}
       />
 
       {/* Main Content */}
@@ -522,24 +569,26 @@ Output the result as a JSON code block with the following structure:
               <div className="flex items-center justify-between p-4 border-b border-neutral-200 bg-white">
                 <div>
                   <h2 className="text-lg font-semibold text-neutral-900">
-                    {selectedPrd.name}
+                    {activeProject?.name || selectedPrd.name}
                   </h2>
                   <p className="text-xs text-neutral-500 mt-0.5">
-                    {selectedPrd.filename}
+                    {activeProject ? (
+                      <span>
+                        来自项目
+                        <span className="font-medium text-blue-600 ml-1">{selectedPrd.filename}</span>
+                      </span>
+                    ) : (
+                      selectedPrd.filename
+                    )}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   {conversionStatus === 'success' && (
                     <button
-                      onClick={handleProceedToStage3}
-                      disabled={isStartingAgent}
-                      className={`rounded-md px-4 py-2 text-sm font-medium text-white transition-colors ${
-                        isStartingAgent
-                          ? 'bg-green-400 cursor-wait'
-                          : 'bg-green-600 hover:bg-green-700'
-                      }`}
+                      onClick={handleStartDevelopment}
+                      className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700"
                     >
-                      {isStartingAgent ? 'Starting...' : 'Start Development'}
+                      Start Development
                     </button>
                   )}
                   <button
