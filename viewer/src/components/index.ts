@@ -35,3 +35,5 @@ export { DimensionCard } from "./pyramid/DimensionCard";
 export type { Question, Answer } from "./pyramid/DimensionCard";
 export { QuestionItem } from "./pyramid/QuestionItem";
 export type { QuestionData, AnswerData } from "./pyramid/QuestionItem";
+export { LevelPanel } from "./pyramid/LevelPanel";
+export type { Dimension } from "./pyramid/LevelPanel";
