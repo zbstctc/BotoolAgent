@@ -47,12 +47,12 @@ export function ToolRenderer({ tool, onRespond, disabled = false, projectName, s
 
   // Fallback for unsupported tools - show raw JSON
   return (
-    <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4 max-w-full overflow-hidden">
+    <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4 max-w-full">
       <div className="flex items-center gap-2 text-sm text-neutral-600 mb-2">
         <ToolIcon />
         <span className="font-medium">{tool.toolName}</span>
       </div>
-      <pre className="text-xs text-neutral-500 overflow-x-auto whitespace-pre-wrap break-all">
+      <pre className="text-xs text-neutral-500 overflow-x-auto overflow-y-auto max-h-48 whitespace-pre-wrap break-all">
         {JSON.stringify(tool.toolInput, null, 2)}
       </pre>
     </div>

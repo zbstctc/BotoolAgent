@@ -314,7 +314,7 @@ export default function Stage1Page() {
   // Don't render if we should redirect
   if (!prdId && !localSessionId) {
     return (
-      <div className="flex flex-col h-[calc(100vh-64px)]">
+      <div className="flex flex-col h-full bg-white">
         <StageIndicator currentStage={1} completedStages={[]} projectName={projectName} />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-neutral-500">Redirecting to Dashboard...</p>
@@ -324,7 +324,7 @@ export default function Stage1Page() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)]">
+    <div className="flex flex-col h-full overflow-hidden bg-white">
       {/* Stage Indicator */}
       <StageIndicator currentStage={1} completedStages={[]} projectName={projectName} />
 
@@ -349,7 +349,7 @@ export default function Stage1Page() {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Chat Area */}
-        <div className="flex-1 flex flex-col border-r border-neutral-200">
+        <div className="flex-1 flex flex-col min-h-0 border-r border-neutral-200">
           {error && (
             <div className="mx-4 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
               {error}
@@ -360,23 +360,22 @@ export default function Stage1Page() {
             onSendMessage={handleSendMessage}
             isLoading={isLoading && !pendingToolUse}
             placeholder="Describe what you want to build..."
+            toolRenderer={
+              currentToolUse && (
+                <ToolRenderer
+                  tool={{
+                    toolId: currentToolUse.id,
+                    toolName: currentToolUse.name,
+                    toolInput: currentToolUse.input,
+                  }}
+                  onRespond={handleToolRespond}
+                  disabled={!pendingToolUse}
+                  projectName={projectName}
+                  sessionId={localSessionIdRef.current}
+                />
+              )
+            }
           />
-          {/* Tool Renderer for interactive tool calls */}
-          {currentToolUse && (
-            <div className="px-4 pb-4">
-              <ToolRenderer
-                tool={{
-                  toolId: currentToolUse.id,
-                  toolName: currentToolUse.name,
-                  toolInput: currentToolUse.input,
-                }}
-                onRespond={handleToolRespond}
-                disabled={!pendingToolUse}
-                projectName={projectName}
-                sessionId={localSessionIdRef.current}
-              />
-            </div>
-          )}
         </div>
 
         {/* Right: PRD Preview Area */}

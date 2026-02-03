@@ -214,7 +214,7 @@ export default function Stage3Page() {
     : 'running';
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)]">
+    <div className="flex flex-col h-full overflow-hidden bg-white">
       {/* Stage Indicator */}
       <StageIndicator currentStage={3} completedStages={[1, 2]} />
 

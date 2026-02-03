@@ -215,7 +215,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex flex-col gap-6 py-6">
+    <div className="flex flex-col gap-6 py-6 px-4 mx-auto max-w-7xl h-full overflow-y-auto bg-neutral-50">
       {/* Active Project Status Banner */}
       {activeProject ? (
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">

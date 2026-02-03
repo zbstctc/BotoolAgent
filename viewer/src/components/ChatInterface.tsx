@@ -14,6 +14,8 @@ export interface ChatInterfaceProps {
   onSendMessage: (content: string) => void;
   isLoading?: boolean;
   placeholder?: string;
+  // 可选的工具渲染器，显示在消息末尾
+  toolRenderer?: React.ReactNode;
 }
 
 export function ChatInterface({
@@ -21,6 +23,7 @@ export function ChatInterface({
   onSendMessage,
   isLoading = false,
   placeholder = 'Type your message...',
+  toolRenderer,
 }: ChatInterfaceProps) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -60,9 +63,9 @@ export function ChatInterface({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
         {messages.map((message) => (
           <div
             key={message.id}
@@ -98,6 +101,9 @@ export function ChatInterface({
             </div>
           </div>
         )}
+
+        {/* 工具渲染器放在消息末尾 */}
+        {toolRenderer}
 
         <div ref={messagesEndRef} />
       </div>

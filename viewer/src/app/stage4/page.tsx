@@ -202,7 +202,7 @@ export default function Stage4Page() {
   const hasTestResults = testResults.length > 0;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)]">
+    <div className="flex flex-col h-full overflow-hidden bg-white">
       {/* Stage Indicator */}
       <StageIndicator currentStage={4} completedStages={[1, 2, 3]} />
 
