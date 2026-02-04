@@ -111,8 +111,8 @@
         "Verify in browser"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "BLOCKED: Claude API credit balance too low - 需要等额度恢复后测试"
+      "passes": true,
+      "notes": "L1-L4 全流程测试通过，PRD 成功生成并保存"
     },
     {
       "id": "DT-008",
@@ -122,8 +122,8 @@
         "Playwright 测试 Stage 1 页面通过"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "BLOCKED: 依赖 DT-007，需要 Claude API 额度恢复"
+      "passes": true,
+      "notes": "使用 MCP Playwright 工具完成浏览器验证测试"
     }
   ]
 }
