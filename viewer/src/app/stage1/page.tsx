@@ -5,24 +5,26 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   StageIndicator,
   PyramidNavigation,
-  LevelPanel,
   PRDPreview,
   StageTransitionModal,
   type LevelInfo,
   type CollectedSummaryItem,
-  type Dimension,
-  type Question,
-  type Answer,
 } from '@/components';
 import { useProject } from '@/contexts/ProjectContext';
-import { useProjectValidation } from '@/hooks';
+import { useProjectValidation, useCliChat } from '@/hooks';
 import {
-  loadPyramidProgress,
-  savePyramidProgress,
-  savePyramidProgressImmediate,
-  type PyramidSession,
-} from '@/lib/pyramid-session-storage';
-import { type LevelId, getActiveDimensions, L2_DIMENSIONS } from '@/lib/dimension-framework';
+  type AskUserQuestionToolInput,
+  type AskUserQuestion,
+  type PyramidMetadata,
+  isAskUserQuestionInput,
+} from '@/lib/tool-types';
+
+type LevelId = 1 | 2 | 3 | 4;
+
+interface QuestionAnswer {
+  questionId: string;
+  value: string | string[];
+}
 
 export default function Stage1Page() {
   const router = useRouter();
@@ -36,227 +38,158 @@ export default function Stage1Page() {
   const hasUrlContext = Boolean(sessionId);
   useProjectValidation({ currentStage: 1, skipValidation: hasUrlContext });
 
-  // Pyramid state
+  // CLI Chat state
   const [currentLevel, setCurrentLevel] = useState<LevelId>(1);
-  const [answers, setAnswers] = useState<Record<string, Answer>>({});
-  const [generatedQuestions, setGeneratedQuestions] = useState<Partial<Record<LevelId, Question[]>>>({});
-  const [activeDimensions, setActiveDimensions] = useState<string[]>([]);
+  const [completedLevels, setCompletedLevels] = useState<LevelId[]>([]);
+  const [currentQuestions, setCurrentQuestions] = useState<AskUserQuestion[]>([]);
+  const [answers, setAnswers] = useState<Record<string, QuestionAnswer>>({});
   const [prdDraft, setPrdDraft] = useState<string>('');
+  const [collectedSummary, setCollectedSummary] = useState<CollectedSummaryItem[]>([]);
 
   // UI state
-  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
   const [showTransitionModal, setShowTransitionModal] = useState(false);
   const [savedPrdId, setSavedPrdId] = useState<string | null>(null);
-  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [isStarted, setIsStarted] = useState(false);
 
   // Initial description from Dashboard
   const [initialDescription, setInitialDescription] = useState<string>('');
-  const [requirementType, setRequirementType] = useState<string>('新功能');
 
-  // Load saved progress and initial description
+  // Load initial description
   useEffect(() => {
     if (!sessionId) return;
-
-    // Load initial description from sessionStorage
     const desc = sessionStorage.getItem(`botool-initial-description-${sessionId}`);
-    const type = sessionStorage.getItem(`botool-requirement-type-${sessionId}`);
     if (desc) setInitialDescription(desc);
-    if (type) setRequirementType(type);
-
-    // Load saved pyramid progress
-    const saved = loadPyramidProgress(sessionId);
-    if (saved) {
-      setCurrentLevel(saved.currentLevel);
-      // Convert answers to proper format
-      const convertedAnswers: Record<string, Answer> = {};
-      Object.entries(saved.answers).forEach(([key, value]) => {
-        convertedAnswers[key] = { questionId: key, value };
-      });
-      setAnswers(convertedAnswers);
-      setGeneratedQuestions(saved.generatedQuestions as Partial<Record<LevelId, Question[]>>);
-      setActiveDimensions(saved.activeDimensions);
-      setPrdDraft(saved.prdDraft);
-    }
   }, [sessionId]);
 
-  // Generate L1 questions on first load
-  useEffect(() => {
-    if (!sessionId || !initialDescription) return;
-    if (generatedQuestions[1] && generatedQuestions[1].length > 0) return;
+  // Handle tool use from CLI
+  const handleToolUse = useCallback((toolUse: { id: string; name: string; input: Record<string, unknown> }) => {
+    if (toolUse.name === 'AskUserQuestion' && isAskUserQuestionInput(toolUse.input)) {
+      const input = toolUse.input as AskUserQuestionToolInput;
+      setCurrentQuestions(input.questions);
 
-    generateQuestions(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, initialDescription]);
+      // Update level from metadata
+      if (input.metadata) {
+        const metadata = input.metadata as PyramidMetadata;
+        setCurrentLevel(metadata.level);
 
-  // Generate questions for a level
-  const generateQuestions = useCallback(async (level: LevelId) => {
-    if (!sessionId) return;
-
-    setIsLoadingQuestions(true);
-    try {
-      const response = await fetch('/api/pyramid/questions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          level,
-          collectedAnswers: Object.fromEntries(
-            Object.entries(answers).map(([k, v]) => [k, v.value])
-          ),
-          activeDimensions,
-          requirementType,
-          initialDescription,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setGeneratedQuestions(prev => ({
-          ...prev,
-          [level]: data.questions,
-        }));
-
-        // Update active dimensions if suggested
-        if (data.suggestedDimensions && level === 2) {
-          setActiveDimensions(data.suggestedDimensions);
+        // Mark previous levels as completed
+        const completed: LevelId[] = [];
+        for (let i = 1; i < metadata.level; i++) {
+          completed.push(i as LevelId);
         }
-
-        // Save to localStorage
-        savePyramidProgressImmediate(sessionId, {
-          generatedQuestions: {
-            ...generatedQuestions,
-            [level]: data.questions,
-          },
-        });
+        setCompletedLevels(completed);
       }
-    } catch (error) {
-      console.error('Failed to generate questions:', error);
-    } finally {
-      setIsLoadingQuestions(false);
     }
-  }, [sessionId, answers, activeDimensions, requirementType, initialDescription, generatedQuestions]);
+  }, []);
 
-  // Handle answer
-  const handleAnswer = useCallback((questionId: string, value: string | string[]) => {
-    if (!sessionId) return;
+  // CLI Chat hook
+  const {
+    messages,
+    isLoading,
+    error: cliError,
+    pendingToolUse,
+    sendMessage,
+    respondToTool,
+  } = useCliChat({
+    mode: 'default',
+    onToolUse: handleToolUse,
+    onError: (error) => console.error('CLI error:', error),
+  });
 
-    const newAnswers = {
-      ...answers,
+  // Extract PRD from messages
+  useEffect(() => {
+    // Look for PRD content in any assistant message
+    // The PRD is generated after L4 is completed, look for "# PRD:" marker
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === 'assistant' && msg.content.includes('# PRD:')) {
+        // Extract PRD content starting from "# PRD:" to the end
+        const prdMatch = msg.content.match(/(# PRD:[\s\S]+)/);
+        if (prdMatch) {
+          setPrdDraft(prdMatch[1]);
+          // Mark all levels as completed when PRD is generated
+          setCompletedLevels([1, 2, 3, 4]);
+          break;
+        }
+      }
+    }
+  }, [messages]);
+
+  // Start pyramid Q&A when description is ready
+  const startPyramid = useCallback(() => {
+    if (!initialDescription || isStarted) return;
+    setIsStarted(true);
+    // Trigger the pyramid skill
+    sendMessage(`/botoolagent-pyramidprd ${initialDescription}`);
+  }, [initialDescription, isStarted, sendMessage]);
+
+  // Auto-start when description is loaded
+  useEffect(() => {
+    if (initialDescription && !isStarted && !isLoading) {
+      startPyramid();
+    }
+  }, [initialDescription, isStarted, isLoading, startPyramid]);
+
+  // Handle answer selection
+  const handleAnswer = useCallback((questionIndex: number, value: string | string[]) => {
+    const question = currentQuestions[questionIndex];
+    if (!question) return;
+
+    const questionId = `L${currentLevel}-Q${questionIndex + 1}`;
+    setAnswers(prev => ({
+      ...prev,
       [questionId]: { questionId, value },
-    };
-    setAnswers(newAnswers);
+    }));
 
-    // Auto-save (debounced)
-    setAutoSaveStatus('saving');
-    savePyramidProgress(sessionId, {
-      answers: Object.fromEntries(
-        Object.entries(newAnswers).map(([k, v]) => [k, v.value])
-      ),
+    // Update collected summary for display
+    if (currentLevel === 1 && questionIndex === 1) {
+      // Target user question
+      setCollectedSummary(prev => {
+        const filtered = prev.filter(s => s.dimension !== '目标用户');
+        return [...filtered, {
+          dimension: '目标用户',
+          summary: Array.isArray(value) ? value.join('、') : String(value),
+        }];
+      });
+    }
+  }, [currentQuestions, currentLevel]);
+
+  // Submit answers to CLI
+  const handleSubmitAnswers = useCallback(() => {
+    if (!pendingToolUse) return;
+
+    // Collect all answers for current questions
+    const answersToSubmit: Record<string, string | string[]> = {};
+    currentQuestions.forEach((q, index) => {
+      const questionId = `L${currentLevel}-Q${index + 1}`;
+      const answer = answers[questionId];
+      if (answer) {
+        answersToSubmit[questionId] = answer.value;
+      }
     });
-    setTimeout(() => setAutoSaveStatus('saved'), 600);
-  }, [sessionId, answers]);
 
-  // Handle level complete
-  const handleLevelComplete = useCallback(async () => {
-    if (!sessionId) return;
+    // Send response to CLI
+    respondToTool(pendingToolUse.id, { answers: answersToSubmit });
 
-    if (currentLevel < 4) {
-      const nextLevel = (currentLevel + 1) as LevelId;
-      setCurrentLevel(nextLevel);
-      savePyramidProgressImmediate(sessionId, { currentLevel: nextLevel });
-
-      // Generate questions for next level
-      await generateQuestions(nextLevel);
-    } else {
-      // L4 complete - generate PRD
-      await generatePrd();
-    }
-  }, [sessionId, currentLevel, generateQuestions]);
-
-  // Generate PRD from collected answers
-  const generatePrd = useCallback(async () => {
-    if (!sessionId) return;
-
-    setIsLoadingQuestions(true);
-    try {
-      // For now, create a basic PRD from answers
-      const prd = buildPrdFromAnswers();
-      setPrdDraft(prd);
-      savePyramidProgressImmediate(sessionId, { prdDraft: prd });
-    } finally {
-      setIsLoadingQuestions(false);
-    }
-  }, [sessionId, answers, initialDescription, requirementType]);
-
-  // Build PRD from answers
-  const buildPrdFromAnswers = useCallback(() => {
-    const projectName = activeProject?.name || '未命名项目';
-    const lines: string[] = [];
-
-    lines.push(`# PRD: ${projectName}`);
-    lines.push('');
-    lines.push('## 项目概述');
-    lines.push('');
-    lines.push(initialDescription);
-    lines.push('');
-    lines.push(`**需求类型**: ${requirementType}`);
-    lines.push('');
-
-    // Extract key info from answers
-    const targetUser = answers['l1-q1']?.value;
-    const coreProblem = answers['l1-q2']?.value;
-    const successCriteria = answers['l1-q3']?.value;
-
-    if (targetUser) {
-      lines.push('## 目标用户');
-      lines.push('');
-      lines.push(Array.isArray(targetUser) ? targetUser.join('、') : String(targetUser));
-      lines.push('');
+    // Mark current level as completed if moving to next
+    if (!completedLevels.includes(currentLevel)) {
+      setCompletedLevels(prev => [...prev, currentLevel]);
     }
 
-    if (coreProblem) {
-      lines.push('## 核心问题');
-      lines.push('');
-      lines.push(String(coreProblem));
-      lines.push('');
-    }
+    // Clear current questions (will be updated by next tool_use)
+    setCurrentQuestions([]);
+  }, [pendingToolUse, currentQuestions, currentLevel, answers, completedLevels, respondToTool]);
 
-    if (successCriteria) {
-      lines.push('## 成功标准');
-      lines.push('');
-      lines.push(String(successCriteria));
-      lines.push('');
-    }
-
-    // Add more sections based on L2-L4 answers
-    lines.push('## 功能需求');
-    lines.push('');
-    lines.push('_根据问答收集的信息生成..._');
-    lines.push('');
-
-    lines.push('## 非目标（Out of Scope）');
-    lines.push('');
-    const outScope = answers['l4-q1']?.value;
-    if (outScope && Array.isArray(outScope)) {
-      outScope.forEach(item => lines.push(`- ${item}`));
-    } else {
-      lines.push('_待补充_');
-    }
-    lines.push('');
-
-    lines.push('## 验收标准');
-    lines.push('');
-    const acceptance = answers['l4-q2']?.value;
-    if (acceptance) {
-      lines.push(String(acceptance));
-    } else {
-      lines.push('_待补充_');
-    }
-
-    return lines.join('\n');
-  }, [answers, initialDescription, requirementType, activeProject]);
+  // Check if all current questions are answered
+  const allAnswered = useMemo(() => {
+    return currentQuestions.every((_, index) => {
+      const questionId = `L${currentLevel}-Q${index + 1}`;
+      return answers[questionId]?.value !== undefined;
+    });
+  }, [currentQuestions, currentLevel, answers]);
 
   // Handle save PRD
   const handleSavePRD = useCallback(async () => {
@@ -308,90 +241,20 @@ export default function Stage1Page() {
   // Build level info for navigation
   const levels: LevelInfo[] = useMemo(() => {
     return [1, 2, 3, 4].map((level) => {
-      const questions = generatedQuestions[level as LevelId] || [];
-      const answered = questions.filter(q => answers[q.id]).length;
-      const isCompleted = level < currentLevel;
+      const isCompleted = completedLevels.includes(level as LevelId);
       const isCurrent = level === currentLevel;
-      const isLocked = level > currentLevel;
+      const isLocked = level > currentLevel && !completedLevels.includes(level as LevelId);
 
       return {
         id: level,
         name: `L${level}`,
         status: isCompleted ? 'completed' : isCurrent ? 'current' : 'locked',
-        questionsTotal: questions.length,
-        questionsAnswered: answered,
-        summary: isCompleted ? `${answered} 个问题已回答` : undefined,
+        questionsTotal: isCurrent ? currentQuestions.length : 0,
+        questionsAnswered: isCurrent ? Object.keys(answers).filter(k => k.startsWith(`L${level}-`)).length : 0,
+        summary: isCompleted ? '已完成' : undefined,
       };
     }) as LevelInfo[];
-  }, [currentLevel, generatedQuestions, answers]);
-
-  // Build collected summary
-  const collectedSummary: CollectedSummaryItem[] = useMemo(() => {
-    const items: CollectedSummaryItem[] = [];
-
-    // Extract key summaries from answers
-    if (answers['l1-q1']) {
-      const val = answers['l1-q1'].value;
-      items.push({
-        dimension: '目标用户',
-        summary: Array.isArray(val) ? val.join('、') : String(val),
-      });
-    }
-
-    if (activeDimensions.length > 0) {
-      items.push({
-        dimension: '涉及领域',
-        summary: activeDimensions.map(d =>
-          L2_DIMENSIONS.find(dim => dim.id === d)?.name || d
-        ).join('、'),
-      });
-    }
-
-    return items;
-  }, [answers, activeDimensions]);
-
-  // Build dimensions for current level
-  const currentDimensions: Dimension[] = useMemo(() => {
-    if (currentLevel === 1 || currentLevel === 4) {
-      // L1 and L4 have single "default" dimension
-      return [{ id: 'default', name: '核心问题', isLocked: false }];
-    }
-
-    // L2 and L3 have multiple dimensions
-    return activeDimensions.length > 0
-      ? activeDimensions.map(id => {
-          const dim = L2_DIMENSIONS.find(d => d.id === id);
-          return {
-            id,
-            name: dim?.name || id,
-            isLocked: false,
-          };
-        })
-      : L2_DIMENSIONS.slice(0, 2).map(d => ({
-          id: d.id,
-          name: d.name,
-          isLocked: false,
-        }));
-  }, [currentLevel, activeDimensions]);
-
-  // Group questions by dimension
-  const questionsByDimension: Record<string, Question[]> = useMemo(() => {
-    const questions = generatedQuestions[currentLevel] || [];
-    const grouped: Record<string, Question[]> = {};
-
-    questions.forEach(q => {
-      const dim = (q as Question & { dimension?: string }).dimension || 'default';
-      if (!grouped[dim]) grouped[dim] = [];
-      grouped[dim].push(q);
-    });
-
-    // Ensure all dimensions have entries
-    currentDimensions.forEach(d => {
-      if (!grouped[d.id]) grouped[d.id] = [];
-    });
-
-    return grouped;
-  }, [currentLevel, generatedQuestions, currentDimensions]);
+  }, [currentLevel, completedLevels, currentQuestions, answers]);
 
   // Project name
   const projectName = activeProject?.name || '新项目';
@@ -433,19 +296,6 @@ export default function Stage1Page() {
         onLater={handleTransitionLater}
       />
 
-      {/* Auto-save indicator */}
-      {autoSaveStatus !== 'idle' && (
-        <div className="absolute top-16 right-4 z-10">
-          <span className={`text-xs px-2 py-1 rounded ${
-            autoSaveStatus === 'saving'
-              ? 'bg-yellow-100 text-yellow-700'
-              : 'bg-green-100 text-green-700'
-          }`}>
-            {autoSaveStatus === 'saving' ? '保存中...' : '已自动保存'}
-          </span>
-        </div>
-      )}
-
       {/* Main Content - Three Column Layout */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Pyramid Navigation */}
@@ -454,33 +304,169 @@ export default function Stage1Page() {
             currentLevel={currentLevel}
             levels={levels}
             collectedSummary={collectedSummary}
-            onLevelClick={(level) => {
-              if (level <= currentLevel) {
-                setCurrentLevel(level as LevelId);
-              }
+            onLevelClick={() => {
+              // In CLI mode, level navigation is controlled by the Skill
+              // So we don't allow manual level switching
             }}
           />
         </div>
 
-        {/* Center: Level Panel */}
-        <div className="flex-1 min-w-0 border-x border-neutral-200 bg-white">
-          {isLoadingQuestions ? (
+        {/* Center: Question Panel */}
+        <div className="flex-1 min-w-0 border-x border-neutral-200 bg-white overflow-y-auto">
+          {isLoading && currentQuestions.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-2"></div>
-                <p className="text-sm text-neutral-600">正在生成问题...</p>
+                <p className="text-sm text-neutral-600">AI 正在思考...</p>
+              </div>
+            </div>
+          ) : cliError ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center text-red-600">
+                <p className="text-lg font-medium mb-2">出错了</p>
+                <p className="text-sm">{cliError}</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  重试
+                </button>
+              </div>
+            </div>
+          ) : currentQuestions.length > 0 ? (
+            <div className="p-6 space-y-6">
+              {/* Level Header */}
+              <div className="border-b border-neutral-200 pb-4">
+                <h2 className="text-xl font-semibold text-neutral-900">
+                  L{currentLevel}: {currentLevel === 1 ? '核心识别' : currentLevel === 2 ? '领域分支' : currentLevel === 3 ? '细节深入' : '边界确认'}
+                </h2>
+                <p className="text-sm text-neutral-500 mt-1">
+                  {currentLevel === 1 && '理解需求的本质和范围'}
+                  {currentLevel === 2 && '按领域深入探索具体需求'}
+                  {currentLevel === 3 && '深入实现细节'}
+                  {currentLevel === 4 && '确认范围边界，防止范围蔓延'}
+                </p>
+              </div>
+
+              {/* Questions */}
+              <div className="space-y-6">
+                {currentQuestions.map((question, index) => {
+                  const questionId = `L${currentLevel}-Q${index + 1}`;
+                  const currentAnswer = answers[questionId]?.value;
+
+                  return (
+                    <div key={questionId} className="bg-neutral-50 rounded-lg p-4">
+                      <div className="flex items-start gap-3 mb-3">
+                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 text-sm font-medium flex items-center justify-center">
+                          {index + 1}
+                        </span>
+                        <div>
+                          <p className="font-medium text-neutral-900">{question.question}</p>
+                          {question.header && (
+                            <span className="inline-block mt-1 px-2 py-0.5 bg-neutral-200 text-neutral-600 text-xs rounded">
+                              {question.header}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Options */}
+                      {question.options && question.options.length > 0 ? (
+                        <div className="ml-9 space-y-2">
+                          {question.options.map((option, optIndex) => {
+                            const isSelected = question.multiSelect
+                              ? Array.isArray(currentAnswer) && currentAnswer.includes(option.label)
+                              : currentAnswer === option.label;
+
+                            return (
+                              <button
+                                key={optIndex}
+                                onClick={() => {
+                                  if (question.multiSelect) {
+                                    const current = Array.isArray(currentAnswer) ? currentAnswer : [];
+                                    const newValue = isSelected
+                                      ? current.filter(v => v !== option.label)
+                                      : [...current, option.label];
+                                    handleAnswer(index, newValue);
+                                  } else {
+                                    handleAnswer(index, option.label);
+                                  }
+                                }}
+                                className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                                  isSelected
+                                    ? 'border-blue-500 bg-blue-50 text-blue-900'
+                                    : 'border-neutral-200 bg-white hover:border-neutral-300'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                                    isSelected ? 'border-blue-500 bg-blue-500' : 'border-neutral-300'
+                                  }`}>
+                                    {isSelected && (
+                                      <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                      </svg>
+                                    )}
+                                  </span>
+                                  <div>
+                                    <span className="font-medium">{option.label}</span>
+                                    {option.description && (
+                                      <p className="text-sm text-neutral-500 mt-0.5">{option.description}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        // Text input for questions without options
+                        <div className="ml-9">
+                          <textarea
+                            value={typeof currentAnswer === 'string' ? currentAnswer : ''}
+                            onChange={(e) => handleAnswer(index, e.target.value)}
+                            placeholder={question.placeholder || '请输入...'}
+                            className="w-full p-3 border border-neutral-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            rows={3}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Submit Button */}
+              <div className="pt-4 border-t border-neutral-200">
+                <button
+                  onClick={handleSubmitAnswers}
+                  disabled={!allAnswered || isLoading}
+                  className={`w-full py-3 rounded-lg font-medium transition-colors ${
+                    allAnswered && !isLoading
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                  }`}
+                >
+                  {isLoading ? '处理中...' : currentLevel < 4 ? '继续下一层' : '生成 PRD'}
+                </button>
+              </div>
+            </div>
+          ) : prdDraft ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <p className="text-lg font-medium text-neutral-900">PRD 已生成</p>
+                <p className="text-sm text-neutral-500 mt-1">请查看右侧预览并保存</p>
               </div>
             </div>
           ) : (
-            <LevelPanel
-              level={currentLevel}
-              levelName={`L${currentLevel}`}
-              dimensions={currentDimensions}
-              questions={questionsByDimension}
-              answers={answers}
-              onAnswer={handleAnswer}
-              onComplete={handleLevelComplete}
-            />
+            <div className="flex items-center justify-center h-full">
+              <p className="text-neutral-500">等待问题加载...</p>
+            </div>
           )}
         </div>
 
