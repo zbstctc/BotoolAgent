@@ -1,138 +1,37 @@
 # Botool 开发代理进度日志
-开始时间: 2026-02-03
-项目: Stage 1/2 金字塔问答优化
-分支: botool/stage1-pyramid-optimization
+开始时间: 2026-02-04
+项目: 金字塔问答 CLI Skill 集成
+分支: botool/pyramid-cli-skill
 ---
 
 ## Codebase Patterns
 - 项目使用 Next.js App Router，组件放在 `viewer/src/components/`
 - hooks 导出统一通过 `hooks/index.ts`
-- localStorage 持久化参考 `lib/prd-session-storage.ts` 的模式
-- Context 放在 `contexts/` 目录，在 `layout.tsx` 中包裹 Provider
-- project-storage.ts 提供独立的存储 API，便于测试和复用
-- 规范管理组件放在 `components/rules/` 目录
-- API 路由使用动态路由 `[id]` 处理单个资源
+- CLI 通信使用 `useCliChat` hook 和 `/api/cli/chat` API
+- Skill 文件放在 `~/.claude/skills/` 目录
+- AskUserQuestion 工具用于交互式提问
+- SSE 流式返回通过 CLIManager 处理
 
 ---
 
-## 2026-02-03 - DT-001
-- 实现了什么：改造创建需求弹窗为多行需求描述输入
+
+## 2026-02-04 - DT-001
+- 实现了什么：改造 Skill 为可触发模式
 - 修改了哪些文件：
-  - 修改 `viewer/src/components/NewPrdDialog.tsx`
+  - 重写 `~/.claude/skills/botoolagent-pyramidprd/SKILL.md`
 - **未来迭代的经验教训：**
-  - 发现的模式：使用 `sessionStorage.setItem()` 在页面间传递临时数据
-  - 有用的上下文：description 存储 key 格式为 `botool-initial-description-{sessionId}`
-  - 有用的上下文：临时项目名使用描述前30字符 + "..."
+  - 发现的模式：Skill 使用 AskUserQuestion 工具提问，metadata 传递层级信息
+  - 有用的上下文：metadata 格式 `{ source, level, levelName, progress, totalLevels }`
+  - 有用的上下文：问题格式以 `【L1: 核心识别】` 开头标注层级
 ---
 
-## 2026-02-03 - DT-002
-- 实现了什么：添加需求类型选择器
-- 修改了哪些文件：
-  - 修改 `viewer/src/components/NewPrdDialog.tsx`
-- **未来迭代的经验教训：**
-  - 发现的模式：chip 样式按钮使用 `rounded-full` + `ring-2` 实现选中高亮
-  - 有用的上下文：需求类型存储 key 为 `botool-requirement-type-{sessionId}`
-  - 有用的上下文：REQUIREMENT_TYPES 常量定义了预设类型
----
 
-## 2026-02-03 - DT-003
-- 实现了什么：自动生成标题功能
+## 2026-02-04 - DT-002
+- 实现了什么：验证并扩展 AskUserQuestion metadata 支持
 - 修改了哪些文件：
-  - 修改 `viewer/src/components/NewPrdDialog.tsx`
-  - 新建 `viewer/src/app/api/generate-title/route.ts`
+  - 修改 `viewer/src/lib/tool-types.ts` 添加 PyramidMetadata 类型
 - **未来迭代的经验教训：**
-  - 发现的坑：/api/cli/chat 是 SSE 流式 API，不能用 response.json() 解析
-  - 发现的模式：创建独立的简单 API 端点比复用 SSE API 更简单
-  - 发现的模式：使用 useRef + setTimeout 实现 debounce
-  - 有用的上下文：Anthropic API 可直接用 fetch 调用，无需 SDK
----
-
-## 2026-02-03 - DT-004~010
-- 实现了什么：金字塔问答核心组件和 API
-- 修改了哪些文件：
-  - 新建 `viewer/src/components/pyramid/` 目录
-  - 新建 `PyramidNavigation.tsx`, `DimensionCard.tsx`, `QuestionItem.tsx`, `LevelPanel.tsx`
-  - 新建 `viewer/src/lib/dimension-framework.ts`
-  - 新建 `viewer/src/lib/skill-parser.ts`
-  - 新建 `viewer/src/lib/pyramid-session-storage.ts`
-  - 新建 `viewer/src/app/api/pyramid/questions/route.ts`
-- **未来迭代的经验教训：**
-  - 发现的模式：组件按功能分组到子目录（pyramid/）
-  - 发现的模式：skill-parser 使用 fallback prompts 确保无 skill 文件时也能工作
-  - 发现的模式：pyramid-session-storage 使用 Partial<Record<>> 允许渐进填充
-  - 有用的上下文：L2_DIMENSIONS 包含 triggerKeywords 用于自动激活维度
----
-
-## 2026-02-03 - DT-011
-- 实现了什么：重写 Stage 1 页面为金字塔界面
-- 修改了哪些文件：
-  - 重写 `viewer/src/app/stage1/page.tsx`
-- **未来迭代的经验教训：**
-  - 发现的模式：三栏布局使用 w-64 + flex-1 + w-96 固定两侧
-  - 发现的模式：从 sessionStorage 获取 Dashboard 传递的初始数据
-  - 有用的上下文：autoSaveStatus 状态显示 '保存中...' / '已自动保存'
----
-
-## 2026-02-03 - DT-012~016
-- 实现了什么：设计确认组件和 API
-- 修改了哪些文件：
-  - 新建 `viewer/src/components/design-confirm/` 目录
-  - 新建 `LayoutPreview.tsx`, `VersionHistory.tsx`, `DesignConfirmPage.tsx`
-  - 新建 `viewer/src/app/api/pyramid/layout/route.ts`
-  - 新建 `viewer/src/app/api/pyramid/iterate/route.ts`
-- **未来迭代的经验教训：**
-  - 发现的模式：iterate API 使用关键词分析确定受影响层级
-  - 有用的上下文：LayoutPreview 使用 Header/Sidebar/Main/Footer 四区块
----
-
-## 2026-02-03 - DT-017
-- 实现了什么：创建规范管理页面路由
-- 修改了哪些文件：
-  - 修改 `viewer/src/app/page.tsx`
-- **未来迭代的经验教训：**
-  - 发现的模式：使用状态控制 Tab 切换，无需路由跳转
-  - 有用的上下文：activeTab 状态控制 'projects' | 'rules' 视图切换
----
-
-## 2026-02-03 - DT-018~021
-- 实现了什么：规范管理完整功能
-- 修改了哪些文件：
-  - 新建 `viewer/src/components/rules/CategoryTree.tsx`
-  - 新建 `viewer/src/components/rules/MarkdownEditor.tsx`
-  - 新建 `viewer/src/components/rules/RulesManager.tsx`
-  - 新建 `viewer/src/app/api/rules/route.ts`
-  - 新建 `viewer/src/app/api/rules/[id]/route.ts`
-- **未来迭代的经验教训：**
-  - 发现的模式：6 个分类使用 emoji 图标增强可读性
-  - 发现的模式：Markdown 预览使用简单正则替换，无需外部库
-  - 发现的模式：动态路由 [id] 处理单个资源的 GET 请求
-  - 有用的上下文：规范存储在 `rules/{category}/{name}.md`
----
-
-## 2026-02-03 - DT-022
-- 实现了什么：规范转 Skill 功能
-- 修改了哪些文件：
-  - 新建 `viewer/src/lib/rules-to-skill.ts`
-- **未来迭代的经验教训：**
-  - 发现的模式：Skill 名称格式 `botool-rules:{category}:{name}`
-  - 有用的上下文：Skill 目录 `~/.claude/skills/botool-rules/`
-  - 发现的模式：使用 frontmatter 格式定义 Skill 元数据
----
-
-## 2026-02-03 - DT-023~028
-- 实现了什么：Stage 2 流水线界面完整功能
-- 修改了哪些文件：
-  - 新建 `viewer/src/components/pipeline/PipelineProgress.tsx`
-  - 新建 `viewer/src/components/pipeline/RuleCheckStep.tsx`
-  - 新建 `viewer/src/components/pipeline/CodeExampleStep.tsx`
-  - 新建 `viewer/src/components/pipeline/TestCaseStep.tsx`
-  - 新建 `viewer/src/components/pipeline/JsonConvertStep.tsx`
-  - 重写 `viewer/src/app/stage2/page.tsx`
-- **未来迭代的经验教训：**
-  - 发现的模式：流水线组件使用统一的 status 类型 `pending | accepted | modified | skipped`
-  - 发现的模式：每个步骤组件接收 `onComplete` 和 `onBack` 回调
-  - 发现的模式：进度条使用绿色(已完成)、蓝色(当前)、灰色(待处理)区分状态
-  - 有用的上下文：TestCaseStep 区分单元测试(unit)和端到端测试(e2e)
-  - 有用的上下文：JsonConvertStep 支持 JSON 格式验证和实时编辑
+  - 发现的模式：toolInput 直接传递给前端，metadata 可通过 `toolUse.input.metadata` 访问
+  - 有用的上下文：useCliChat 的 onToolUse 回调接收完整的 toolInput
 ---
 

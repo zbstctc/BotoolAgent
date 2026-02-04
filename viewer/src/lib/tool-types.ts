@@ -20,8 +20,19 @@ export interface AskUserQuestion {
   placeholder?: string;
 }
 
+export interface PyramidMetadata {
+  source: 'pyramidprd';
+  level: 1 | 2 | 3 | 4;
+  levelName: string;
+  progress: string;
+  totalLevels: number;
+  activeDimensions?: string[];
+}
+
 export interface AskUserQuestionToolInput {
   questions: AskUserQuestion[];
+  /** Metadata for pyramid mode - contains level information */
+  metadata?: PyramidMetadata;
   [key: string]: unknown; // Index signature for compatibility with Record<string, unknown>
 }
 

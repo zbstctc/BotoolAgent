@@ -1,510 +1,129 @@
 {
-  "project": "Stage 1/2 金字塔问答优化",
-  "branchName": "botool/stage1-pyramid-optimization",
-  "description": "将 Stage 1 改造为金字塔式多轮问答系统，新增规范管理功能，Stage 2 改为四步流水线",
+  "project": "金字塔问答 CLI Skill 集成",
+  "branchName": "botool/pyramid-cli-skill",
+  "description": "将金字塔问答流程改为 CLI Skill 控制模式，Skill 控制问答流程，前端只负责渲染",
   "devTasks": [
     {
       "id": "DT-001",
-      "title": "改造创建需求弹窗 - 需求描述输入",
-      "description": "将现有的标题输入改为需求描述输入，支持多行文本",
+      "title": "改造 Skill 为可触发模式",
+      "description": "修改 ~/.claude/skills/botoolagent-pyramidprd/SKILL.md，改为 user-invocable，重写问答流程逻辑，使用 AskUserQuestion 工具按 L1-L4 层级提问",
       "acceptanceCriteria": [
-        "修改 Dashboard 的创建弹窗组件",
-        "将单行标题输入改为多行文本框（textarea）",
-        "placeholder: 请描述你想要构建的功能或解决的问题...",
-        "支持至少 500 字符输入",
-        "移除原有的标题输入框",
-        "Typecheck passes",
-        "Verify in browser"
+        "user-invocable: true",
+        "Skill 定义完整的 L1-L4 问答流程",
+        "使用 AskUserQuestion 工具提问",
+        "每个问题带 metadata: { level, progress, dimension }",
+        "根据答案动态调整后续问题",
+        "L4 完成后生成 PRD 文档",
+        "Skill 文件语法正确，可被 CLI 加载"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "使用 textarea 替换 input，字数统计显示在右下角"
+      "notes": "SKILL.md 已完成"
     },
     {
       "id": "DT-002",
-      "title": "添加需求类型选择器",
-      "description": "在创建弹窗中添加需求类型标签选择",
+      "title": "验证 AskUserQuestion metadata 支持",
+      "description": "确认 AskUserQuestion 工具的 metadata 字段可以传递 level 等信息，前端能正确接收",
       "acceptanceCriteria": [
-        "在描述输入框上方添加需求类型选择器",
-        "预设选项：新功能、改功能、修bug（使用标签/chip 样式）",
-        "添加其他选项，选中后显示自定义输入框",
-        "默认选中新功能",
-        "选中状态使用蓝色高亮",
-        "Typecheck passes",
-        "Verify in browser"
+        "确认 AskUserQuestion 支持 metadata 字段",
+        "测试 CLI 发送带 metadata 的 tool_use",
+        "前端能从 SSE 事件中解析 metadata",
+        "Typecheck passes"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "使用 rounded-full 样式的 chip，蓝色 ring-2 高亮选中状态"
+      "notes": ""
     },
     {
       "id": "DT-003",
-      "title": "实现自动生成标题功能",
-      "description": "调用 AI 根据需求描述自动生成标题",
+      "title": "创建 Stage 1 CLI 聊天模式页面",
+      "description": "重写 /stage1/page.tsx，改为 CLI 聊天模式，监听 tool_use 事件渲染问题",
       "acceptanceCriteria": [
-        "用户输入描述后，显示生成标题按钮或自动触发",
-        "调用 /api/cli/chat 生成简短标题（10-20字）",
-        "生成的标题显示在可编辑的输入框中",
-        "显示加载状态",
-        "用户可以修改生成的标题",
-        "点击创建后保存标题、描述、类型到项目状态",
-        "创建后携带这些信息跳转到 Stage 1",
+        "使用 useCliChat hook 连接 CLI",
+        "初始发送 /botoolagent-pyramidprd {description} 触发 Skill",
+        "监听 tool_use 事件，识别 AskUserQuestion",
+        "渲染问题 UI（复用现有组件或新建）",
+        "从 metadata.level 更新金字塔进度条",
+        "用户回答后调用 respondToTool 发送答案",
+        "收到 PRD 文本后显示在预览区",
         "Typecheck passes",
         "Verify in browser"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "创建独立的 /api/generate-title API，使用 debounce 1秒触发"
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "DT-004",
-      "title": "创建金字塔导航组件 PyramidNavigation",
-      "description": "创建左侧金字塔导航面板组件",
+      "title": "金字塔进度条组件适配",
+      "description": "修改 PyramidNavigation 组件，支持从 CLI 事件更新进度，改为只读展示模式",
       "acceptanceCriteria": [
-        "创建 viewer/src/components/pyramid/PyramidNavigation.tsx",
-        "Props: currentLevel, levels, collectedSummary, onLevelClick",
-        "显示 4 个层级：L1 核心识别、L2 领域分支、L3 细节深入、L4 边界确认",
-        "当前层级显示 ▶ 图标和高亮背景",
-        "已完成层级显示 ✓ 和收集的信息摘要",
-        "未解锁层级显示 ○ 灰色文字",
-        "每个层级显示维度进度条",
-        "底部显示已收集信息摘要区域",
-        "Typecheck passes",
-        "Verify in browser"
+        "接收 currentLevel prop 从 CLI 事件更新",
+        "显示当前层级和已完成层级",
+        "不再控制层级切换（只读展示）",
+        "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "使用 LEVEL_NAMES 和 LEVEL_DESCRIPTIONS 常量管理层级信息"
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "DT-005",
-      "title": "创建维度卡片组件 DimensionCard",
-      "description": "创建单个维度的问题卡片组件",
+      "title": "问题渲染组件适配",
+      "description": "确保问题渲染组件能处理 AskUserQuestion 返回的问题格式",
       "acceptanceCriteria": [
-        "创建 viewer/src/components/pyramid/DimensionCard.tsx",
-        "Props: dimension, questions, answers, isLocked, onAnswer",
-        "卡片标题显示维度名称和进度",
-        "锁定状态显示 (待解锁) 并灰显",
-        "展开状态显示所有问题",
-        "可折叠/展开",
-        "Typecheck passes",
-        "Verify in browser"
+        "支持 single/multi/text 问题类型",
+        "支持 options 选项渲染",
+        "支持批量问题（questions 数组）",
+        "收集答案并返回给父组件",
+        "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "内置 QuestionItem 组件支持三种输入类型"
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "DT-006",
-      "title": "创建问题项组件 QuestionItem",
-      "description": "创建单个问题的渲染组件，支持多种输入类型",
+      "title": "清理旧的 API 和逻辑",
+      "description": "移除不再需要的旧代码，包括 /api/pyramid/questions 和相关调用",
       "acceptanceCriteria": [
-        "创建 viewer/src/components/pyramid/QuestionItem.tsx",
-        "Props: question, answer, isAnswered, onAnswer",
-        "支持单选、多选、文本输入三种类型",
-        "已回答状态：收缩为一行，显示 ✓ 和答案摘要，可点击展开修改",
-        "未回答状态：展开显示完整问题和选项",
-        "选项使用白色背景卡片样式",
-        "Typecheck passes",
-        "Verify in browser"
+        "移除或标记废弃 /api/pyramid/questions",
+        "移除 skill-parser.ts 的调用（Skill 内部处理）",
+        "移除旧的 generateQuestions 函数",
+        "清理无用的 state 和 effects",
+        "Typecheck passes"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "支持收缩/展开显示已回答问题"
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "DT-007",
-      "title": "创建层级问题面板 LevelPanel",
-      "description": "创建右侧当前层级的问题面板",
+      "title": "全流程测试",
+      "description": "测试完整的金字塔问答流程，确保 L1-L4 正常工作",
       "acceptanceCriteria": [
-        "创建 viewer/src/components/pyramid/LevelPanel.tsx",
-        "Props: level, dimensions, questions, answers, onAnswer, onComplete",
-        "顶部显示层级标题",
-        "按维度分组显示 DimensionCard",
-        "底部显示完成当前层级按钮",
-        "按钮在所有必填问题回答后才可点击",
-        "Typecheck passes",
+        "输入需求描述，触发 Skill",
+        "L1 问题正确显示，进度条显示 L1",
+        "回答 L1 后进入 L2，进度条更新",
+        "L2-L4 流程正常",
+        "L4 完成后 PRD 正确生成",
+        "PRD 可以保存",
         "Verify in browser"
       ],
       "priority": 7,
-      "passes": true,
-      "notes": "顶部显示层级标题和进度"
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "DT-008",
-      "title": "创建维度框架配置",
-      "description": "定义金字塔各层级的维度和话题框架",
+      "title": "Playwright 自动化测试",
+      "description": "运行 Playwright 测试验证 Stage 1 功能",
       "acceptanceCriteria": [
-        "创建 viewer/src/lib/dimension-framework.ts",
-        "定义 L1 层级：4-6 个核心问题话题",
-        "定义 L2 层级：4 个维度及其触发词和话题",
-        "定义 L3 层级：动态话题",
-        "定义 L4 层级：边界确认话题",
-        "定义问题数量约束",
-        "导出 TypeScript 类型定义",
-        "Typecheck passes"
+        "Playwright 测试 Stage 1 页面通过"
       ],
       "priority": 8,
-      "passes": true,
-      "notes": "定义了 LEVELS, L1_TOPICS, L2_DIMENSIONS, L4_TOPICS"
-    },
-    {
-      "id": "DT-009",
-      "title": "创建问题生成 API（集成 Skill）",
-      "description": "创建 API 端点，读取 botoolagent-pyramidprd Skill 的 Prompt 模板，调用 Claude 生成问题",
-      "acceptanceCriteria": [
-        "创建 viewer/src/lib/skill-parser.ts 解析 Skill 文件",
-        "从 ~/.claude/skills/botoolagent-pyramidprd/SKILL.md 读取 Prompt 模板",
-        "创建 viewer/src/app/api/pyramid/questions/route.ts",
-        "POST 接口，接收：level, collectedAnswers, activeDimensions, requirementType, initialDescription",
-        "根据 level 选择对应的 Prompt 模板（L1/L2/L3/L4_QUESTION_PROMPT）",
-        "填充模板变量，调用 Claude API",
-        "返回格式：{ questions, suggestedDimensions }",
-        "Typecheck passes"
-      ],
-      "priority": 9,
-      "passes": true,
-      "notes": "skill-parser.ts 支持 fallback prompts"
-    },
-    {
-      "id": "DT-010",
-      "title": "创建金字塔进度存储",
-      "description": "扩展 session storage 支持金字塔进度保存",
-      "acceptanceCriteria": [
-        "创建 viewer/src/lib/pyramid-session-storage.ts",
-        "存储结构：{ currentLevel, answers, generatedQuestions, activeDimensions, prdDraft, versions }",
-        "localStorage key: botool-pyramid-session-{projectId}",
-        "提供 savePyramidProgress, loadPyramidProgress, clearPyramidProgress 方法",
-        "每个问题回答后自动保存（debounce 500ms）",
-        "页面加载时自动恢复",
-        "Typecheck passes"
-      ],
-      "priority": 10,
-      "passes": true,
-      "notes": "debounce 500ms 自动保存, 版本管理支持"
-    },
-    {
-      "id": "DT-011",
-      "title": "重写 Stage 1 页面为金字塔界面",
-      "description": "完全重写 Stage 1 页面，使用金字塔组件",
-      "acceptanceCriteria": [
-        "重写 viewer/src/app/stage1/page.tsx",
-        "保留顶部 5 阶段进度条",
-        "三栏布局：左侧 PyramidNavigation、中间 LevelPanel、右侧 PRD 预览",
-        "从 Dashboard 获取初始描述和需求类型",
-        "进入时自动生成 L1 问题",
-        "完成每层后生成下一层问题",
-        "实时更新 PRD 预览",
-        "显示自动保存中状态",
-        "L4 完成后进入设计确认页面",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 11,
-      "passes": true,
-      "notes": "三栏布局，从 sessionStorage 获取初始描述"
-    },
-    {
-      "id": "DT-012",
-      "title": "创建可视化布局图组件 LayoutPreview",
-      "description": "创建 React 组件渲染页面布局预览图",
-      "acceptanceCriteria": [
-        "创建 viewer/src/components/design-confirm/LayoutPreview.tsx",
-        "Props: layoutData",
-        "渲染页面主要区域（Header, Sidebar, Main, Footer）",
-        "渲染关键组件占位",
-        "使用灰色边框和标签标注各区域",
-        "底部显示组件列表",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 12,
-      "passes": true,
-      "notes": "Header/Sidebar/Main/Footer 区块显示"
-    },
-    {
-      "id": "DT-013",
-      "title": "创建布局图生成 API（集成 Skill）",
-      "description": "创建 API 端点，使用 Skill 的 LAYOUT_GENERATION_PROMPT 生成布局描述",
-      "acceptanceCriteria": [
-        "创建 viewer/src/app/api/pyramid/layout/route.ts",
-        "POST 接口，接收：prdContent, collectedAnswers",
-        "读取 Skill 的 LAYOUT_GENERATION_PROMPT",
-        "调用 Claude 生成结构化布局 JSON",
-        "返回格式：{ layout, components }",
-        "Typecheck passes"
-      ],
-      "priority": 13,
-      "passes": true,
-      "notes": "mock layout fallback 支持"
-    },
-    {
-      "id": "DT-014",
-      "title": "创建版本历史组件 VersionHistory",
-      "description": "创建版本历史显示组件",
-      "acceptanceCriteria": [
-        "创建 viewer/src/components/design-confirm/VersionHistory.tsx",
-        "Props: versions, currentVersion, onVersionClick",
-        "水平显示版本链",
-        "每个版本显示简短描述",
-        "当前版本高亮显示",
-        "点击历史版本可查看（只读）",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 14,
-      "passes": true,
-      "notes": "水平版本链布局"
-    },
-    {
-      "id": "DT-015",
-      "title": "创建设计确认页面 DesignConfirmPage",
-      "description": "创建 L4 完成后的设计确认页面",
-      "acceptanceCriteria": [
-        "创建 viewer/src/components/design-confirm/DesignConfirmPage.tsx",
-        "顶部显示 VersionHistory",
-        "中间显示 LayoutPreview",
-        "下方显示完整 PRD 预览（可折叠）",
-        "底部显示继续修改区域：多行文本框 + 提交按钮",
-        "底部显示确认并进入 Stage 2 按钮",
-        "集成到 Stage 1 页面",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 15,
-      "passes": true,
-      "notes": "集成 LayoutPreview 和修改输入区"
-    },
-    {
-      "id": "DT-016",
-      "title": "实现版本迭代逻辑（集成 Skill）",
-      "description": "实现提交修改后的增量金字塔流程，使用 Skill 的 ITERATION_ANALYSIS_PROMPT",
-      "acceptanceCriteria": [
-        "创建 viewer/src/app/api/pyramid/iterate/route.ts",
-        "使用 Skill 的 ITERATION_ANALYSIS_PROMPT 分析修改影响",
-        "用户提交修改需求后创建新版本",
-        "返回 affectedLevels 和 unchangedLevels",
-        "前端根据分析结果只显示需要重新提问的层级",
-        "无变化的层级显示跳过标记",
-        "完成后合并生成新版本 PRD",
-        "版本历史更新",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 16,
-      "passes": true,
-      "notes": "关键词分析确定 affectedLevels"
-    },
-    {
-      "id": "DT-017",
-      "title": "创建规范管理页面路由",
-      "description": "在 Dashboard 添加规范管理 Tab 和页面",
-      "acceptanceCriteria": [
-        "修改 Dashboard 页面，顶部添加 Tab 切换",
-        "Tab 选项：项目列表、规范管理",
-        "点击规范管理切换到规范管理视图",
-        "Tab 切换使用状态控制，无页面刷新",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 17,
-      "passes": true,
-      "notes": "使用状态控制 Tab 切换，规范管理显示占位符"
-    },
-    {
-      "id": "DT-018",
-      "title": "创建规范分类树组件 CategoryTree",
-      "description": "创建左侧规范分类树组件",
-      "acceptanceCriteria": [
-        "创建 viewer/src/components/rules/CategoryTree.tsx",
-        "显示 6 个分类：前端规范、后端规范、测试规范、部署规范、应用规范、其他规范",
-        "每个分类可展开显示其下的规范文档列表",
-        "显示每个分类的规范数量",
-        "支持选中某个规范文档",
-        "底部显示新建规范按钮",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 18,
-      "passes": true,
-      "notes": "6 个分类使用 emoji 图标，支持展开/折叠"
-    },
-    {
-      "id": "DT-019",
-      "title": "创建 Markdown 编辑器组件",
-      "description": "创建规范文档的 Markdown 编辑器",
-      "acceptanceCriteria": [
-        "创建 viewer/src/components/rules/MarkdownEditor.tsx",
-        "左右分栏：左侧编辑、右侧预览",
-        "支持常用 Markdown 语法高亮",
-        "工具栏：加粗、斜体、代码、链接、列表",
-        "保存按钮",
-        "显示保存状态",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 19,
-      "passes": true,
-      "notes": "工具栏支持快捷插入，预览支持显示/隐藏切换"
-    },
-    {
-      "id": "DT-020",
-      "title": "创建规范文件存储 API",
-      "description": "创建规范文档的读写 API",
-      "acceptanceCriteria": [
-        "创建 viewer/src/app/api/rules/route.ts",
-        "GET: 获取所有规范列表（按分类）",
-        "POST: 保存规范文档到 rules/{category}/{name}.md",
-        "DELETE: 删除规范文档",
-        "确保 rules/ 目录存在",
-        "Typecheck passes"
-      ],
-      "priority": 20,
-      "passes": true,
-      "notes": "支持 GET/POST/DELETE，含 [id] 动态路由"
-    },
-    {
-      "id": "DT-021",
-      "title": "创建规范管理主组件 RulesManager",
-      "description": "组装规范管理的完整界面",
-      "acceptanceCriteria": [
-        "创建 viewer/src/components/rules/RulesManager.tsx",
-        "左侧显示 CategoryTree",
-        "右侧显示 MarkdownEditor",
-        "选中规范时加载内容到编辑器",
-        "新建规范时显示空编辑器 + 名称输入",
-        "保存时调用 API 写入文件",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 21,
-      "passes": true,
-      "notes": "集成 CategoryTree 和 MarkdownEditor，支持新建和编辑"
-    },
-    {
-      "id": "DT-022",
-      "title": "实现规范转 Skill 功能",
-      "description": "将规范文档自动转换为 Skill 文件",
-      "acceptanceCriteria": [
-        "创建 viewer/src/lib/rules-to-skill.ts",
-        "规范保存时自动生成对应 Skill 文件",
-        "Skill 目录：~/.claude/skills/botool-rules/",
-        "Skill 文件命名：{category}-{name}.md",
-        "Skill 格式符合 Claude Code Skill 规范",
-        "提供预览 Skill 功能",
-        "Typecheck passes"
-      ],
-      "priority": 22,
-      "passes": true,
-      "notes": "生成 Skill 前缀 botool-rules:，支持预览和保存"
-    },
-    {
-      "id": "DT-023",
-      "title": "创建流水线进度条组件 PipelineProgress",
-      "description": "创建 Stage 2 的四步流水线进度条",
-      "acceptanceCriteria": [
-        "创建 viewer/src/components/pipeline/PipelineProgress.tsx",
-        "Props: currentStep, steps, onStepClick",
-        "显示四个步骤：v6 规范检查 → v7 代码示例 → v9 测试用例 → JSON 转换",
-        "当前步骤高亮，已完成步骤显示 ✓",
-        "点击已完成步骤可回看（只读）",
-        "使用连接线连接各步骤",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 23,
-      "passes": true,
-      "notes": "四步进度条，绿色已完成、蓝色当前、灰色待处理"
-    },
-    {
-      "id": "DT-024",
-      "title": "创建规范检查步骤组件 RuleCheckStep",
-      "description": "创建 v6 规范检查步骤的界面",
-      "acceptanceCriteria": [
-        "创建 viewer/src/components/pipeline/RuleCheckStep.tsx",
-        "加载所有相关规范文档",
-        "显示检查进度",
-        "列出不符合项，每项显示：问题描述、建议修改",
-        "每项提供 采纳/修改/跳过 按钮",
-        "采纳后显示 ✓",
-        "所有项处理完毕后显示继续下一步按钮",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 24,
-      "passes": true,
-      "notes": "ViolationCard 支持三种操作状态"
-    },
-    {
-      "id": "DT-025",
-      "title": "创建代码示例步骤组件 CodeExampleStep",
-      "description": "创建 v7 代码示例补全步骤的界面",
-      "acceptanceCriteria": [
-        "创建 viewer/src/components/pipeline/CodeExampleStep.tsx",
-        "遍历 PRD 中的每个开发任务",
-        "为涉及数据结构的任务生成 TypeScript interface",
-        "代码使用语法高亮显示",
-        "每个示例提供 采纳/修改/跳过 按钮",
-        "修改时打开代码编辑器",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 25,
-      "passes": true,
-      "notes": "深色代码编辑器，支持内联修改"
-    },
-    {
-      "id": "DT-026",
-      "title": "创建测试用例步骤组件 TestCaseStep",
-      "description": "创建 v9 测试用例生成步骤的界面",
-      "acceptanceCriteria": [
-        "创建 viewer/src/components/pipeline/TestCaseStep.tsx",
-        "遍历 PRD 中的每个开发任务",
-        "生成单元测试用例描述",
-        "生成 E2E 测试场景描述",
-        "每个用例提供 采纳/修改/跳过 按钮",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 26,
-      "passes": true,
-      "notes": "区分单元测试(紫色)和E2E测试(橙色)"
-    },
-    {
-      "id": "DT-027",
-      "title": "创建 JSON 转换步骤组件 JsonConvertStep",
-      "description": "创建最终 JSON 转换步骤的界面",
-      "acceptanceCriteria": [
-        "创建 viewer/src/components/pipeline/JsonConvertStep.tsx",
-        "解析最终 PRD 生成 prd.json 结构",
-        "在 JSON 编辑器中显示",
-        "用户可以编辑任务详情",
-        "保存按钮写入 prd.json 文件",
-        "显示开始开发按钮进入 Stage 3",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 27,
-      "passes": true,
-      "notes": "深色JSON编辑器，支持格式化和复制"
-    },
-    {
-      "id": "DT-028",
-      "title": "重写 Stage 2 页面为流水线界面",
-      "description": "重写 Stage 2 页面，集成流水线组件",
-      "acceptanceCriteria": [
-        "重写 viewer/src/app/stage2/page.tsx",
-        "保留顶部 5 阶段进度条",
-        "顶部显示 PipelineProgress",
-        "根据当前步骤显示对应组件",
-        "步骤间数据传递（PRD 内容累积更新）",
-        "最终步骤完成后可进入 Stage 3",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 28,
-      "passes": true,
-      "notes": "四步流水线界面，步骤间数据传递"
+      "passes": false,
+      "notes": ""
     }
   ]
 }
