@@ -53,16 +53,26 @@ export default function Stage1Page() {
   const [showTransitionModal, setShowTransitionModal] = useState(false);
   const [savedPrdId, setSavedPrdId] = useState<string | null>(null);
   const [isStarted, setIsStarted] = useState(false);
+  // Track which questions have "Other" selected (for custom text input)
+  const [otherSelected, setOtherSelected] = useState<Record<string, boolean>>({});
 
   // Initial description from Dashboard
   const [initialDescription, setInitialDescription] = useState<string>('');
 
-  // Load initial description
+  // Load initial description from sessionStorage or fallback to project name
   useEffect(() => {
     if (!sessionId) return;
+    // First try sessionStorage (set when creating new project)
     const desc = sessionStorage.getItem(`botool-initial-description-${sessionId}`);
-    if (desc) setInitialDescription(desc);
-  }, [sessionId]);
+    if (desc) {
+      setInitialDescription(desc);
+      return;
+    }
+    // Fallback: use project name if available (for existing projects)
+    if (activeProject?.name) {
+      setInitialDescription(activeProject.name);
+    }
+  }, [sessionId, activeProject?.name]);
 
   // Handle tool use from CLI
   const handleToolUse = useCallback((toolUse: { id: string; name: string; input: Record<string, unknown> }) => {
@@ -179,17 +189,23 @@ export default function Stage1Page() {
       setCompletedLevels(prev => [...prev, currentLevel]);
     }
 
-    // Clear current questions (will be updated by next tool_use)
+    // Clear current questions and otherSelected state (will be updated by next tool_use)
     setCurrentQuestions([]);
+    setOtherSelected({});
   }, [pendingToolUse, currentQuestions, currentLevel, answers, completedLevels, respondToTool]);
 
   // Check if all current questions are answered
   const allAnswered = useMemo(() => {
     return currentQuestions.every((_, index) => {
       const questionId = `L${currentLevel}-Q${index + 1}`;
-      return answers[questionId]?.value !== undefined;
+      const answer = answers[questionId]?.value;
+      // If "Other" is selected, require non-empty text
+      if (otherSelected[questionId]) {
+        return typeof answer === 'string' && answer.trim().length > 0;
+      }
+      return answer !== undefined && answer !== '';
     });
-  }, [currentQuestions, currentLevel, answers]);
+  }, [currentQuestions, currentLevel, answers, otherSelected]);
 
   // Handle save PRD
   const handleSavePRD = useCallback(async () => {
@@ -374,14 +390,17 @@ export default function Stage1Page() {
                       {question.options && question.options.length > 0 ? (
                         <div className="ml-9 space-y-2">
                           {question.options.map((option, optIndex) => {
-                            const isSelected = question.multiSelect
+                            const isOtherMode = otherSelected[questionId];
+                            const isSelected = !isOtherMode && (question.multiSelect
                               ? Array.isArray(currentAnswer) && currentAnswer.includes(option.label)
-                              : currentAnswer === option.label;
+                              : currentAnswer === option.label);
 
                             return (
                               <button
                                 key={optIndex}
                                 onClick={() => {
+                                  // Clear "Other" mode when selecting a predefined option
+                                  setOtherSelected(prev => ({ ...prev, [questionId]: false }));
                                   if (question.multiSelect) {
                                     const current = Array.isArray(currentAnswer) ? currentAnswer : [];
                                     const newValue = isSelected
@@ -418,6 +437,52 @@ export default function Stage1Page() {
                               </button>
                             );
                           })}
+
+                          {/* "Other" option with text input */}
+                          {!question.multiSelect && (
+                            <div className="space-y-2">
+                              <button
+                                onClick={() => {
+                                  setOtherSelected(prev => ({ ...prev, [questionId]: true }));
+                                  // Clear the answer so user can type custom value
+                                  handleAnswer(index, '');
+                                }}
+                                className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                                  otherSelected[questionId]
+                                    ? 'border-blue-500 bg-blue-50 text-blue-900'
+                                    : 'border-neutral-200 bg-white hover:border-neutral-300'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                                    otherSelected[questionId] ? 'border-blue-500 bg-blue-500' : 'border-neutral-300'
+                                  }`}>
+                                    {otherSelected[questionId] && (
+                                      <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                      </svg>
+                                    )}
+                                  </span>
+                                  <div>
+                                    <span className="font-medium">其他</span>
+                                    <p className="text-sm text-neutral-500 mt-0.5">输入自定义答案</p>
+                                  </div>
+                                </div>
+                              </button>
+
+                              {/* Text input when "Other" is selected */}
+                              {otherSelected[questionId] && (
+                                <textarea
+                                  value={typeof currentAnswer === 'string' ? currentAnswer : ''}
+                                  onChange={(e) => handleAnswer(index, e.target.value)}
+                                  placeholder="请输入你的答案..."
+                                  className="w-full p-3 border border-blue-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                  rows={2}
+                                  autoFocus
+                                />
+                              )}
+                            </div>
+                          )}
                         </div>
                       ) : (
                         // Text input for questions without options
