@@ -1,3 +1,9 @@
+/**
+ * @deprecated This API is no longer used.
+ * Stage 1 now uses CLI chat mode with /botoolagent-pyramidprd skill.
+ * This file is kept for reference only.
+ */
+
 import { NextRequest } from 'next/server';
 import { parseSkillPrompts, fillPromptTemplate } from '@/lib/skill-parser';
 
