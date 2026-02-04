@@ -100,7 +100,7 @@ export class CLIManager extends EventEmitter {
       throw new Error('CLI session is already active');
     }
 
-    const args = ['--print', '--verbose', '--output-format', 'stream-json'];
+    const args = ['--dangerously-skip-permissions', '--print', '--verbose', '--output-format', 'stream-json'];
 
     // Resume existing session if sessionId provided
     if (options.sessionId) {

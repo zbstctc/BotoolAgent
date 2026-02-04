@@ -50,8 +50,8 @@
         "Verify in browser"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Stage 1 页面已重写为 CLI 聊天模式，L1->L2 流程验证通过"
     },
     {
       "id": "DT-004",
@@ -64,8 +64,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "组件已满足要求，Stage 1 页面中 onLevelClick 设为空函数"
     },
     {
       "id": "DT-005",
@@ -79,8 +79,8 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "已在 DT-003 中实现，直接在 Stage 1 页面内渲染问题"
     },
     {
       "id": "DT-006",
@@ -94,8 +94,8 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "已标记所有 pyramid API 为废弃，Stage 1 页面中的旧逻辑已在 DT-003 中移除"
     },
     {
       "id": "DT-007",
@@ -112,7 +112,7 @@
       ],
       "priority": 7,
       "passes": false,
-      "notes": ""
+      "notes": "BLOCKED: Claude API credit balance too low - 需要等额度恢复后测试"
     },
     {
       "id": "DT-008",
@@ -123,7 +123,7 @@
       ],
       "priority": 8,
       "passes": false,
-      "notes": ""
+      "notes": "BLOCKED: 依赖 DT-007，需要 Claude API 额度恢复"
     }
   ]
 }
