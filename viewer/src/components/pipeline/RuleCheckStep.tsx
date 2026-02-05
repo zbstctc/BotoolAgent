@@ -30,6 +30,12 @@ export interface RuleViolation {
 // Adapting state
 type AdaptingState = 'idle' | 'loading-rules' | 'adapting' | 'completed' | 'error';
 
+// Adapting result for confirmation dialog
+interface AdaptingResult {
+  appliedRules: RuleDocument[];
+  summary: string;
+}
+
 const DEFAULT_CATEGORIES: Omit<RuleCategory, 'documents'>[] = [
   { id: 'frontend', name: '前端规范', icon: '🎨' },
   { id: 'backend', name: '后端规范', icon: '⚙️' },
@@ -60,6 +66,8 @@ export function RuleCheckStep({
   const [adaptingState, setAdaptingState] = useState<AdaptingState>('idle');
   const [adaptingProgress, setAdaptingProgress] = useState(0);
   const [adaptingMessage, setAdaptingMessage] = useState('');
+  const [adaptingResult, setAdaptingResult] = useState<AdaptingResult | null>(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Load rules from API
@@ -248,6 +256,7 @@ ${rulesText}
       const decoder = new TextDecoder();
       let buffer = '';
       let progressValue = 30;
+      let summaryContent = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -266,6 +275,9 @@ ${rulesText}
               const parsed = JSON.parse(data);
 
               if (parsed.type === 'text') {
+                // Collect summary content from CLI response
+                summaryContent += parsed.content;
+
                 // Update progress based on received text
                 progressValue = Math.min(progressValue + 2, 95);
                 setAdaptingProgress(progressValue);
@@ -296,9 +308,13 @@ ${rulesText}
         }
       }
 
-      // Complete - call onComplete with rules
+      // Store adapting result and show confirmation dialog
+      setAdaptingResult({
+        appliedRules: rulesWithContent,
+        summary: summaryContent || '规范审核已完成。',
+      });
       setTimeout(() => {
-        onComplete(rulesWithContent);
+        setShowConfirmDialog(true);
       }, 500);
 
     } catch (err) {
@@ -324,6 +340,23 @@ ${rulesText}
     setAdaptingState('idle');
     setAdaptingProgress(0);
     setAdaptingMessage('');
+  }, []);
+
+  // Confirm adapting result and proceed
+  const handleConfirmResult = useCallback(() => {
+    if (adaptingResult) {
+      setShowConfirmDialog(false);
+      onComplete(adaptingResult.appliedRules);
+    }
+  }, [adaptingResult, onComplete]);
+
+  // Close confirmation dialog and return to selection
+  const handleCancelResult = useCallback(() => {
+    setShowConfirmDialog(false);
+    setAdaptingState('idle');
+    setAdaptingProgress(0);
+    setAdaptingMessage('');
+    setAdaptingResult(null);
   }, []);
 
   // Calculate totals
@@ -438,6 +471,15 @@ ${rulesText}
             )}
           </div>
         </div>
+
+        {/* Confirmation Dialog - also rendered in progress view */}
+        {showConfirmDialog && adaptingResult && (
+          <ConfirmationDialog
+            result={adaptingResult}
+            onConfirm={handleConfirmResult}
+            onCancel={handleCancelResult}
+          />
+        )}
       </div>
     );
   }
@@ -506,6 +548,15 @@ ${rulesText}
           {selectedCount > 0 ? `确认选择 (${selectedCount} 项)` : '跳过规范检查'}
         </button>
       </div>
+
+      {/* Confirmation Dialog */}
+      {showConfirmDialog && adaptingResult && (
+        <ConfirmationDialog
+          result={adaptingResult}
+          onConfirm={handleConfirmResult}
+          onCancel={handleCancelResult}
+        />
+      )}
     </div>
   );
 }
@@ -599,6 +650,122 @@ function CategoryCard({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// Confirmation Dialog Component
+function ConfirmationDialog({
+  result,
+  onConfirm,
+  onCancel,
+}: {
+  result: AdaptingResult;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  // Group applied rules by category
+  const rulesByCategory = result.appliedRules.reduce<Record<string, RuleDocument[]>>(
+    (acc, rule) => {
+      const category = rule.category || 'other';
+      if (!acc[category]) {
+        acc[category] = [];
+      }
+      acc[category].push(rule);
+      return acc;
+    },
+    {}
+  );
+
+  const categoryNames: Record<string, string> = {
+    frontend: '前端规范',
+    backend: '后端规范',
+    testing: '测试规范',
+    deployment: '部署规范',
+    application: '应用规范',
+    other: '其他规范',
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={onCancel}
+      />
+
+      {/* Dialog */}
+      <div className="relative bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="p-6 border-b border-neutral-200">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+              <span className="text-xl">✅</span>
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-neutral-900">规范审核完成</h2>
+              <p className="text-sm text-neutral-500">
+                已审核 {result.appliedRules.length} 项规范
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Applied Rules Section */}
+          <div>
+            <h3 className="text-sm font-medium text-neutral-700 mb-3">已应用的规范</h3>
+            <div className="space-y-3">
+              {Object.entries(rulesByCategory).map(([category, rules]) => (
+                <div key={category} className="bg-neutral-50 rounded-lg p-3">
+                  <div className="text-sm font-medium text-neutral-600 mb-2">
+                    {categoryNames[category] || category}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {rules.map((rule) => (
+                      <span
+                        key={rule.id}
+                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                      >
+                        {rule.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Summary Section */}
+          {result.summary && (
+            <div>
+              <h3 className="text-sm font-medium text-neutral-700 mb-3">审核摘要</h3>
+              <div className="bg-neutral-50 rounded-lg p-4 max-h-48 overflow-y-auto">
+                <pre className="text-sm text-neutral-600 whitespace-pre-wrap font-sans">
+                  {result.summary}
+                </pre>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-neutral-200 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-neutral-600 hover:text-neutral-800 transition-colors"
+          >
+            返回修改
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+          >
+            确认并继续
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
