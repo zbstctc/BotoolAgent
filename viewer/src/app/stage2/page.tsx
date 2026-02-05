@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { StageIndicator } from '@/components';
 import { useProject } from '@/contexts/ProjectContext';
@@ -39,14 +39,12 @@ export default function Stage2Page() {
   const [testCases, setTestCases] = useState<TestCase[]>([]);
 
   // Load PRD content from session storage
-  useState(() => {
-    if (typeof window !== 'undefined') {
-      const storedPrd = sessionStorage.getItem('botool-stage2-prd');
-      if (storedPrd) {
-        setPrdContent(storedPrd);
-      }
+  useEffect(() => {
+    const storedPrd = sessionStorage.getItem('botool-stage2-prd');
+    if (storedPrd) {
+      setPrdContent(storedPrd);
     }
-  });
+  }, []);
 
   // Handle step click (for viewing completed steps)
   const handleStepClick = useCallback((stepIndex: number) => {

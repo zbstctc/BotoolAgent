@@ -1,33 +1,35 @@
 {
-  "project": "金字塔问答 CLI Skill 集成",
-  "branchName": "botool/pyramid-cli-skill",
-  "description": "将金字塔问答流程改为 CLI Skill 控制模式，Skill 控制问答流程，前端只负责渲染",
+  "project": "Stage 2 规范检查功能改造",
+  "branchName": "botool/stage2-rule-check-redesign",
+  "description": "将 Stage 2 规范检查步骤从 mock 数据改为真实的规范选择和 CLI 适配流程",
   "devTasks": [
     {
       "id": "DT-001",
-      "title": "改造 Skill 为可触发模式",
-      "description": "修改 ~/.claude/skills/botoolagent-pyramidprd/SKILL.md，改为 user-invocable，重写问答流程逻辑，使用 AskUserQuestion 工具按 L1-L4 层级提问",
+      "title": "改造 RuleCheckStep 为规范选择界面",
+      "description": "重写 RuleCheckStep 组件，从规范检查改为规范选择。加载 Dashboard 规范文档，按分类展示为可折叠卡片。",
       "acceptanceCriteria": [
-        "user-invocable: true",
-        "Skill 定义完整的 L1-L4 问答流程",
-        "使用 AskUserQuestion 工具提问",
-        "每个问题带 metadata: { level, progress, dimension }",
-        "根据答案动态调整后续问题",
-        "L4 完成后生成 PRD 文档",
-        "Skill 文件语法正确，可被 CLI 加载"
+        "调用 /api/rules GET 获取所有规范",
+        "按分类（frontend, backend, testing 等）分组展示",
+        "每个分类显示为可折叠的垂直卡片",
+        "支持全选/分类全选/单个勾选",
+        "显示已选规范数量统计",
+        "Typecheck passes",
+        "Verify in browser"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "SKILL.md 已完成"
+      "notes": ""
     },
     {
       "id": "DT-002",
-      "title": "验证 AskUserQuestion metadata 支持",
-      "description": "确认 AskUserQuestion 工具的 metadata 字段可以传递 level 等信息，前端能正确接收",
+      "title": "实现 CLI 规范适配逻辑",
+      "description": "用户点击确认后，调用 CLI 按选中的规范适配 PRD。使用 SSE 流式传输显示适配进度。",
       "acceptanceCriteria": [
-        "确认 AskUserQuestion 支持 metadata 字段",
-        "测试 CLI 发送带 metadata 的 tool_use",
-        "前端能从 SSE 事件中解析 metadata",
+        "点击确认按钮后调用 /api/cli/chat",
+        "发送包含选中规范和 PRD 内容的 prompt",
+        "使用 SSE 流式传输接收适配进度",
+        "显示进度条（根据 SSE 事件更新）",
+        "适配过程中禁用确认按钮",
         "Typecheck passes"
       ],
       "priority": 2,
@@ -36,94 +38,83 @@
     },
     {
       "id": "DT-003",
-      "title": "创建 Stage 1 CLI 聊天模式页面",
-      "description": "重写 /stage1/page.tsx，改为 CLI 聊天模式，监听 tool_use 事件渲染问题",
+      "title": "实现适配完成确认弹窗",
+      "description": "CLI 适配完成后，显示确认弹窗，展示适配结果摘要。",
       "acceptanceCriteria": [
-        "使用 useCliChat hook 连接 CLI",
-        "初始发送 /botoolagent-pyramidprd {description} 触发 Skill",
-        "监听 tool_use 事件，识别 AskUserQuestion",
-        "渲染问题 UI（复用现有组件或新建）",
-        "从 metadata.level 更新金字塔进度条",
-        "用户回答后调用 respondToTool 发送答案",
-        "收到 PRD 文本后显示在预览区",
+        "适配完成后弹出确认弹窗",
+        "显示已应用的规范列表",
+        "显示 PRD 修改摘要（如有）",
+        "点击确认进入下一步",
         "Typecheck passes",
         "Verify in browser"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "Stage 1 页面已重写为 CLI 聊天模式，L1->L2 流程验证通过"
+      "notes": ""
     },
     {
       "id": "DT-004",
-      "title": "金字塔进度条组件适配",
-      "description": "修改 PyramidNavigation 组件，支持从 CLI 事件更新进度，改为只读展示模式",
+      "title": "改造 CodeExampleStep 为 CLI 集成",
+      "description": "将 CodeExampleStep 从 mock 数据改为 CLI 集成，自动生成代码示例。",
       "acceptanceCriteria": [
-        "接收 currentLevel prop 从 CLI 事件更新",
-        "显示当前层级和已完成层级",
-        "不再控制层级切换（只读展示）",
-        "Typecheck passes"
+        "调用 CLI 生成代码示例",
+        "SSE 流式传输显示生成进度",
+        "展示生成的代码示例列表",
+        "支持用户编辑/采纳/跳过",
+        "Typecheck passes",
+        "Verify in browser"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "组件已满足要求，Stage 1 页面中 onLevelClick 设为空函数"
+      "notes": ""
     },
     {
       "id": "DT-005",
-      "title": "问题渲染组件适配",
-      "description": "确保问题渲染组件能处理 AskUserQuestion 返回的问题格式",
+      "title": "改造 TestCaseStep 为 CLI 集成",
+      "description": "将 TestCaseStep 从 mock 数据改为 CLI 集成，自动生成测试用例。",
       "acceptanceCriteria": [
-        "支持 single/multi/text 问题类型",
-        "支持 options 选项渲染",
-        "支持批量问题（questions 数组）",
-        "收集答案并返回给父组件",
-        "Typecheck passes"
+        "调用 CLI 生成测试用例",
+        "SSE 流式传输显示生成进度",
+        "分类展示单元测试和 E2E 测试",
+        "支持用户编辑/采纳/跳过",
+        "Typecheck passes",
+        "Verify in browser"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "已在 DT-003 中实现，直接在 Stage 1 页面内渲染问题"
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "DT-006",
-      "title": "清理旧的 API 和逻辑",
-      "description": "移除不再需要的旧代码，包括 /api/pyramid/questions 和相关调用",
+      "title": "改造 JsonConvertStep 为 CLI 集成",
+      "description": "将 JsonConvertStep 从 mock 数据改为 CLI 集成，自动转换 PRD 为 JSON。",
       "acceptanceCriteria": [
-        "移除或标记废弃 /api/pyramid/questions",
-        "移除 skill-parser.ts 的调用（Skill 内部处理）",
-        "移除旧的 generateQuestions 函数",
-        "清理无用的 state 和 effects",
-        "Typecheck passes"
+        "调用 CLI 将 PRD 转换为 prd.json 格式",
+        "SSE 流式传输显示转换进度",
+        "展示 JSON 编辑器",
+        "支持保存到项目根目录",
+        "Typecheck passes",
+        "Verify in browser"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "已标记所有 pyramid API 为废弃，Stage 1 页面中的旧逻辑已在 DT-003 中移除"
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "DT-007",
-      "title": "全流程测试",
-      "description": "测试完整的金字塔问答流程，确保 L1-L4 正常工作",
+      "title": "端到端测试",
+      "description": "测试完整的 Stage 2 流程。",
       "acceptanceCriteria": [
-        "输入需求描述，触发 Skill",
-        "L1 问题正确显示，进度条显示 L1",
-        "回答 L1 后进入 L2，进度条更新",
-        "L2-L4 流程正常",
-        "L4 完成后 PRD 正确生成",
-        "PRD 可以保存",
+        "规范选择正确加载和展示",
+        "CLI 适配流程正常工作",
+        "代码示例生成正常",
+        "测试用例生成正常",
+        "JSON 转换和保存正常",
         "Verify in browser"
       ],
       "priority": 7,
-      "passes": true,
-      "notes": "L1-L4 全流程测试通过，PRD 成功生成并保存"
-    },
-    {
-      "id": "DT-008",
-      "title": "Playwright 自动化测试",
-      "description": "运行 Playwright 测试验证 Stage 1 功能",
-      "acceptanceCriteria": [
-        "Playwright 测试 Stage 1 页面通过"
-      ],
-      "priority": 8,
-      "passes": true,
-      "notes": "使用 MCP Playwright 工具完成浏览器验证测试"
+      "passes": false,
+      "notes": ""
     }
   ]
 }
