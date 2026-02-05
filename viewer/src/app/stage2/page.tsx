@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { StageIndicator } from '@/components';
 import { useProject } from '@/contexts/ProjectContext';
 import { PipelineProgress, DEFAULT_STEPS } from '@/components/pipeline/PipelineProgress';
-import { RuleCheckStep, type RuleViolation } from '@/components/pipeline/RuleCheckStep';
+import { RuleCheckStep, type RuleDocument } from '@/components/pipeline/RuleCheckStep';
 import { CodeExampleStep, type CodeExample } from '@/components/pipeline/CodeExampleStep';
 import { TestCaseStep, type TestCase } from '@/components/pipeline/TestCaseStep';
 import { JsonConvertStep } from '@/components/pipeline/JsonConvertStep';
@@ -34,7 +34,7 @@ export default function Stage2Page() {
   const [prdContent, setPrdContent] = useState('');
 
   // Step results
-  const [ruleViolations, setRuleViolations] = useState<RuleViolation[]>([]);
+  const [selectedRules, setSelectedRules] = useState<RuleDocument[]>([]);
   const [codeExamples, setCodeExamples] = useState<CodeExample[]>([]);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
 
@@ -56,8 +56,8 @@ export default function Stage2Page() {
   }, [currentStep]);
 
   // Step completion handlers
-  const handleRuleCheckComplete = useCallback((violations: RuleViolation[]) => {
-    setRuleViolations(violations);
+  const handleRuleCheckComplete = useCallback((rules: RuleDocument[]) => {
+    setSelectedRules(rules);
     setCurrentStep(1);
   }, []);
 
