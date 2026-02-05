@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export interface RuleDocument {
   id: string;
   name: string;
   category: string;
+  content?: string;
 }
 
 export interface RuleCategory {
@@ -25,6 +26,9 @@ export interface RuleViolation {
   status: 'pending' | 'accepted' | 'modified' | 'skipped';
   modifiedContent?: string;
 }
+
+// Adapting state
+type AdaptingState = 'idle' | 'loading-rules' | 'adapting' | 'completed' | 'error';
 
 const DEFAULT_CATEGORIES: Omit<RuleCategory, 'documents'>[] = [
   { id: 'frontend', name: '前端规范', icon: '🎨' },
@@ -51,6 +55,12 @@ export function RuleCheckStep({
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // CLI adapting state
+  const [adaptingState, setAdaptingState] = useState<AdaptingState>('idle');
+  const [adaptingProgress, setAdaptingProgress] = useState(0);
+  const [adaptingMessage, setAdaptingMessage] = useState('');
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Load rules from API
   useEffect(() => {
@@ -151,6 +161,171 @@ export function RuleCheckStep({
     );
   }, [categories, selectedRules]);
 
+  // Fetch rule content by id
+  const fetchRuleContent = useCallback(async (ruleId: string): Promise<string> => {
+    const response = await fetch(`/api/rules/${encodeURIComponent(ruleId)}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch rule: ${ruleId}`);
+    }
+    const data = await response.json();
+    return data.content;
+  }, []);
+
+  // Handle confirm button click - start CLI adapting process
+  const handleConfirm = useCallback(async () => {
+    const rules = getSelectedRulesArray();
+
+    // If no rules selected, skip adapting and proceed directly
+    if (rules.length === 0) {
+      onComplete(rules);
+      return;
+    }
+
+    // Start the adapting process
+    setAdaptingState('loading-rules');
+    setAdaptingProgress(0);
+    setAdaptingMessage('正在加载规范内容...');
+    setError(null);
+
+    try {
+      // Step 1: Fetch content for all selected rules
+      const rulesWithContent: RuleDocument[] = [];
+      for (let i = 0; i < rules.length; i++) {
+        const rule = rules[i];
+        const content = await fetchRuleContent(rule.id);
+        rulesWithContent.push({ ...rule, content });
+        setAdaptingProgress(Math.round(((i + 1) / rules.length) * 30)); // 0-30% for loading rules
+      }
+
+      // Step 2: Build prompt for CLI
+      setAdaptingState('adapting');
+      setAdaptingProgress(30);
+      setAdaptingMessage('正在分析 PRD 并适配规范...');
+
+      const rulesText = rulesWithContent
+        .map(r => `### ${r.category}/${r.name}\n\n${r.content}`)
+        .join('\n\n---\n\n');
+
+      const prompt = `请分析以下 PRD 内容，并根据所选规范进行审核。请指出 PRD 中需要改进的地方。
+
+## PRD 内容
+
+${prdContent}
+
+## 选中的规范
+
+${rulesText}
+
+请对 PRD 进行审核，指出以下几点：
+1. PRD 是否符合所选规范的要求
+2. 如有不符合之处，请给出具体的修改建议
+3. 审核完成后，请说"审核完成"`;
+
+      // Step 3: Call CLI API with SSE
+      abortControllerRef.current = new AbortController();
+
+      const response = await fetch('/api/cli/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: prompt,
+          mode: 'default',
+        }),
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'CLI 调用失败');
+      }
+
+      // Process SSE stream
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('无法获取响应流');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let progressValue = 30;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            if (!data) continue;
+
+            try {
+              const parsed = JSON.parse(data);
+
+              if (parsed.type === 'text') {
+                // Update progress based on received text
+                progressValue = Math.min(progressValue + 2, 95);
+                setAdaptingProgress(progressValue);
+
+                // Check if adapting is completed
+                if (parsed.content.includes('审核完成')) {
+                  setAdaptingProgress(100);
+                  setAdaptingMessage('适配完成！');
+                }
+              } else if (parsed.type === 'error') {
+                throw new Error(parsed.error);
+              } else if (parsed.type === 'done') {
+                // Stream finished
+                setAdaptingProgress(100);
+                setAdaptingState('completed');
+                setAdaptingMessage('适配完成！');
+                break;
+              }
+            } catch (parseError) {
+              // Ignore JSON parse errors (incomplete data)
+              if (parseError instanceof Error &&
+                  !parseError.message.includes('Unexpected') &&
+                  !parseError.message.includes('JSON')) {
+                throw parseError;
+              }
+            }
+          }
+        }
+      }
+
+      // Complete - call onComplete with rules
+      setTimeout(() => {
+        onComplete(rulesWithContent);
+      }, 500);
+
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        // Cancelled by user
+        setAdaptingState('idle');
+        return;
+      }
+
+      const errorMessage = err instanceof Error ? err.message : '未知错误';
+      setError(errorMessage);
+      setAdaptingState('error');
+      setAdaptingMessage('适配失败');
+    }
+  }, [getSelectedRulesArray, fetchRuleContent, prdContent, onComplete]);
+
+  // Cancel adapting
+  const cancelAdapting = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setAdaptingState('idle');
+    setAdaptingProgress(0);
+    setAdaptingMessage('');
+  }, []);
+
   // Calculate totals
   const totalRules = categories.reduce((sum, cat) => sum + cat.documents.length, 0);
   const selectedCount = selectedRules.size;
@@ -167,7 +342,7 @@ export function RuleCheckStep({
     );
   }
 
-  if (error) {
+  if (error && adaptingState !== 'error') {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
@@ -178,6 +353,90 @@ export function RuleCheckStep({
           >
             重试
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show adapting progress UI
+  if (adaptingState !== 'idle') {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          {/* Progress Header */}
+          <div className="text-center mb-6">
+            {adaptingState === 'error' ? (
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
+                <span className="text-2xl">❌</span>
+              </div>
+            ) : adaptingState === 'completed' ? (
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
+                <span className="text-2xl">✅</span>
+              </div>
+            ) : (
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
+                <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full" />
+              </div>
+            )}
+            <h3 className="text-lg font-semibold text-neutral-900">
+              {adaptingState === 'loading-rules' && '加载规范中'}
+              {adaptingState === 'adapting' && '适配规范中'}
+              {adaptingState === 'completed' && '适配完成'}
+              {adaptingState === 'error' && '适配失败'}
+            </h3>
+            <p className="text-sm text-neutral-500 mt-1">{adaptingMessage}</p>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="mb-6">
+            <div className="flex justify-between text-sm text-neutral-600 mb-2">
+              <span>进度</span>
+              <span>{adaptingProgress}%</span>
+            </div>
+            <div className="w-full h-2 bg-neutral-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all duration-300 ${
+                  adaptingState === 'error'
+                    ? 'bg-red-500'
+                    : adaptingState === 'completed'
+                    ? 'bg-green-500'
+                    : 'bg-blue-500'
+                }`}
+                style={{ width: `${adaptingProgress}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-center gap-4">
+            {adaptingState === 'error' && (
+              <>
+                <button
+                  onClick={() => {
+                    setAdaptingState('idle');
+                    setError(null);
+                  }}
+                  className="px-4 py-2 text-neutral-600 hover:text-neutral-800"
+                >
+                  返回选择
+                </button>
+                <button
+                  onClick={handleConfirm}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  重试
+                </button>
+              </>
+            )}
+            {(adaptingState === 'loading-rules' || adaptingState === 'adapting') && (
+              <button
+                onClick={cancelAdapting}
+                className="px-4 py-2 text-neutral-600 hover:text-neutral-800 border border-neutral-300 rounded-lg"
+              >
+                取消
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -241,7 +500,7 @@ export function RuleCheckStep({
           </button>
         )}
         <button
-          onClick={() => onComplete(getSelectedRulesArray())}
+          onClick={handleConfirm}
           className="px-6 py-2 rounded-lg font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700 ml-auto"
         >
           {selectedCount > 0 ? `确认选择 (${selectedCount} 项)` : '跳过规范检查'}
