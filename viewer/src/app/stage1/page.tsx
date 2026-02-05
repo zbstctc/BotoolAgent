@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   StageIndicator,
@@ -26,6 +26,13 @@ interface QuestionAnswer {
   value: string | string[];
 }
 
+// Q&A history for resume
+interface QAHistoryItem {
+  level: LevelId;
+  question: string;
+  answer: string | string[];
+}
+
 export default function Stage1Page() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -45,6 +52,10 @@ export default function Stage1Page() {
   const [answers, setAnswers] = useState<Record<string, QuestionAnswer>>({});
   const [prdDraft, setPrdDraft] = useState<string>('');
   const [collectedSummary, setCollectedSummary] = useState<CollectedSummaryItem[]>([]);
+  // Q&A history for resume functionality
+  const [qaHistory, setQaHistory] = useState<QAHistoryItem[]>([]);
+  // Track current tool being used (for progress feedback)
+  const [currentTool, setCurrentTool] = useState<string | null>(null);
 
   // UI state
   const [isSaving, setIsSaving] = useState(false);
@@ -58,6 +69,58 @@ export default function Stage1Page() {
 
   // Initial description from Dashboard
   const [initialDescription, setInitialDescription] = useState<string>('');
+  // CLI session ID for resuming conversation
+  const [cliSessionId, setCliSessionId] = useState<string | undefined>(undefined);
+  // Track if we've restored state (use ref to avoid re-renders)
+  const hasRestoredStateRef = useRef(false);
+
+  // Storage key for this project's pyramid state
+  const storageKey = sessionId ? `botool-pyramid-state-${sessionId}` : null;
+
+  // Load saved state from localStorage on mount (only once)
+  useEffect(() => {
+    if (!storageKey || hasRestoredStateRef.current) return;
+    hasRestoredStateRef.current = true;
+
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      try {
+        const state = JSON.parse(saved);
+        if (state.cliSessionId) setCliSessionId(state.cliSessionId);
+        if (state.currentLevel) setCurrentLevel(state.currentLevel);
+        if (state.completedLevels) setCompletedLevels(state.completedLevels);
+        if (state.answers) setAnswers(state.answers);
+        if (state.prdDraft) setPrdDraft(state.prdDraft);
+        if (state.isStarted) setIsStarted(state.isStarted);
+        if (state.qaHistory) setQaHistory(state.qaHistory);
+        console.log('[Stage1] Restored saved state (once)', { qaHistoryCount: state.qaHistory?.length || 0 });
+      } catch (e) {
+        console.error('[Stage1] Failed to parse saved state:', e);
+      }
+    }
+  }, [storageKey]);
+
+  // Save state to localStorage whenever it changes (debounced)
+  useEffect(() => {
+    if (!storageKey || !isStarted || !hasRestoredStateRef.current) return;
+
+    // Debounce saves to prevent excessive writes
+    const timeoutId = setTimeout(() => {
+      const state = {
+        cliSessionId,
+        currentLevel,
+        completedLevels,
+        answers,
+        prdDraft,
+        isStarted,
+        qaHistory,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(storageKey, JSON.stringify(state));
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [storageKey, cliSessionId, currentLevel, completedLevels, answers, prdDraft, isStarted, qaHistory]);
 
   // Load initial description from sessionStorage or fallback to project name
   useEffect(() => {
@@ -76,13 +139,19 @@ export default function Stage1Page() {
 
   // Handle tool use from CLI
   const handleToolUse = useCallback((toolUse: { id: string; name: string; input: Record<string, unknown> }) => {
+    console.log('[Stage1] Tool use received:', toolUse.name);
+    // Track current tool for progress feedback
+    setCurrentTool(toolUse.name);
+
     if (toolUse.name === 'AskUserQuestion' && isAskUserQuestionInput(toolUse.input)) {
       const input = toolUse.input as AskUserQuestionToolInput;
+      console.log('[Stage1] AskUserQuestion received, questions:', input.questions.length);
       setCurrentQuestions(input.questions);
 
       // Update level from metadata
       if (input.metadata) {
         const metadata = input.metadata as PyramidMetadata;
+        console.log('[Stage1] Level from metadata:', metadata.level);
         setCurrentLevel(metadata.level);
 
         // Mark previous levels as completed
@@ -103,26 +172,44 @@ export default function Stage1Page() {
     pendingToolUse,
     sendMessage,
     respondToTool,
+    sessionId: currentCliSessionId,
   } = useCliChat({
     mode: 'default',
+    initialSessionId: cliSessionId,
     onToolUse: handleToolUse,
     onError: (error) => console.error('CLI error:', error),
+    onSessionIdChange: (newSessionId) => {
+      console.log('[Stage1] CLI session ID changed:', newSessionId);
+      setCliSessionId(newSessionId);
+    },
   });
+
+  // Clear current tool when loading stops
+  useEffect(() => {
+    if (!isLoading) {
+      setCurrentTool(null);
+    }
+  }, [isLoading]);
 
   // Extract PRD from messages
   useEffect(() => {
     // Look for PRD content in any assistant message
     // The PRD is generated after L4 is completed, look for "# PRD:" marker
+    console.log('[Stage1] Checking messages for PRD, count:', messages.length);
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
-      if (msg.role === 'assistant' && msg.content.includes('# PRD:')) {
-        // Extract PRD content starting from "# PRD:" to the end
-        const prdMatch = msg.content.match(/(# PRD:[\s\S]+)/);
-        if (prdMatch) {
-          setPrdDraft(prdMatch[1]);
-          // Mark all levels as completed when PRD is generated
-          setCompletedLevels([1, 2, 3, 4]);
-          break;
+      if (msg.role === 'assistant') {
+        console.log('[Stage1] Assistant message preview:', msg.content.slice(0, 100));
+        if (msg.content.includes('# PRD:')) {
+          // Extract PRD content starting from "# PRD:" to the end
+          const prdMatch = msg.content.match(/(# PRD:[\s\S]+)/);
+          if (prdMatch) {
+            console.log('[Stage1] PRD found!');
+            setPrdDraft(prdMatch[1]);
+            // Mark all levels as completed when PRD is generated
+            setCompletedLevels([1, 2, 3, 4]);
+            break;
+          }
         }
       }
     }
@@ -135,6 +222,67 @@ export default function Stage1Page() {
     // Trigger the pyramid skill
     sendMessage(`/botoolagent-pyramidprd ${initialDescription}`);
   }, [initialDescription, isStarted, sendMessage]);
+
+  // Resume from saved state - continue from where we left off
+  const resumePyramid = useCallback(() => {
+    if (!isStarted || isLoading) return;
+    // Send a message to continue the conversation
+    // The CLI will resume from the saved session if cliSessionId is set
+    const resumeMessage = currentLevel === 4 && completedLevels.includes(4)
+      ? '请生成 PRD 文档'
+      : `请继续 L${currentLevel} 的问答`;
+    sendMessage(resumeMessage);
+  }, [isStarted, isLoading, currentLevel, completedLevels, sendMessage]);
+
+  // Check if we have saved progress but no current questions (need to resume)
+  // L4 completed but no PRD yet - need to request PRD generation
+  const needsPrdGeneration = completedLevels.includes(4) && !prdDraft && !isLoading && !cliError;
+  const needsResume = isStarted && !isLoading && currentQuestions.length === 0 && !prdDraft && !cliError && !needsPrdGeneration;
+
+  // Debug logging
+  console.log('[Stage1] State:', {
+    isStarted,
+    isLoading,
+    currentLevel,
+    completedLevels,
+    currentQuestionsCount: currentQuestions.length,
+    hasPrdDraft: !!prdDraft,
+    qaHistoryCount: qaHistory.length,
+    cliError,
+    needsPrdGeneration,
+    needsResume,
+    cliSessionId: cliSessionId?.slice(0, 8),
+  });
+
+  // Track if we've already attempted to resume/generate (to prevent infinite loops)
+  const [hasAttemptedResume, setHasAttemptedResume] = useState(false);
+  const [hasAttemptedPrdGeneration, setHasAttemptedPrdGeneration] = useState(false);
+
+  // Auto-generate PRD when L4 is completed but no PRD yet
+  useEffect(() => {
+    console.log('[Stage1] PRD generation check:', { needsPrdGeneration, cliSessionId: !!cliSessionId, hasAttemptedPrdGeneration, qaHistoryCount: qaHistory.length });
+    if (needsPrdGeneration && cliSessionId && !hasAttemptedPrdGeneration && qaHistory.length > 0) {
+      console.log('[Stage1] Auto-requesting PRD generation with Q&A history...');
+      setHasAttemptedPrdGeneration(true);
+
+      // Build Q&A summary from history
+      const qaSummary = qaHistory
+        .map((item, idx) => `L${item.level} Q${idx + 1}: ${item.question}\n答案: ${Array.isArray(item.answer) ? item.answer.join(', ') : item.answer}`)
+        .join('\n\n');
+
+      sendMessage(`请根据以下金字塔问答内容直接生成 PRD 文档，不要再提问：\n\n${qaSummary}\n\n请直接输出 PRD 文档，格式以 "# PRD:" 开头。`);
+    }
+  }, [needsPrdGeneration, cliSessionId, hasAttemptedPrdGeneration, sendMessage, qaHistory]);
+
+  // Auto-resume when needed (only once)
+  useEffect(() => {
+    console.log('[Stage1] Auto-resume check:', { needsResume, cliSessionId: !!cliSessionId, hasAttemptedResume });
+    if (needsResume && cliSessionId && !hasAttemptedResume) {
+      console.log('[Stage1] Auto-resuming from saved state...');
+      setHasAttemptedResume(true);
+      resumePyramid();
+    }
+  }, [needsResume, cliSessionId, hasAttemptedResume, resumePyramid]);
 
   // Auto-start when description is loaded
   useEffect(() => {
@@ -173,13 +321,24 @@ export default function Stage1Page() {
 
     // Collect all answers for current questions
     const answersToSubmit: Record<string, string | string[]> = {};
+    const newHistoryItems: QAHistoryItem[] = [];
+
     currentQuestions.forEach((q, index) => {
       const questionId = `L${currentLevel}-Q${index + 1}`;
       const answer = answers[questionId];
       if (answer) {
         answersToSubmit[questionId] = answer.value;
+        // Add to Q&A history for resume
+        newHistoryItems.push({
+          level: currentLevel,
+          question: q.question,
+          answer: answer.value,
+        });
       }
     });
+
+    // Update Q&A history
+    setQaHistory(prev => [...prev, ...newHistoryItems]);
 
     // Send response to CLI
     respondToTool(pendingToolUse.id, { answers: answersToSubmit });
@@ -329,7 +488,20 @@ export default function Stage1Page() {
 
         {/* Center: Question Panel */}
         <div className="flex-1 min-w-0 border-x border-neutral-200 bg-white overflow-y-auto">
-          {isLoading && currentQuestions.length === 0 ? (
+          {/* PRD generation in progress - check first (highest priority) */}
+          {isLoading && completedLevels.includes(4) && currentQuestions.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="animate-spin h-8 w-8 border-4 border-green-600 border-t-transparent rounded-full mx-auto mb-2"></div>
+                <p className="text-sm text-neutral-600">正在生成 PRD 文档...</p>
+                <p className="text-xs text-neutral-400 mt-1">
+                  {currentTool
+                    ? `正在执行: ${currentTool}`
+                    : '所有层级已完成，请稍候'}
+                </p>
+              </div>
+            </div>
+          ) : isLoading && currentQuestions.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-2"></div>
@@ -526,6 +698,16 @@ export default function Stage1Page() {
                 </div>
                 <p className="text-lg font-medium text-neutral-900">PRD 已生成</p>
                 <p className="text-sm text-neutral-500 mt-1">请查看右侧预览并保存</p>
+              </div>
+            </div>
+          ) : needsResume ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-2"></div>
+                <p className="text-sm text-neutral-600">正在恢复进度...</p>
+                <p className="text-xs text-neutral-400 mt-1">
+                  L{currentLevel} · 已完成 {completedLevels.length} 层
+                </p>
               </div>
             </div>
           ) : (

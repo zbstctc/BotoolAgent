@@ -1,37 +1,47 @@
 # Botool 开发代理进度日志
-开始时间: 2026-02-04
-项目: 金字塔问答 CLI Skill 集成
-分支: botool/pyramid-cli-skill
+开始时间: Wed Feb  4 13:18:42 CST 2026
 ---
 
 ## Codebase Patterns
-- 项目使用 Next.js App Router，组件放在 `viewer/src/components/`
-- hooks 导出统一通过 `hooks/index.ts`
-- CLI 通信使用 `useCliChat` hook 和 `/api/cli/chat` API
-- Skill 文件放在 `~/.claude/skills/` 目录
-- AskUserQuestion 工具用于交互式提问
-- SSE 流式返回通过 CLIManager 处理
+- Stage 1 使用 useCliChat hook 与 CLI 通信，通过 SSE 事件流接收 tool_use 事件
+- AskUserQuestion 工具的 metadata 字段用于传递层级信息（level, levelName, progress）
+- PRD 文本通过检测 `# PRD:` 标记从 assistant 消息中提取
+- CLI 聊天模式下，前端不再直接调用 API 生成问题，而是由 Skill 控制问答流程
 
 ---
 
+## 2026-02-04 18:45 - DT-003
+- 实现了什么：
+  - 将 Stage 1 页面从 API 生成问题模式重写为 CLI 聊天模式
+  - 使用 useCliChat hook 连接 Claude CLI
+  - 初始发送 /botoolagent-pyramidprd 触发 Skill
+  - 监听 tool_use 事件识别 AskUserQuestion
+  - 从 metadata.level 更新金字塔进度条
+  - 用户回答后调用 respondToTool 发送答案
+  - 改进 PRD 检测逻辑，从消息中提取 PRD 内容
 
-## 2026-02-04 - DT-001
-- 实现了什么：改造 Skill 为可触发模式
 - 修改了哪些文件：
-  - 重写 `~/.claude/skills/botoolagent-pyramidprd/SKILL.md`
+  - viewer/src/app/stage1/page.tsx (完全重写)
+
 - **未来迭代的经验教训：**
-  - 发现的模式：Skill 使用 AskUserQuestion 工具提问，metadata 传递层级信息
-  - 有用的上下文：metadata 格式 `{ source, level, levelName, progress, totalLevels }`
-  - 有用的上下文：问题格式以 `【L1: 核心识别】` 开头标注层级
+  - useCliChat hook 的 onToolUse 回调在收到 tool_use 事件时触发，可用于更新 UI 状态
+  - pendingToolUse 保存当前待响应的工具调用，respondToTool 用于发送响应
+  - metadata 字段在 AskUserQuestionToolInput 接口中定义为可选的 PyramidMetadata 类型
+  - PRD 检测应该遍历所有消息而不仅仅是最后一条，因为 PRD 可能在之前的消息中生成
 ---
 
+## 2026-02-04 19:00 - DT-004, DT-005, DT-006
+- 实现了什么：
+  - DT-004: PyramidNavigation 组件已满足 CLI 模式要求（只读展示）
+  - DT-005: 问题渲染已在 DT-003 中直接在页面内实现
+  - DT-006: 标记所有 pyramid API 为废弃
 
-## 2026-02-04 - DT-002
-- 实现了什么：验证并扩展 AskUserQuestion metadata 支持
 - 修改了哪些文件：
-  - 修改 `viewer/src/lib/tool-types.ts` 添加 PyramidMetadata 类型
-- **未来迭代的经验教训：**
-  - 发现的模式：toolInput 直接传递给前端，metadata 可通过 `toolUse.input.metadata` 访问
-  - 有用的上下文：useCliChat 的 onToolUse 回调接收完整的 toolInput
----
+  - viewer/src/app/api/pyramid/questions/route.ts (添加废弃注释)
+  - viewer/src/app/api/pyramid/iterate/route.ts (添加废弃注释)
+  - viewer/src/app/api/pyramid/layout/route.ts (添加废弃注释)
 
+- **未来迭代的经验教训：**
+  - 废弃 API 时使用 @deprecated JSDoc 标记，而不是直接删除
+  - PyramidNavigation 组件的 onLevelClick 在 CLI 模式下设为空函数来禁用层级切换
+---

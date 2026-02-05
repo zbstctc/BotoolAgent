@@ -138,7 +138,7 @@ export function JsonConvertStep({
   }
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col min-h-0">
       {/* Header */}
       <div className="p-6 border-b border-neutral-200 bg-neutral-50">
         <h2 className="text-lg font-semibold text-neutral-900">JSON 转换</h2>
@@ -148,7 +148,7 @@ export function JsonConvertStep({
       </div>
 
       {/* JSON Editor */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* Toolbar */}
         <div className="flex items-center justify-between p-4 border-b border-neutral-200 bg-white">
           <div className="flex items-center gap-4">

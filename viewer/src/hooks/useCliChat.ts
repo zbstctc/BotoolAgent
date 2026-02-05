@@ -237,10 +237,21 @@ export function useCliChat(options: UseCliChatOptions = {}) {
       // Clear the pending tool use
       setPendingToolUse(null);
       setError(null);
+      setIsLoading(true);
 
       // Get the current assistant message ID to continue appending
-      const assistantMessageId =
-        currentAssistantMessageIdRef.current || (Date.now() + 1).toString();
+      // If no current message exists, create a new one
+      let assistantMessageId = currentAssistantMessageIdRef.current;
+      if (!assistantMessageId) {
+        assistantMessageId = (Date.now() + 1).toString();
+        const newAssistantMessage: CliChatMessage = {
+          id: assistantMessageId,
+          role: 'assistant',
+          content: '',
+        };
+        setMessages((prev) => [...prev, newAssistantMessage]);
+      }
+      currentAssistantMessageIdRef.current = assistantMessageId;
 
       // Create abort controller for this request
       abortControllerRef.current = new AbortController();

@@ -79,7 +79,7 @@ export class CLIManager extends EventEmitter {
   private readonly cliPath: string;
   private readonly workingDir: string;
   private timeoutId: NodeJS.Timeout | null = null;
-  private readonly defaultTimeout: number = 300000; // 5 minutes default
+  private readonly defaultTimeout: number = 600000; // 10 minutes default (PRD generation can take longer)
   // Track pending tool_use blocks by index during streaming
   private pendingToolUses: Map<number, PendingToolUse> = new Map();
 

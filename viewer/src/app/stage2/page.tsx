@@ -159,7 +159,7 @@ export default function Stage2Page() {
       />
 
       {/* Step Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0">
         {renderStepContent()}
       </div>
     </div>

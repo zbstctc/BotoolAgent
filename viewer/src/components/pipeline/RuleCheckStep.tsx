@@ -120,7 +120,7 @@ export function RuleCheckStep({
   }
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col min-h-0">
       {/* Header */}
       <div className="p-6 border-b border-neutral-200 bg-neutral-50">
         <h2 className="text-lg font-semibold text-neutral-900">规范检查</h2>

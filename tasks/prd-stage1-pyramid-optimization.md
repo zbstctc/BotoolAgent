@@ -32,294 +32,388 @@
 
 ---
 
-## User Stories
+## Dev Tasks
 
 ### 模块一：Dashboard 创建弹窗改造
 
-#### US-001: 需求描述输入
-**Description:** 作为用户，我想在创建新需求时输入一段描述文字，而不是只输入标题，以便系统能更好地理解我的需求。
+#### DT-001: 改造创建需求弹窗 - 需求描述输入
+**Description:** 将现有的标题输入改为需求描述输入，支持多行文本
 
 **Acceptance Criteria:**
-- [ ] 创建弹窗包含多行文本框（textarea），支持粘贴长文本
-- [ ] 文本框 placeholder 提示："请描述你想要构建的功能或解决的问题..."
+- [ ] 修改 Dashboard 的创建弹窗组件
+- [ ] 将单行标题输入改为多行文本框（textarea）
+- [ ] placeholder: "请描述你想要构建的功能或解决的问题..."
 - [ ] 支持至少 500 字符输入
+- [ ] 移除原有的标题输入框
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
 
-#### US-002: 需求类型标签
-**Description:** 作为用户，我想选择需求类型（新功能/改功能/修bug/自定义），以便系统知道这是什么类型的需求。
+#### DT-002: 添加需求类型选择器
+**Description:** 在创建弹窗中添加需求类型标签选择
 
 **Acceptance Criteria:**
-- [ ] 弹窗包含需求类型选择器（单选）
-- [ ] 预设选项：新功能、改功能、修bug
-- [ ] 支持自定义输入（选择"其他"后显示输入框）
+- [ ] 在描述输入框上方添加需求类型选择器
+- [ ] 预设选项：新功能、改功能、修bug（使用标签/chip 样式）
+- [ ] 添加"其他"选项，选中后显示自定义输入框
 - [ ] 默认选中"新功能"
+- [ ] 选中状态使用蓝色高亮
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
 
-#### US-003: 自动生成标题
-**Description:** 作为用户，我希望系统根据我的需求描述自动生成标题，以便我不需要手动总结。
+#### DT-003: 实现自动生成标题功能
+**Description:** 调用 AI 根据需求描述自动生成标题
 
 **Acceptance Criteria:**
-- [ ] 用户输入需求描述后，点击"生成标题"或自动触发
-- [ ] 调用 AI 生成简短标题（10-20字）
-- [ ] 标题显示在可编辑的输入框中
+- [ ] 用户输入描述后，显示"生成标题"按钮或自动触发
+- [ ] 调用 /api/cli/chat 生成简短标题（10-20字）
+- [ ] 生成的标题显示在可编辑的输入框中
+- [ ] 显示加载状态
 - [ ] 用户可以修改生成的标题
-- [ ] 点击"创建"后保存标题和描述，进入 Stage 1
+- [ ] 点击"创建"后保存标题、描述、类型到项目状态
+- [ ] 创建后携带这些信息跳转到 Stage 1
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
 
 ---
 
 ### 模块二：Stage 1 金字塔问答
 
-#### US-004: 金字塔导航组件
-**Description:** 作为用户，我想在左侧看到金字塔导航，显示 4 个层级和当前进度，以便了解整体结构。
+#### DT-004: 创建金字塔导航组件 PyramidNavigation
+**Description:** 创建左侧金字塔导航面板组件
 
 **Acceptance Criteria:**
-- [ ] 左侧显示金字塔导航面板
+- [ ] 创建 viewer/src/components/pyramid/PyramidNavigation.tsx
+- [ ] Props: currentLevel, levels, collectedSummary, onLevelClick
 - [ ] 显示 4 个层级：L1 核心识别、L2 领域分支、L3 细节深入、L4 边界确认
-- [ ] 当前层级高亮显示（▶ 图标）
-- [ ] 已完成层级显示 ✓ 和收集的信息摘要
-- [ ] 未解锁层级显示 ○ 灰色
-- [ ] 每个层级显示进度条（如 "前端 2/5"）
+- [ ] 当前层级显示 ▶ 图标和高亮背景
+- [ ] 已完成层级显示 ✓ 和收集的信息摘要（缩进显示 key: value）
+- [ ] 未解锁层级显示 ○ 灰色文字
+- [ ] 每个层级显示维度进度条（如 "前端 ██░░ 2/5"）
+- [ ] 底部显示"已收集信息摘要"区域
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
 
-#### US-005: 问题卡片面板
-**Description:** 作为用户，我想在右侧看到当前层级的所有问题，按维度分组显示为卡片。
+#### DT-005: 创建维度卡片组件 DimensionCard
+**Description:** 创建单个维度的问题卡片组件
 
 **Acceptance Criteria:**
-- [ ] 右侧显示当前层级的问题面板
-- [ ] 问题按维度分组（前端设计、后端架构、UX 流程等）
-- [ ] 每个维度是一个可折叠的卡片
-- [ ] 卡片内显示该维度的所有问题
-- [ ] 已回答问题收缩为一行，显示答案摘要
-- [ ] 未回答问题展开显示选项
-- [ ] 支持单选、多选、文本输入三种问题类型
+- [ ] 创建 viewer/src/components/pyramid/DimensionCard.tsx
+- [ ] Props: dimension, questions, answers, isLocked, onAnswer
+- [ ] 卡片标题显示维度名称和进度（如 "前端设计 (3/5)"）
+- [ ] 锁定状态显示 "(待解锁)" 并灰显
+- [ ] 展开状态显示所有问题
+- [ ] 可折叠/展开
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
 
-#### US-006: 问题动态生成
-**Description:** 作为系统，我需要根据维度框架和用户上下文动态生成具体问题，而不是使用固定模板。
+#### DT-006: 创建问题项组件 QuestionItem
+**Description:** 创建单个问题的渲染组件，支持多种输入类型
 
 **Acceptance Criteria:**
-- [ ] 定义维度框架配置（前端、后端、UX、架构等维度及其子话题）
-- [ ] L1 层级生成 4-6 个核心问题
-- [ ] L2-L4 层级根据前一层答案，动态生成 8-12 个问题
-- [ ] 问题数量受维度框架约束
-- [ ] 调用 Claude API 生成具体问题文本和选项
+- [ ] 创建 viewer/src/components/pyramid/QuestionItem.tsx
+- [ ] Props: question, answer, isAnswered, onAnswer
+- [ ] 支持单选（radio）、多选（checkbox）、文本输入三种类型
+- [ ] 已回答状态：收缩为一行，显示 ✓ 和答案摘要，可点击展开修改
+- [ ] 未回答状态：展开显示完整问题和选项
+- [ ] 当前回答中状态：显示 ▶ 图标
+- [ ] 选项使用白色背景卡片样式
 - [ ] Typecheck passes
+- [ ] Verify in browser
 
-#### US-007: 层级顺序控制
-**Description:** 作为系统，我需要确保用户必须顺序完成各层级。
+#### DT-007: 创建层级问题面板 LevelPanel
+**Description:** 创建右侧当前层级的问题面板
 
 **Acceptance Criteria:**
-- [ ] 用户必须完成当前层级所有必填问题才能进入下一层
-- [ ] "完成当前层级"按钮在所有必填问题回答后才可点击
-- [ ] 点击后触发 AI 生成下一层问题
-- [ ] 显示加载状态
+- [ ] 创建 viewer/src/components/pyramid/LevelPanel.tsx
+- [ ] Props: level, dimensions, questions, answers, onAnswer, onComplete
+- [ ] 顶部显示层级标题（如 "Level 2: 领域分支"）
+- [ ] 按维度分组显示 DimensionCard
+- [ ] 底部显示"完成当前层级 →"按钮
+- [ ] 按钮在所有必填问题回答后才可点击
+- [ ] 点击后触发 onComplete 回调
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
 
-#### US-008: 实时 PRD 预览
-**Description:** 作为用户，我想实时看到基于我回答生成的 PRD 内容预览。
+#### DT-008: 创建维度框架配置
+**Description:** 定义金字塔各层级的维度和话题框架
 
 **Acceptance Criteria:**
-- [ ] 底部或右侧显示可折叠的 PRD 预览面板
-- [ ] 每完成一个层级后更新 PRD 内容
-- [ ] PRD 使用 Markdown 格式渲染
-- [ ] 支持展开/收缩
+- [ ] 创建 viewer/src/lib/dimension-framework.ts
+- [ ] 定义 L1 层级：4-6 个核心问题话题（问题域、目标用户、核心价值、紧急度）
+- [ ] 定义 L2 层级：4 个维度（frontend, backend, ux, architecture）及其触发词和话题
+- [ ] 定义 L3 层级：动态话题（form, list, api, data 等）
+- [ ] 定义 L4 层级：边界确认话题
+- [ ] 定义问题数量约束（min, max）
+- [ ] 导出 TypeScript 类型定义
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
 
-#### US-009: 进度自动保存
-**Description:** 作为用户，我希望我的回答进度自动保存，以便刷新页面或关闭后能继续。
+#### DT-009: 创建问题生成 API
+**Description:** 创建 API 端点，调用 Claude 动态生成问题
 
 **Acceptance Criteria:**
-- [ ] 每个问题回答后自动保存到 localStorage
-- [ ] 保存内容包括：当前层级、所有答案、生成的问题、PRD 草稿
-- [ ] 页面加载时检查并恢复保存的进度
-- [ ] 显示"自动保存中 ✓"状态指示器
-- [ ] 支持手动清除进度重新开始
+- [ ] 创建 viewer/src/app/api/pyramid/questions/route.ts
+- [ ] POST 接口，接收：level, collectedAnswers, activeDimensions, requirementType, initialDescription
+- [ ] 构造 prompt 包含维度框架、已收集信息、数量约束
+- [ ] 调用 Claude API 生成具体问题和选项
+- [ ] 返回格式：{ questions: Question[], suggestedDimensions?: string[] }
+- [ ] 支持流式响应
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+
+#### DT-010: 创建金字塔进度存储
+**Description:** 扩展 session storage 支持金字塔进度保存
+
+**Acceptance Criteria:**
+- [ ] 创建 viewer/src/lib/pyramid-session-storage.ts
+- [ ] 存储结构：{ currentLevel, answers, generatedQuestions, activeDimensions, prdDraft, versions }
+- [ ] localStorage key: botool-pyramid-session-{projectId}
+- [ ] 提供 savePyramidProgress, loadPyramidProgress, clearPyramidProgress 方法
+- [ ] 每个问题回答后自动保存（debounce 500ms）
+- [ ] 页面加载时自动恢复
+- [ ] Typecheck passes
+
+#### DT-011: 重写 Stage 1 页面为金字塔界面
+**Description:** 完全重写 Stage 1 页面，使用金字塔组件
+
+**Acceptance Criteria:**
+- [ ] 重写 viewer/src/app/stage1/page.tsx
+- [ ] 保留顶部 5 阶段进度条（StageIndicator）
+- [ ] 三栏布局：左侧 PyramidNavigation、中间 LevelPanel、右侧 PRD 预览
+- [ ] 从 Dashboard 获取初始描述和需求类型
+- [ ] 进入时自动生成 L1 问题
+- [ ] 完成每层后生成下一层问题
+- [ ] 实时更新 PRD 预览
+- [ ] 显示"自动保存中 ✓"状态
+- [ ] L4 完成后进入设计确认页面
+- [ ] Typecheck passes
+- [ ] Verify in browser
 
 ---
 
 ### 模块三：设计确认与版本迭代
 
-#### US-010: 设计确认页面
-**Description:** 作为用户，完成 L4 后我想看到完整的 PRD 和可视化布局图来确认设计。
+#### DT-012: 创建可视化布局图组件 LayoutPreview
+**Description:** 创建 React 组件渲染页面布局预览图
 
 **Acceptance Criteria:**
-- [ ] L4 完成后自动进入设计确认页面
-- [ ] 页面上方显示版本历史（v1 → v2 → v3...）
-- [ ] 中间显示可视化页面布局图（React 组件渲染）
-- [ ] 下方显示完整 PRD 预览
-- [ ] 底部显示两个操作区：继续修改 / 确认进入 Stage 2
+- [ ] 创建 viewer/src/components/design-confirm/LayoutPreview.tsx
+- [ ] Props: layoutData (结构化布局描述)
+- [ ] 渲染页面主要区域（Header, Sidebar, Main, Footer）
+- [ ] 渲染关键组件占位（按钮、表单、列表等）
+- [ ] 使用灰色边框和标签标注各区域
+- [ ] 底部显示组件列表
+- [ ] 支持点击组件高亮显示
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
 
-#### US-011: 可视化布局图组件
-**Description:** 作为用户，我想看到 AI 生成的页面布局可视化图，直观了解前端设计。
+#### DT-013: 创建布局图生成 API
+**Description:** 创建 API 端点，根据 PRD 生成布局描述
 
 **Acceptance Criteria:**
-- [ ] 使用 React 组件渲染布局图（不是 ASCII art）
-- [ ] 显示页面主要区域（Header、Sidebar、Main、Footer 等）
-- [ ] 显示关键组件位置（按钮、表单、列表等）
-- [ ] 组件列表在布局图下方展示
-- [ ] 支持点击组件查看详情
+- [ ] 创建 viewer/src/app/api/pyramid/layout/route.ts
+- [ ] POST 接口，接收：prdContent, collectedAnswers
+- [ ] 调用 Claude 生成结构化布局 JSON
+- [ ] 返回格式：{ layout: LayoutData, components: ComponentInfo[] }
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
 
-#### US-012: 继续修改功能
-**Description:** 作为用户，如果我对设计不满意，我想输入修改需求开始新一轮迭代。
+#### DT-014: 创建版本历史组件 VersionHistory
+**Description:** 创建版本历史显示组件
 
 **Acceptance Criteria:**
-- [ ] 设计确认页面包含"继续修改"区域
-- [ ] 提供多行文本框输入修改需求
-- [ ] 点击"提交修改"后创建新版本（v2, v3...）
-- [ ] 进入增量金字塔问答流程
+- [ ] 创建 viewer/src/components/design-confirm/VersionHistory.tsx
+- [ ] Props: versions, currentVersion, onVersionClick
+- [ ] 水平显示版本链（v1 → v2 → v3...）
+- [ ] 每个版本显示简短描述
+- [ ] 当前版本高亮显示
+- [ ] 点击历史版本可查看（只读）
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
 
-#### US-013: 增量金字塔问答
-**Description:** 作为系统，新版本迭代时只需要问与修改相关的增量问题。
+#### DT-015: 创建设计确认页面 DesignConfirmPage
+**Description:** 创建 L4 完成后的设计确认页面
 
 **Acceptance Criteria:**
-- [ ] AI 分析修改需求，判断哪些层级/维度需要重新提问
+- [ ] 创建 viewer/src/components/design-confirm/DesignConfirmPage.tsx
+- [ ] 顶部显示 VersionHistory
+- [ ] 中间显示 LayoutPreview
+- [ ] 下方显示完整 PRD 预览（可折叠）
+- [ ] 底部显示"继续修改"区域：多行文本框 + 提交按钮
+- [ ] 底部显示"确认并进入 Stage 2"按钮
+- [ ] 集成到 Stage 1 页面，L4 完成后显示
+- [ ] Typecheck passes
+- [ ] Verify in browser
+
+#### DT-016: 实现版本迭代逻辑
+**Description:** 实现提交修改后的增量金字塔流程
+
+**Acceptance Criteria:**
+- [ ] 用户提交修改需求后创建新版本（v2, v3...）
+- [ ] 调用 API 分析修改需求，判断哪些层级需要重新提问
+- [ ] 返回增量问题（数量减少）
 - [ ] 无变化的层级显示"━"跳过标记
-- [ ] 需要调整的层级只生成相关问题（数量减少）
-- [ ] 底部显示上一版本已确认内容的摘要
+- [ ] 底部显示上一版本已确认内容摘要
 - [ ] 完成后合并生成新版本 PRD
+- [ ] 版本历史更新
 - [ ] Typecheck passes
-
-#### US-014: 版本历史管理
-**Description:** 作为用户，我想看到 PRD 的版本历史和变更记录。
-
-**Acceptance Criteria:**
-- [ ] 设计确认页面顶部显示版本链
-- [ ] 每个版本显示简短描述（来自修改需求）
-- [ ] PRD 中包含变更记录章节
-- [ ] 可以查看历史版本的 PRD（只读）
-- [ ] 不支持回退编辑旧版本
-- [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
 
 ---
 
 ### 模块四：规范管理
 
-#### US-015: 规范管理入口
-**Description:** 作为用户，我想在 Dashboard 顶部 Tab 中访问规范管理功能。
+#### DT-017: 创建规范管理页面路由
+**Description:** 在 Dashboard 添加规范管理 Tab 和页面
 
 **Acceptance Criteria:**
-- [ ] Dashboard 顶部增加 Tab：[项目列表] [规范管理] [设置]
-- [ ] 点击"规范管理"进入规范管理页面
-- [ ] Tab 切换无页面刷新
+- [ ] 修改 Dashboard 页面，顶部添加 Tab 切换
+- [ ] Tab 选项：[项目列表] [规范管理]
+- [ ] 点击"规范管理"切换到规范管理视图
+- [ ] Tab 切换使用状态控制，无页面刷新
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
 
-#### US-016: 规范分类列表
-**Description:** 作为用户，我想看到按类别组织的规范列表。
+#### DT-018: 创建规范分类树组件 CategoryTree
+**Description:** 创建左侧规范分类树组件
 
 **Acceptance Criteria:**
-- [ ] 左侧显示规范分类树
-- [ ] 6 个分类：前端规范、后端规范、测试规范、部署规范、应用规范、其他规范
-- [ ] 每个分类可展开显示其下的规范文档
+- [ ] 创建 viewer/src/components/rules/CategoryTree.tsx
+- [ ] 显示 6 个分类：前端规范、后端规范、测试规范、部署规范、应用规范、其他规范
+- [ ] 每个分类可展开显示其下的规范文档列表
 - [ ] 显示每个分类的规范数量
-- [ ] 支持新建规范按钮
+- [ ] 支持选中某个规范文档
+- [ ] 底部显示"+ 新建规范"按钮
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
 
-#### US-017: 规范文档编辑
-**Description:** 作为用户，我想使用 Markdown 编辑器创建和编辑规范文档。
+#### DT-019: 创建 Markdown 编辑器组件
+**Description:** 创建规范文档的 Markdown 编辑器
 
 **Acceptance Criteria:**
-- [ ] 右侧显示 Markdown 编辑器
-- [ ] 支持实时预览（左右分栏或切换模式）
+- [ ] 创建 viewer/src/components/rules/MarkdownEditor.tsx
+- [ ] 左右分栏：左侧编辑、右侧预览
 - [ ] 支持常用 Markdown 语法高亮
-- [ ] 保存按钮将内容写入 rules/ 目录
-- [ ] 文件命名格式：{category}/{name}.md
+- [ ] 工具栏：加粗、斜体、代码、链接、列表
+- [ ] 保存按钮
+- [ ] 显示保存状态
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
 
-#### US-018: 规范转 Skill
-**Description:** 作为系统，我需要将规范文档自动转换为 Skill，以便在 Stage 2/3 中注入。
+#### DT-020: 创建规范文件存储 API
+**Description:** 创建规范文档的读写 API
 
 **Acceptance Criteria:**
-- [ ] 规范保存时自动生成对应的 Skill 文件
-- [ ] Skill 存储在 ~/.claude/skills/botool-rules/ 目录
-- [ ] Stage 2 开始时自动加载相关规范 Skill
-- [ ] Stage 3 开发时自动注入规范 Skill
-- [ ] 提供"预览 Skill"按钮查看生成结果
+- [ ] 创建 viewer/src/app/api/rules/route.ts
+- [ ] GET: 获取所有规范列表（按分类）
+- [ ] POST: 保存规范文档到 rules/{category}/{name}.md
+- [ ] DELETE: 删除规范文档
+- [ ] 确保 rules/ 目录存在
+- [ ] Typecheck passes
+
+#### DT-021: 创建规范管理主组件 RulesManager
+**Description:** 组装规范管理的完整界面
+
+**Acceptance Criteria:**
+- [ ] 创建 viewer/src/components/rules/RulesManager.tsx
+- [ ] 左侧显示 CategoryTree
+- [ ] 右侧显示 MarkdownEditor
+- [ ] 选中规范时加载内容到编辑器
+- [ ] 新建规范时显示空编辑器 + 名称输入
+- [ ] 保存时调用 API 写入文件
+- [ ] Typecheck passes
+- [ ] Verify in browser
+
+#### DT-022: 实现规范转 Skill 功能
+**Description:** 将规范文档自动转换为 Skill 文件
+
+**Acceptance Criteria:**
+- [ ] 创建 viewer/src/lib/rules-to-skill.ts
+- [ ] 规范保存时自动生成对应 Skill 文件
+- [ ] Skill 目录：~/.claude/skills/botool-rules/
+- [ ] Skill 文件命名：{category}-{name}.md
+- [ ] Skill 格式符合 Claude Code Skill 规范
+- [ ] 提供"预览 Skill"功能
 - [ ] Typecheck passes
 
 ---
 
 ### 模块五：Stage 2 四步流水线
 
-#### US-019: 流水线进度条
-**Description:** 作为用户，我想看到 Stage 2 的四步流水线进度。
+#### DT-023: 创建流水线进度条组件 PipelineProgress
+**Description:** 创建 Stage 2 的四步流水线进度条
 
 **Acceptance Criteria:**
-- [ ] Stage 2 顶部显示流水线进度条
-- [ ] 四个步骤：v6 规范检查 → v7 代码示例 → v9 测试用例 → JSON 转换
+- [ ] 创建 viewer/src/components/pipeline/PipelineProgress.tsx
+- [ ] Props: currentStep, steps, onStepClick
+- [ ] 显示四个步骤：v6 规范检查 → v7 代码示例 → v9 测试用例 → JSON 转换
 - [ ] 当前步骤高亮，已完成步骤显示 ✓
-- [ ] 点击已完成步骤可以回看（只读）
+- [ ] 点击已完成步骤可回看（只读）
+- [ ] 使用连接线连接各步骤
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
 
-#### US-020: v6 规范检查
-**Description:** 作为用户，我希望系统根据已配置的规范检查 PRD。
+#### DT-024: 创建规范检查步骤组件 RuleCheckStep
+**Description:** 创建 v6 规范检查步骤的界面
 
 **Acceptance Criteria:**
-- [ ] 加载所有相关规范（根据 PRD 涉及的领域）
-- [ ] AI 分析 PRD 与规范的符合度
-- [ ] 列出不符合项和建议修改
-- [ ] 每项建议提供：[采纳] [修改] [跳过] 操作
-- [ ] 采纳后自动更新 PRD
-- [ ] 所有项处理完毕后可进入下一步
+- [ ] 创建 viewer/src/components/pipeline/RuleCheckStep.tsx
+- [ ] 加载所有相关规范文档
+- [ ] 显示检查进度
+- [ ] 列出不符合项，每项显示：问题描述、建议修改
+- [ ] 每项提供 [采纳] [修改] [跳过] 按钮
+- [ ] 采纳后显示 ✓
+- [ ] 所有项处理完毕后显示"继续下一步"按钮
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
 
-#### US-021: v7 代码示例补全
-**Description:** 作为用户，我希望系统为关键接口生成 TypeScript 定义。
+#### DT-025: 创建代码示例步骤组件 CodeExampleStep
+**Description:** 创建 v7 代码示例补全步骤的界面
 
 **Acceptance Criteria:**
-- [ ] 遍历 PRD 中的每个 User Story
-- [ ] 为涉及数据结构的 Story 生成 interface 定义
-- [ ] 为涉及 API 的 Story 生成 API 契约示例
-- [ ] 每个示例提供：[采纳] [修改] [跳过] 操作
-- [ ] 采纳的示例添加到 PRD 的技术附录
+- [ ] 创建 viewer/src/components/pipeline/CodeExampleStep.tsx
+- [ ] 遍历 PRD 中的每个开发任务
+- [ ] 为涉及数据结构的任务生成 TypeScript interface
+- [ ] 代码使用语法高亮显示
+- [ ] 每个示例提供 [采纳] [修改] [跳过] 按钮
+- [ ] 修改时打开代码编辑器
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
 
-#### US-022: v9 测试用例生成
-**Description:** 作为用户，我希望系统为每个 User Story 生成测试用例描述。
+#### DT-026: 创建测试用例步骤组件 TestCaseStep
+**Description:** 创建 v9 测试用例生成步骤的界面
 
 **Acceptance Criteria:**
-- [ ] 遍历 PRD 中的每个 User Story
+- [ ] 创建 viewer/src/components/pipeline/TestCaseStep.tsx
+- [ ] 遍历 PRD 中的每个开发任务
 - [ ] 生成单元测试用例描述（测什么、预期结果）
-- [ ] 生成 E2E 测试场景描述（用户操作流程）
-- [ ] 每个用例提供：[采纳] [修改] [跳过] 操作
-- [ ] 采纳的用例添加到 PRD 的测试章节
+- [ ] 生成 E2E 测试场景描述
+- [ ] 每个用例提供 [采纳] [修改] [跳过] 按钮
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
 
-#### US-023: JSON 转换
-**Description:** 作为系统，我需要将最终 PRD 转换为 prd.json 格式。
+#### DT-027: 创建 JSON 转换步骤组件 JsonConvertStep
+**Description:** 创建最终 JSON 转换步骤的界面
 
 **Acceptance Criteria:**
-- [ ] 解析 PRD 提取：项目名、分支名、描述、开发任务
-- [ ] 每个 User Story 转为一个 devTask
-- [ ] devTask 包含：id、title、description、acceptanceCriteria、passes(false)
-- [ ] 生成的 JSON 显示在编辑器中供用户审核
+- [ ] 创建 viewer/src/components/pipeline/JsonConvertStep.tsx
+- [ ] 解析最终 PRD 生成 prd.json 结构
+- [ ] 在 JSON 编辑器中显示
 - [ ] 用户可以编辑任务详情
-- [ ] 保存到 prd.json 文件
+- [ ] 保存按钮写入 prd.json 文件
+- [ ] 显示"开始开发"按钮进入 Stage 3
 - [ ] Typecheck passes
-- [ ] 在浏览器中验证
+- [ ] Verify in browser
+
+#### DT-028: 重写 Stage 2 页面为流水线界面
+**Description:** 重写 Stage 2 页面，集成流水线组件
+
+**Acceptance Criteria:**
+- [ ] 重写 viewer/src/app/stage2/page.tsx
+- [ ] 保留顶部 5 阶段进度条
+- [ ] 顶部显示 PipelineProgress
+- [ ] 根据当前步骤显示对应组件
+- [ ] 步骤间数据传递（PRD 内容累积更新）
+- [ ] 最终步骤完成后可进入 Stage 3
+- [ ] Typecheck passes
+- [ ] Verify in browser
 
 ---
 
@@ -368,14 +462,40 @@
 
 ## Technical Considerations
 
+### Skill 架构
+
+金字塔模式使用独立的 Skill：`botoolagent-pyramidprd`
+
+```
+~/.claude/skills/
+├── botoolagent-generateprd/     # CLI 模式 + Viewer 聊天模式（旧）
+│   └── SKILL.md
+└── botoolagent-pyramidprd/      # Viewer 金字塔模式（新）
+    └── SKILL.md                 # 包含维度框架、Prompt 模板、生成规则
+```
+
+**Skill 内容：**
+- 维度框架定义（L1-L4 的话题、问题数量约束）
+- 问题生成 Prompt 模板（L1/L2/L3/L4_QUESTION_PROMPT）
+- PRD 生成 Prompt（PRD_GENERATION_PROMPT）
+- 布局图生成 Prompt（LAYOUT_GENERATION_PROMPT）
+- 版本迭代分析 Prompt（ITERATION_ANALYSIS_PROMPT）
+
+**API 如何使用 Skill：**
+1. API 读取 `~/.claude/skills/botoolagent-pyramidprd/SKILL.md`
+2. 解析出对应层级的 Prompt 模板
+3. 填充变量（用户输入、已收集答案、维度配置）
+4. 调用 Claude API
+5. 返回结构化 JSON
+
 ### 现有代码集成
 
 - Stage 1 金字塔界面将**完全替代**现有的聊天界面（`viewer/src/app/stage1/page.tsx`）
-- 复用现有的 `useCliChat` hook 与 Claude 通信
+- **不再使用** `useCliChat` hook（改为直接调用 pyramid API）
 - 复用现有的 `prd-session-storage.ts` 进行进度存储，需扩展数据结构
 - 复用现有的 `ProjectContext` 进行项目状态管理
 
-### 新增组件
+### 新增文件结构
 
 ```
 viewer/src/
@@ -385,45 +505,54 @@ viewer/src/
 │   │   ├── LevelPanel.tsx             # 层级问题面板
 │   │   ├── DimensionCard.tsx          # 维度卡片
 │   │   ├── QuestionItem.tsx           # 问题项
-│   │   └── VersionHistory.tsx         # 版本历史
+│   │   └── index.ts
 │   ├── design-confirm/
 │   │   ├── DesignConfirmPage.tsx      # 设计确认页面
 │   │   ├── LayoutPreview.tsx          # 可视化布局图
-│   │   └── IterationInput.tsx         # 修改需求输入
+│   │   ├── VersionHistory.tsx         # 版本历史
+│   │   └── index.ts
 │   ├── rules/
 │   │   ├── RulesManager.tsx           # 规范管理主页
 │   │   ├── CategoryTree.tsx           # 分类树
-│   │   └── MarkdownEditor.tsx         # MD编辑器
+│   │   ├── MarkdownEditor.tsx         # MD编辑器
+│   │   └── index.ts
 │   └── pipeline/
 │       ├── PipelineProgress.tsx       # 流水线进度条
 │       ├── RuleCheckStep.tsx          # v6 规范检查
 │       ├── CodeExampleStep.tsx        # v7 代码示例
 │       ├── TestCaseStep.tsx           # v9 测试用例
-│       └── JsonConvertStep.tsx        # JSON 转换
+│       ├── JsonConvertStep.tsx        # JSON 转换
+│       └── index.ts
 ├── lib/
-│   ├── dimension-framework.ts         # 维度框架定义
+│   ├── dimension-framework.ts         # 维度框架定义（从 Skill 解析或硬编码）
+│   ├── pyramid-prompts.ts             # Prompt 模板（从 Skill 读取）
 │   ├── pyramid-session-storage.ts     # 金字塔进度存储
+│   ├── skill-parser.ts                # Skill 文件解析工具
 │   └── rules-to-skill.ts              # 规范转 Skill
 └── app/
+    ├── api/
+    │   ├── pyramid/
+    │   │   ├── questions/route.ts     # 问题生成
+    │   │   └── layout/route.ts        # 布局图生成
+    │   └── rules/
+    │       └── route.ts               # 规范 CRUD
     ├── stage1/
     │   └── page.tsx                   # 重写为金字塔界面
-    ├── stage2/
-    │   └── page.tsx                   # 改为流水线界面
-    └── rules/
-        └── page.tsx                   # 新增规范管理页
+    └── stage2/
+        └── page.tsx                   # 改为流水线界面
 ```
 
 ### API 端点
 
-```
-POST /api/pyramid/questions/generate   # 生成问题
-POST /api/pyramid/layout/generate      # 生成布局图
-POST /api/rules/save                   # 保存规范
-POST /api/rules/to-skill               # 转换为 Skill
-POST /api/pipeline/rule-check          # 规范检查
-POST /api/pipeline/code-examples       # 代码示例生成
-POST /api/pipeline/test-cases          # 测试用例生成
-```
+| 端点 | 方法 | 说明 | 使用的 Prompt |
+|------|------|------|--------------|
+| /api/pyramid/questions | POST | 生成金字塔问题 | L1/L2/L3/L4_QUESTION_PROMPT |
+| /api/pyramid/layout | POST | 生成布局图 | LAYOUT_GENERATION_PROMPT |
+| /api/pyramid/prd | POST | 生成 PRD 文档 | PRD_GENERATION_PROMPT |
+| /api/pyramid/iterate | POST | 分析迭代影响 | ITERATION_ANALYSIS_PROMPT |
+| /api/rules | GET | 获取规范列表 | - |
+| /api/rules | POST | 保存规范文档 | - |
+| /api/rules | DELETE | 删除规范文档 | - |
 
 ### 性能考虑
 
@@ -444,32 +573,41 @@ POST /api/pipeline/test-cases          # 测试用例生成
 
 ## Open Questions
 
-1. **布局图组件库**：可视化布局图使用什么 React 组件库实现？考虑 react-flow 或自定义 SVG
-2. **规范 Skill 格式**：规范转 Skill 的具体格式是什么？需要与现有 Skill 系统兼容
-3. **增量问题算法**：AI 如何判断哪些层级需要重新提问？需要定义判断规则
-4. **文本框字数限制**：Dashboard 创建弹窗的需求描述最大字数是多少？
+1. **布局图组件库**：可视化布局图使用什么 React 组件库实现？考虑 react-flow 或自定义 div/CSS
+2. **Skill 解析方式**：API 是否需要实时读取 Skill 文件，还是构建时提取？
+3. ~~增量问题算法~~：已在 `botoolagent-pyramidprd` Skill 中定义 `ITERATION_ANALYSIS_PROMPT`
+4. **文本框字数限制**：Dashboard 创建弹窗的需求描述最大字数是多少？建议 2000 字符
 
 ---
 
 ## Implementation Priority
 
 ### Phase 1: Stage 1 金字塔（核心功能）
-1. US-001 ~ US-003: Dashboard 创建弹窗改造
-2. US-004 ~ US-009: 金字塔问答核心功能
-3. US-010 ~ US-014: 设计确认与版本迭代
+- DT-001 ~ DT-003: Dashboard 创建弹窗改造
+- DT-004 ~ DT-011: 金字塔问答核心功能
+- DT-012 ~ DT-016: 设计确认与版本迭代
 
 ### Phase 2: 规范管理
-4. US-015 ~ US-018: 规范管理完整功能
+- DT-017 ~ DT-022: 规范管理完整功能
 
 ### Phase 3: Stage 2 流水线
-5. US-019 ~ US-023: 四步流水线
+- DT-023 ~ DT-028: 四步流水线
 
 ---
 
 ## Appendix: 维度框架定义
 
 ```typescript
-const DIMENSION_FRAMEWORK = {
+// viewer/src/lib/dimension-framework.ts
+
+export interface DimensionFramework {
+  L1: LevelConfig;
+  L2: LevelWithDimensions;
+  L3: LevelWithDynamicTopics;
+  L4: LevelConfig;
+}
+
+export const DIMENSION_FRAMEWORK: DimensionFramework = {
   L1: {
     name: '核心识别',
     questionCount: { min: 4, max: 6 },
@@ -481,22 +619,22 @@ const DIMENSION_FRAMEWORK = {
     dimensions: {
       frontend: {
         name: '前端设计',
-        triggers: ['前端', '界面', 'UI', '页面'],
+        triggers: ['前端', '界面', 'UI', '页面', '组件'],
         topics: ['页面结构', '组件类型', '设计风格', '响应式', '交互', '状态管理']
       },
       backend: {
         name: '后端架构',
-        triggers: ['后端', 'API', '服务', '数据'],
+        triggers: ['后端', 'API', '服务', '数据', '接口'],
         topics: ['API 类型', '数据模型', '认证', '存储', '集成', '缓存']
       },
       ux: {
         name: 'UX 流程',
-        triggers: ['用户', '流程', '体验'],
+        triggers: ['用户', '流程', '体验', '操作'],
         topics: ['用户旅程', '核心流程', '边缘场景', '反馈机制']
       },
       architecture: {
         name: '技术架构',
-        triggers: ['架构', '部署', '扩展'],
+        triggers: ['架构', '部署', '扩展', '技术栈'],
         topics: ['技术栈', '模块划分', '部署方式', '依赖管理']
       }
     }
