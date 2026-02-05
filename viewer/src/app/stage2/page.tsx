@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator } from '@/components';
 import { useProject } from '@/contexts/ProjectContext';
 import { PipelineProgress, DEFAULT_STEPS } from '@/components/pipeline/PipelineProgress';
@@ -27,6 +27,7 @@ interface PrdJson {
 
 export default function Stage2Page() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { activeProject, updateProject } = useProject();
 
   // Pipeline state
@@ -38,13 +39,35 @@ export default function Stage2Page() {
   const [codeExamples, setCodeExamples] = useState<CodeExample[]>([]);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
 
-  // Load PRD content from session storage
+  // Load PRD content from URL param or session storage
   useEffect(() => {
+    // First try sessionStorage
     const storedPrd = sessionStorage.getItem('botool-stage2-prd');
     if (storedPrd) {
       setPrdContent(storedPrd);
+      return;
     }
-  }, []);
+
+    // Then try loading from API using URL param
+    const prdId = searchParams.get('prd');
+    if (prdId) {
+      fetch(`/api/prd/${encodeURIComponent(prdId)}`)
+        .then(res => {
+          if (!res.ok) throw new Error('PRD not found');
+          return res.json();
+        })
+        .then(data => {
+          if (data.content) {
+            setPrdContent(data.content);
+            // Cache in sessionStorage for subsequent steps
+            sessionStorage.setItem('botool-stage2-prd', data.content);
+          }
+        })
+        .catch(err => {
+          console.error('Failed to load PRD content:', err);
+        });
+    }
+  }, [searchParams]);
 
   // Handle step click (for viewing completed steps)
   const handleStepClick = useCallback((stepIndex: number) => {

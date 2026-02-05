@@ -254,6 +254,9 @@ ${prdContent}
           <p className="text-sm text-neutral-500 mb-6">
             分析 PRD 内容，为开发任务生成单元测试和端到端测试用例
           </p>
+          {error && (
+            <p className="text-sm text-red-600 mb-4">{error}</p>
+          )}
           <div className="flex justify-center gap-4">
             {onBack && (
               <button
