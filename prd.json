@@ -1,7 +1,7 @@
 {
   "project": "Stage 2 规范检查功能改造",
   "branchName": "botool/stage2-rule-check-redesign",
-  "description": "将 Stage 2 规范检查步骤从 mock 数据改为真实的规范选择和 CLI 适配流程",
+  "description": "将 Stage 2 规范检查步骤从 mock 数据改为真实的规范选择和 CLI 适配流程。用户从 Dashboard 规范文档系统中选择规范，点击确认后，CLI 自动按规范适配 PRD，无需逐项确认。",
   "devTasks": [
     {
       "id": "DT-001",
@@ -81,7 +81,7 @@
         "Verify in browser"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -97,13 +97,13 @@
         "Verify in browser"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
       "id": "DT-007",
       "title": "端到端测试",
-      "description": "测试完整的 Stage 2 流程。",
+      "description": "测试完整的 Stage 2 流程，确保所有步骤正常工作。",
       "acceptanceCriteria": [
         "规范选择正确加载和展示",
         "CLI 适配流程正常工作",
@@ -113,7 +113,7 @@
         "Verify in browser"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": ""
     }
   ]

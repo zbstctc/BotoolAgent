@@ -1,47 +1,32 @@
-# Botool 开发代理进度日志
-开始时间: Wed Feb  4 13:18:42 CST 2026
+# Botool Dev Agent Progress Log
+Started: 2/6/2026, 2:29:46 AM
 ---
 
 ## Codebase Patterns
-- Stage 1 使用 useCliChat hook 与 CLI 通信，通过 SSE 事件流接收 tool_use 事件
-- AskUserQuestion 工具的 metadata 字段用于传递层级信息（level, levelName, progress）
-- PRD 文本通过检测 `# PRD:` 标记从 assistant 消息中提取
-- CLI 聊天模式下，前端不再直接调用 API 生成问题，而是由 Skill 控制问答流程
+- 规范文档存储在 `/rules/{category}/{name}.md` 目录结构中
+- /api/rules GET 返回 `{ categories: { [categoryId]: RuleDocument[] } }` 格式
+- RuleDocument 类型: `{ id: string, name: string, category: string }`
+- Stage 2 组件在 `viewer/src/components/pipeline/` 目录下
+- 分类定义在 CategoryTree.tsx 的 DEFAULT_CATEGORIES 常量中
+- /api/prd/convert 是专用的 PRD 转 JSON 端点，SSE 事件类型为 progress/complete/error
+- /api/cli/chat 是通用 CLI 调用端点，SSE 事件类型为 text/done/error
+- /api/prd/[id] GET 返回 PRD 文件内容，文件路径为 tasks/prd-{id}.md
+- Stage 2 页面通过 URL 参数 `?prd={id}` 传递 PRD ID，从 API 加载内容并缓存到 sessionStorage
 
 ---
 
-## 2026-02-04 18:45 - DT-003
+## 2026-02-06 - DT-007
 - 实现了什么：
-  - 将 Stage 1 页面从 API 生成问题模式重写为 CLI 聊天模式
-  - 使用 useCliChat hook 连接 Claude CLI
-  - 初始发送 /botoolagent-pyramidprd 触发 Skill
-  - 监听 tool_use 事件识别 AskUserQuestion
-  - 从 metadata.level 更新金字塔进度条
-  - 用户回答后调用 respondToTool 发送答案
-  - 改进 PRD 检测逻辑，从消息中提取 PRD 内容
-
+  - 端到端测试完整 Stage 2 流程（规范选择→CLI适配→代码示例→测试用例→JSON转换）
+  - 修复 stage2/page.tsx: 从 URL 参数通过 /api/prd/{id} 加载 PRD 内容
+  - 修复 CodeExampleStep/TestCaseStep: idle 状态显示错误信息
 - 修改了哪些文件：
-  - viewer/src/app/stage1/page.tsx (完全重写)
-
+  - viewer/src/app/stage2/page.tsx（PRD 内容加载修复）
+  - viewer/src/components/pipeline/CodeExampleStep.tsx（错误显示修复）
+  - viewer/src/components/pipeline/TestCaseStep.tsx（错误显示修复）
 - **未来迭代的经验教训：**
-  - useCliChat hook 的 onToolUse 回调在收到 tool_use 事件时触发，可用于更新 UI 状态
-  - pendingToolUse 保存当前待响应的工具调用，respondToTool 用于发送响应
-  - metadata 字段在 AskUserQuestionToolInput 接口中定义为可选的 PyramidMetadata 类型
-  - PRD 检测应该遍历所有消息而不仅仅是最后一条，因为 PRD 可能在之前的消息中生成
----
-
-## 2026-02-04 19:00 - DT-004, DT-005, DT-006
-- 实现了什么：
-  - DT-004: PyramidNavigation 组件已满足 CLI 模式要求（只读展示）
-  - DT-005: 问题渲染已在 DT-003 中直接在页面内实现
-  - DT-006: 标记所有 pyramid API 为废弃
-
-- 修改了哪些文件：
-  - viewer/src/app/api/pyramid/questions/route.ts (添加废弃注释)
-  - viewer/src/app/api/pyramid/iterate/route.ts (添加废弃注释)
-  - viewer/src/app/api/pyramid/layout/route.ts (添加废弃注释)
-
-- **未来迭代的经验教训：**
-  - 废弃 API 时使用 @deprecated JSDoc 标记，而不是直接删除
-  - PyramidNavigation 组件的 onLevelClick 在 CLI 模式下设为空函数来禁用层级切换
+  - Stage 2 页面的 PRD 内容有两个来源：sessionStorage 和 URL 参数，优先级为 sessionStorage > API
+  - CodeExampleStep/TestCaseStep 的 idle 界面需要显示 error 状态（之前 setError 后界面不更新）
+  - JSON 转换步骤的"保存 prd.json"会覆盖项目根目录的 prd.json，需要注意不要覆盖正在使用的 PRD
+  - 端到端测试时 CLI 响应时间可能很长（1-2分钟），需要耐心等待
 ---
