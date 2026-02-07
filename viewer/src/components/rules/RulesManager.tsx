@@ -22,6 +22,10 @@ export function RulesManager({ className }: RulesManagerProps) {
   const [newDocCategory, setNewDocCategory] = useState<string>('');
   const [newDocName, setNewDocName] = useState<string>('');
 
+  // Delete confirmation state
+  const [deleteTarget, setDeleteTarget] = useState<RuleDocument | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // Skill preview state
   const [showSkillPreview, setShowSkillPreview] = useState(false);
   const [isGeneratingSkill, setIsGeneratingSkill] = useState(false);
@@ -161,6 +165,39 @@ export function RulesManager({ className }: RulesManagerProps) {
     }
   }, [isCreating, newDocCategory, newDocName, selectedDoc, content]);
 
+  // Handle delete document
+  const handleDeleteDocument = useCallback((doc: RuleDocument) => {
+    setDeleteTarget(doc);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/rules?id=${encodeURIComponent(deleteTarget.id)}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        // If the deleted doc was selected, clear selection
+        if (selectedDoc?.id === deleteTarget.id) {
+          setSelectedDoc(null);
+          setContent('');
+        }
+        await loadRules();
+      } else {
+        alert('删除失败，请稍后重试');
+      }
+    } catch (error) {
+      console.error('Failed to delete:', error);
+      alert('删除失败，请稍后重试');
+    } finally {
+      setIsDeleting(false);
+      setDeleteTarget(null);
+    }
+  }, [deleteTarget, selectedDoc, loadRules]);
+
   // Get current document info for skill preview
   const currentCategory = isCreating ? newDocCategory : selectedDoc?.category;
   const currentName = isCreating ? newDocName.trim() : selectedDoc?.name;
@@ -183,6 +220,7 @@ export function RulesManager({ className }: RulesManagerProps) {
             selectedDocId={selectedDoc?.id || null}
             onSelectDocument={handleSelectDocument}
             onCreateDocument={handleCreateDocument}
+            onDeleteDocument={handleDeleteDocument}
           />
         )}
       </div>
@@ -264,6 +302,41 @@ export function RulesManager({ className }: RulesManagerProps) {
           onGenerate={handleGenerateSkill}
           isGenerating={isGeneratingSkill}
         />
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setDeleteTarget(null)}
+        >
+          <div
+            className="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-neutral-900 mb-2">
+              确认删除
+            </h3>
+            <p className="text-sm text-neutral-600 mb-6">
+              确定要删除规范 <span className="font-medium text-neutral-900">&quot;{deleteTarget.name}&quot;</span> 吗？此操作不可撤销。
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {isDeleting ? '删除中...' : '删除'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

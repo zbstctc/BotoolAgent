@@ -21,6 +21,7 @@ interface CategoryTreeProps {
   selectedDocId: string | null;
   onSelectDocument: (doc: RuleDocument) => void;
   onCreateDocument: (categoryId: string) => void;
+  onDeleteDocument?: (doc: RuleDocument) => void;
 }
 
 const DEFAULT_CATEGORIES: RuleCategory[] = [
@@ -37,6 +38,7 @@ export function CategoryTree({
   selectedDocId,
   onSelectDocument,
   onCreateDocument,
+  onDeleteDocument,
 }: CategoryTreeProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set(categories.map(c => c.id))
@@ -72,6 +74,7 @@ export function CategoryTree({
             onToggle={() => toggleCategory(category.id)}
             onSelectDocument={onSelectDocument}
             onCreateDocument={() => onCreateDocument(category.id)}
+            onDeleteDocument={onDeleteDocument}
           />
         ))}
       </div>
@@ -96,6 +99,7 @@ function CategoryItem({
   onToggle,
   onSelectDocument,
   onCreateDocument,
+  onDeleteDocument,
 }: {
   category: RuleCategory;
   isExpanded: boolean;
@@ -103,6 +107,7 @@ function CategoryItem({
   onToggle: () => void;
   onSelectDocument: (doc: RuleDocument) => void;
   onCreateDocument: () => void;
+  onDeleteDocument?: (doc: RuleDocument) => void;
 }) {
   return (
     <div className="mb-1">
@@ -128,17 +133,47 @@ function CategoryItem({
         <div className="ml-8 space-y-0.5">
           {category.documents.length > 0 ? (
             category.documents.map((doc) => (
-              <button
+              <div
                 key={doc.id}
-                onClick={() => onSelectDocument(doc)}
-                className={`w-full text-left px-3 py-1.5 rounded text-sm transition-colors ${
+                className={`group flex items-center rounded transition-colors ${
                   selectedDocId === doc.id
                     ? 'bg-blue-100 text-blue-700'
                     : 'text-neutral-600 hover:bg-neutral-100'
                 }`}
               >
-                {doc.name}
-              </button>
+                <button
+                  onClick={() => onSelectDocument(doc)}
+                  className="flex-1 text-left px-3 py-1.5 text-sm truncate"
+                >
+                  {doc.name}
+                </button>
+                {/* Action buttons - visible on hover */}
+                <div className="flex items-center gap-0.5 pr-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => onSelectDocument(doc)}
+                    className="p-1 rounded hover:bg-neutral-200 text-neutral-400 hover:text-neutral-600 transition-colors"
+                    title="编辑"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  {onDeleteDocument && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteDocument(doc);
+                      }}
+                      className="p-1 rounded hover:bg-red-100 text-neutral-400 hover:text-red-600 transition-colors"
+                      title="删除"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
             ))
           ) : (
             <p className="px-3 py-1.5 text-xs text-neutral-400">暂无规范</p>
