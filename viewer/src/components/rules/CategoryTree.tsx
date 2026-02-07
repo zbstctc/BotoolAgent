@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 export interface RuleDocument {
   id: string;
@@ -43,6 +43,7 @@ export function CategoryTree({
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set(categories.map(c => c.id))
   );
+  const [searchQuery, setSearchQuery] = useState('');
 
   const toggleCategory = (categoryId: string) => {
     setExpandedCategories(prev => {
@@ -56,20 +57,59 @@ export function CategoryTree({
     });
   };
 
+  // Filter categories based on search query
+  const filteredCategories = useMemo(() => {
+    if (!searchQuery.trim()) return categories;
+    const query = searchQuery.toLowerCase();
+    return categories.map(cat => ({
+      ...cat,
+      documents: cat.documents.filter(doc =>
+        doc.name.toLowerCase().includes(query)
+      ),
+    }));
+  }, [categories, searchQuery]);
+
+  // Count total filtered results
+  const totalResults = useMemo(() => {
+    return filteredCategories.reduce((sum, cat) => sum + cat.documents.length, 0);
+  }, [filteredCategories]);
+
+  const totalDocs = useMemo(() => {
+    return categories.reduce((sum, cat) => sum + cat.documents.length, 0);
+  }, [categories]);
+
   return (
     <div className="flex flex-col h-full bg-white border-r border-neutral-200">
       {/* Header */}
       <div className="p-4 border-b border-neutral-200">
-        <h2 className="text-sm font-semibold text-neutral-900">规范分类</h2>
+        <h2 className="text-sm font-semibold text-neutral-900 mb-3">规范分类</h2>
+        {/* Search */}
+        <div className="relative">
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="搜索规范..."
+            className="w-full pl-8 pr-3 py-1.5 text-sm border border-neutral-300 rounded-lg placeholder:text-neutral-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+          />
+        </div>
+        {searchQuery.trim() && (
+          <p className="text-xs text-neutral-500 mt-2">
+            找到 {totalResults} / {totalDocs} 条结果
+          </p>
+        )}
       </div>
 
       {/* Category List */}
       <div className="flex-1 overflow-y-auto p-2">
-        {categories.map((category) => (
+        {filteredCategories.map((category) => (
           <CategoryItem
             key={category.id}
             category={category}
-            isExpanded={expandedCategories.has(category.id)}
+            isExpanded={expandedCategories.has(category.id) || searchQuery.trim().length > 0}
             selectedDocId={selectedDocId}
             onToggle={() => toggleCategory(category.id)}
             onSelectDocument={onSelectDocument}
