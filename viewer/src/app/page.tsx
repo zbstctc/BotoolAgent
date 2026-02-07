@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { TaskHistory, NewPrdDialog, ProjectCard, type TaskHistoryItem, type TaskStatus, type TaskStage } from '@/components';
 import { useProject, type ProjectState } from '@/contexts/ProjectContext';
+import { RulesManager } from '@/components/rules/RulesManager';
 
 interface PRDItem {
   id: string;
@@ -282,11 +283,8 @@ export default function Dashboard() {
 
       {/* Tab Content */}
       {activeTab === 'rules' ? (
-        <div className="flex-1 flex items-center justify-center text-neutral-500">
-          <div className="text-center">
-            <p className="text-lg mb-2">规范管理</p>
-            <p className="text-sm">即将推出...</p>
-          </div>
+        <div className="flex-1 min-h-0 -mx-4 -mb-6">
+          <RulesManager className="h-full" />
         </div>
       ) : (
       /* Main Content Grid */
