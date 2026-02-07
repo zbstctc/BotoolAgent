@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { TaskHistory, NewPrdDialog, ProjectCard, type TaskHistoryItem, type TaskStatus, type TaskStage } from '@/components';
 import { useProject, type ProjectState } from '@/contexts/ProjectContext';
 
@@ -57,6 +57,7 @@ interface SessionDetails {
 
 export default function Dashboard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const {
     activeProject,
     activeProjectId,
@@ -81,7 +82,9 @@ export default function Dashboard() {
   const [loadingSessionDetails, setLoadingSessionDetails] = useState(false);
   const [viewMode, setViewMode] = useState<'timeline' | 'list'>('timeline');
   const [showNewPrdDialog, setShowNewPrdDialog] = useState(false);
-  const [activeTab, setActiveTab] = useState<'projects' | 'rules'>('projects');
+  const [activeTab, setActiveTab] = useState<'projects' | 'rules'>(
+    searchParams.get('tab') === 'rules' ? 'rules' : 'projects'
+  );
 
   // Get all projects from context
   const allProjects = getAllProjects();

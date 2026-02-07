@@ -9,8 +9,6 @@ export interface TestCase {
   type: 'unit' | 'e2e';
   description: string;
   steps?: string[];
-  status: 'pending' | 'accepted' | 'modified' | 'skipped';
-  modifiedDescription?: string;
 }
 
 // Generation state
@@ -28,8 +26,6 @@ export function TestCaseStep({
   onBack,
 }: TestCaseStepProps) {
   const [testCases, setTestCases] = useState<TestCase[]>([]);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDescription, setEditDescription] = useState('');
 
   // CLI generation state
   const [generatingState, setGeneratingState] = useState<GeneratingState>('idle');
@@ -198,47 +194,6 @@ ${prdContent}
     setGeneratingMessage('');
   }, []);
 
-  const handleAccept = useCallback((id: string) => {
-    setTestCases(prev =>
-      prev.map(t => (t.id === id ? { ...t, status: 'accepted' as const } : t))
-    );
-  }, []);
-
-  const handleSkip = useCallback((id: string) => {
-    setTestCases(prev =>
-      prev.map(t => (t.id === id ? { ...t, status: 'skipped' as const } : t))
-    );
-  }, []);
-
-  const handleModify = useCallback((id: string) => {
-    const testCase = testCases.find(t => t.id === id);
-    if (testCase) {
-      setEditingId(id);
-      setEditDescription(testCase.description);
-    }
-  }, [testCases]);
-
-  const handleSaveModify = useCallback(() => {
-    if (editingId) {
-      setTestCases(prev =>
-        prev.map(t =>
-          t.id === editingId
-            ? { ...t, status: 'modified' as const, modifiedDescription: editDescription }
-            : t
-        )
-      );
-      setEditingId(null);
-      setEditDescription('');
-    }
-  }, [editingId, editDescription]);
-
-  const handleCancelModify = useCallback(() => {
-    setEditingId(null);
-    setEditDescription('');
-  }, []);
-
-  const allProcessed = testCases.every(t => t.status !== 'pending');
-  const processedCount = testCases.filter(t => t.status !== 'pending').length;
   const unitTests = testCases.filter(t => t.type === 'unit');
   const e2eTests = testCases.filter(t => t.type === 'e2e');
 
@@ -372,22 +327,15 @@ ${prdContent}
       <div className="p-6 border-b border-neutral-200 bg-neutral-50">
         <h2 className="text-lg font-semibold text-neutral-900">测试用例</h2>
         <p className="text-sm text-neutral-500 mt-1">
-          生成单元测试和端到端测试用例描述
+          已生成 {testCases.length} 个测试用例，确认后将全部添加到 PRD
         </p>
-        <div className="mt-3 flex items-center gap-2">
-          <div className="flex-1 bg-neutral-200 h-2 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-green-500 transition-all duration-300"
-              style={{ width: `${testCases.length > 0 ? (processedCount / testCases.length) * 100 : 0}%` }}
-            />
-          </div>
-          <span className="text-sm text-neutral-500">
-            {processedCount}/{testCases.length}
+        <div className="mt-2 flex gap-4 text-sm">
+          <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
+            单元测试: {unitTests.length}
           </span>
-        </div>
-        <div className="mt-2 flex gap-4 text-xs text-neutral-500">
-          <span>单元测试: {unitTests.length}</span>
-          <span>E2E 测试: {e2eTests.length}</span>
+          <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded">
+            E2E 测试: {e2eTests.length}
+          </span>
         </div>
       </div>
 
@@ -400,18 +348,7 @@ ${prdContent}
           </div>
         ) : (
           testCases.map((testCase) => (
-            <TestCaseCard
-              key={testCase.id}
-              testCase={testCase}
-              isEditing={editingId === testCase.id}
-              editDescription={editDescription}
-              onEditDescriptionChange={setEditDescription}
-              onAccept={() => handleAccept(testCase.id)}
-              onSkip={() => handleSkip(testCase.id)}
-              onModify={() => handleModify(testCase.id)}
-              onSaveModify={handleSaveModify}
-              onCancelModify={handleCancelModify}
-            />
+            <TestCaseCard key={testCase.id} testCase={testCase} />
           ))
         )}
       </div>
@@ -430,14 +367,9 @@ ${prdContent}
         <button
           type="button"
           onClick={() => onComplete(testCases)}
-          disabled={!allProcessed && testCases.length > 0}
-          className={`px-6 py-2 rounded-lg font-medium transition-colors ml-auto ${
-            allProcessed || testCases.length === 0
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
-              : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-          }`}
+          className="px-6 py-2 rounded-lg font-medium transition-colors ml-auto bg-blue-600 text-white hover:bg-blue-700"
         >
-          继续下一步
+          {testCases.length === 0 ? '继续下一步' : `确认全部 ${testCases.length} 个测试用例`}
         </button>
       </div>
     </div>
@@ -465,7 +397,6 @@ function parseGeneratedTestCases(content: string): TestCase[] {
           type: (tc.type === 'unit' || tc.type === 'e2e') ? tc.type : 'unit',
           description: tc.description || '',
           steps: tc.steps || [],
-          status: 'pending' as const,
         }));
       }
     }
@@ -486,7 +417,6 @@ function parseGeneratedTestCases(content: string): TestCase[] {
         type: (tc.type === 'unit' || tc.type === 'e2e') ? tc.type : 'unit',
         description: tc.description || '',
         steps: tc.steps || [],
-        status: 'pending' as const,
       }));
     }
   } catch {
@@ -497,74 +427,25 @@ function parseGeneratedTestCases(content: string): TestCase[] {
   return [];
 }
 
-function TestCaseCard({
-  testCase,
-  isEditing,
-  editDescription,
-  onEditDescriptionChange,
-  onAccept,
-  onSkip,
-  onModify,
-  onSaveModify,
-  onCancelModify,
-}: {
-  testCase: TestCase;
-  isEditing: boolean;
-  editDescription: string;
-  onEditDescriptionChange: (description: string) => void;
-  onAccept: () => void;
-  onSkip: () => void;
-  onModify: () => void;
-  onSaveModify: () => void;
-  onCancelModify: () => void;
-}) {
-  const statusColors = {
-    pending: 'border-yellow-200 bg-yellow-50',
-    accepted: 'border-green-200 bg-green-50',
-    modified: 'border-blue-200 bg-blue-50',
-    skipped: 'border-neutral-200 bg-neutral-50 opacity-60',
-  };
-
-  const statusBadges = {
-    pending: null,
-    accepted: <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded">已采纳</span>,
-    modified: <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded">已修改</span>,
-    skipped: <span className="text-xs px-2 py-0.5 bg-neutral-100 text-neutral-500 rounded">已跳过</span>,
-  };
-
+function TestCaseCard({ testCase }: { testCase: TestCase }) {
   const typeBadge = testCase.type === 'unit'
     ? <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded">单元测试</span>
     : <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded">E2E 测试</span>;
 
   return (
-    <div className={`border rounded-lg p-4 ${statusColors[testCase.status]}`}>
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xs px-2 py-0.5 bg-white rounded text-neutral-600">
-            {testCase.taskId}
-          </span>
-          {typeBadge}
-        </div>
-        {statusBadges[testCase.status]}
+    <div className="border border-neutral-200 rounded-lg p-4 bg-white">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-xs px-2 py-0.5 bg-neutral-100 rounded text-neutral-600">
+          {testCase.taskId}
+        </span>
+        {typeBadge}
       </div>
 
-      <h3 className="font-medium text-neutral-900 mt-2">{testCase.taskTitle}</h3>
+      <h3 className="font-medium text-neutral-900">{testCase.taskTitle}</h3>
+      <p className="text-sm text-neutral-700 mt-2">{testCase.description}</p>
 
-      {isEditing ? (
-        <textarea
-          value={editDescription}
-          onChange={(e) => onEditDescriptionChange(e.target.value)}
-          className="w-full mt-2 p-2 border border-neutral-300 rounded text-sm resize-none"
-          rows={3}
-        />
-      ) : (
-        <p className="text-sm text-neutral-700 mt-2">
-          {testCase.modifiedDescription || testCase.description}
-        </p>
-      )}
-
-      {testCase.steps && testCase.steps.length > 0 && !isEditing && (
-        <div className="mt-3 bg-white rounded p-3">
+      {testCase.steps && testCase.steps.length > 0 && (
+        <div className="mt-3 bg-neutral-50 rounded p-3">
           <p className="text-xs text-neutral-500 mb-2">测试步骤：</p>
           <ul className="space-y-1">
             {testCase.steps.map((step, index) => (
@@ -574,46 +455,6 @@ function TestCaseCard({
               </li>
             ))}
           </ul>
-        </div>
-      )}
-
-      {testCase.status === 'pending' && !isEditing && (
-        <div className="flex gap-2 mt-3">
-          <button
-            onClick={onAccept}
-            className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700"
-          >
-            采纳
-          </button>
-          <button
-            onClick={onModify}
-            className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-          >
-            修改
-          </button>
-          <button
-            onClick={onSkip}
-            className="px-3 py-1.5 bg-neutral-200 text-neutral-600 text-sm rounded hover:bg-neutral-300"
-          >
-            跳过
-          </button>
-        </div>
-      )}
-
-      {isEditing && (
-        <div className="flex gap-2 mt-3">
-          <button
-            onClick={onSaveModify}
-            className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-          >
-            保存修改
-          </button>
-          <button
-            onClick={onCancelModify}
-            className="px-3 py-1.5 bg-neutral-200 text-neutral-600 text-sm rounded hover:bg-neutral-300"
-          >
-            取消
-          </button>
         </div>
       )}
     </div>

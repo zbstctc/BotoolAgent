@@ -1,119 +1,103 @@
 {
-  "project": "Stage 2 规范检查功能改造",
-  "branchName": "botool/stage2-rule-check-redesign",
-  "description": "将 Stage 2 规范检查步骤从 mock 数据改为真实的规范选择和 CLI 适配流程。用户从 Dashboard 规范文档系统中选择规范，点击确认后，CLI 自动按规范适配 PRD，无需逐项确认。",
+  "project": "Dashboard 规范管理功能",
+  "branchName": "botool/rules-management",
+  "description": "在 Dashboard 的规范管理 Tab 中实现完整的规范文档管理功能，支持查看、创建、编辑和删除规范文档。",
   "devTasks": [
     {
       "id": "DT-001",
-      "title": "改造 RuleCheckStep 为规范选择界面",
-      "description": "重写 RuleCheckStep 组件，从规范检查改为规范选择。加载 Dashboard 规范文档，按分类展示为可折叠卡片。",
+      "title": "创建 RulesManagement 组件框架",
+      "description": "创建规范管理的主组件，包含列表视图和基本布局。",
       "acceptanceCriteria": [
-        "调用 /api/rules GET 获取所有规范",
-        "按分类（frontend, backend, testing 等）分组展示",
-        "每个分类显示为可折叠的垂直卡片",
-        "支持全选/分类全选/单个勾选",
-        "显示已选规范数量统计",
-        "Typecheck passes",
-        "Verify in browser"
+        "创建 viewer/src/components/RulesManagement.tsx 组件",
+        "组件包含：顶部操作栏（新建按钮、搜索框）、分类列表区域",
+        "从 /api/rules 加载规范列表",
+        "按分类分组显示规范，使用可折叠的卡片形式",
+        "空状态：当某分类无规范时显示暂无规范",
+        "在 Dashboard page.tsx 中替换占位符内容",
+        "Typecheck passes"
       ],
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "DT-002",
-      "title": "实现 CLI 规范适配逻辑",
-      "description": "用户点击确认后，调用 CLI 按选中的规范适配 PRD。使用 SSE 流式传输显示适配进度。",
+      "title": "实现规范列表项组件",
+      "description": "实现单个规范的列表项展示，包含操作按钮。",
       "acceptanceCriteria": [
-        "点击确认按钮后调用 /api/cli/chat",
-        "发送包含选中规范和 PRD 内容的 prompt",
-        "使用 SSE 流式传输接收适配进度",
-        "显示进度条（根据 SSE 事件更新）",
-        "适配过程中禁用确认按钮",
+        "每个规范项显示：名称、分类标签",
+        "右侧显示操作按钮：查看、编辑、删除（使用图标按钮）",
+        "鼠标悬停时显示操作按钮（默认半透明）",
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "DT-003",
-      "title": "实现适配完成确认弹窗",
-      "description": "CLI 适配完成后，显示确认弹窗，展示适配结果摘要。",
+      "title": "实现创建/编辑规范对话框",
+      "description": "创建规范编辑对话框，支持新建和编辑模式。",
       "acceptanceCriteria": [
-        "适配完成后弹出确认弹窗",
-        "显示已应用的规范列表",
-        "显示 PRD 修改摘要（如有）",
-        "点击确认进入下一步",
-        "Typecheck passes",
-        "Verify in browser"
+        "创建 RuleEditorDialog 组件",
+        "对话框包含：分类选择（下拉）、名称输入、内容编辑区（textarea）",
+        "分类下拉选项：前端规范、后端规范、测试规范、部署规范、应用规范、其他规范",
+        "下拉框背景必须是白色（不能透明）",
+        "编辑模式下预填充现有内容",
+        "新建模式下分类和名称为空",
+        "保存按钮调用 POST /api/rules",
+        "保存成功后关闭对话框并刷新列表",
+        "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "DT-004",
-      "title": "改造 CodeExampleStep 为 CLI 集成",
-      "description": "将 CodeExampleStep 从 mock 数据改为 CLI 集成，自动生成代码示例。",
+      "title": "实现删除确认对话框",
+      "description": "实现删除规范的确认对话框。",
       "acceptanceCriteria": [
-        "调用 CLI 生成代码示例",
-        "SSE 流式传输显示生成进度",
-        "展示生成的代码示例列表",
-        "支持用户编辑/采纳/跳过",
-        "Typecheck passes",
-        "Verify in browser"
+        "创建 DeleteConfirmDialog 组件",
+        "显示要删除的规范名称",
+        "确认按钮调用 DELETE /api/rules?id=xxx",
+        "删除成功后关闭对话框并刷新列表",
+        "取消按钮关闭对话框",
+        "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "DT-005",
-      "title": "改造 TestCaseStep 为 CLI 集成",
-      "description": "将 TestCaseStep 从 mock 数据改为 CLI 集成，自动生成测试用例。",
+      "title": "实现规范预览对话框",
+      "description": "实现规范内容的 Markdown 预览。",
       "acceptanceCriteria": [
-        "调用 CLI 生成测试用例",
-        "SSE 流式传输显示生成进度",
-        "分类展示单元测试和 E2E 测试",
-        "支持用户编辑/采纳/跳过",
-        "Typecheck passes",
-        "Verify in browser"
+        "创建 RulePreviewDialog 组件",
+        "从 /api/rules/{id} 加载完整内容",
+        "使用 pre 标签展示 Markdown 内容（保持格式）",
+        "对话框可滚动查看长内容",
+        "底部有关闭和编辑按钮",
+        "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "DT-006",
-      "title": "改造 JsonConvertStep 为 CLI 集成",
-      "description": "将 JsonConvertStep 从 mock 数据改为 CLI 集成，自动转换 PRD 为 JSON。",
+      "title": "实现搜索过滤功能",
+      "description": "在规范列表中实现搜索过滤。",
       "acceptanceCriteria": [
-        "调用 CLI 将 PRD 转换为 prd.json 格式",
-        "SSE 流式传输显示转换进度",
-        "展示 JSON 编辑器",
-        "支持保存到项目根目录",
-        "Typecheck passes",
-        "Verify in browser"
+        "顶部搜索框支持按规范名称搜索",
+        "实时过滤（输入时即时过滤）",
+        "搜索为空时显示全部",
+        "显示搜索结果数量",
+        "Typecheck passes"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "DT-007",
-      "title": "端到端测试",
-      "description": "测试完整的 Stage 2 流程，确保所有步骤正常工作。",
-      "acceptanceCriteria": [
-        "规范选择正确加载和展示",
-        "CLI 适配流程正常工作",
-        "代码示例生成正常",
-        "测试用例生成正常",
-        "JSON 转换和保存正常",
-        "Verify in browser"
-      ],
-      "priority": 7,
-      "passes": true,
+      "passes": false,
       "notes": ""
     }
   ]

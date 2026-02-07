@@ -14,9 +14,9 @@ interface PipelineProgressProps {
 }
 
 const DEFAULT_STEPS: PipelineStep[] = [
-  { id: 'rule-check', name: '规范检查', description: 'v6 检查 PRD 是否符合规范', status: 'pending' },
-  { id: 'code-example', name: '代码示例', description: 'v7 为数据结构生成示例代码', status: 'pending' },
-  { id: 'test-case', name: '测试用例', description: 'v9 生成测试用例描述', status: 'pending' },
+  { id: 'rule-check', name: '规范检查', description: '检查 PRD 是否符合规范', status: 'pending' },
+  { id: 'code-example', name: '代码示例', description: '为数据结构生成示例代码', status: 'pending' },
+  { id: 'test-case', name: '测试用例', description: '生成测试用例描述', status: 'pending' },
   { id: 'json-convert', name: 'JSON 转换', description: '转换为 prd.json 格式', status: 'pending' },
 ];
 

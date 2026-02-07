@@ -499,6 +499,14 @@ ${rulesText}
             <span className="text-sm text-neutral-600">
               已选 <span className="font-semibold text-blue-600">{selectedCount}</span> / {totalRules} 项
             </span>
+            <a
+              href="/?tab=rules"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+            >
+              查看规范
+            </a>
             <button
               onClick={toggleAllRules}
               className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded transition-colors"
