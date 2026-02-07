@@ -37,12 +37,12 @@ interface AdaptingResult {
 }
 
 const DEFAULT_CATEGORIES: Omit<RuleCategory, 'documents'>[] = [
-  { id: 'frontend', name: '前端规范', icon: '🎨' },
-  { id: 'backend', name: '后端规范', icon: '⚙️' },
-  { id: 'testing', name: '测试规范', icon: '🧪' },
-  { id: 'deployment', name: '部署规范', icon: '🚀' },
-  { id: 'application', name: '应用规范', icon: '📱' },
-  { id: 'other', name: '其他规范', icon: '📋' },
+  { id: 'frontend', name: '前端规范', icon: '' },
+  { id: 'backend', name: '后端规范', icon: '' },
+  { id: 'testing', name: '测试规范', icon: '' },
+  { id: 'deployment', name: '部署规范', icon: '' },
+  { id: 'application', name: '应用规范', icon: '' },
+  { id: 'other', name: '其他规范', icon: '' },
 ];
 
 interface RuleCheckStepProps {
@@ -621,8 +621,7 @@ function CategoryCard({
           />
         </div>
 
-        {/* Icon and Name */}
-        <span className="text-xl">{category.icon}</span>
+        {/* Name */}
         <span className="flex-1 font-medium text-neutral-900">{category.name}</span>
 
         {/* Selection Count */}

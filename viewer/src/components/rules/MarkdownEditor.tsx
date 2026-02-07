@@ -25,7 +25,7 @@ export function MarkdownEditor({
   isGeneratingSkill,
   skillStatus = 'idle',
 }: MarkdownEditorProps) {
-  const [showPreview, setShowPreview] = useState(true);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Insert markdown syntax at cursor
   const insertMarkdown = useCallback((before: string, after: string = '') => {

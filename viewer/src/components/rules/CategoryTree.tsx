@@ -25,12 +25,12 @@ interface CategoryTreeProps {
 }
 
 const DEFAULT_CATEGORIES: RuleCategory[] = [
-  { id: 'frontend', name: '前端规范', icon: '🎨', documents: [] },
-  { id: 'backend', name: '后端规范', icon: '⚙️', documents: [] },
-  { id: 'testing', name: '测试规范', icon: '🧪', documents: [] },
-  { id: 'deployment', name: '部署规范', icon: '🚀', documents: [] },
-  { id: 'application', name: '应用规范', icon: '📱', documents: [] },
-  { id: 'other', name: '其他规范', icon: '📋', documents: [] },
+  { id: 'frontend', name: '前端规范', icon: '', documents: [] },
+  { id: 'backend', name: '后端规范', icon: '', documents: [] },
+  { id: 'testing', name: '测试规范', icon: '', documents: [] },
+  { id: 'deployment', name: '部署规范', icon: '', documents: [] },
+  { id: 'application', name: '应用规范', icon: '', documents: [] },
+  { id: 'other', name: '其他规范', icon: '', documents: [] },
 ];
 
 export function CategoryTree({
@@ -156,7 +156,6 @@ function CategoryItem({
         onClick={onToggle}
         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors text-left"
       >
-        <span className="text-lg">{category.icon}</span>
         <span className="flex-1 text-sm font-medium text-neutral-700">
           {category.name}
         </span>
