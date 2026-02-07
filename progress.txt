@@ -1,32 +1,51 @@
-# Botool Dev Agent Progress Log
-Started: 2/6/2026, 2:29:46 AM
+# Botool 开发代理进度日志
+开始时间: Sat Feb  7 10:09:31 CST 2026
 ---
 
 ## Codebase Patterns
-- 规范文档存储在 `/rules/{category}/{name}.md` 目录结构中
-- /api/rules GET 返回 `{ categories: { [categoryId]: RuleDocument[] } }` 格式
-- RuleDocument 类型: `{ id: string, name: string, category: string }`
-- Stage 2 组件在 `viewer/src/components/pipeline/` 目录下
-- 分类定义在 CategoryTree.tsx 的 DEFAULT_CATEGORIES 常量中
-- /api/prd/convert 是专用的 PRD 转 JSON 端点，SSE 事件类型为 progress/complete/error
-- /api/cli/chat 是通用 CLI 调用端点，SSE 事件类型为 text/done/error
-- /api/prd/[id] GET 返回 PRD 文件内容，文件路径为 tasks/prd-{id}.md
-- Stage 2 页面通过 URL 参数 `?prd={id}` 传递 PRD ID，从 API 加载内容并缓存到 sessionStorage
+- 规范管理组件位于 `viewer/src/components/rules/` 目录下，包含 RulesManager、CategoryTree、MarkdownEditor、SkillPreviewModal
+- 规范 API 路由在 `viewer/src/app/api/rules/` 下，支持 GET (列表)、POST (保存)、DELETE (删除)
+- 规范文件存储在项目根目录 `rules/{category}/{name}.md` 中
+- Dashboard 使用 Tab 导航，activeTab state 控制显示 'projects' 或 'rules'
+- 所有弹窗/对话框使用 `fixed inset-0 z-50 bg-black/50` 作为遮罩，内容使用 `bg-white rounded-lg shadow-xl`
+- 组件间通过 props 回调通信，无全局状态管理（规范模块）
 
+## 2026-02-07 - DT-001
+- 实现了 Dashboard 规范管理 Tab 的集成
+- 修改了 `viewer/src/app/page.tsx`：导入 RulesManager 并替换 "即将推出..." 占位符
+- **未来迭代的经验教训：**
+  - 发现 RulesManager 组件已经完整实现：分类列表 (CategoryTree)、Markdown 编辑器 (MarkdownEditor)、Skill 预览 (SkillPreviewModal)
+  - RulesManager 使用两栏布局（左侧分类树 + 右侧编辑器），不是列表+对话框模式
+  - DT-002（列表项）、DT-003（创建/编辑）、DT-005（预览）的功能已被 RulesManager 涵盖
+  - **缺失功能**: 无删除按钮 UI (DT-004)、无搜索过滤 (DT-006)
+  - `useSearchParams()` 在 page.tsx 中未包裹 Suspense，导致 `next build` 失败（pre-existing issue）
+  - `-mx-4 -mb-6` 用于让 RulesManager 全宽展示，抵消父容器的 padding
 ---
 
-## 2026-02-06 - DT-007
-- 实现了什么：
-  - 端到端测试完整 Stage 2 流程（规范选择→CLI适配→代码示例→测试用例→JSON转换）
-  - 修复 stage2/page.tsx: 从 URL 参数通过 /api/prd/{id} 加载 PRD 内容
-  - 修复 CodeExampleStep/TestCaseStep: idle 状态显示错误信息
-- 修改了哪些文件：
-  - viewer/src/app/stage2/page.tsx（PRD 内容加载修复）
-  - viewer/src/components/pipeline/CodeExampleStep.tsx（错误显示修复）
-  - viewer/src/components/pipeline/TestCaseStep.tsx（错误显示修复）
+## 2026-02-07 - DT-002
+- 在 CategoryTree 文档列表项中添加了悬停操作按钮（编辑图标、删除图标）
+- 在 RulesManager 中添加了删除确认对话框和删除逻辑
+- 修改了 `viewer/src/components/rules/CategoryTree.tsx` 和 `viewer/src/components/rules/RulesManager.tsx`
 - **未来迭代的经验教训：**
-  - Stage 2 页面的 PRD 内容有两个来源：sessionStorage 和 URL 参数，优先级为 sessionStorage > API
-  - CodeExampleStep/TestCaseStep 的 idle 界面需要显示 error 状态（之前 setError 后界面不更新）
-  - JSON 转换步骤的"保存 prd.json"会覆盖项目根目录的 prd.json，需要注意不要覆盖正在使用的 PRD
-  - 端到端测试时 CLI 响应时间可能很长（1-2分钟），需要耐心等待
+  - CategoryTree 的 `onDeleteDocument` 是可选 prop，向后兼容
+  - 删除确认对话框直接内联在 RulesManager 中，使用 `deleteTarget` state 控制显示
+  - 列表项从 `<button>` 改为 `<div>` 包裹，内含 flex 布局的 name button + action buttons
+  - DT-004 的删除确认对话框功能已经在此任务中一并实现
+---
+
+## 2026-02-07 - DT-003/DT-005 (已有功能确认)
+- DT-003 创建/编辑功能：RulesManager 已内置，通过 CategoryTree 选择分类 + 名称输入 + MarkdownEditor 编辑
+- DT-005 预览功能：MarkdownEditor 已内置分屏 Markdown 预览
+- 标记为 passes: true
+---
+
+## 2026-02-07 - DT-006
+- 在 CategoryTree 头部添加搜索输入框，支持按规范名称实时过滤
+- 搜索时显示 "找到 X / Y 条结果"
+- 搜索时自动展开所有分类
+- 修改了 `viewer/src/components/rules/CategoryTree.tsx`
+- **未来迭代的经验教训：**
+  - 搜索过滤使用 `useMemo` 在客户端完成，不涉及 API 调用
+  - 搜索时强制展开所有分类：`isExpanded={... || searchQuery.trim().length > 0}`
+  - `filteredCategories` 保留所有分类结构，只过滤其 documents 数组
 ---

@@ -17,8 +17,8 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "已集成现有 RulesManager 组件到 Dashboard，替换占位符内容"
     },
     {
       "id": "DT-002",
@@ -31,8 +31,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "在 CategoryTree 文档列表项中添加了悬停操作按钮（编辑、删除），同时在 RulesManager 中添加了删除确认对话框"
     },
     {
       "id": "DT-003",
@@ -50,8 +50,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "RulesManager 已内置创建/编辑功能：CategoryTree 选择分类、名称输入、MarkdownEditor 编辑、POST /api/rules 保存。采用内联编辑模式而非对话框"
     },
     {
       "id": "DT-004",
@@ -66,8 +66,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "删除确认对话框已在 DT-002 中一并实现：显示规范名称、确认/取消按钮、调用 DELETE API、刷新列表"
     },
     {
       "id": "DT-005",
@@ -82,8 +82,8 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "MarkdownEditor 已内置 Markdown 预览功能（分屏预览），支持滚动查看。采用内联预览而非对话框"
     },
     {
       "id": "DT-006",
@@ -97,8 +97,8 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "在 CategoryTree 头部添加搜索框，支持实时过滤、结果计数、自动展开"
     }
   ]
 }
