@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import { StageIndicator, StageTransitionModal } from '@/components';
 import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
@@ -104,6 +104,38 @@ export default function Stage3Page() {
   const [showTransitionModal, setShowTransitionModal] = useState(false);
   // Track if we've already shown the modal for this completion
   const [hasShownCompletionModal, setHasShownCompletionModal] = useState(false);
+
+  // Agent control state
+  const [maxIterations, setMaxIterations] = useState(10);
+  const [showIterationInput, setShowIterationInput] = useState(false);
+  const [agentActionLoading, setAgentActionLoading] = useState(false);
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
+
+  // Handle start agent
+  const handleStartAgent = useCallback(async () => {
+    setAgentActionLoading(true);
+    try {
+      await agentStatus.startAgent(maxIterations);
+      setShowIterationInput(false);
+    } catch {
+      // Error is handled inside useAgentStatus
+    } finally {
+      setAgentActionLoading(false);
+    }
+  }, [agentStatus, maxIterations]);
+
+  // Handle stop agent (with confirmation)
+  const handleStopAgent = useCallback(async () => {
+    setAgentActionLoading(true);
+    try {
+      await agentStatus.stopAgent();
+    } catch {
+      // Error is handled inside useAgentStatus
+    } finally {
+      setAgentActionLoading(false);
+      setShowStopConfirm(false);
+    }
+  }, [agentStatus]);
 
   // Use file watcher to get real-time updates
   const { prd, progress, isConnected, lastUpdated } = useFileWatcher({
@@ -273,17 +305,90 @@ export default function Stage3Page() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white">
-      {/* Stage Indicator */}
-      <StageIndicator
-        currentStage={3}
-        completedStages={[1, 2]}
-        projectName={activeProject?.name}
-        stageStatus={
-          totalTasks > 0
-            ? `${completedTasks}/${totalTasks} 完成`
-            : undefined
-        }
-      />
+      {/* Stage Indicator + Agent Control */}
+      <div className="flex items-center">
+        <div className="flex-1">
+          <StageIndicator
+            currentStage={3}
+            completedStages={[1, 2]}
+            projectName={activeProject?.name}
+            stageStatus={
+              totalTasks > 0
+                ? `${completedTasks}/${totalTasks} 完成`
+                : undefined
+            }
+          />
+        </div>
+        <div className="flex items-center gap-2 px-4 flex-shrink-0">
+          {agentStatus.isRunning ? (
+            <Fragment>
+              {showStopConfirm ? (
+                <div className="flex items-center gap-2 bg-white border border-red-200 rounded-lg px-3 py-1.5 shadow-sm">
+                  <span className="text-xs text-red-600">确认停止代理？</span>
+                  <button
+                    onClick={handleStopAgent}
+                    disabled={agentActionLoading}
+                    className="px-2 py-0.5 text-xs font-medium bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                  >
+                    {agentActionLoading ? '停止中...' : '确认'}
+                  </button>
+                  <button
+                    onClick={() => setShowStopConfirm(false)}
+                    className="px-2 py-0.5 text-xs text-neutral-500 hover:text-neutral-700"
+                  >
+                    取消
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowStopConfirm(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                >
+                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                  停止代理
+                </button>
+              )}
+            </Fragment>
+          ) : (
+            <Fragment>
+              {showIterationInput ? (
+                <div className="flex items-center gap-2 bg-white border border-blue-200 rounded-lg px-3 py-1.5 shadow-sm">
+                  <label className="text-xs text-neutral-600">最大迭代:</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={maxIterations}
+                    onChange={(e) => setMaxIterations(Math.max(1, Math.min(100, Number(e.target.value))))}
+                    className="w-14 px-1.5 py-0.5 text-xs border border-neutral-300 rounded text-center bg-white"
+                  />
+                  <button
+                    onClick={handleStartAgent}
+                    disabled={agentActionLoading}
+                    className="px-2 py-0.5 text-xs font-medium bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                  >
+                    {agentActionLoading ? '启动中...' : '启动'}
+                  </button>
+                  <button
+                    onClick={() => setShowIterationInput(false)}
+                    className="px-2 py-0.5 text-xs text-neutral-500 hover:text-neutral-700"
+                  >
+                    取消
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowIterationInput(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  <span>▶</span>
+                  启动代理
+                </button>
+              )}
+            </Fragment>
+          )}
+        </div>
+      </div>
 
       {/* Stage Transition Modal */}
       <StageTransitionModal
@@ -464,7 +569,7 @@ export default function Stage3Page() {
                   : 'text-neutral-600 hover:bg-neutral-100'
               }`}
             >
-              Flowchart
+              流程图
             </button>
             <button
               onClick={() => setActiveTab('log')}
@@ -474,7 +579,7 @@ export default function Stage3Page() {
                   : 'text-neutral-600 hover:bg-neutral-100'
               }`}
             >
-              Progress Log
+              进度日志
             </button>
             <button
               onClick={() => setActiveTab('changes')}
@@ -484,7 +589,7 @@ export default function Stage3Page() {
                   : 'text-neutral-600 hover:bg-neutral-100'
               }`}
             >
-              Changes
+              文件变更
               {gitChanges && (
                 <span className="ml-1 px-1.5 py-0.5 text-xs rounded bg-neutral-200 text-neutral-700">
                   {gitChanges.totals.files}
@@ -499,7 +604,7 @@ export default function Stage3Page() {
                   : 'text-neutral-600 hover:bg-neutral-100'
               }`}
             >
-              Commits
+              提交记录
               {gitCommits && (
                 <span className="ml-1 px-1.5 py-0.5 text-xs rounded bg-neutral-200 text-neutral-700">
                   {gitCommits.count}
@@ -508,7 +613,7 @@ export default function Stage3Page() {
             </button>
             {lastUpdated && (
               <span className="ml-auto text-xs text-neutral-400">
-                Last update: {new Date(lastUpdated).toLocaleTimeString()}
+                最近更新: {new Date(lastUpdated).toLocaleTimeString()}
               </span>
             )}
           </div>
@@ -528,7 +633,7 @@ export default function Stage3Page() {
                 </pre>
               ) : (
                 <div className="flex items-center justify-center h-full">
-                  <p className="text-neutral-500 text-sm">No progress log yet...</p>
+                  <p className="text-neutral-500 text-sm">暂无进度日志...</p>
                 </div>
               )}
             </div>
@@ -544,7 +649,7 @@ export default function Stage3Page() {
                   {/* Summary */}
                   <div className="flex items-center gap-4 mb-4 pb-4 border-b border-neutral-200">
                     <div className="text-sm text-neutral-600">
-                      <span className="font-medium">{gitChanges.totals.files}</span> files changed
+                      <span className="font-medium">{gitChanges.totals.files}</span> 个文件变更
                     </div>
                     <div className="text-sm text-green-600">
                       <span className="font-medium">+{gitChanges.totals.additions}</span>
@@ -556,7 +661,7 @@ export default function Stage3Page() {
                       onClick={fetchGitChanges}
                       className="ml-auto text-xs text-neutral-500 hover:text-neutral-700"
                     >
-                      Refresh
+                      刷新
                     </button>
                   </div>
                   {/* File list */}
@@ -595,7 +700,7 @@ export default function Stage3Page() {
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-full">
-                  <p className="text-neutral-500 text-sm">No changes detected</p>
+                  <p className="text-neutral-500 text-sm">暂无文件变更</p>
                 </div>
               )}
             </div>
@@ -611,14 +716,15 @@ export default function Stage3Page() {
                   {/* Header */}
                   <div className="flex items-center gap-4 mb-4 pb-4 border-b border-neutral-200">
                     <div className="text-sm text-neutral-600">
-                      <span className="font-medium">{gitCommits.count}</span> commits on{' '}
                       <span className="font-mono text-blue-600">{gitCommits.branch}</span>
+                      {' 分支 · '}
+                      <span className="font-medium">{gitCommits.count}</span> 个提交
                     </div>
                     <button
                       onClick={fetchGitCommits}
                       className="ml-auto text-xs text-neutral-500 hover:text-neutral-700"
                     >
-                      Refresh
+                      刷新
                     </button>
                   </div>
                   {/* Commits list */}
@@ -643,7 +749,7 @@ export default function Stage3Page() {
                                 </span>
                               )}
                               <span className="text-xs text-neutral-400">
-                                {new Date(commit.date).toLocaleDateString('en-US', {
+                                {new Date(commit.date).toLocaleDateString('zh-CN', {
                                   month: 'short',
                                   day: 'numeric',
                                   hour: '2-digit',
@@ -659,7 +765,7 @@ export default function Stage3Page() {
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-full">
-                  <p className="text-neutral-500 text-sm">No commits found on this branch</p>
+                  <p className="text-neutral-500 text-sm">该分支暂无提交记录</p>
                 </div>
               )}
             </div>
@@ -669,7 +775,7 @@ export default function Stage3Page() {
         {/* Right: Agent Data Panel (260px) */}
         <div className="w-[260px] flex-shrink-0 border-l border-neutral-200 flex flex-col bg-neutral-50 overflow-auto">
           <div className="p-4 border-b border-neutral-200 bg-white">
-            <h3 className="text-sm font-semibold text-neutral-900">Agent Status</h3>
+            <h3 className="text-sm font-semibold text-neutral-900">代理状态</h3>
           </div>
           <AgentDataPanel
             agentStatus={agentStatus.status}

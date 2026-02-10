@@ -1,124 +1,149 @@
 # Botool 开发代理进度日志
-开始时间: Tue Feb 10 12:50:19 CST 2026
+开始时间: Tue Feb 10 13:40:20 CST 2026
 ---
 
 ## Codebase Patterns
-- SKILL.md 文件位于 `~/.claude/skills/<skill-name>/SKILL.md`，不在 git 仓库内
-- Viewer 项目的 TypeScript 代码在 `viewer/` 目录下，使用 `npx tsc --noEmit` 检查类型
-- prd.json 和 progress.txt 在项目根目录下，需要手动标记任务完成状态
-
----
+- Stage 3 页面路径：`viewer/src/app/stage3/page.tsx`
+- `useAgentStatus` hook 位于 `src/hooks/useAgentStatus.ts`，返回 `status`、`isRunning`、`isComplete`、`hasError`、`progressPercent`、`startAgent`、`stopAgent` 等
+- `useProjectValidation({ currentStage: N })` 会在项目 currentStage < N 时重定向，浏览器验证需先确保项目处于对应 stage
+- FlowChart 接收 `agentPhase: AgentPhase`、`agentStatus?: AgentStatus`、`currentIteration: number`；当提供 agentStatus 时使用精确步骤高亮
+- FlowChart 边的自定义 CSS 动画通过 Edge `className` 属性设置，选择器模式为 `.react-flow__edge.<class-name> path.react-flow__edge-path`
+- Tailwind CSS 自定义宽度使用 `w-[Npx]` 语法
+- 后端 `.agent-status` 文件的 JSON 数据比前端 TypeScript 类型定义更丰富，API route 的 `readStatusFile()` 直接透传所有字段，前端只需更新类型定义即可使用新字段
 
 ## 2026-02-10 - DT-001
-- 实现了 pyramidprd SKILL.md 代码库感知扫描阶段
-- 修改了 `~/.claude/skills/botoolagent-pyramidprd/SKILL.md`
-- 变更内容：
-  - 金字塔结构概述中新增「代码库扫描」步骤
-  - 新增 Phase 2.5 代码库感知扫描阶段（L1→L2 之间）
-  - 扫描包含 4 步：技术栈检测、目录结构分析、组件/路由/API 识别、数据模型分析
-  - 无代码库时降级为 `codebaseScanned: false` 并跳过
-  - L2 阶段增加「融合扫描结果的规则」说明
-  - 所有相关 metadata 示例中增加 `codebaseScanned` 和 `codebaseSummary` 字段
+- 实现了 Stage 3 页面接入 useAgentStatus hook + 两栏改三栏布局
+- 修改了 `viewer/src/app/stage3/page.tsx`
+  - 导入并调用 `useAgentStatus({ stream: true })`
+  - 左栏从 w-80 (320px) 改为 w-[240px]
+  - 新增右侧 w-[260px] Agent Data Panel，显示迭代进度、任务完成率、当前任务状态
+  - agentPhase 逻辑改为优先使用 SSE agentStatus 数据
 - **未来迭代的经验教训：**
-  - SKILL.md 是 Markdown 文件，不在 git 仓库中，需要通过绝对路径编辑
-  - metadata 中的字段会被 Viewer 的 `tool-types.ts` 解析，DT-006 需要同步更新类型定义
-  - 扫描结果不直接输出给用户，而是内化到后续问题选项中
+  - useProjectValidation 会重定向到项目的实际 stage，浏览器测试时需确保活跃项目 currentStage >= 3
+  - 右侧面板内容目前是内联的，DT-002 会将其抽取为独立的 AgentDataPanel 组件
+  - agentStatus.status 默认值为 DEFAULT_STATUS（idle），不会 null
 ---
 
 ## 2026-02-10 - DT-002
-- 实现了 pyramidprd SKILL.md 确认门控流程
-- 修改了 `~/.claude/skills/botoolagent-pyramidprd/SKILL.md`
-- 变更内容：
-  - 金字塔结构概述中新增「L5: 确认门控」步骤（L4→生成 PRD 之间）
-  - 所有 metadata 示例中 `totalLevels` 从 4 更新为 5，`progress` 对应更新
-  - 新增 Phase 6: L5 确认门控，含完整的 AskUserQuestion 调用格式
-  - 确认摘要包含 5 个分区：需求摘要、功能范围、技术方案、风险评估、复杂度估计
-  - metadata 包含 `phase: 'confirmation'` 和 `level: 5`
-  - 用户可选「确认并生成 PRD」或「需要修改」
-  - 「需要修改」时提供 4 种修改选项（功能范围、技术方案、风险评估、返回重新提问）
-  - 原 Phase 6（生成 PRD）改为 Phase 7
-  - 对比表新增「确认门控」维度
-  - frontmatter description 更新为"5 层"
+- 创建了独立的 AgentDataPanel 组件，从 Stage 3 页面内联代码中抽取
+- 新建了 `viewer/src/components/AgentDataPanel/AgentDataPanel.tsx`
+- 修改了 `viewer/src/app/stage3/page.tsx`（导入组件，替换内联代码）
+- 组件功能：
+  - 迭代进度条（蓝色，带平滑过渡动画 transition-all duration-500）
+  - 任务完成率进度条（绿色，同上动画）
+  - 当前任务卡片：显示任务 ID、执行状态标签（中文）、迭代次数和重试信息
+  - 消息展示（仅 agent 非 idle 时显示）
 - **未来迭代的经验教训：**
-  - 修改层级数量时，需要全文搜索 `totalLevels`、`progress` 和 `/4` 等引用，确保一致性
-  - 确认门控的 metadata 中 `phase: 'confirmation'` 是 Viewer 识别确认阶段的关键字段（DT-007 依赖）
-  - `confirmationSummary` 对象结构（含 risks.high/medium/low）需要在 DT-006 的 tool-types.ts 中同步定义
+  - AgentDataPanel 接收 agentStatus + isRunning/isComplete/hasError/progressPercent/totalTasks 作为 props
+  - totalTasks 是 fallback 值，当 agentStatus.total 为 0 时使用（PRD 中的任务总数）
+  - DT-003 将在此组件中添加状态指示灯区域
+  - AgentStatus 当前没有 rateLimit/circuitBreaker/apiRateLimit/noProgressCount 字段，DT-003 可能需要扩展类型
 ---
 
 ## 2026-02-10 - DT-003
-- 实现了 pyramidprd SKILL.md PRD 模板增加风险和测试章节
-- 修改了 `~/.claude/skills/botoolagent-pyramidprd/SKILL.md`
-- 变更内容：
-  - PRD 模板（Phase 7）中 Functional Requirements 之后、Non-Goals 之前新增 Risks & Mitigations 章节
-  - 风险分 HIGH/MEDIUM/LOW 三级，每级含风险标题、描述和缓解措施
-  - 新增风险识别指导规则（L1-L4 答案到风险的映射逻辑）
-  - PRD 模板中新增 Testing Strategy 章节
-  - 测试策略覆盖 Unit Tests、Integration Tests、E2E Tests 三种类型
-  - 新增测试策略生成指导规则（L2/L3/L4 答案到测试项的映射逻辑）
+- 实现了 AgentDataPanel 状态指示灯（说人话版保护机制）
+- 修改了以下文件：
+  - `viewer/src/hooks/useAgentStatus.ts`：新增 RateLimitInfo、CircuitBreakerInfo、ApiRateLimitInfo 接口，AgentStatus 新增 rateLimit/circuitBreaker/apiRateLimit 可选字段
+  - `viewer/src/app/api/agent/status/route.ts`：AgentStatus 接口同步新增 rateLimit/circuitBreaker/apiRateLimit 字段
+  - `viewer/src/components/AgentDataPanel/AgentDataPanel.tsx`：新增 computeIndicators 函数和状态指示灯 UI
+- 指示灯映射规则：
+  - 网络：waiting_network → 红灯，否则 → 绿灯
+  - API 限流：apiRateLimit.waiting → 红灯，rateLimit > 80% → 黄灯，否则 → 绿灯
+  - 连续进展：noProgressCount >= 2 → 红灯，== 1 → 黄灯，否则 → 绿灯
+  - 重试：retryCount > 0 → 黄灯，否则 → 绿灯
+- 指示灯仅在 agent 非 idle 时显示
 - **未来迭代的经验教训：**
-  - PRD 模板中的风险识别和测试策略生成是基于映射规则自动推导，不需要用户额外回答问题
-  - 风险评估在 L5 确认门控中已有展示（DT-002），PRD 模板中的是最终完整版本
-  - DT-005 的 generateprd 也需要添加相同的章节，可以复用相似的模板结构
+  - 后端 `.agent-status` 文件已包含 rateLimit/circuitBreaker/apiRateLimit 等完整数据，API route 的 readStatusFile 直接 JSON.parse 整个文件，所以额外字段已传递到前端，只需更新 TypeScript 类型定义
+  - AgentStatus 的 rateLimit/circuitBreaker/apiRateLimit 是可选字段（`?`），因为 idle 状态下后端不写入这些字段
+  - 状态指示灯使用 `computeIndicators` 纯函数计算，方便测试和扩展
 ---
 
 ## 2026-02-10 - DT-004
-- 实现了 generateprd SKILL.md 重构定位 + 代码库扫描
-- 修改了 `~/.claude/skills/botoolagent-generateprd/SKILL.md`
-- 变更内容：
-  - 删除了 Viewer Mode (Recommended) 整个章节（包括启动服务器、打开 Stage 1、引导用户）
-  - 删除了 CLI Mode (Fallback) 章节
-  - 删除了 IMPORTANT: You are running inside BotoolAgent Viewer 整个章节（包括工具限制指令）
-  - Phase 1 重命名为 "Understand the Idea + Codebase Scan"
-  - Phase 1 新增 Step 1 代码库扫描：技术栈检测、目录结构分析、组件/路由/API 识别、数据模型分析
-  - 扫描结果融入后续提问选项（预设技术栈、已有组件名称等）
-  - 无代码库时跳过扫描，使用通用选项
-  - 原有提问逻辑移至 Step 2
+- 实现了 FlowChart 精确步骤高亮（接入 agent status）
+- 修改了以下文件：
+  - `viewer/src/components/FlowChart/types.ts`：StepStatus 新增 'error' | 'retry' 两种状态
+  - `viewer/src/components/FlowChart/FlowChart.tsx`：
+    - 新增 `getStepStatusPrecise` 函数，根据 AgentStatusType 精确映射每个步骤的状态
+    - 保留 `getStepStatusFromPhase` 作为 backward compat 降级
+    - FlowChart 组件新增 `agentStatus?: AgentStatus` prop
+    - 所有 computeNodes 调用透传 agentStatus
+  - `viewer/src/components/FlowChart/CustomNode.tsx`：
+    - 支持 error 状态（红色边框 + ✗ 图标）和 retry 状态（橙色边框 + ↻ 图标）
+    - error/retry 节点使用 custom-node-error CSS class 实现橙色闪烁动画
+  - `viewer/src/components/FlowChart/FlowChart.css`：新增 `@keyframes flowchart-error-flash` 动画
+  - `viewer/src/app/stage3/page.tsx`：将 `agentStatus.status` 传递给 FlowChart 组件
+- 精确映射规则：
+  - idle → 全 pending
+  - running → 步骤3(completed) + 步骤4(current/蓝色脉冲)
+  - waiting_network → 步骤2(current) 高亮检查 Rate Limit
+  - timeout/error/failed → 步骤5(error/retry橙色闪烁)
+  - iteration_complete → 步骤8(current) 双条件退出验证
+  - max_iterations → 步骤8(error) 超出最大迭代
+  - complete → 全 completed(绿色✓)
 - **未来迭代的经验教训：**
-  - generateprd 现在是纯 CLI 工具，Viewer 用户使用 pyramidprd
-  - generateprd 的代码库扫描和 pyramidprd 的类似，但格式不同（generateprd 更简洁，无 metadata 层级标记）
-  - 删除 Viewer 指令后，generateprd 可以自由使用所有工具（Bash、Read、Write 等）
+  - FlowChart 现在同时支持粗粒度 AgentPhase 和精细 AgentStatus，优先使用 AgentStatus
+  - StepStatus 类型扩展了 'error' 和 'retry'，CustomNode 对应处理了背景色和图标
+  - 步骤索引与 constants.ts 中 ALL_STEPS 数组对应，修改步骤顺序时需同步更新 getStepStatusPrecise
 ---
 
 ## 2026-02-10 - DT-005
-- 实现了 generateprd SKILL.md 确认门控 + PRD 模板更新
-- 修改了 `~/.claude/skills/botoolagent-generateprd/SKILL.md`
-- 变更内容：
-  - Phase 3 和 Phase 4 之间新增 Phase 3.5: Final Confirmation（确认门控）
-  - 确认摘要通过 AskUserQuestion 展示，包含需求摘要、功能范围、技术方案、风险评估、复杂度估计
-  - 用户可选「确认并生成 PRD」或「需要修改」
-  - 「需要修改」时提供修改范围选择（功能范围、技术方案、风险评估、返回重新讨论）
-  - PRD 模板在 Functional Requirements 之后、Non-Goals 之前新增 Risks & Mitigations（HIGH/MEDIUM/LOW）
-  - PRD 模板新增 Testing Strategy（Unit/Integration/E2E）
-  - Checklist 更新：新增代码库扫描、确认门控、风险和测试章节检查项
+- 实现了 FlowChart 连线虚线流动动画
+- 修改了以下文件：
+  - `viewer/src/components/FlowChart/FlowChart.css`：新增 `@keyframes flowchart-dash-flow` 动画，使用 `stroke-dasharray` + `stroke-dashoffset` 实现虚线流动效果
+  - `viewer/src/components/FlowChart/FlowChart.tsx`：
+    - 新增 `isEdgeFlowing` 函数，根据 agentPhase 和 agentStatus 判断边是否应有流动动画
+    - `computeEdges` 新增 agentPhase/currentIteration/agentStatus 参数
+    - 所有 computeEdges 调用更新为传递完整参数
+    - useEffect 同时更新 nodes 和 edges
+    - 导入 EdgeConnection 类型
+  - `viewer/src/components/FlowChart/utils.ts`：`createEdge` 新增 `flowing` 参数，控制 className、stroke 颜色（蓝色 #3b82f6）和 markerEnd 颜色
+- 动画行为：
+  - agent running 时：source 和 target 步骤均为 completed/current/error/retry 的边显示蓝色虚线流动动画
+  - agent idle/complete 时：所有边为静态黑色实线
+  - 使用纯 CSS animation（`stroke-dasharray: 8 4; stroke-dashoffset` 动画），无 JS 开销
 - **未来迭代的经验教训：**
-  - generateprd 的确认门控比 pyramidprd 更简洁（无 metadata 层级），适合 CLI 交互风格
-  - 两个 Skill 的 PRD 模板现在保持一致的章节结构（Risks & Mitigations + Testing Strategy）
-  - Checklist 是最终质量保障，新增功能后必须同步更新
+  - React Flow 的 `animated` 属性会添加内置虚线动画，但使用自定义 CSS class (`flowchart-edge-flowing`) 可以更精确控制样式
+  - 边的 CSS class 通过 React Flow Edge 的 `className` 属性设置，选择器为 `.react-flow__edge.flowchart-edge-flowing path.react-flow__edge-path`
+  - `computeEdges` 和 `computeNodes` 现在都依赖 agentPhase/agentStatus，useEffect 中需同时更新两者
 ---
 
 ## 2026-02-10 - DT-006
-- 实现了 tool-types.ts 和 PyramidNavigation 支持新状态
+- 实现了左侧任务列表轻度改造
 - 修改了以下文件：
-  - `viewer/src/lib/tool-types.ts`: PyramidMetadata 增加 phase、codebaseScanned、codebaseSummary、confirmationSummary 字段，level 类型从 1-4 扩展到 1-5，新增 ConfirmationSummary 接口
-  - `viewer/src/components/pyramid/PyramidNavigation.tsx`: LEVEL_NAMES 和 LEVEL_DESCRIPTIONS 新增 L5 确认门控，新增 codebaseScanned 可选 prop 显示"代码库已分析"标签
-  - `viewer/src/app/stage1/page.tsx`: LevelId 扩展到 5，levels 数组从 4 扩展到 5，codebaseScanned 状态追踪和 localStorage 持久化，PRD 生成触发条件从 L4 改为 L5，提交按钮文案适配 3 种状态
+  - `viewer/src/app/globals.css`：新增 `@keyframes task-breathing` 呼吸动画和 `.task-card-breathing` class
+  - `viewer/src/app/stage3/page.tsx`：
+    - 状态标签中文化：Completed→已完成, In Progress→执行中, Pending→等待中, Failed→失败
+    - 当前任务卡片使用 `task-card-breathing` CSS class 实现蓝色呼吸动画（border-color + box-shadow 2s ease-in-out）
+    - 新增 useEffect 监听 currentTaskId 变化自动展开对应任务详情
+    - 底部统计文案中文化："6/7 完成 · 迭代 #5" 格式
+    - 左侧面板标题 "Dev Tasks"→"开发任务"，连接状态 "Live"→"已连接"
+    - "Acceptance Criteria"→"验收标准"
+    - 空状态文案中文化
 - **未来迭代的经验教训：**
-  - PyramidNavigation 组件路径是 `components/pyramid/PyramidNavigation.tsx`，不是 `components/PyramidNavigation.tsx`
-  - stage1/page.tsx 中所有引用 `completedLevels.includes(4)` 的地方在 5 层模型下需要改为 `includes(5)` 来触发 PRD 生成
-  - codebaseScanned 状态需要同时在 handleToolUse 回调和 localStorage 恢复两处维护
-  - DT-007 依赖本任务的类型定义，特别是 `phase: 'confirmation'` 和 `ConfirmationSummary` 接口
+  - 呼吸动画定义在 globals.css 中（不在组件级 CSS module），因为 stage3/page.tsx 是 app router 页面没有自己的 CSS module
+  - 自动展开通过 setExpandedTaskId(currentTaskId) 实现，当 currentTaskId 为 null 时不做操作（保持用户手动展开的状态）
+  - DT-007 需要继续中文化 Tab 标签（Flowchart/Progress Log/Changes/Commits）和右侧面板标题
 ---
 
 ## 2026-02-10 - DT-007
-- 实现了 Viewer 确认门控 UI 组件
-- 修改/新增了以下文件：
-  - `viewer/src/components/pyramid/ConfirmationCard.tsx`（新增）: 确认门控摘要卡片组件，包含 5 个分区（需求摘要、功能范围、技术方案、风险评估、复杂度估计）和两个操作按钮
-  - `viewer/src/app/stage1/page.tsx`: 新增 isConfirmationPhase 和 confirmationSummary 状态，handleToolUse 中检测 phase: 'confirmation' 并提取 confirmationSummary，新增 handleConfirmGenerate 和 handleRevise 回调，条件渲染 ConfirmationCard 组件，localStorage 持久化确认状态，左侧导航 L5 显示"待确认"摘要
-  - `viewer/src/components/index.ts`: 导出 ConfirmationCard 组件
+- 实现了启动/停止代理按钮 + Stage 3 全面中文化
+- 修改了以下文件：
+  - `viewer/src/app/stage3/page.tsx`：
+    - 顶部右侧新增「启动代理」按钮，点击后展开最大迭代次数输入框（默认10），可配置后启动
+    - agent running 状态时，按钮变为「停止代理」（红色，带脉冲动画圆点）
+    - 停止时二次确认：点击后显示「确认停止代理？」+ 确认/取消按钮
+    - 启动/停止按钮均有 loading 状态（disabled + 文字变化）
+    - Tab 标签中文化：Flowchart→流程图, Progress Log→进度日志, Changes→文件变更, Commits→提交记录
+    - 右侧面板标题 "Agent Status"→"代理状态"
+    - 最近更新时间 "Last update:"→"最近更新:"
+    - 文件变更 Tab 内容中文化："files changed"→"个文件变更", "Refresh"→"刷新", "No changes detected"→"暂无文件变更"
+    - 提交记录 Tab 内容中文化："commits on"→"分支 · N 个提交", "Refresh"→"刷新", "No commits found..."→"该分支暂无提交记录"
+    - 进度日志空状态 "No progress log yet..."→"暂无进度日志..."
+    - 提交日期 locale 从 en-US 改为 zh-CN
+- 使用了 useAgentStatus hook 已有的 startAgent/stopAgent 方法，无需新增 API 调用
 - **未来迭代的经验教训：**
-  - ConfirmationCard 通过 metadata.phase === 'confirmation' && metadata.confirmationSummary 双重检查来激活，缺一不可
-  - 确认/修改的响应是通过 respondToTool 发送固定文案（'确认并生成 PRD' / '需要修改'），SKILL.md 中的选项文案需要与此匹配
-  - isConfirmationPhase 状态需要在 handleToolUse、handleConfirmGenerate、handleRevise 三处维护一致性
-  - 风险评估卡片使用 RiskGroup 子组件，颜色编码：高(红)、中(琥珀)、低(蓝)
-  - 所有新状态（isConfirmationPhase、confirmationSummary）都需要同步到 localStorage 持久化和恢复逻辑
+  - StageIndicator 组件嵌入了 flex 布局中以便在右侧放置操作按钮，使用 `<div className="flex items-center">` 包裹
+  - 启动按钮使用两步交互：先点击显示迭代数输入，再点击「启动」确认。停止按钮也是两步（先显示确认区域）
+  - useAgentStatus 的 startAgent/stopAgent 已处理错误状态，调用方只需 try/catch 并管理 loading 状态
+  - 所有 Stage 3 页面英文文案已全面中文化，这是最后一个任务
 ---

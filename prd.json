@@ -1,121 +1,118 @@
 {
-  "project": "PRD 生成系统增强",
-  "branchName": "botool/prd-enhancements",
-  "description": "借鉴 ECC 获奖项目，对 pyramidprd 和 generateprd 两个 Skill 增加代码库感知扫描、确认门控、风险评估和测试策略章节。pyramidprd 服务 Viewer 用户，generateprd 服务 CLI 开发者。",
+  "project": "Stage 3 工厂看板改造",
+  "branchName": "botool/stage3-factory-dashboard",
+  "description": "将 Stage 3 页面从静态展示改造为实时数据驱动的代理监控面板，接入 useAgentStatus hook 和 SSE 数据流，实现精确步骤高亮、状态指示灯、启动/停止控制，全面中文化",
   "devTasks": [
     {
       "id": "DT-001",
-      "title": "pyramidprd SKILL.md — 增加代码库感知扫描指令",
-      "description": "在 pyramidprd SKILL.md 中，L1 完成后、L2 开始前，新增代码库扫描阶段。指导 Claude 使用 Glob/Grep/Read 扫描项目，识别技术栈、架构模式、现有组件、业务模型和 API 接口。扫描结果内化为更精准的 L2/L3 问题。无代码库时跳过。在 metadata 中标记 codebaseScanned。",
+      "title": "Stage 3 接入 useAgentStatus + 三栏布局重构",
+      "description": "在 Stage 3 页面中接入已有的 useAgentStatus hook 获取实时代理状态数据。将现有两栏布局改为三栏布局（左 240px 任务列表 | 中 flex-1 流程图+tab | 右 260px 数据面板）",
       "acceptanceCriteria": [
-        "SKILL.md 中有明确的代码库扫描阶段指令（在 L1→L2 之间）",
-        "扫描指令覆盖：技术栈检测、目录结构分析、现有组件/路由/API 识别、数据模型分析",
-        "有「无代码库」场景的降级处理（跳过扫描）",
-        "扫描结果体现在 L2/L3 问题的选项中（如现有技术栈作为预设选项）",
-        "metadata 中标记 codebaseScanned: true/false",
-        "Typecheck passes"
+        "Stage 3 页面通过 useAgentStatus({ stream: true }) 获取实时数据",
+        "页面布局变为三栏，中间区域保持上下分割（流程图 + tab）",
+        "三栏在 >=1024px 屏幕上正常显示，不拥挤",
+        "Typecheck passes",
+        "在浏览器中验证布局正确"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "修改文件：~/.claude/skills/botoolagent-pyramidprd/SKILL.md"
+      "notes": "修改文件：viewer/src/app/stage3/page.tsx。useAgentStatus hook 在 src/hooks/useAgentStatus.ts"
     },
     {
       "id": "DT-002",
-      "title": "pyramidprd SKILL.md — 增加确认门控流程",
-      "description": "在 pyramidprd SKILL.md 中，L4 完成后、PRD 生成前，新增确认门控阶段。通过 AskUserQuestion 输出结构化确认摘要（需求摘要、功能范围、风险评估、复杂度估计），metadata 标记 phase: 'confirmation' 和 level: 5。用户可选确认并生成或返回修改。",
+      "title": "创建 AgentDataPanel 组件（迭代进度 + 任务完成率）",
+      "description": "创建新组件 src/components/AgentDataPanel/AgentDataPanel.tsx，展示迭代进度条和任务完成率进度条。接收 AgentStatus 数据作为 props",
       "acceptanceCriteria": [
-        "SKILL.md 中 L4 之后有明确的确认门控指令",
-        "确认摘要通过 AskUserQuestion 输出，包含需求摘要、功能范围、风险评估",
-        "metadata 包含 phase: 'confirmation' 和 level: 5",
-        "用户可选择确认并生成或返回修改",
-        "返回修改时 Claude 能重新提问",
-        "Typecheck passes"
+        "组件接收 agentStatus props，展示迭代进度（如 5/10）和任务完成率（如 6/7）",
+        "进度条使用 Tailwind CSS，数值变化时有平滑过渡动画（transition）",
+        "显示当前任务 ID 和执行状态（如 DT-006 · 执行中 · 第1次尝试）",
+        "agent 未运行时显示 idle 状态",
+        "Typecheck passes",
+        "在浏览器中验证"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "修改文件：~/.claude/skills/botoolagent-pyramidprd/SKILL.md"
+      "notes": "新建文件：viewer/src/components/AgentDataPanel/AgentDataPanel.tsx。在 DT-001 的右侧面板中使用"
     },
     {
       "id": "DT-003",
-      "title": "pyramidprd SKILL.md — 更新 PRD 模板增加风险和测试章节",
-      "description": "修改 pyramidprd SKILL.md 的 PRD 输出模板，在 Dev Tasks 之后新增 Risks & Mitigations 章节（HIGH/MEDIUM/LOW 分级）和 Testing Strategy 章节（单元/集成/E2E）。指导 Claude 基于 L1-L4 答案自动生成。",
+      "title": "AgentDataPanel 状态指示灯（说人话版保护机制）",
+      "description": "在 AgentDataPanel 中添加状态指示灯区域，将技术指标转化为绿/黄/红指示灯 + 一句话说明。映射规则：网络状态（waiting_network→红灯）、API调用（rateLimit>80%→黄灯，apiRateLimit.waiting→红灯）、连续进展（noProgressCount>=2→红灯）、重试状态（retryCount>0→黄灯）",
       "acceptanceCriteria": [
-        "SKILL.md PRD 模板包含 Risks & Mitigations 章节",
-        "SKILL.md PRD 模板包含 Testing Strategy 章节",
-        "章节位于 Dev Tasks 之后、Non-Goals 之前",
-        "风险分 HIGH/MEDIUM/LOW 三级",
-        "测试策略覆盖单元/集成/E2E 三种类型",
-        "Typecheck passes"
+        "每个指示灯由彩色圆点 + 一句中文说明组成",
+        "颜色和文案根据映射规则正确切换",
+        "绿灯、黄灯、红灯视觉区分清晰",
+        "Typecheck passes",
+        "在浏览器中验证"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "修改文件：~/.claude/skills/botoolagent-pyramidprd/SKILL.md"
+      "notes": "修改文件：viewer/src/components/AgentDataPanel/AgentDataPanel.tsx。需要从 AgentStatus 中读取 rateLimit、circuitBreaker、apiRateLimit 字段"
     },
     {
       "id": "DT-004",
-      "title": "generateprd SKILL.md — 重构定位 + 增加代码库扫描",
-      "description": "重构 generateprd SKILL.md 为纯 CLI 开发者工具。删除所有 Viewer 相关指令（Viewer Mode、Do NOT use tools 限制等）。Phase 1 增加结构化代码库扫描，使用 Glob/Grep/Read 分析项目技术栈、架构、业务逻辑。新项目时跳过。",
+      "title": "FlowChart 精确步骤高亮（接入 agent status）",
+      "description": "改造 FlowChart 组件的 getStepStatus 函数，从粗略的 idle/running/done 三态改为根据 agentStatus.status 精确高亮到对应节点。映射：idle→全pending，running→高亮启动Claude实例和Claude执行任务，waiting_network→高亮检查Rate Limit，timeout/error→高亮结果处理（橙色闪烁），iteration_complete→高亮双条件退出验证，complete→全completed",
       "acceptanceCriteria": [
-        "SKILL.md 中不包含任何 Viewer 相关指令",
-        "Phase 1 有明确的代码库扫描步骤",
-        "扫描使用 Glob/Grep/Read 工具，覆盖技术栈+架构+业务逻辑",
-        "扫描结果体现在后续问题的选项和上下文中",
-        "无代码库场景有降级处理",
-        "Typecheck passes"
+        "FlowChart 接收完整的 agentStatus 对象（不仅是 agentPhase）",
+        "节点高亮精确匹配映射规则",
+        "当前步骤有蓝色脉冲动画，已完成步骤显示绿色 ✓",
+        "错误/重试状态节点有橙色闪烁效果",
+        "Typecheck passes",
+        "在浏览器中验证"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "修改文件：~/.claude/skills/botoolagent-generateprd/SKILL.md。删除 Viewer Mode 和 IMPORTANT: You are running inside BotoolAgent Viewer 章节。"
+      "notes": "修改文件：viewer/src/components/FlowChart/FlowChart.tsx、FlowChart.css、CustomNode.tsx。需要新增 StepStatus 类型如 error/retry"
     },
     {
       "id": "DT-005",
-      "title": "generateprd SKILL.md — 增加确认门控 + 更新 PRD 模板",
-      "description": "在 generateprd SKILL.md 的 Phase 3 和 Phase 4 之间插入 Final Confirmation 步骤，通过 AskUserQuestion 展示确认摘要。同时更新 PRD 模板增加 Risks & Mitigations 和 Testing Strategy 章节。更新 Checklist。",
+      "title": "FlowChart 连线虚线流动动画",
+      "description": "当代理运行时，FlowChart 的连线（edges）添加 CSS 虚线流动动画（stroke-dashoffset animation），表示数据流动。代理停止时动画停止",
       "acceptanceCriteria": [
-        "Phase 3 和 Phase 4 之间有明确的确认门控步骤",
-        "确认摘要通过 AskUserQuestion 展示",
-        "用户可选择确认生成或返回修改",
-        "PRD 模板包含 Risks & Mitigations 章节",
-        "PRD 模板包含 Testing Strategy 章节",
-        "Checklist 已更新",
-        "Typecheck passes"
+        "agent running 时，已通过的连线显示虚线流动动画",
+        "agent idle/complete 时，连线为静态实线",
+        "动画方向与流程方向一致（从源到目标）",
+        "性能良好，无卡顿（纯 CSS animation，不用 JS）",
+        "Typecheck passes",
+        "在浏览器中验证"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "修改文件：~/.claude/skills/botoolagent-generateprd/SKILL.md"
+      "notes": "修改文件：viewer/src/components/FlowChart/FlowChart.css、FlowChart.tsx（传递 animated 属性给 edges）"
     },
     {
       "id": "DT-006",
-      "title": "更新 tool-types.ts 和 PyramidNavigation 支持新状态",
-      "description": "更新 tool-types.ts 中 PyramidMetadata 增加 phase、codebaseScanned、codebaseSummary 字段。修改 PyramidNavigation 组件支持 5 层显示（L1-L4 + 确认）。stage1/page.tsx 中 levels 数组从 4 层扩展到 5 层。codebaseScanned 时 L2 层显示已分析提示。",
+      "title": "左侧任务列表轻度改造",
+      "description": "对现有任务列表做轻度改造：当前任务高亮（蓝色呼吸动画边框）、自动展开当前任务详情、状态标签中文化",
       "acceptanceCriteria": [
-        "PyramidMetadata 类型增加 phase、codebaseScanned、codebaseSummary 可选字段",
-        "PyramidNavigation 支持第 5 层确认显示",
-        "代码库扫描状态在 UI 中有体现",
-        "卡片/对话框背景为白色",
+        "当前执行的任务卡片有蓝色呼吸动画（CSS animation on border/shadow）",
+        "当 currentTaskId 变化时，自动展开对应任务的详情",
+        "状态标签中文化：Completed→已完成, In Progress→执行中, Pending→等待中",
+        "底部统计文案中文化：如 6/7 完成 · 迭代 #5",
         "Typecheck passes",
-        "Verify in browser"
+        "在浏览器中验证"
       ],
       "priority": 6,
       "passes": true,
-      "notes": "修改文件：viewer/src/lib/tool-types.ts、viewer/src/components/pyramid/PyramidNavigation.tsx、viewer/src/app/stage1/page.tsx"
+      "notes": "修改文件：viewer/src/app/stage3/page.tsx 中的任务列表部分"
     },
     {
       "id": "DT-007",
-      "title": "Viewer — 确认门控 UI 组件",
-      "description": "修改 Stage 1 页面，识别 phase: 'confirmation' 的 metadata，渲染为摘要卡片 UI（区别于普通问答界面）。卡片展示需求摘要、功能列表、风险评估等分区，底部有确认并生成 PRD 和返回修改按钮。",
+      "title": "启动/停止代理按钮 + Stage 3 全面中文化",
+      "description": "在 Stage 3 页面顶部添加启动/停止代理按钮（POST /api/agent/start 和 DELETE /api/agent/status）。启动时可设置最大迭代次数（默认10），停止时二次确认。同时将页面内所有英文标签改为中文",
       "acceptanceCriteria": [
-        "Stage 1 页面识别 confirmation 阶段并渲染卡片 UI",
-        "卡片包含需求摘要、功能范围、风险评估等分区",
-        "确认并生成和返回修改按钮功能正常",
-        "左侧导航显示确认层级状态",
-        "卡片背景为白色（遵循项目规范）",
+        "顶部有启动代理按钮，running 状态时变为停止代理",
+        "启动时可设置最大迭代次数（默认 10）",
+        "按钮有 loading 状态和确认提示（停止时二次确认）",
+        "Tab 标签中文化：Flowchart→流程图, Progress Log→进度日志, Changes→文件变更, Commits→提交记录",
+        "右侧面板标题、左侧面板标题等所有英文均中文化",
         "Typecheck passes",
-        "Verify in browser"
+        "在浏览器中验证"
       ],
       "priority": 7,
       "passes": true,
-      "notes": "修改文件：viewer/src/app/stage1/page.tsx。依赖 DT-006 的类型定义。"
+      "notes": "修改文件：viewer/src/app/stage3/page.tsx。API 已存在：POST /api/agent/start、DELETE /api/agent/status"
     }
   ]
 }
