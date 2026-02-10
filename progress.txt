@@ -78,3 +78,20 @@
   - generateprd 的代码库扫描和 pyramidprd 的类似，但格式不同（generateprd 更简洁，无 metadata 层级标记）
   - 删除 Viewer 指令后，generateprd 可以自由使用所有工具（Bash、Read、Write 等）
 ---
+
+## 2026-02-10 - DT-005
+- 实现了 generateprd SKILL.md 确认门控 + PRD 模板更新
+- 修改了 `~/.claude/skills/botoolagent-generateprd/SKILL.md`
+- 变更内容：
+  - Phase 3 和 Phase 4 之间新增 Phase 3.5: Final Confirmation（确认门控）
+  - 确认摘要通过 AskUserQuestion 展示，包含需求摘要、功能范围、技术方案、风险评估、复杂度估计
+  - 用户可选「确认并生成 PRD」或「需要修改」
+  - 「需要修改」时提供修改范围选择（功能范围、技术方案、风险评估、返回重新讨论）
+  - PRD 模板在 Functional Requirements 之后、Non-Goals 之前新增 Risks & Mitigations（HIGH/MEDIUM/LOW）
+  - PRD 模板新增 Testing Strategy（Unit/Integration/E2E）
+  - Checklist 更新：新增代码库扫描、确认门控、风险和测试章节检查项
+- **未来迭代的经验教训：**
+  - generateprd 的确认门控比 pyramidprd 更简洁（无 metadata 层级），适合 CLI 交互风格
+  - 两个 Skill 的 PRD 模板现在保持一致的章节结构（Risks & Mitigations + Testing Strategy）
+  - Checklist 是最终质量保障，新增功能后必须同步更新
+---
