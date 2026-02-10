@@ -44,3 +44,19 @@
   - 确认门控的 metadata 中 `phase: 'confirmation'` 是 Viewer 识别确认阶段的关键字段（DT-007 依赖）
   - `confirmationSummary` 对象结构（含 risks.high/medium/low）需要在 DT-006 的 tool-types.ts 中同步定义
 ---
+
+## 2026-02-10 - DT-003
+- 实现了 pyramidprd SKILL.md PRD 模板增加风险和测试章节
+- 修改了 `~/.claude/skills/botoolagent-pyramidprd/SKILL.md`
+- 变更内容：
+  - PRD 模板（Phase 7）中 Functional Requirements 之后、Non-Goals 之前新增 Risks & Mitigations 章节
+  - 风险分 HIGH/MEDIUM/LOW 三级，每级含风险标题、描述和缓解措施
+  - 新增风险识别指导规则（L1-L4 答案到风险的映射逻辑）
+  - PRD 模板中新增 Testing Strategy 章节
+  - 测试策略覆盖 Unit Tests、Integration Tests、E2E Tests 三种类型
+  - 新增测试策略生成指导规则（L2/L3/L4 答案到测试项的映射逻辑）
+- **未来迭代的经验教训：**
+  - PRD 模板中的风险识别和测试策略生成是基于映射规则自动推导，不需要用户额外回答问题
+  - 风险评估在 L5 确认门控中已有展示（DT-002），PRD 模板中的是最终完整版本
+  - DT-005 的 generateprd 也需要添加相同的章节，可以复用相似的模板结构
+---
