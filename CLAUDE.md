@@ -4,17 +4,28 @@
 
 ## 你的任务
 
-1. 读取本目录下的 `prd.json` 文件
-2. 读取 `progress.txt` 中的进度日志（先查看 Codebase Patterns 部分）
-3. 检查你是否在 PRD 中指定的 `branchName` 分支上。如果不是，切换到该分支或从 main 创建
-4. 选择优先级最高且 `passes: false` 的开发任务
-5. 实现该单个开发任务
-6. 运行质量检查（如 typecheck、lint、test - 使用项目所需的检查工具）
-7. 如果发现可复用的模式，更新 CLAUDE.md 文件（见下文）
-8. 如果检查通过，提交所有更改，提交信息格式：`feat: [任务ID] - [任务标题]`
-9. **推送到远程**：`git push origin <branchName>` - 确保进度同步到 GitHub
-10. 更新 PRD，将已完成任务的 `passes` 设为 `true`
-11. 将进度追加到 `progress.txt`
+1. 读取 `PROJECT.md`（如果存在）— 了解项目全局
+2. 读取 `.project-status`（如果存在）— 了解当前状态
+3. 读取 `patterns.json`（如果存在）— 了解累积经验，按 confidence 降序，只读 `status: "active"`
+4. 读取本目录下的 `prd.json` 文件：
+   a. 读取 `constitution.rules`（如果存在）— 了解项目编码规范（Constitution 层）
+   b. 读取 `progress.txt` 中的 Codebase Patterns（fallback，如果 patterns.json 不存在）
+5. 检查你是否在 PRD 中指定的 `branchName` 分支上。如果不是，切换到该分支或从 main 创建
+6. 选择优先级最高且 `passes: false` 的开发任务
+7. 读取该任务的 `spec` 字段（如果存在）：
+   - `spec.codeExamples` → 期望的代码结构
+   - `spec.testCases` → 需要通过的测试场景
+8. 读取该任务的 `evals` 字段（如果存在）
+9. 执行上下文检索（见下文"上下文检索"部分）
+10. 实现该单个开发任务
+11. 运行 evals（见下文"Eval 执行"部分）
+12. 执行 Spec 对照检查（见下文"Spec 对照检查"部分）
+13. 运行质量检查（如 typecheck、lint、test - 使用项目所需的检查工具）
+14. 如果发现可复用的模式，更新 `patterns.json`（优先）或 CLAUDE.md 文件（见下文）
+15. 如果检查通过，提交所有更改，提交信息格式：`feat: [任务ID] - [任务标题]`
+16. **推送到远程**：`git push origin <branchName>` - 确保进度同步到 GitHub
+17. 更新 prd.json（将已完成任务的 `passes` 设为 `true`）+ 更新 `.project-status`
+18. 将进度追加到 `progress.txt`
 
 ## 进度报告格式
 
@@ -32,9 +43,44 @@
 
 经验教训部分非常关键 - 它帮助未来的迭代避免重复错误并更好地理解代码库。
 
+## 上下文检索（实现前）
+
+1. 读取当前任务的 `spec.filesToModify` 和 `spec.relatedFiles`
+2. 如果存在，直接读取这些文件
+3. 如果为空或不存在，执行搜索：
+   a. 用任务关键词搜索相关文件
+   b. 只深度阅读高相关性文件（最多 5 个）
+4. 如果有 `dependsOn`，读取依赖任务在 progress.txt 中的日志
+5. 如果有 `contextHint`，按提示重点关注特定上下文
+
+## Eval 执行（提交前）
+
+如果当前任务有 `evals` 字段：
+1. 运行所有 eval
+2. code-based eval（`blocking: true`）：失败 → 必须修复，不可提交
+3. model-based eval（`blocking: false`）：不满足 → 记录警告，不阻塞
+4. 将 eval 结果写入 progress.txt
+
+## Spec 对照检查（提交前）
+
+1. typecheck 通过
+2. lint 通过
+3. test 通过
+4. evals 通过（blocking 类型必须全部通过）
+5. 逐条核对 acceptanceCriteria：
+   - 每条标注：✅ 已满足 / ❌ 未满足（附原因）/ ⬚ 不适用
+   - 检查 `spec.testCases` 覆盖情况
+   - 检查 `spec.codeExamples` 符合度
+   - 检查 `constitution.rules` 遵循情况
+   - 将结果写入 progress.txt
+
 ## 整合模式
 
-如果你发现了未来迭代应该知道的**可复用模式**，将其添加到 progress.txt 顶部的 `## Codebase Patterns` 部分（如果不存在则创建）。这个部分应该整合最重要的经验：
+如果你发现了未来迭代应该知道的**可复用模式**：
+
+**优先写入 `patterns.json`**（如果存在）— 详见下文"更新 patterns.json"部分。
+
+**Fallback**：如果 `patterns.json` 不存在，将模式添加到 progress.txt 顶部的 `## Codebase Patterns` 部分（如果不存在则创建）：
 
 ```
 ## Codebase Patterns
@@ -44,6 +90,39 @@
 ```
 
 只添加**通用且可复用**的模式，不要添加特定任务的细节。
+
+## 更新 patterns.json
+
+完成任务后，如果发现了可复用的模式：
+
+1. 读取 patterns.json
+2. 检查是否已有相似 pattern（同 trigger）：
+   - 有 → 增加 evidence，更新 confidence 和 lastValidated
+   - 无 → 创建新 pattern，confidence: 0.3
+3. 置信度规则：
+   - 0.3 — 首次发现
+   - 0.6 — 2+ 条证据
+   - 0.9 — 3+ 条证据且近期验证
+   - >= 0.8 → 硬性规则（必须遵循）
+   - < 0.8 → 建议
+4. 淘汰：总条目 > 30 时，confidence < 0.4 且 30 天未验证 → status: "deprecated"
+5. 领域分类（domain）：database, frontend, backend, security, testing, general
+6. 每领域最多 10 条 active
+
+Pattern 结构：
+```json
+{
+  "id": "pat-NNN",
+  "trigger": "触发条件",
+  "action": "应该做什么",
+  "confidence": 0.3,
+  "domain": "general",
+  "evidence": ["来源"],
+  "status": "active",
+  "createdAt": "YYYY-MM-DD",
+  "lastValidated": "YYYY-MM-DD"
+}
+```
 
 ## 更新 CLAUDE.md 文件
 
