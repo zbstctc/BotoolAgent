@@ -97,8 +97,8 @@
         "Verify in browser"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "修改文件：viewer/src/lib/tool-types.ts、viewer/src/components/PyramidNavigation.tsx、viewer/src/app/stage1/page.tsx"
+      "passes": true,
+      "notes": "修改文件：viewer/src/lib/tool-types.ts、viewer/src/components/pyramid/PyramidNavigation.tsx、viewer/src/app/stage1/page.tsx"
     },
     {
       "id": "DT-007",
@@ -114,7 +114,7 @@
         "Verify in browser"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "修改文件：viewer/src/app/stage1/page.tsx。依赖 DT-006 的类型定义。"
     }
   ]

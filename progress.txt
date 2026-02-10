@@ -95,3 +95,30 @@
   - 两个 Skill 的 PRD 模板现在保持一致的章节结构（Risks & Mitigations + Testing Strategy）
   - Checklist 是最终质量保障，新增功能后必须同步更新
 ---
+
+## 2026-02-10 - DT-006
+- 实现了 tool-types.ts 和 PyramidNavigation 支持新状态
+- 修改了以下文件：
+  - `viewer/src/lib/tool-types.ts`: PyramidMetadata 增加 phase、codebaseScanned、codebaseSummary、confirmationSummary 字段，level 类型从 1-4 扩展到 1-5，新增 ConfirmationSummary 接口
+  - `viewer/src/components/pyramid/PyramidNavigation.tsx`: LEVEL_NAMES 和 LEVEL_DESCRIPTIONS 新增 L5 确认门控，新增 codebaseScanned 可选 prop 显示"代码库已分析"标签
+  - `viewer/src/app/stage1/page.tsx`: LevelId 扩展到 5，levels 数组从 4 扩展到 5，codebaseScanned 状态追踪和 localStorage 持久化，PRD 生成触发条件从 L4 改为 L5，提交按钮文案适配 3 种状态
+- **未来迭代的经验教训：**
+  - PyramidNavigation 组件路径是 `components/pyramid/PyramidNavigation.tsx`，不是 `components/PyramidNavigation.tsx`
+  - stage1/page.tsx 中所有引用 `completedLevels.includes(4)` 的地方在 5 层模型下需要改为 `includes(5)` 来触发 PRD 生成
+  - codebaseScanned 状态需要同时在 handleToolUse 回调和 localStorage 恢复两处维护
+  - DT-007 依赖本任务的类型定义，特别是 `phase: 'confirmation'` 和 `ConfirmationSummary` 接口
+---
+
+## 2026-02-10 - DT-007
+- 实现了 Viewer 确认门控 UI 组件
+- 修改/新增了以下文件：
+  - `viewer/src/components/pyramid/ConfirmationCard.tsx`（新增）: 确认门控摘要卡片组件，包含 5 个分区（需求摘要、功能范围、技术方案、风险评估、复杂度估计）和两个操作按钮
+  - `viewer/src/app/stage1/page.tsx`: 新增 isConfirmationPhase 和 confirmationSummary 状态，handleToolUse 中检测 phase: 'confirmation' 并提取 confirmationSummary，新增 handleConfirmGenerate 和 handleRevise 回调，条件渲染 ConfirmationCard 组件，localStorage 持久化确认状态，左侧导航 L5 显示"待确认"摘要
+  - `viewer/src/components/index.ts`: 导出 ConfirmationCard 组件
+- **未来迭代的经验教训：**
+  - ConfirmationCard 通过 metadata.phase === 'confirmation' && metadata.confirmationSummary 双重检查来激活，缺一不可
+  - 确认/修改的响应是通过 respondToTool 发送固定文案（'确认并生成 PRD' / '需要修改'），SKILL.md 中的选项文案需要与此匹配
+  - isConfirmationPhase 状态需要在 handleToolUse、handleConfirmGenerate、handleRevise 三处维护一致性
+  - 风险评估卡片使用 RiskGroup 子组件，颜色编码：高(红)、中(琥珀)、低(蓝)
+  - 所有新状态（isConfirmationPhase、confirmationSummary）都需要同步到 localStorage 持久化和恢复逻辑
+---

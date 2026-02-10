@@ -7,6 +7,7 @@ import {
   PyramidNavigation,
   PRDPreview,
   StageTransitionModal,
+  ConfirmationCard,
   type LevelInfo,
   type CollectedSummaryItem,
 } from '@/components';
@@ -16,6 +17,7 @@ import {
   type AskUserQuestionToolInput,
   type AskUserQuestion,
   type PyramidMetadata,
+  type ConfirmationSummary,
   isAskUserQuestionInput,
 } from '@/lib/tool-types';
 
@@ -58,6 +60,9 @@ export default function Stage1Page() {
   const [currentTool, setCurrentTool] = useState<string | null>(null);
   // Track codebase scan status
   const [codebaseScanned, setCodebaseScanned] = useState(false);
+  // Confirmation gate state
+  const [isConfirmationPhase, setIsConfirmationPhase] = useState(false);
+  const [confirmationSummary, setConfirmationSummary] = useState<ConfirmationSummary | null>(null);
 
   // UI state
   const [isSaving, setIsSaving] = useState(false);
@@ -96,6 +101,8 @@ export default function Stage1Page() {
         if (state.isStarted) setIsStarted(state.isStarted);
         if (state.qaHistory) setQaHistory(state.qaHistory);
         if (state.codebaseScanned) setCodebaseScanned(state.codebaseScanned);
+        if (state.isConfirmationPhase) setIsConfirmationPhase(state.isConfirmationPhase);
+        if (state.confirmationSummary) setConfirmationSummary(state.confirmationSummary);
         console.log('[Stage1] Restored saved state (once)', { qaHistoryCount: state.qaHistory?.length || 0 });
       } catch (e) {
         console.error('[Stage1] Failed to parse saved state:', e);
@@ -118,13 +125,15 @@ export default function Stage1Page() {
         isStarted,
         qaHistory,
         codebaseScanned,
+        isConfirmationPhase,
+        confirmationSummary,
         savedAt: new Date().toISOString(),
       };
       localStorage.setItem(storageKey, JSON.stringify(state));
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [storageKey, cliSessionId, currentLevel, completedLevels, answers, prdDraft, isStarted, qaHistory, codebaseScanned]);
+  }, [storageKey, cliSessionId, currentLevel, completedLevels, answers, prdDraft, isStarted, qaHistory, codebaseScanned, isConfirmationPhase, confirmationSummary]);
 
   // Load initial description from sessionStorage or fallback to project name
   useEffect(() => {
@@ -161,6 +170,15 @@ export default function Stage1Page() {
         // Track codebase scan status
         if (metadata.codebaseScanned !== undefined) {
           setCodebaseScanned(metadata.codebaseScanned);
+        }
+
+        // Detect confirmation phase
+        if (metadata.phase === 'confirmation' && metadata.confirmationSummary) {
+          setIsConfirmationPhase(true);
+          setConfirmationSummary(metadata.confirmationSummary);
+        } else {
+          setIsConfirmationPhase(false);
+          setConfirmationSummary(null);
         }
 
         // Mark previous levels as completed
@@ -375,6 +393,35 @@ export default function Stage1Page() {
     });
   }, [currentQuestions, currentLevel, answers, otherSelected]);
 
+  // Handle confirmation: user confirms and wants PRD generated
+  const handleConfirmGenerate = useCallback(() => {
+    if (!pendingToolUse) return;
+    // Respond with "confirm" selection to the AskUserQuestion tool
+    const answersToSubmit: Record<string, string | string[]> = {
+      [`L${currentLevel}-Q1`]: '确认并生成 PRD',
+    };
+    respondToTool(pendingToolUse.id, { answers: answersToSubmit });
+    setIsConfirmationPhase(false);
+    setConfirmationSummary(null);
+    setCurrentQuestions([]);
+    if (!completedLevels.includes(currentLevel)) {
+      setCompletedLevels(prev => [...prev, currentLevel]);
+    }
+  }, [pendingToolUse, currentLevel, completedLevels, respondToTool]);
+
+  // Handle revision: user wants to go back and modify
+  const handleRevise = useCallback(() => {
+    if (!pendingToolUse) return;
+    // Respond with "revise" selection
+    const answersToSubmit: Record<string, string | string[]> = {
+      [`L${currentLevel}-Q1`]: '需要修改',
+    };
+    respondToTool(pendingToolUse.id, { answers: answersToSubmit });
+    setIsConfirmationPhase(false);
+    setConfirmationSummary(null);
+    setCurrentQuestions([]);
+  }, [pendingToolUse, currentLevel, respondToTool]);
+
   // Handle save PRD
   const handleSavePRD = useCallback(async () => {
     if (!prdDraft || isSaving) return;
@@ -429,18 +476,23 @@ export default function Stage1Page() {
       const isCurrent = level === currentLevel;
       const isLocked = level > currentLevel && !completedLevels.includes(level as LevelId);
 
+      let summary: string | undefined;
+      if (isCompleted) {
+        summary = level === 2 && codebaseScanned ? '已完成 (代码库已分析)' : '已完成';
+      } else if (isCurrent && level === 5 && isConfirmationPhase) {
+        summary = '待确认';
+      }
+
       return {
         id: level,
         name: `L${level}`,
         status: isCompleted ? 'completed' : isCurrent ? 'current' : 'locked',
-        questionsTotal: isCurrent ? currentQuestions.length : 0,
-        questionsAnswered: isCurrent ? Object.keys(answers).filter(k => k.startsWith(`L${level}-`)).length : 0,
-        summary: isCompleted
-          ? level === 2 && codebaseScanned ? '已完成 (代码库已分析)' : '已完成'
-          : undefined,
+        questionsTotal: isCurrent && !isConfirmationPhase ? currentQuestions.length : 0,
+        questionsAnswered: isCurrent && !isConfirmationPhase ? Object.keys(answers).filter(k => k.startsWith(`L${level}-`)).length : 0,
+        summary,
       };
     }) as LevelInfo[];
-  }, [currentLevel, completedLevels, currentQuestions, answers, codebaseScanned]);
+  }, [currentLevel, completedLevels, currentQuestions, answers, codebaseScanned, isConfirmationPhase]);
 
   // Project name
   const projectName = activeProject?.name || '新项目';
@@ -500,8 +552,16 @@ export default function Stage1Page() {
 
         {/* Center: Question Panel */}
         <div className="flex-1 min-w-0 border-x border-neutral-200 bg-white overflow-y-auto">
-          {/* PRD generation in progress - check first (highest priority) */}
-          {isLoading && completedLevels.includes(5) && currentQuestions.length === 0 ? (
+          {/* Confirmation card - highest priority when in confirmation phase */}
+          {isConfirmationPhase && confirmationSummary ? (
+            <ConfirmationCard
+              summary={confirmationSummary}
+              onConfirm={handleConfirmGenerate}
+              onRevise={handleRevise}
+              isLoading={isLoading}
+            />
+          ) : /* PRD generation in progress */
+          isLoading && completedLevels.includes(5) && currentQuestions.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <div className="animate-spin h-8 w-8 border-4 border-green-600 border-t-transparent rounded-full mx-auto mb-2"></div>
