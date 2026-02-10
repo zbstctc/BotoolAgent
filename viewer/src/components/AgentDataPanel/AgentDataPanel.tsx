@@ -12,6 +12,103 @@ interface AgentDataPanelProps {
   totalTasks?: number;
 }
 
+type IndicatorColor = 'green' | 'yellow' | 'red';
+
+interface StatusIndicator {
+  label: string;
+  description: string;
+  color: IndicatorColor;
+}
+
+const COLOR_CLASSES: Record<IndicatorColor, string> = {
+  green: 'bg-green-500',
+  yellow: 'bg-yellow-400',
+  red: 'bg-red-500',
+};
+
+function computeIndicators(agentStatus: AgentStatus): StatusIndicator[] {
+  const indicators: StatusIndicator[] = [];
+
+  // 1. Network status
+  if (agentStatus.status === 'waiting_network') {
+    indicators.push({
+      label: '网络',
+      description: '等待网络响应，可能连接异常',
+      color: 'red',
+    });
+  } else {
+    indicators.push({
+      label: '网络',
+      description: '网络连接正常',
+      color: 'green',
+    });
+  }
+
+  // 2. API rate limit
+  if (agentStatus.apiRateLimit?.waiting) {
+    indicators.push({
+      label: 'API 限流',
+      description: `API 被限流，${agentStatus.apiRateLimit.remainingSeconds}秒后恢复`,
+      color: 'red',
+    });
+  } else if (
+    agentStatus.rateLimit?.enabled &&
+    agentStatus.rateLimit.maxCalls > 0 &&
+    agentStatus.rateLimit.calls / agentStatus.rateLimit.maxCalls > 0.8
+  ) {
+    indicators.push({
+      label: 'API 限流',
+      description: `API 调用接近上限（${agentStatus.rateLimit.calls}/${agentStatus.rateLimit.maxCalls}）`,
+      color: 'yellow',
+    });
+  } else {
+    indicators.push({
+      label: 'API 限流',
+      description: 'API 调用额度充足',
+      color: 'green',
+    });
+  }
+
+  // 3. Progress check (circuit breaker)
+  const noProgressCount = agentStatus.circuitBreaker?.noProgressCount ?? 0;
+  if (noProgressCount >= 2) {
+    indicators.push({
+      label: '连续进展',
+      description: `连续${noProgressCount}次无进展，可能卡住`,
+      color: 'red',
+    });
+  } else if (noProgressCount === 1) {
+    indicators.push({
+      label: '连续进展',
+      description: '上次迭代无进展，继续观察',
+      color: 'yellow',
+    });
+  } else {
+    indicators.push({
+      label: '连续进展',
+      description: '任务正常推进',
+      color: 'green',
+    });
+  }
+
+  // 4. Retry status
+  if (agentStatus.retryCount > 0) {
+    indicators.push({
+      label: '重试',
+      description: `第${agentStatus.retryCount}次重试中`,
+      color: 'yellow',
+    });
+  } else {
+    indicators.push({
+      label: '重试',
+      description: '无需重试',
+      color: 'green',
+    });
+  }
+
+  return indicators;
+}
+
 function getStatusLabel(status: AgentStatus['status']): string {
   switch (status) {
     case 'running':
@@ -129,6 +226,27 @@ export default function AgentDataPanel({
         <p className="text-xs text-neutral-500 italic">
           {agentStatus.message}
         </p>
+      )}
+
+      {/* Status Indicators */}
+      {agentStatus.status !== 'idle' && (
+        <div className="rounded-lg border border-neutral-200 bg-white p-3">
+          <span className="text-xs text-neutral-400">状态指示灯</span>
+          <div className="mt-2 space-y-2">
+            {computeIndicators(agentStatus).map((ind) => (
+              <div key={ind.label} className="flex items-center gap-2">
+                <span
+                  className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${COLOR_CLASSES[ind.color]}`}
+                />
+                <span className="text-xs text-neutral-700">
+                  <span className="font-medium">{ind.label}</span>
+                  {' · '}
+                  {ind.description}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

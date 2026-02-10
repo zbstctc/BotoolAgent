@@ -23,6 +23,23 @@ interface AgentStatus {
   total: number;
   currentTask: string;
   retryCount: number;
+  rateLimit?: {
+    enabled: boolean;
+    calls: number;
+    maxCalls: number;
+    windowRemaining: number;
+  };
+  circuitBreaker?: {
+    enabled: boolean;
+    noProgressCount: number;
+    threshold: number;
+    lastCompletedCount: number;
+  };
+  apiRateLimit?: {
+    waiting: boolean;
+    resetAt: number;
+    remainingSeconds: number;
+  };
 }
 
 interface PRDJson {

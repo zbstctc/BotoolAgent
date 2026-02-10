@@ -13,6 +13,26 @@ export type AgentStatusType =
   | 'iteration_complete'
   | 'max_iterations';
 
+export interface RateLimitInfo {
+  enabled: boolean;
+  calls: number;
+  maxCalls: number;
+  windowRemaining: number;
+}
+
+export interface CircuitBreakerInfo {
+  enabled: boolean;
+  noProgressCount: number;
+  threshold: number;
+  lastCompletedCount: number;
+}
+
+export interface ApiRateLimitInfo {
+  waiting: boolean;
+  resetAt: number;
+  remainingSeconds: number;
+}
+
 export interface AgentStatus {
   status: AgentStatusType;
   message: string;
@@ -23,6 +43,9 @@ export interface AgentStatus {
   total: number;
   currentTask: string;
   retryCount: number;
+  rateLimit?: RateLimitInfo;
+  circuitBreaker?: CircuitBreakerInfo;
+  apiRateLimit?: ApiRateLimitInfo;
 }
 
 interface StatusEvent {
