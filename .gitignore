@@ -1,6 +1,7 @@
 # ===== BotoolAgent Runtime (generated during runs) =====
 prd.json
 progress.txt
+.project-status
 .last-branch
 .agent-status
 .botoolrc

@@ -1289,6 +1289,22 @@ PATTERNS_EOF
 fi
 
 # ============================================================================
+# 如果 .project-status 不存在则初始化
+# ============================================================================
+PROJECT_STATUS_FILE="$PROJECT_DIR/.project-status"
+if [ ! -f "$PROJECT_STATUS_FILE" ]; then
+  cat > "$PROJECT_STATUS_FILE" << 'EOF'
+{
+  "currentBranch": "",
+  "lastCompleted": [],
+  "inProgress": "",
+  "updatedAt": ""
+}
+EOF
+  log "INFO" "Created empty .project-status"
+fi
+
+# ============================================================================
 # 分支安全检查 - 防止丢失未合并的工作
 # ============================================================================
 check_branch_safety() {
@@ -1971,6 +1987,11 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   echo ""
 
   update_status "iteration_complete" "第 $i 次迭代完成，$COMPLETED/$TOTAL 个任务已完成"
+
+  # Update .project-status (will be further enriched by Agent via CLAUDE.md instructions)
+  if [ -f "$PROJECT_STATUS_FILE" ]; then
+    log "INFO" ".project-status will be updated by Agent"
+  fi
 
   # 检查 Circuit Breaker（只在迭代成功时检查）
   if [ "$iteration_success" = true ]; then

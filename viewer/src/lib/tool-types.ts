@@ -80,3 +80,75 @@ export function isAskUserQuestionInput(
 export function isTextInputQuestion(question: AskUserQuestion): boolean {
   return !question.options || question.options.length === 0;
 }
+
+// === SDD Enhancement Types (DT-002) ===
+
+// Constitution layer - project-level coding standards
+export interface ConstitutionRule {
+  id: string;
+  name: string;
+  category: string;
+  content?: string;
+}
+
+export interface Constitution {
+  rules: ConstitutionRule[];
+  ruleAuditSummary?: string;
+}
+
+// Task Spec layer - per-task implementation details
+export interface SpecCodeExample {
+  language: string;
+  description: string;
+  code: string;
+}
+
+export interface SpecTestCase {
+  type: 'unit' | 'e2e';
+  description: string;
+  steps: string[];
+}
+
+export interface DevTaskSpec {
+  codeExamples: SpecCodeExample[];
+  testCases: SpecTestCase[];
+  filesToModify: string[];
+  relatedFiles: string[];
+}
+
+// Eval types
+export interface DevTaskEval {
+  type: 'code-based' | 'model-based';
+  blocking: boolean;
+  description: string;
+  command?: string;
+  expect?: string;
+  files?: string[];
+  criteria?: string;
+}
+
+// Enriched PrdJson (new schema)
+export interface EnrichedDevTask {
+  id: string;
+  title: string;
+  description: string;
+  acceptanceCriteria: string[];
+  priority: number;
+  passes: boolean;
+  dependsOn?: string[];
+  contextHint?: string;
+  notes: string;
+  spec?: DevTaskSpec;
+  evals?: DevTaskEval[];
+}
+
+export interface EnrichedPrdJson {
+  project: string;
+  branchName: string;
+  description: string;
+  constitution?: Constitution;
+  devTasks: EnrichedDevTask[];
+}
+
+// Pipeline mode type
+export type PipelineMode = 'quick' | 'feature' | 'full';
