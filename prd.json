@@ -32,7 +32,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "修改文件：~/.claude/skills/botoolagent-pyramidprd/SKILL.md"
     },
     {

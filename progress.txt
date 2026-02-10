@@ -24,3 +24,23 @@
   - metadata 中的字段会被 Viewer 的 `tool-types.ts` 解析，DT-006 需要同步更新类型定义
   - 扫描结果不直接输出给用户，而是内化到后续问题选项中
 ---
+
+## 2026-02-10 - DT-002
+- 实现了 pyramidprd SKILL.md 确认门控流程
+- 修改了 `~/.claude/skills/botoolagent-pyramidprd/SKILL.md`
+- 变更内容：
+  - 金字塔结构概述中新增「L5: 确认门控」步骤（L4→生成 PRD 之间）
+  - 所有 metadata 示例中 `totalLevels` 从 4 更新为 5，`progress` 对应更新
+  - 新增 Phase 6: L5 确认门控，含完整的 AskUserQuestion 调用格式
+  - 确认摘要包含 5 个分区：需求摘要、功能范围、技术方案、风险评估、复杂度估计
+  - metadata 包含 `phase: 'confirmation'` 和 `level: 5`
+  - 用户可选「确认并生成 PRD」或「需要修改」
+  - 「需要修改」时提供 4 种修改选项（功能范围、技术方案、风险评估、返回重新提问）
+  - 原 Phase 6（生成 PRD）改为 Phase 7
+  - 对比表新增「确认门控」维度
+  - frontmatter description 更新为"5 层"
+- **未来迭代的经验教训：**
+  - 修改层级数量时，需要全文搜索 `totalLevels`、`progress` 和 `/4` 等引用，确保一致性
+  - 确认门控的 metadata 中 `phase: 'confirmation'` 是 Viewer 识别确认阶段的关键字段（DT-007 依赖）
+  - `confirmationSummary` 对象结构（含 risks.high/medium/low）需要在 DT-006 的 tool-types.ts 中同步定义
+---
