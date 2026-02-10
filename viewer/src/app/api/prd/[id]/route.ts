@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getTasksDir } from '@/lib/project-root';
 
-// Path to tasks directory (relative to project root)
-const PROJECT_ROOT = process.cwd();
-const TASKS_DIR = path.join(PROJECT_ROOT, '..', 'tasks');
+const TASKS_DIR = getTasksDir();
 
 export async function GET(
   request: NextRequest,

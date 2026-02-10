@@ -1,12 +1,11 @@
 import { NextRequest } from 'next/server';
 import * as fs from 'fs';
-import * as path from 'path';
+import { getPrdJsonPath, getProgressPath } from '@/lib/project-root';
 
-// File paths to watch (relative to project root)
-const PROJECT_ROOT = process.cwd();
+// File paths to watch
 const WATCHED_FILES = {
-  prd: path.join(PROJECT_ROOT, '..', 'prd.json'),
-  progress: path.join(PROJECT_ROOT, '..', 'progress.txt'),
+  prd: getPrdJsonPath(),
+  progress: getProgressPath(),
 };
 
 interface FileContent {

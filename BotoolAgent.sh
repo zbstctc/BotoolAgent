@@ -128,6 +128,8 @@ load_config() {
 # ============================================================================
 # 解析参数
 # ============================================================================
+PROJECT_DIR=""  # 用户项目目录（可移植模式）
+
 while [[ $# -gt 0 ]]; do
   case $1 in
     --timeout)
@@ -136,6 +138,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --retries)
       MAX_RETRIES="$2"
+      shift 2
+      ;;
+    --project-dir)
+      PROJECT_DIR="$2"
       shift 2
       ;;
     *)
@@ -152,14 +158,40 @@ done
 # 设置路径
 # ============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PRD_FILE="$SCRIPT_DIR/prd.json"
-PROGRESS_FILE="$SCRIPT_DIR/progress.txt"
+
+# 自动检测项目目录（可移植模式支持）
+# 优先级: --project-dir 参数 > 环境变量 > 自动检测
+if [ -z "$PROJECT_DIR" ]; then
+  PROJECT_DIR="${BOTOOL_PROJECT_ROOT:-}"
+fi
+if [ -z "$PROJECT_DIR" ]; then
+  # 自动检测: 如果 SCRIPT_DIR 有 .git，它就是项目根目录（独立模式）
+  # 否则，检查父目录是否有 .git（可移植模式）
+  if [ -d "$SCRIPT_DIR/.git" ]; then
+    PROJECT_DIR="$SCRIPT_DIR"
+  elif [ -d "$(dirname "$SCRIPT_DIR")/.git" ]; then
+    PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+  else
+    PROJECT_DIR="$SCRIPT_DIR"
+  fi
+fi
+
+# BotoolAgent 自身的文件路径（始终在 SCRIPT_DIR）
 ARCHIVE_DIR="$SCRIPT_DIR/archive"
 LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch"
 LOG_DIR="$SCRIPT_DIR/logs"
 STATUS_FILE="$SCRIPT_DIR/.agent-status"
 RATE_LIMIT_STATE_FILE="$SCRIPT_DIR/.rate-limit-state"
 CIRCUIT_BREAKER_STATE_FILE="$SCRIPT_DIR/.circuit-breaker-state"
+
+# 用户项目的文件路径（在 PROJECT_DIR）
+PRD_FILE="$PROJECT_DIR/prd.json"
+PROGRESS_FILE="$PROJECT_DIR/progress.txt"
+
+if [ "$PROJECT_DIR" != "$SCRIPT_DIR" ]; then
+  echo ">>> 可移植模式: 项目目录 = $PROJECT_DIR"
+  echo ">>> BotoolAgent 目录 = $SCRIPT_DIR"
+fi
 
 # 创建日志目录
 mkdir -p "$LOG_DIR"
@@ -1141,6 +1173,9 @@ run_claude_with_monitoring() {
 
   # 查找 claude 命令的完整路径
   local CLAUDE_CMD=$(which claude 2>/dev/null || echo "$HOME/.claude/local/claude")
+
+  # 确保 Claude 在用户项目目录中运行
+  cd "$PROJECT_DIR"
 
   # 检查 timeout 命令是否可用
   if command -v gtimeout &> /dev/null; then

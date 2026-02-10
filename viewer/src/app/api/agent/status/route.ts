@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
-import * as path from 'path';
 import {
   updateTaskHistoryEntry,
   determineStage,
@@ -8,11 +7,11 @@ import {
   type TaskStatus as HistoryTaskStatus,
   type TaskStage,
 } from '@/lib/task-history';
+import { getAgentStatusPath, getPrdJsonPath } from '@/lib/project-root';
 
 // File paths
-const PROJECT_ROOT = path.join(process.cwd(), '..');
-const STATUS_FILE = path.join(PROJECT_ROOT, '.agent-status');
-const PRD_FILE = path.join(PROJECT_ROOT, 'prd.json');
+const STATUS_FILE = getAgentStatusPath();
+const PRD_FILE = getPrdJsonPath();
 
 interface AgentStatus {
   status: 'idle' | 'running' | 'waiting_network' | 'timeout' | 'error' | 'failed' | 'complete' | 'iteration_complete' | 'max_iterations';

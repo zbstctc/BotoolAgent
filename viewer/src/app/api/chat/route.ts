@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { CLIManager, CLIMessage } from '@/lib/cli-manager';
+import { getProjectRoot } from '@/lib/project-root';
 
 // System prompt for PRD generation (used when called via legacy /api/chat endpoint)
 const SYSTEM_PROMPT = `You are a PRD (Product Requirements Document) generation assistant for BotoolAgent. Your goal is to help users create well-structured PRDs through natural, collaborative dialogue.
@@ -178,8 +179,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Get working directory (project root, parent of viewer)
-    const workingDir = process.cwd().replace(/\/viewer$/, '');
+    // Get working directory (user's project root)
+    const workingDir = getProjectRoot();
 
     // Create CLI manager instance
     const cliManager = new CLIManager({

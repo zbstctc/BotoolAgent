@@ -3,11 +3,11 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
+import { getProjectRoot, getProgressPath, getPrdJsonPath } from '@/lib/project-root';
 
 const execAsync = promisify(exec);
 
-// Get project root (parent of viewer directory)
-const PROJECT_ROOT = path.join(process.cwd(), '..');
+const PROJECT_ROOT = getProjectRoot();
 
 interface PRInfo {
   number: number;
@@ -32,7 +32,7 @@ interface CompletedTask {
  * Parse progress.txt to extract completed task IDs and titles
  */
 async function getCompletedTasks(): Promise<CompletedTask[]> {
-  const progressPath = path.join(PROJECT_ROOT, 'progress.txt');
+  const progressPath = getProgressPath();
   const tasks: CompletedTask[] = [];
 
   try {
@@ -57,7 +57,7 @@ async function getCompletedTasks(): Promise<CompletedTask[]> {
  * Get task titles from prd.json
  */
 async function getTaskTitles(taskIds: string[]): Promise<Map<string, string>> {
-  const prdPath = path.join(PROJECT_ROOT, 'prd.json');
+  const prdPath = getPrdJsonPath();
   const titleMap = new Map<string, string>();
 
   try {
@@ -82,7 +82,7 @@ async function getTaskTitles(taskIds: string[]): Promise<Map<string, string>> {
  * Generate PR title from project name and branch
  */
 async function generatePRTitle(): Promise<string> {
-  const prdPath = path.join(PROJECT_ROOT, 'prd.json');
+  const prdPath = getPrdJsonPath();
 
   try {
     const content = await fs.readFile(prdPath, 'utf-8');
@@ -117,7 +117,7 @@ async function generatePRDescription(): Promise<string> {
   // Get PRD description
   let projectDescription = '';
   try {
-    const prdPath = path.join(PROJECT_ROOT, 'prd.json');
+    const prdPath = getPrdJsonPath();
     const content = await fs.readFile(prdPath, 'utf-8');
     const prd = JSON.parse(content);
     projectDescription = prd.description || '';

@@ -30,15 +30,8 @@ interface TestResult {
   duration?: number;
 }
 
-// Get project root (parent of viewer directory)
-function getProjectRoot(): string {
-  const cwd = process.cwd();
-  // If running from viewer directory, go up one level
-  if (cwd.endsWith('/viewer')) {
-    return path.dirname(cwd);
-  }
-  return cwd;
-}
+// Import centralized path resolution
+import { getProjectRoot } from '@/lib/project-root';
 
 // Detect available test commands from package.json
 function detectTestCommands(projectRoot: string): TestCommand[] {

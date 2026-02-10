@@ -4,12 +4,12 @@ import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
+import { getProjectRoot, getPrdJsonPath } from '@/lib/project-root';
 
 const execAsync = promisify(exec);
 
-// Get project root (parent of viewer directory)
-const PROJECT_ROOT = path.join(process.cwd(), '..');
-const PRD_FILE = path.join(PROJECT_ROOT, 'prd.json');
+const PROJECT_ROOT = getProjectRoot();
+const PRD_FILE = getPrdJsonPath();
 
 interface PRDJson {
   project?: string;

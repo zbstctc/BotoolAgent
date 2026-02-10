@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getArchiveDir } from '@/lib/project-root';
 
-// Path to archive directory (relative to project root)
-const PROJECT_ROOT = process.cwd();
-const ARCHIVE_DIR = path.join(PROJECT_ROOT, '..', 'archive');
+const ARCHIVE_DIR = getArchiveDir();
 
 interface DevTask {
   id: string;

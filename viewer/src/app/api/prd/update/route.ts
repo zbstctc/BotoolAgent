@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
-
-// Path to project root (parent of viewer)
-const PROJECT_ROOT = path.join(process.cwd(), '..');
+import { getPrdJsonPath } from '@/lib/project-root';
 
 interface DevTask {
   id: string;
@@ -52,7 +50,7 @@ export async function POST(request: NextRequest) {
     };
 
     // Write to prd.json
-    const prdJsonPath = path.join(PROJECT_ROOT, 'prd.json');
+    const prdJsonPath = getPrdJsonPath();
     fs.writeFileSync(prdJsonPath, JSON.stringify(updatedPrd, null, 2));
 
     return NextResponse.json({

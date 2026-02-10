@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getTasksDir, getPrdJsonPath } from '@/lib/project-root';
 
-// Path to tasks directory (relative to project root)
-const PROJECT_ROOT = process.cwd();
-const TASKS_DIR = path.join(PROJECT_ROOT, '..', 'tasks');
+const TASKS_DIR = getTasksDir();
 
 export interface PRDItem {
   id: string;
@@ -66,7 +65,7 @@ function extractPreview(content: string): string {
 function determinePRDStatus(filename: string): PRDItem['status'] {
   // Check if there's an active prd.json that references this PRD
   try {
-    const prdJsonPath = path.join(PROJECT_ROOT, '..', 'prd.json');
+    const prdJsonPath = getPrdJsonPath();
     if (fs.existsSync(prdJsonPath)) {
       const prdJson = JSON.parse(fs.readFileSync(prdJsonPath, 'utf-8'));
       const baseName = filename.replace(/^prd-/, '').replace(/\.md$/, '');

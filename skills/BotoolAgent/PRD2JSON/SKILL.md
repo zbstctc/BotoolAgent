@@ -25,8 +25,9 @@ This skill supports two modes:
 ### Step 1: Check for Available PRDs
 
 ```bash
-# Check if any PRD files exist
-ls tasks/prd-*.md 2>/dev/null
+# Check if any PRD files exist (auto-detect mode)
+TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"
+ls "$TASKS_DIR"/prd-*.md 2>/dev/null
 ```
 
 **If no PRDs found:**
@@ -48,7 +49,9 @@ lsof -i :3000 | grep LISTEN
 **If server is NOT running:**
 ```bash
 # Start the Viewer dev server in background
-cd viewer && npm run dev &
+# Auto-detect: standalone (viewer/) or portable (BotoolAgent/viewer/)
+VIEWER_DIR="$([ -d BotoolAgent/viewer ] && echo BotoolAgent/viewer || echo viewer)"
+cd "$VIEWER_DIR" && npm run dev &
 # Wait for server to be ready (3-5 seconds)
 sleep 3
 ```

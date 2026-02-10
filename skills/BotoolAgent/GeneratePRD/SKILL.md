@@ -46,7 +46,9 @@ If the server is not running:
 
 ```bash
 # Navigate to viewer directory and start dev server in background
-cd viewer && npm run dev &
+# Auto-detect: standalone (viewer/) or portable (BotoolAgent/viewer/)
+VIEWER_DIR="$([ -d BotoolAgent/viewer ] && echo BotoolAgent/viewer || echo viewer)"
+cd "$VIEWER_DIR" && npm run dev &
 ```
 
 Wait a few seconds for the server to start.

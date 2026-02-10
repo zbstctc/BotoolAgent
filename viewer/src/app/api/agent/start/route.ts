@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { spawn } from 'child_process';
-import path from 'path';
 import fs from 'fs';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
+import { getProjectRoot, getPrdJsonPath, getAgentScriptPath, isPortableMode } from '@/lib/project-root';
 
-// Get project root directory (parent of viewer/)
-const PROJECT_ROOT = path.join(process.cwd(), '..');
-const PRD_PATH = path.join(PROJECT_ROOT, 'prd.json');
+const PROJECT_ROOT = getProjectRoot();
+const PRD_PATH = getPrdJsonPath();
 
 interface PRDJson {
   project?: string;
@@ -30,7 +29,7 @@ export async function POST(request: Request) {
   try {
     const { maxIterations = 10 } = await request.json().catch(() => ({}));
 
-    const SCRIPT_PATH = path.join(PROJECT_ROOT, 'BotoolAgent.sh');
+    const SCRIPT_PATH = getAgentScriptPath();
 
     // Check if script exists
     if (!fs.existsSync(SCRIPT_PATH)) {
@@ -70,8 +69,13 @@ export async function POST(request: Request) {
     }
 
     // Start BotoolAgent.sh in background
-    // Use nohup equivalent: detached: true, stdio: 'ignore', unref()
-    const child = spawn('bash', [SCRIPT_PATH, String(maxIterations)], {
+    // In portable mode, pass --project-dir so the agent operates on the user's project
+    const args = [SCRIPT_PATH, String(maxIterations)];
+    if (isPortableMode()) {
+      args.push('--project-dir', PROJECT_ROOT);
+    }
+
+    const child = spawn('bash', args, {
       cwd: PROJECT_ROOT,
       detached: true,
       stdio: 'ignore',

@@ -2,8 +2,9 @@ import { NextRequest } from 'next/server';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { getRulesDir } from '@/lib/project-root';
 
-const RULES_DIR = join(process.cwd().replace(/\/viewer$/, ''), 'rules');
+const RULES_DIR = getRulesDir();
 
 // GET: Get a specific rule document content
 export async function GET(

@@ -3,12 +3,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { getArchiveDir, getProjectRoot } from '@/lib/project-root';
 
 const execAsync = promisify(exec);
 
-// Path to archive directory (relative to project root)
-const PROJECT_ROOT = process.cwd();
-const ARCHIVE_DIR = path.join(PROJECT_ROOT, '..', 'archive');
+const ARCHIVE_DIR = getArchiveDir();
 
 // Task status type - more detailed than before
 export type TaskStatus = 'running' | 'completed' | 'partial' | 'failed' | 'waiting_merge';
@@ -59,7 +58,7 @@ async function isBranchMerged(branchName: string): Promise<boolean> {
     // Check if the branch exists in merged branches list
     const { stdout } = await execAsync(
       `git branch --merged main | grep -w "${branchName}" || true`,
-      { cwd: path.join(PROJECT_ROOT, '..') }
+      { cwd: getProjectRoot() }
     );
     return stdout.trim().includes(branchName);
   } catch {
@@ -74,7 +73,7 @@ async function getPRUrl(branchName: string): Promise<string | undefined> {
   try {
     const { stdout } = await execAsync(
       `gh pr view ${branchName} --json url --jq '.url' 2>/dev/null || true`,
-      { cwd: path.join(PROJECT_ROOT, '..') }
+      { cwd: getProjectRoot() }
     );
     const url = stdout.trim();
     return url || undefined;

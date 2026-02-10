@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { getTasksDir } from '@/lib/project-root';
 
 // Task status type
 export type TaskStatus = 'running' | 'completed' | 'partial' | 'failed' | 'waiting_merge';
@@ -30,9 +31,7 @@ export interface TaskHistoryData {
   entries: TaskHistoryEntry[];
 }
 
-// Path to task history file
-const PROJECT_ROOT = process.cwd();
-const TASKS_DIR = path.join(PROJECT_ROOT, '..', 'tasks');
+const TASKS_DIR = getTasksDir();
 const TASK_HISTORY_FILE = path.join(TASKS_DIR, '.task-history.json');
 
 /**

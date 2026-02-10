@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { CLIManager, CLIMessage } from '@/lib/cli-manager';
+import { getProjectRoot } from '@/lib/project-root';
 
 interface CLIRespondRequest {
   sessionId: string;
@@ -26,8 +27,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Get working directory (project root, parent of viewer)
-    const workingDir = process.cwd().replace(/\/viewer$/, '');
+    // Get working directory (user's project root)
+    const workingDir = getProjectRoot();
 
     // Create CLI manager instance
     const cliManager = new CLIManager({

@@ -9,6 +9,7 @@ import { NextRequest } from 'next/server';
 import { parseSkillPrompts, fillPromptTemplate } from '@/lib/skill-parser';
 import { getActiveDimensions, type LevelId } from '@/lib/dimension-framework';
 import { execSync } from 'child_process';
+import { getBotoolRoot } from '@/lib/project-root';
 
 interface QuestionRequest {
   level: LevelId;
@@ -22,7 +23,7 @@ interface QuestionRequest {
  * Run CLI synchronously and return the result
  */
 function runCLISync(prompt: string): string {
-  const workingDir = process.cwd().replace(/\/viewer$/, '');
+  const workingDir = getBotoolRoot();
 
   // Write prompt to a temp file to avoid shell escaping issues
   const fs = require('fs');

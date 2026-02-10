@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CLIManager, CLIMessage } from '@/lib/cli-manager';
+import { getProjectRoot, getPrdJsonPath, getProgressPath, getArchiveDir } from '@/lib/project-root';
 
-// Path to project root (parent of viewer)
-const PROJECT_ROOT = path.join(process.cwd(), '..');
+const PROJECT_ROOT = getProjectRoot();
 
 // System prompt for PRD to JSON conversion
 const SYSTEM_PROMPT = `You are a PRD to JSON converter for BotoolAgent. Your task is to convert a PRD markdown document into a structured JSON format.
@@ -73,8 +73,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'PRD content is required' }, { status: 400 });
     }
 
-    // Get working directory (project root, parent of viewer)
-    const workingDir = process.cwd().replace(/\/viewer$/, '');
+    // Get working directory (user's project root)
+    const workingDir = getProjectRoot();
 
     // Create CLI manager instance
     const cliManager = new CLIManager({
@@ -121,11 +121,11 @@ export async function POST(request: NextRequest) {
             await archiveIfNeeded(prdJson);
 
             // Write prd.json to project root
-            const prdJsonPath = path.join(PROJECT_ROOT, 'prd.json');
+            const prdJsonPath = getPrdJsonPath();
             fs.writeFileSync(prdJsonPath, JSON.stringify(prdJson, null, 2));
 
             // Reset progress.txt with fresh header
-            const progressPath = path.join(PROJECT_ROOT, 'progress.txt');
+            const progressPath = getProgressPath();
             const header = `# Botool Dev Agent Progress Log\nStarted: ${new Date().toLocaleString()}\n---\n\n## Codebase Patterns\n- (patterns will be added here as discovered)\n\n---\n`;
             fs.writeFileSync(progressPath, header);
 
@@ -219,8 +219,8 @@ export async function POST(request: NextRequest) {
 }
 
 async function archiveIfNeeded(newPrdJson: { branchName: string }) {
-  const prdJsonPath = path.join(PROJECT_ROOT, 'prd.json');
-  const progressPath = path.join(PROJECT_ROOT, 'progress.txt');
+  const prdJsonPath = getPrdJsonPath();
+  const progressPath = getProgressPath();
 
   // Check if existing prd.json exists
   if (!fs.existsSync(prdJsonPath)) {
@@ -243,7 +243,7 @@ async function archiveIfNeeded(newPrdJson: { branchName: string }) {
       // Create archive directory
       const date = new Date().toISOString().split('T')[0];
       const featureName = existingPrd.branchName?.replace('botool/', '') || 'unknown';
-      const archiveDir = path.join(PROJECT_ROOT, 'archive', `${date}-${featureName}`);
+      const archiveDir = path.join(getArchiveDir(), `${date}-${featureName}`);
 
       fs.mkdirSync(archiveDir, { recursive: true });
 

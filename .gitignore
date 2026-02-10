@@ -1,30 +1,67 @@
-# BotoolAgent working files (generated during runs)
+# ===== BotoolAgent Runtime (generated during runs) =====
 prd.json
 progress.txt
 .last-branch
 .agent-status
+.botoolrc
 logs/
 
 # Archive is optional to commit
 # archive/
 
-# OS files
+# ===== OS =====
 .DS_Store
+Thumbs.db
 
-# Claude
+# ===== IDE / Editor =====
 .claude/
+.codex/
+.cursor/
+.gemini/
+.opencode/
+.windsurf/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
 
-# Playwright MCP
+# ===== Playwright MCP =====
 .playwright-mcp/
 
-# Environment files
+# ===== Environment =====
 .env
 .env.*
 .env.local
 
-# Node modules (in case of root level)
+# ===== Dependencies =====
 node_modules/
 
-# Temporary files
+# ===== Build Artifacts =====
+viewer/.next/
+viewer/.turbo/
+flowchart/dist/
+flowchart/node_modules/
+
+# ===== Temporary Files =====
 *.tmp
 *.log
+.pr-body-temp.md
+
+# ===== Distribution Packages =====
+*.tar.gz
+*.zip
+
+# ===== Runtime State =====
+.circuit-breaker-state
+.rate-limit-state
+
+# ===== Screenshots / Images (test artifacts) =====
+*.png
+*.webp
+!skills/**/*.png
+!viewer/public/**/*.png
+!flowchart/public/**/*
+
+# ===== Test Coverage =====
+coverage/

@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import path from 'path';
+import { getProjectRoot } from '@/lib/project-root';
 
 const execAsync = promisify(exec);
 
-// Get project root (parent of viewer directory)
-const PROJECT_ROOT = path.join(process.cwd(), '..');
+const PROJECT_ROOT = getProjectRoot();
 
 interface FileChange {
   path: string;
