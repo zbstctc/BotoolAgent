@@ -507,7 +507,7 @@ export default function Stage3Page() {
           {/* Content */}
           {activeTab === 'flowchart' && (
             <div className="flex-1 overflow-hidden">
-              <FlowChart agentPhase={agentPhase as AgentPhase} currentIteration={iterationCount} />
+              <FlowChart agentPhase={agentPhase as AgentPhase} agentStatus={agentStatus.status} currentIteration={iterationCount} />
             </div>
           )}
           {activeTab === 'log' && (

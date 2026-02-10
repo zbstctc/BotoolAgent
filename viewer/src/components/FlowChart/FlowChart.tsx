@@ -22,6 +22,7 @@ import { NoteNode } from './NoteNode';
 import { createNode, createEdge, createNoteNode, getEdgeVisibility } from './utils';
 import { ALL_STEPS, NOTES, POSITIONS, EDGE_CONNECTIONS } from './constants';
 import type { StepStatus } from './types';
+import type { AgentStatus, AgentStatusType } from '@/hooks/useAgentStatus';
 
 const nodeTypes = { custom: CustomNode, note: NoteNode };
 
@@ -31,44 +32,119 @@ export type AgentPhase = 'idle' | 'running' | 'done';
 
 interface FlowChartProps {
   agentPhase?: AgentPhase;
+  agentStatus?: AgentStatus;
   currentIteration?: number;
   showControls?: boolean; // Whether to show step-by-step navigation controls
 }
 
-// Compute step status based on agent phase and iteration count
-function getStepStatus(stepIndex: number, agentPhase: AgentPhase, currentIteration: number): StepStatus {
-  // Steps 1-3 are setup: completed once agent is running or done
+// Step index mapping:
+// 0: 读取 prd.json
+// 1: 初始化保护机制
+// 2: 开始迭代 (检查 Rate Limit)
+// 3: 启动 Claude 实例
+// 4: Claude 执行任务
+// 5: 结果处理
+// 6: 响应分析
+// 7: 记录进度日志
+// 8: 双条件退出验证
+// 9: 全部完成!
+
+// Precise step status mapping based on AgentStatusType
+function getStepStatusPrecise(stepIndex: number, agentStatusType: AgentStatusType, currentIteration: number, retryCount: number): StepStatus {
+  // idle → all pending
+  if (agentStatusType === 'idle') return 'pending';
+
+  // complete → all completed
+  if (agentStatusType === 'complete') return 'completed';
+
+  // Setup steps (0-2): completed once agent starts running
   if (stepIndex < 3) {
-    return agentPhase === 'idle' ? 'pending' : 'completed';
-  }
-
-  // Step 10 (index 9) is "Done!" - only completed when all tasks are done
-  if (stepIndex === 9) {
-    return agentPhase === 'done' ? 'completed' : 'pending';
-  }
-
-  // Step 9 (index 8) is "More stories?" decision node
-  if (stepIndex === 8) {
-    if (agentPhase === 'done') return 'completed';
-    // After iterations, the decision was made (answered "Yes" to continue)
-    if (agentPhase === 'running' && currentIteration > 0) return 'completed';
-    return 'pending';
-  }
-
-  // Steps 4-8 (indexes 3-7) are the main loop steps
-  if (agentPhase === 'running') {
-    // Highlight step 4 (AI picks a story) as current during running
-    if (stepIndex === 3) return 'current';
-    // Other loop steps show as pending
-    return 'pending';
-  }
-
-  if (agentPhase === 'done') {
-    // All loop steps completed when done
+    // Step 2 (检查 Rate Limit) is current when waiting_network
+    if (stepIndex === 2 && agentStatusType === 'waiting_network') return 'current';
     return 'completed';
   }
 
+  // Step 9 (全部完成!): only on 'complete' (handled above)
+  if (stepIndex === 9) return 'pending';
+
+  // Step 8 (双条件退出验证)
+  if (stepIndex === 8) {
+    if (agentStatusType === 'iteration_complete') return 'current';
+    if (currentIteration > 0) return 'completed';
+    return 'pending';
+  }
+
+  // Main loop steps (3-7) - precise mapping by status
+  switch (agentStatusType) {
+    case 'running':
+      // running → highlight 启动 Claude 实例 (3) and Claude 执行任务 (4)
+      if (stepIndex === 3) return 'completed';
+      if (stepIndex === 4) return 'current';
+      // Steps after current are pending, unless we've iterated
+      if (stepIndex > 4 && currentIteration > 0) return 'completed';
+      return 'pending';
+
+    case 'waiting_network':
+      // waiting_network → step 2 is current (handled above), loop steps completed up to check
+      if (stepIndex <= 4) return 'completed';
+      return 'pending';
+
+    case 'timeout':
+    case 'error':
+    case 'failed':
+      // Error states → highlight 结果处理 (5) with error status
+      if (stepIndex <= 4) return 'completed';
+      if (stepIndex === 5) return retryCount > 0 ? 'retry' : 'error';
+      return 'pending';
+
+    case 'iteration_complete':
+      // iteration_complete → all loop steps completed, decision node is current (handled above)
+      if (stepIndex <= 7) return 'completed';
+      return 'pending';
+
+    case 'max_iterations':
+      // max_iterations → all loop steps completed, decision highlighted as error
+      if (stepIndex <= 7) return 'completed';
+      if (stepIndex === 8) return 'error';
+      return 'pending';
+
+    default:
+      return 'pending';
+  }
+}
+
+// Fallback: compute step status from coarse AgentPhase (for backward compat)
+function getStepStatusFromPhase(stepIndex: number, agentPhase: AgentPhase, currentIteration: number): StepStatus {
+  if (stepIndex < 3) {
+    return agentPhase === 'idle' ? 'pending' : 'completed';
+  }
+  if (stepIndex === 9) {
+    return agentPhase === 'done' ? 'completed' : 'pending';
+  }
+  if (stepIndex === 8) {
+    if (agentPhase === 'done') return 'completed';
+    if (agentPhase === 'running' && currentIteration > 0) return 'completed';
+    return 'pending';
+  }
+  if (agentPhase === 'running') {
+    if (stepIndex === 3) return 'current';
+    return 'pending';
+  }
+  if (agentPhase === 'done') return 'completed';
   return 'pending';
+}
+
+// Unified getStepStatus: prefer precise mapping when agentStatus is available
+function getStepStatus(
+  stepIndex: number,
+  agentPhase: AgentPhase,
+  currentIteration: number,
+  agentStatus?: AgentStatus
+): StepStatus {
+  if (agentStatus && agentStatus.status !== 'idle') {
+    return getStepStatusPrecise(stepIndex, agentStatus.status, currentIteration, agentStatus.retryCount);
+  }
+  return getStepStatusFromPhase(stepIndex, agentPhase, currentIteration);
 }
 
 // Helper to compute nodes based on positions, visibility count, and agent state
@@ -76,10 +152,11 @@ function computeNodes(
   count: number,
   positions: Record<string, { x: number; y: number }>,
   agentPhase: AgentPhase = 'idle',
-  currentIteration: number = 0
+  currentIteration: number = 0,
+  agentStatus?: AgentStatus
 ): Node[] {
   const stepNodes = ALL_STEPS.map((step, index) =>
-    createNode(step, index < count, positions[step.id], getStepStatus(index, agentPhase, currentIteration))
+    createNode(step, index < count, positions[step.id], getStepStatus(index, agentPhase, currentIteration, agentStatus))
   );
   const noteNodes = NOTES.map(note => {
     const noteVisible = count >= note.appearsWithStep;
@@ -94,24 +171,24 @@ function computeEdges(count: number): Edge[] {
   );
 }
 
-export function FlowChart({ agentPhase = 'idle', currentIteration = 0, showControls = false }: FlowChartProps) {
+export function FlowChart({ agentPhase = 'idle', agentStatus, currentIteration = 0, showControls = false }: FlowChartProps) {
   const [visibleCount, setVisibleCount] = useState(ALL_STEPS.length); // Show all steps by default
   const nodePositions = useRef<Record<string, { x: number; y: number }>>({ ...POSITIONS });
 
   // Compute initial values using useMemo with static positions (safe during render)
   const initialNodes = useMemo(
-    () => computeNodes(ALL_STEPS.length, POSITIONS, agentPhase, currentIteration),
-    [agentPhase, currentIteration]
+    () => computeNodes(ALL_STEPS.length, POSITIONS, agentPhase, currentIteration, agentStatus),
+    [agentPhase, currentIteration, agentStatus]
   );
   const initialEdges = useMemo(() => computeEdges(ALL_STEPS.length), []);
 
   const [nodes, setNodes] = useNodesState(initialNodes);
   const [edges, setEdges] = useEdgesState(initialEdges);
 
-  // Update nodes when agentPhase or currentIteration changes
+  // Update nodes when agentPhase, currentIteration, or agentStatus changes
   useEffect(() => {
-    setNodes(computeNodes(visibleCount, nodePositions.current, agentPhase, currentIteration));
-  }, [agentPhase, currentIteration, visibleCount, setNodes]);
+    setNodes(computeNodes(visibleCount, nodePositions.current, agentPhase, currentIteration, agentStatus));
+  }, [agentPhase, currentIteration, agentStatus, visibleCount, setNodes]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -162,10 +239,10 @@ export function FlowChart({ agentPhase = 'idle', currentIteration = 0, showContr
       setVisibleCount(newCount);
 
       // Access ref in event handler (safe)
-      setNodes(computeNodes(newCount, nodePositions.current, agentPhase, currentIteration));
+      setNodes(computeNodes(newCount, nodePositions.current, agentPhase, currentIteration, agentStatus));
       setEdges(computeEdges(newCount));
     }
-  }, [visibleCount, setNodes, setEdges, agentPhase, currentIteration]);
+  }, [visibleCount, setNodes, setEdges, agentPhase, currentIteration, agentStatus]);
 
   const handlePrev = useCallback(() => {
     if (visibleCount > 1) {
@@ -173,17 +250,17 @@ export function FlowChart({ agentPhase = 'idle', currentIteration = 0, showContr
       setVisibleCount(newCount);
 
       // Access ref in event handler (safe)
-      setNodes(computeNodes(newCount, nodePositions.current, agentPhase, currentIteration));
+      setNodes(computeNodes(newCount, nodePositions.current, agentPhase, currentIteration, agentStatus));
       setEdges(computeEdges(newCount));
     }
-  }, [visibleCount, setNodes, setEdges, agentPhase, currentIteration]);
+  }, [visibleCount, setNodes, setEdges, agentPhase, currentIteration, agentStatus]);
 
   const handleReset = useCallback(() => {
     setVisibleCount(ALL_STEPS.length);
     nodePositions.current = { ...POSITIONS };
-    setNodes(computeNodes(ALL_STEPS.length, POSITIONS, agentPhase, currentIteration));
+    setNodes(computeNodes(ALL_STEPS.length, POSITIONS, agentPhase, currentIteration, agentStatus));
     setEdges(computeEdges(ALL_STEPS.length));
-  }, [setNodes, setEdges, agentPhase, currentIteration]);
+  }, [setNodes, setEdges, agentPhase, currentIteration, agentStatus]);
 
   return (
     <div className="flowchart-container">

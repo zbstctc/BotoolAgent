@@ -125,7 +125,7 @@
   justify-content: center;
 }
 
-/* Current step highlight with pulse animation */
+/* Current step highlight with blue pulse animation */
 .custom-node-current {
   animation: flowchart-pulse 2s ease-in-out infinite;
 }
@@ -136,6 +136,20 @@
   }
   50% {
     box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+  }
+}
+
+/* Error/retry step highlight with orange flashing animation */
+.custom-node-error {
+  animation: flowchart-error-flash 1.2s ease-in-out infinite;
+}
+
+@keyframes flowchart-error-flash {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 12px 4px rgba(249, 115, 22, 0.3);
   }
 }
 

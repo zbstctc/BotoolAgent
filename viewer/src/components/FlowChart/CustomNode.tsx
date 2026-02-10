@@ -12,26 +12,35 @@ export function CustomNode({ data }: CustomNodeProps) {
   const colors = PHASE_COLORS[data.phase];
   const status = data.status || 'pending';
 
-  // Status-based styling
-  const statusStyles = {
-    current: {
-      boxShadow: '0 0 0 3px rgba(59, 130, 246, 0.5)',
-      animation: 'pulse 2s infinite',
-    },
-    completed: {
-      opacity: 0.9,
-    },
-    pending: {},
-  };
+  const isError = status === 'error';
+  const isRetry = status === 'retry';
+  const isCurrent = status === 'current';
+  const isCompleted = status === 'completed';
+
+  // Determine border color based on status
+  const borderColor = isCurrent
+    ? '#3b82f6'
+    : isError
+    ? '#ef4444'
+    : isRetry
+    ? '#f97316'
+    : colors.border;
+
+  // CSS class for animations
+  const nodeClass = [
+    'custom-node',
+    isCurrent ? 'custom-node-current' : '',
+    isError || isRetry ? 'custom-node-error' : '',
+  ].filter(Boolean).join(' ');
 
   return (
     <div
-      className={`custom-node ${status === 'current' ? 'custom-node-current' : ''}`}
+      className={nodeClass}
       style={{
-        backgroundColor: colors.bg,
-        borderColor: status === 'current' ? '#3b82f6' : colors.border,
-        borderWidth: status === 'current' ? 3 : 2,
-        ...statusStyles[status],
+        backgroundColor: isError ? '#fef2f2' : isRetry ? '#fff7ed' : colors.bg,
+        borderColor,
+        borderWidth: isCurrent || isError || isRetry ? 3 : 2,
+        opacity: isCompleted ? 0.9 : 1,
       }}
     >
       <Handle type="target" position={Position.Top} id="top" />
@@ -44,8 +53,10 @@ export function CustomNode({ data }: CustomNodeProps) {
       <Handle type="source" position={Position.Left} id="left-source" />
       <div className="node-content">
         <div className="node-title">
-          {status === 'completed' && <span style={{ color: '#22c55e', marginRight: 6 }}>✓</span>}
-          {status === 'current' && <span style={{ color: '#3b82f6', marginRight: 6 }}>●</span>}
+          {isCompleted && <span style={{ color: '#22c55e', marginRight: 6 }}>✓</span>}
+          {isCurrent && <span style={{ color: '#3b82f6', marginRight: 6 }}>●</span>}
+          {isError && <span style={{ color: '#ef4444', marginRight: 6 }}>✗</span>}
+          {isRetry && <span style={{ color: '#f97316', marginRight: 6 }}>↻</span>}
           {data.title}
         </div>
         {data.description && <div className="node-description">{data.description}</div>}

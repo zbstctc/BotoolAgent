@@ -1,5 +1,5 @@
 export type Phase = 'setup' | 'loop' | 'decision' | 'done';
-export type StepStatus = 'pending' | 'current' | 'completed';
+export type StepStatus = 'pending' | 'current' | 'completed' | 'error' | 'retry';
 
 export interface StepData {
   id: string;
