@@ -64,7 +64,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "修改文件：~/.claude/skills/botoolagent-generateprd/SKILL.md。删除 Viewer Mode 和 IMPORTANT: You are running inside BotoolAgent Viewer 章节。"
     },
     {

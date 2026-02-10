@@ -60,3 +60,21 @@
   - 风险评估在 L5 确认门控中已有展示（DT-002），PRD 模板中的是最终完整版本
   - DT-005 的 generateprd 也需要添加相同的章节，可以复用相似的模板结构
 ---
+
+## 2026-02-10 - DT-004
+- 实现了 generateprd SKILL.md 重构定位 + 代码库扫描
+- 修改了 `~/.claude/skills/botoolagent-generateprd/SKILL.md`
+- 变更内容：
+  - 删除了 Viewer Mode (Recommended) 整个章节（包括启动服务器、打开 Stage 1、引导用户）
+  - 删除了 CLI Mode (Fallback) 章节
+  - 删除了 IMPORTANT: You are running inside BotoolAgent Viewer 整个章节（包括工具限制指令）
+  - Phase 1 重命名为 "Understand the Idea + Codebase Scan"
+  - Phase 1 新增 Step 1 代码库扫描：技术栈检测、目录结构分析、组件/路由/API 识别、数据模型分析
+  - 扫描结果融入后续提问选项（预设技术栈、已有组件名称等）
+  - 无代码库时跳过扫描，使用通用选项
+  - 原有提问逻辑移至 Step 2
+- **未来迭代的经验教训：**
+  - generateprd 现在是纯 CLI 工具，Viewer 用户使用 pyramidprd
+  - generateprd 的代码库扫描和 pyramidprd 的类似，但格式不同（generateprd 更简洁，无 metadata 层级标记）
+  - 删除 Viewer 指令后，generateprd 可以自由使用所有工具（Bash、Read、Write 等）
+---
