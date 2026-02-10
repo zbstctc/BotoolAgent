@@ -8,6 +8,7 @@ import type { DevTask, PrdData } from '@/hooks';
 import { FlowChart, type AgentPhase } from '@/components/FlowChart';
 import { useProject } from '@/contexts/ProjectContext';
 import { useAgentStatus } from '@/hooks/useAgentStatus';
+import AgentDataPanel from '@/components/AgentDataPanel/AgentDataPanel';
 
 type TaskStatus = 'pending' | 'in-progress' | 'completed' | 'failed';
 type RightPanelTab = 'flowchart' | 'log' | 'changes' | 'commits';
@@ -661,70 +662,14 @@ export default function Stage3Page() {
           <div className="p-4 border-b border-neutral-200 bg-white">
             <h3 className="text-sm font-semibold text-neutral-900">Agent Status</h3>
           </div>
-          <div className="p-4 space-y-4">
-            {/* Iteration progress */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-neutral-500">Iteration</span>
-                <span className="text-xs font-mono text-neutral-700">
-                  {agentStatus.status.iteration}/{agentStatus.status.maxIterations || '—'}
-                </span>
-              </div>
-              <div className="h-2 bg-neutral-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-500 transition-all duration-500"
-                  style={{
-                    width: agentStatus.status.maxIterations > 0
-                      ? `${Math.round((agentStatus.status.iteration / agentStatus.status.maxIterations) * 100)}%`
-                      : '0%',
-                  }}
-                />
-              </div>
-            </div>
-            {/* Task completion */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-neutral-500">Task Completion</span>
-                <span className="text-xs font-mono text-neutral-700">
-                  {agentStatus.status.completed}/{agentStatus.status.total || totalTasks}
-                </span>
-              </div>
-              <div className="h-2 bg-neutral-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-green-500 transition-all duration-500"
-                  style={{
-                    width: `${agentStatus.progressPercent}%`,
-                  }}
-                />
-              </div>
-            </div>
-            {/* Current task */}
-            <div className="rounded-lg border border-neutral-200 bg-white p-3">
-              <span className="text-xs text-neutral-400">Current Task</span>
-              <p className="text-sm font-medium text-neutral-900 mt-1">
-                {agentStatus.status.currentTask !== 'none'
-                  ? agentStatus.status.currentTask
-                  : '—'}
-              </p>
-              <span className={`inline-block mt-1 text-xs px-1.5 py-0.5 rounded ${
-                agentStatus.isRunning
-                  ? 'bg-blue-100 text-blue-700'
-                  : agentStatus.isComplete
-                  ? 'bg-green-100 text-green-700'
-                  : agentStatus.hasError
-                  ? 'bg-red-100 text-red-700'
-                  : 'bg-neutral-100 text-neutral-600'
-              }`}>
-                {agentStatus.status.status}
-              </span>
-            </div>
-            {/* Message */}
-            {agentStatus.status.message && (
-              <p className="text-xs text-neutral-500 italic">
-                {agentStatus.status.message}
-              </p>
-            )}
-          </div>
+          <AgentDataPanel
+            agentStatus={agentStatus.status}
+            isRunning={agentStatus.isRunning}
+            isComplete={agentStatus.isComplete}
+            hasError={agentStatus.hasError}
+            progressPercent={agentStatus.progressPercent}
+            totalTasks={totalTasks}
+          />
         </div>
       </div>
     </div>
