@@ -29,7 +29,7 @@ export function createNode(
   };
 }
 
-export function createEdge(conn: EdgeConnection, visible: boolean): Edge {
+export function createEdge(conn: EdgeConnection, visible: boolean, flowing: boolean = false): Edge {
   return {
     id: `e${conn.source}-${conn.target}`,
     source: conn.source,
@@ -37,12 +37,13 @@ export function createEdge(conn: EdgeConnection, visible: boolean): Edge {
     sourceHandle: conn.sourceHandle,
     targetHandle: conn.targetHandle,
     label: visible ? conn.label : undefined,
-    animated: visible,
+    animated: false,
+    className: flowing ? 'flowchart-edge-flowing' : undefined,
     style: {
-      stroke: '#222',
+      stroke: flowing ? '#3b82f6' : '#222',
       strokeWidth: 2,
       opacity: visible ? 1 : 0,
-      transition: 'opacity 0.5s ease-in-out',
+      transition: 'opacity 0.5s ease-in-out, stroke 0.3s ease',
     },
     labelStyle: {
       fill: '#222',
@@ -58,7 +59,7 @@ export function createEdge(conn: EdgeConnection, visible: boolean): Edge {
     },
     markerEnd: {
       type: MarkerType.ArrowClosed,
-      color: '#222',
+      color: flowing ? '#3b82f6' : '#222',
     },
   };
 }

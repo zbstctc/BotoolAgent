@@ -21,7 +21,7 @@ import { CustomNode } from './CustomNode';
 import { NoteNode } from './NoteNode';
 import { createNode, createEdge, createNoteNode, getEdgeVisibility } from './utils';
 import { ALL_STEPS, NOTES, POSITIONS, EDGE_CONNECTIONS } from './constants';
-import type { StepStatus } from './types';
+import type { StepStatus, EdgeConnection } from './types';
 import type { AgentStatus, AgentStatusType } from '@/hooks/useAgentStatus';
 
 const nodeTypes = { custom: CustomNode, note: NoteNode };
@@ -165,10 +165,41 @@ function computeNodes(
   return [...stepNodes, ...noteNodes];
 }
 
-function computeEdges(count: number): Edge[] {
-  return EDGE_CONNECTIONS.map((conn) =>
-    createEdge(conn, getEdgeVisibility(conn, count, ALL_STEPS))
-  );
+// Determine if an edge should have flowing animation
+// An edge flows when agent is running AND both source and target steps are completed or current
+function isEdgeFlowing(
+  conn: EdgeConnection,
+  agentPhase: AgentPhase,
+  currentIteration: number,
+  agentStatus?: AgentStatus
+): boolean {
+  // Only flow when agent is actively running (not idle, not complete)
+  if (agentPhase === 'idle') return false;
+  if (agentPhase === 'done') return false;
+
+  const sourceIndex = ALL_STEPS.findIndex(s => s.id === conn.source);
+  const targetIndex = ALL_STEPS.findIndex(s => s.id === conn.target);
+  if (sourceIndex === -1 || targetIndex === -1) return false;
+
+  const sourceStatus = getStepStatus(sourceIndex, agentPhase, currentIteration, agentStatus);
+  const targetStatus = getStepStatus(targetIndex, agentPhase, currentIteration, agentStatus);
+
+  // Edge flows when source is completed/current and target is completed/current
+  const activeStatuses: StepStatus[] = ['completed', 'current', 'error', 'retry'];
+  return activeStatuses.includes(sourceStatus) && activeStatuses.includes(targetStatus);
+}
+
+function computeEdges(
+  count: number,
+  agentPhase: AgentPhase = 'idle',
+  currentIteration: number = 0,
+  agentStatus?: AgentStatus
+): Edge[] {
+  return EDGE_CONNECTIONS.map((conn) => {
+    const visible = getEdgeVisibility(conn, count, ALL_STEPS);
+    const flowing = visible && isEdgeFlowing(conn, agentPhase, currentIteration, agentStatus);
+    return createEdge(conn, visible, flowing);
+  });
 }
 
 export function FlowChart({ agentPhase = 'idle', agentStatus, currentIteration = 0, showControls = false }: FlowChartProps) {
@@ -180,15 +211,19 @@ export function FlowChart({ agentPhase = 'idle', agentStatus, currentIteration =
     () => computeNodes(ALL_STEPS.length, POSITIONS, agentPhase, currentIteration, agentStatus),
     [agentPhase, currentIteration, agentStatus]
   );
-  const initialEdges = useMemo(() => computeEdges(ALL_STEPS.length), []);
+  const initialEdges = useMemo(
+    () => computeEdges(ALL_STEPS.length, agentPhase, currentIteration, agentStatus),
+    [agentPhase, currentIteration, agentStatus]
+  );
 
   const [nodes, setNodes] = useNodesState(initialNodes);
   const [edges, setEdges] = useEdgesState(initialEdges);
 
-  // Update nodes when agentPhase, currentIteration, or agentStatus changes
+  // Update nodes and edges when agentPhase, currentIteration, or agentStatus changes
   useEffect(() => {
     setNodes(computeNodes(visibleCount, nodePositions.current, agentPhase, currentIteration, agentStatus));
-  }, [agentPhase, currentIteration, agentStatus, visibleCount, setNodes]);
+    setEdges(computeEdges(visibleCount, agentPhase, currentIteration, agentStatus));
+  }, [agentPhase, currentIteration, agentStatus, visibleCount, setNodes, setEdges]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -240,7 +275,7 @@ export function FlowChart({ agentPhase = 'idle', agentStatus, currentIteration =
 
       // Access ref in event handler (safe)
       setNodes(computeNodes(newCount, nodePositions.current, agentPhase, currentIteration, agentStatus));
-      setEdges(computeEdges(newCount));
+      setEdges(computeEdges(newCount, agentPhase, currentIteration, agentStatus));
     }
   }, [visibleCount, setNodes, setEdges, agentPhase, currentIteration, agentStatus]);
 
@@ -251,7 +286,7 @@ export function FlowChart({ agentPhase = 'idle', agentStatus, currentIteration =
 
       // Access ref in event handler (safe)
       setNodes(computeNodes(newCount, nodePositions.current, agentPhase, currentIteration, agentStatus));
-      setEdges(computeEdges(newCount));
+      setEdges(computeEdges(newCount, agentPhase, currentIteration, agentStatus));
     }
   }, [visibleCount, setNodes, setEdges, agentPhase, currentIteration, agentStatus]);
 
@@ -259,7 +294,7 @@ export function FlowChart({ agentPhase = 'idle', agentStatus, currentIteration =
     setVisibleCount(ALL_STEPS.length);
     nodePositions.current = { ...POSITIONS };
     setNodes(computeNodes(ALL_STEPS.length, POSITIONS, agentPhase, currentIteration, agentStatus));
-    setEdges(computeEdges(ALL_STEPS.length));
+    setEdges(computeEdges(ALL_STEPS.length, agentPhase, currentIteration, agentStatus));
   }, [setNodes, setEdges, agentPhase, currentIteration, agentStatus]);
 
   return (
