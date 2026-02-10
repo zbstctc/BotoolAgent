@@ -19,7 +19,7 @@ import {
   isAskUserQuestionInput,
 } from '@/lib/tool-types';
 
-type LevelId = 1 | 2 | 3 | 4;
+type LevelId = 1 | 2 | 3 | 4 | 5;
 
 interface QuestionAnswer {
   questionId: string;
@@ -56,6 +56,8 @@ export default function Stage1Page() {
   const [qaHistory, setQaHistory] = useState<QAHistoryItem[]>([]);
   // Track current tool being used (for progress feedback)
   const [currentTool, setCurrentTool] = useState<string | null>(null);
+  // Track codebase scan status
+  const [codebaseScanned, setCodebaseScanned] = useState(false);
 
   // UI state
   const [isSaving, setIsSaving] = useState(false);
@@ -93,6 +95,7 @@ export default function Stage1Page() {
         if (state.prdDraft) setPrdDraft(state.prdDraft);
         if (state.isStarted) setIsStarted(state.isStarted);
         if (state.qaHistory) setQaHistory(state.qaHistory);
+        if (state.codebaseScanned) setCodebaseScanned(state.codebaseScanned);
         console.log('[Stage1] Restored saved state (once)', { qaHistoryCount: state.qaHistory?.length || 0 });
       } catch (e) {
         console.error('[Stage1] Failed to parse saved state:', e);
@@ -114,13 +117,14 @@ export default function Stage1Page() {
         prdDraft,
         isStarted,
         qaHistory,
+        codebaseScanned,
         savedAt: new Date().toISOString(),
       };
       localStorage.setItem(storageKey, JSON.stringify(state));
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [storageKey, cliSessionId, currentLevel, completedLevels, answers, prdDraft, isStarted, qaHistory]);
+  }, [storageKey, cliSessionId, currentLevel, completedLevels, answers, prdDraft, isStarted, qaHistory, codebaseScanned]);
 
   // Load initial description from sessionStorage or fallback to project name
   useEffect(() => {
@@ -151,8 +155,13 @@ export default function Stage1Page() {
       // Update level from metadata
       if (input.metadata) {
         const metadata = input.metadata as PyramidMetadata;
-        console.log('[Stage1] Level from metadata:', metadata.level);
+        console.log('[Stage1] Level from metadata:', metadata.level, 'phase:', metadata.phase);
         setCurrentLevel(metadata.level);
+
+        // Track codebase scan status
+        if (metadata.codebaseScanned !== undefined) {
+          setCodebaseScanned(metadata.codebaseScanned);
+        }
 
         // Mark previous levels as completed
         const completed: LevelId[] = [];
@@ -207,7 +216,7 @@ export default function Stage1Page() {
             console.log('[Stage1] PRD found!');
             setPrdDraft(prdMatch[1]);
             // Mark all levels as completed when PRD is generated
-            setCompletedLevels([1, 2, 3, 4]);
+            setCompletedLevels([1, 2, 3, 4, 5]);
             break;
           }
         }
@@ -228,15 +237,15 @@ export default function Stage1Page() {
     if (!isStarted || isLoading) return;
     // Send a message to continue the conversation
     // The CLI will resume from the saved session if cliSessionId is set
-    const resumeMessage = currentLevel === 4 && completedLevels.includes(4)
+    const resumeMessage = currentLevel === 5 && completedLevels.includes(5)
       ? '请生成 PRD 文档'
       : `请继续 L${currentLevel} 的问答`;
     sendMessage(resumeMessage);
   }, [isStarted, isLoading, currentLevel, completedLevels, sendMessage]);
 
   // Check if we have saved progress but no current questions (need to resume)
-  // L4 completed but no PRD yet - need to request PRD generation
-  const needsPrdGeneration = completedLevels.includes(4) && !prdDraft && !isLoading && !cliError;
+  // L5 (confirmation) completed but no PRD yet - need to request PRD generation
+  const needsPrdGeneration = completedLevels.includes(5) && !prdDraft && !isLoading && !cliError;
   const needsResume = isStarted && !isLoading && currentQuestions.length === 0 && !prdDraft && !cliError && !needsPrdGeneration;
 
   // Debug logging
@@ -415,7 +424,7 @@ export default function Stage1Page() {
 
   // Build level info for navigation
   const levels: LevelInfo[] = useMemo(() => {
-    return [1, 2, 3, 4].map((level) => {
+    return [1, 2, 3, 4, 5].map((level) => {
       const isCompleted = completedLevels.includes(level as LevelId);
       const isCurrent = level === currentLevel;
       const isLocked = level > currentLevel && !completedLevels.includes(level as LevelId);
@@ -426,10 +435,12 @@ export default function Stage1Page() {
         status: isCompleted ? 'completed' : isCurrent ? 'current' : 'locked',
         questionsTotal: isCurrent ? currentQuestions.length : 0,
         questionsAnswered: isCurrent ? Object.keys(answers).filter(k => k.startsWith(`L${level}-`)).length : 0,
-        summary: isCompleted ? '已完成' : undefined,
+        summary: isCompleted
+          ? level === 2 && codebaseScanned ? '已完成 (代码库已分析)' : '已完成'
+          : undefined,
       };
     }) as LevelInfo[];
-  }, [currentLevel, completedLevels, currentQuestions, answers]);
+  }, [currentLevel, completedLevels, currentQuestions, answers, codebaseScanned]);
 
   // Project name
   const projectName = activeProject?.name || '新项目';
@@ -479,6 +490,7 @@ export default function Stage1Page() {
             currentLevel={currentLevel}
             levels={levels}
             collectedSummary={collectedSummary}
+            codebaseScanned={codebaseScanned}
             onLevelClick={() => {
               // In CLI mode, level navigation is controlled by the Skill
               // So we don't allow manual level switching
@@ -489,7 +501,7 @@ export default function Stage1Page() {
         {/* Center: Question Panel */}
         <div className="flex-1 min-w-0 border-x border-neutral-200 bg-white overflow-y-auto">
           {/* PRD generation in progress - check first (highest priority) */}
-          {isLoading && completedLevels.includes(4) && currentQuestions.length === 0 ? (
+          {isLoading && completedLevels.includes(5) && currentQuestions.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <div className="animate-spin h-8 w-8 border-4 border-green-600 border-t-transparent rounded-full mx-auto mb-2"></div>
@@ -526,13 +538,14 @@ export default function Stage1Page() {
               {/* Level Header */}
               <div className="border-b border-neutral-200 pb-4">
                 <h2 className="text-xl font-semibold text-neutral-900">
-                  L{currentLevel}: {currentLevel === 1 ? '核心识别' : currentLevel === 2 ? '领域分支' : currentLevel === 3 ? '细节深入' : '边界确认'}
+                  L{currentLevel}: {currentLevel === 1 ? '核心识别' : currentLevel === 2 ? '领域分支' : currentLevel === 3 ? '细节深入' : currentLevel === 4 ? '边界确认' : '确认门控'}
                 </h2>
                 <p className="text-sm text-neutral-500 mt-1">
                   {currentLevel === 1 && '理解需求的本质和范围'}
                   {currentLevel === 2 && '按领域深入探索具体需求'}
                   {currentLevel === 3 && '深入实现细节'}
                   {currentLevel === 4 && '确认范围边界，防止范围蔓延'}
+                  {currentLevel === 5 && '确认需求摘要，准备生成 PRD'}
                 </p>
               </div>
 
@@ -684,7 +697,7 @@ export default function Stage1Page() {
                       : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                   }`}
                 >
-                  {isLoading ? '处理中...' : currentLevel < 4 ? '继续下一层' : '生成 PRD'}
+                  {isLoading ? '处理中...' : currentLevel < 4 ? '继续下一层' : currentLevel === 4 ? '进入确认' : '确认并生成 PRD'}
                 </button>
               </div>
             </div>

@@ -20,13 +20,33 @@ export interface AskUserQuestion {
   placeholder?: string;
 }
 
+export interface ConfirmationSummary {
+  requirementsSummary: string;
+  features: string[];
+  technicalApproach: string;
+  risks: {
+    high: string[];
+    medium: string[];
+    low: string[];
+  };
+  complexityEstimate: string;
+}
+
 export interface PyramidMetadata {
   source: 'pyramidprd';
-  level: 1 | 2 | 3 | 4;
+  level: 1 | 2 | 3 | 4 | 5;
   levelName: string;
   progress: string;
   totalLevels: number;
   activeDimensions?: string[];
+  /** Phase identifier - 'confirmation' for L5 confirmation gate */
+  phase?: 'questioning' | 'confirmation' | 'generating';
+  /** Whether codebase scan was performed */
+  codebaseScanned?: boolean;
+  /** Summary of codebase scan results */
+  codebaseSummary?: string;
+  /** Structured confirmation summary for L5 */
+  confirmationSummary?: ConfirmationSummary;
 }
 
 export interface AskUserQuestionToolInput {

@@ -19,6 +19,8 @@ interface PyramidNavigationProps {
   levels: LevelInfo[];
   collectedSummary: CollectedSummaryItem[];
   onLevelClick: (level: number) => void;
+  /** Whether codebase scan was performed */
+  codebaseScanned?: boolean;
 }
 
 const LEVEL_NAMES: Record<number, string> = {
@@ -26,6 +28,7 @@ const LEVEL_NAMES: Record<number, string> = {
   2: 'L2 领域分支',
   3: 'L3 细节深入',
   4: 'L4 边界确认',
+  5: 'L5 确认门控',
 };
 
 const LEVEL_DESCRIPTIONS: Record<number, string> = {
@@ -33,6 +36,7 @@ const LEVEL_DESCRIPTIONS: Record<number, string> = {
   2: '确定涉及的技术领域',
   3: '深入具体实现细节',
   4: '确认边界和验收标准',
+  5: '确认需求摘要并生成 PRD',
 };
 
 export function PyramidNavigation({
@@ -40,6 +44,7 @@ export function PyramidNavigation({
   levels,
   collectedSummary,
   onLevelClick,
+  codebaseScanned,
 }: PyramidNavigationProps) {
   return (
     <div className="flex flex-col h-full bg-white border-r border-neutral-200">
@@ -49,6 +54,12 @@ export function PyramidNavigation({
         <p className="text-xs text-neutral-500 mt-1">
           当前：第 {currentLevel} 层
         </p>
+        {codebaseScanned && (
+          <div className="mt-2 flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+            <span>✓</span>
+            <span>代码库已分析</span>
+          </div>
+        )}
       </div>
 
       {/* Levels */}
