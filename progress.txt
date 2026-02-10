@@ -1,51 +1,26 @@
 # Botool 开发代理进度日志
-开始时间: Sat Feb  7 10:09:31 CST 2026
+开始时间: Tue Feb 10 12:50:19 CST 2026
 ---
 
 ## Codebase Patterns
-- 规范管理组件位于 `viewer/src/components/rules/` 目录下，包含 RulesManager、CategoryTree、MarkdownEditor、SkillPreviewModal
-- 规范 API 路由在 `viewer/src/app/api/rules/` 下，支持 GET (列表)、POST (保存)、DELETE (删除)
-- 规范文件存储在项目根目录 `rules/{category}/{name}.md` 中
-- Dashboard 使用 Tab 导航，activeTab state 控制显示 'projects' 或 'rules'
-- 所有弹窗/对话框使用 `fixed inset-0 z-50 bg-black/50` 作为遮罩，内容使用 `bg-white rounded-lg shadow-xl`
-- 组件间通过 props 回调通信，无全局状态管理（规范模块）
+- SKILL.md 文件位于 `~/.claude/skills/<skill-name>/SKILL.md`，不在 git 仓库内
+- Viewer 项目的 TypeScript 代码在 `viewer/` 目录下，使用 `npx tsc --noEmit` 检查类型
+- prd.json 和 progress.txt 在项目根目录下，需要手动标记任务完成状态
 
-## 2026-02-07 - DT-001
-- 实现了 Dashboard 规范管理 Tab 的集成
-- 修改了 `viewer/src/app/page.tsx`：导入 RulesManager 并替换 "即将推出..." 占位符
-- **未来迭代的经验教训：**
-  - 发现 RulesManager 组件已经完整实现：分类列表 (CategoryTree)、Markdown 编辑器 (MarkdownEditor)、Skill 预览 (SkillPreviewModal)
-  - RulesManager 使用两栏布局（左侧分类树 + 右侧编辑器），不是列表+对话框模式
-  - DT-002（列表项）、DT-003（创建/编辑）、DT-005（预览）的功能已被 RulesManager 涵盖
-  - **缺失功能**: 无删除按钮 UI (DT-004)、无搜索过滤 (DT-006)
-  - `useSearchParams()` 在 page.tsx 中未包裹 Suspense，导致 `next build` 失败（pre-existing issue）
-  - `-mx-4 -mb-6` 用于让 RulesManager 全宽展示，抵消父容器的 padding
 ---
 
-## 2026-02-07 - DT-002
-- 在 CategoryTree 文档列表项中添加了悬停操作按钮（编辑图标、删除图标）
-- 在 RulesManager 中添加了删除确认对话框和删除逻辑
-- 修改了 `viewer/src/components/rules/CategoryTree.tsx` 和 `viewer/src/components/rules/RulesManager.tsx`
+## 2026-02-10 - DT-001
+- 实现了 pyramidprd SKILL.md 代码库感知扫描阶段
+- 修改了 `~/.claude/skills/botoolagent-pyramidprd/SKILL.md`
+- 变更内容：
+  - 金字塔结构概述中新增「代码库扫描」步骤
+  - 新增 Phase 2.5 代码库感知扫描阶段（L1→L2 之间）
+  - 扫描包含 4 步：技术栈检测、目录结构分析、组件/路由/API 识别、数据模型分析
+  - 无代码库时降级为 `codebaseScanned: false` 并跳过
+  - L2 阶段增加「融合扫描结果的规则」说明
+  - 所有相关 metadata 示例中增加 `codebaseScanned` 和 `codebaseSummary` 字段
 - **未来迭代的经验教训：**
-  - CategoryTree 的 `onDeleteDocument` 是可选 prop，向后兼容
-  - 删除确认对话框直接内联在 RulesManager 中，使用 `deleteTarget` state 控制显示
-  - 列表项从 `<button>` 改为 `<div>` 包裹，内含 flex 布局的 name button + action buttons
-  - DT-004 的删除确认对话框功能已经在此任务中一并实现
----
-
-## 2026-02-07 - DT-003/DT-005 (已有功能确认)
-- DT-003 创建/编辑功能：RulesManager 已内置，通过 CategoryTree 选择分类 + 名称输入 + MarkdownEditor 编辑
-- DT-005 预览功能：MarkdownEditor 已内置分屏 Markdown 预览
-- 标记为 passes: true
----
-
-## 2026-02-07 - DT-006
-- 在 CategoryTree 头部添加搜索输入框，支持按规范名称实时过滤
-- 搜索时显示 "找到 X / Y 条结果"
-- 搜索时自动展开所有分类
-- 修改了 `viewer/src/components/rules/CategoryTree.tsx`
-- **未来迭代的经验教训：**
-  - 搜索过滤使用 `useMemo` 在客户端完成，不涉及 API 调用
-  - 搜索时强制展开所有分类：`isExpanded={... || searchQuery.trim().length > 0}`
-  - `filteredCategories` 保留所有分类结构，只过滤其 documents 数组
+  - SKILL.md 是 Markdown 文件，不在 git 仓库中，需要通过绝对路径编辑
+  - metadata 中的字段会被 Viewer 的 `tool-types.ts` 解析，DT-006 需要同步更新类型定义
+  - 扫描结果不直接输出给用户，而是内化到后续问题选项中
 ---
