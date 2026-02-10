@@ -67,13 +67,13 @@ function getStatusColor(status: TaskStatus): string {
 function getStatusLabel(status: TaskStatus): string {
   switch (status) {
     case 'completed':
-      return 'Completed';
+      return '已完成';
     case 'in-progress':
-      return 'In Progress';
+      return '执行中';
     case 'failed':
-      return 'Failed';
+      return '失败';
     default:
-      return 'Pending';
+      return '等待中';
   }
 }
 
@@ -142,6 +142,13 @@ export default function Stage3Page() {
       setProgressLog(progress);
     }
   }, [progress]);
+
+  // Auto-expand current task when currentTaskId changes
+  useEffect(() => {
+    if (currentTaskId) {
+      setExpandedTaskId(currentTaskId);
+    }
+  }, [currentTaskId]);
 
   // Auto-scroll log to bottom
   useEffect(() => {
@@ -295,13 +302,13 @@ export default function Stage3Page() {
           {/* Header with progress */}
           <div className="p-4 border-b border-neutral-200 bg-white">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-neutral-900">Dev Tasks</h2>
+              <h2 className="text-sm font-semibold text-neutral-900">开发任务</h2>
               <div className="flex items-center gap-1">
                 <span
                   className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
                 />
                 <span className="text-xs text-neutral-400">
-                  {isConnected ? 'Live' : 'Disconnected'}
+                  {isConnected ? '已连接' : '未连接'}
                 </span>
               </div>
             </div>
@@ -336,9 +343,11 @@ export default function Stage3Page() {
               />
             </div>
             <div className="flex items-center justify-between mt-2">
-              <span className="text-xs text-neutral-500">{progressPercent}% complete</span>
+              <span className="text-xs text-neutral-500">
+                {completedTasks}/{totalTasks} 完成{iterationCount > 0 ? ` · 迭代 #${iterationCount}` : ''}
+              </span>
               <span className="text-xs text-neutral-400">
-                {completedTasks}/{totalTasks} tasks
+                {progressPercent}%
               </span>
             </div>
           </div>
@@ -354,7 +363,7 @@ export default function Stage3Page() {
                     <div
                       key={task.id}
                       className={`rounded-lg border bg-white transition-all ${
-                        status === 'in-progress' ? 'ring-2 ring-blue-200' : ''
+                        status === 'in-progress' ? 'border-2 task-card-breathing' : ''
                       }`}
                     >
                       <button
@@ -401,7 +410,7 @@ export default function Stage3Page() {
                           {task.acceptanceCriteria.length > 0 && (
                             <div className="mt-2">
                               <p className="text-xs font-medium text-neutral-500 mb-1">
-                                Acceptance Criteria:
+                                验收标准:
                               </p>
                               <ul className="space-y-1">
                                 {task.acceptanceCriteria.map((criterion, idx) => (
@@ -434,9 +443,9 @@ export default function Stage3Page() {
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <div className="text-3xl text-neutral-300 mb-2">📋</div>
-                <p className="text-sm font-medium text-neutral-700">No PRD loaded</p>
+                <p className="text-sm font-medium text-neutral-700">未加载 PRD</p>
                 <p className="text-xs text-neutral-500 mt-1">
-                  Waiting for prd.json to be created...
+                  等待 prd.json 创建中...
                 </p>
               </div>
             )}
