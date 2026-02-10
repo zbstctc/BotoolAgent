@@ -189,8 +189,8 @@ export function FlowChart({ agentPhase = 'idle', currentIteration = 0, showContr
     <div className="flowchart-container">
       {showControls && (
         <div className="flowchart-header">
-          <h1>How Botool Agent Works</h1>
-          <p>Autonomous AI agent loop for completing PRDs</p>
+          <h1>BotoolAgent 工作流程</h1>
+          <p>自主 AI 代理循环，自动完成 PRD 中的开发任务</p>
         </div>
       )}
       <div className="flowchart-flow">

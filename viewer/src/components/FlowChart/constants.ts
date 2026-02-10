@@ -11,19 +11,19 @@ export const PHASE_COLORS: Record<Phase, { bg: string; border: string }> = {
 };
 
 export const ALL_STEPS: StepData[] = [
-  // Setup phase (vertical)
-  { id: '1', label: 'You write a PRD', description: 'Define what you want to build', phase: 'setup' },
-  { id: '2', label: 'Convert to prd.json', description: 'Break into small user stories', phase: 'setup' },
-  { id: '3', label: 'Run BotoolAgent.sh', description: 'Starts the autonomous loop', phase: 'setup' },
-  // Loop phase
-  { id: '4', label: 'AI picks a story', description: 'Finds next passes: false', phase: 'loop' },
-  { id: '5', label: 'Implements it', description: 'Writes code, runs tests', phase: 'loop' },
-  { id: '6', label: 'Commits changes', description: 'If tests pass', phase: 'loop' },
-  { id: '7', label: 'Updates prd.json', description: 'Sets passes: true', phase: 'loop' },
-  { id: '8', label: 'Logs to progress.txt', description: 'Saves learnings', phase: 'loop' },
-  { id: '9', label: 'More stories?', description: '', phase: 'decision' },
-  // Exit
-  { id: '10', label: 'Done!', description: 'All stories complete', phase: 'done' },
+  // 准备阶段
+  { id: '1', label: '读取 prd.json', description: '加载任务列表和进度日志', phase: 'setup' },
+  { id: '2', label: '初始化保护机制', description: 'Rate Limit / Circuit Breaker / 超时', phase: 'setup' },
+  { id: '3', label: '开始迭代', description: '检查 Rate Limit 和网络连通', phase: 'setup' },
+  // 迭代循环
+  { id: '4', label: '启动 Claude 实例', description: '全新上下文，带超时和健康监控', phase: 'loop' },
+  { id: '5', label: 'Claude 执行任务', description: '选任务 → 编码 → 测试 → 提交 → 推送', phase: 'loop' },
+  { id: '6', label: '结果处理', description: '超时/错误 → 自动重试（最多3次）', phase: 'loop' },
+  { id: '7', label: '响应分析', description: '统计任务进度，更新状态', phase: 'loop' },
+  { id: '8', label: '记录进度日志', description: '追加到 progress.txt', phase: 'loop' },
+  { id: '9', label: '双条件退出验证', description: 'COMPLETE 承诺 + prd.json 状态', phase: 'decision' },
+  // 退出
+  { id: '10', label: '全部完成!', description: '所有任务 passes: true', phase: 'done' },
 ];
 
 export const NOTES: NoteData[] = [
@@ -33,12 +33,12 @@ export const NOTES: NoteData[] = [
     position: { x: 340, y: 100 },
     color: { bg: '#f5f0ff', border: '#8b5cf6' },
     content: `{
-  "id": "US-001",
-  "title": "Add priority field to database",
+  "id": "DT-001",
+  "title": "创建数据库表",
   "acceptanceCriteria": [
-    "Add priority column to tasks table",
-    "Generate and run migration",
-    "Typecheck passes"
+    "新增 priority 列",
+    "生成并运行迁移",
+    "类型检查通过"
   ],
   "passes": false
 }`,
@@ -48,42 +48,43 @@ export const NOTES: NoteData[] = [
     appearsWithStep: 8,
     position: { x: 480, y: 620 },
     color: { bg: '#fdf4f0', border: '#c97a50' },
-    content: `Also updates AGENTS.md with
-patterns discovered, so future
-iterations learn from this one.`,
+    content: `双条件验证机制：
+1. Claude 输出 <promise>COMPLETE</promise>
+2. prd.json 所有 passes: true
+两个条件都满足才安全退出`,
   },
 ];
 
 export const POSITIONS: Record<string, { x: number; y: number }> = {
-  // Vertical setup flow on the left
+  // 准备阶段（左侧垂直）
   '1': { x: 20, y: 20 },
   '2': { x: 80, y: 130 },
   '3': { x: 60, y: 250 },
-  // Loop
+  // 迭代循环
   '4': { x: 40, y: 420 },
   '5': { x: 450, y: 300 },
   '6': { x: 750, y: 450 },
   '7': { x: 470, y: 520 },
   '8': { x: 200, y: 620 },
   '9': { x: 40, y: 720 },
-  // Exit
+  // 退出
   '10': { x: 350, y: 880 },
-  // Notes
+  // 注释
   ...Object.fromEntries(NOTES.map(n => [n.id, n.position])),
 };
 
 export const EDGE_CONNECTIONS: EdgeConnection[] = [
-  // Setup phase (vertical) - bottom to top connections
+  // 准备阶段（垂直连接）
   { source: '1', target: '2', sourceHandle: 'bottom', targetHandle: 'top' },
   { source: '2', target: '3', sourceHandle: 'bottom', targetHandle: 'top' },
   { source: '3', target: '4', sourceHandle: 'bottom', targetHandle: 'top' },
-  // Loop phase
+  // 迭代循环
   { source: '4', target: '5', sourceHandle: 'right', targetHandle: 'left' },
   { source: '5', target: '6', sourceHandle: 'right', targetHandle: 'top' },
   { source: '6', target: '7', sourceHandle: 'left-source', targetHandle: 'right-target' },
   { source: '7', target: '8', sourceHandle: 'left-source', targetHandle: 'right-target' },
   { source: '8', target: '9', sourceHandle: 'left-source', targetHandle: 'right-target' },
-  { source: '9', target: '4', sourceHandle: 'top-source', targetHandle: 'bottom-target', label: 'Yes' },
-  // Exit
-  { source: '9', target: '10', sourceHandle: 'bottom', targetHandle: 'top', label: 'No' },
+  { source: '9', target: '4', sourceHandle: 'top-source', targetHandle: 'bottom-target', label: '未通过' },
+  // 退出
+  { source: '9', target: '10', sourceHandle: 'bottom', targetHandle: 'top', label: '通过' },
 ];
