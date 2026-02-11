@@ -1,29 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-
-interface ReviewSummaryData {
-  totalTasks: number;
-  completedTasks: number;
-  totalCriteria: number;
-  metCriteria: number;
-  deviations: Array<{ taskId: string; content: string; reason: string }>;
-  filesChanged: number;
-  additions: number;
-  deletions: number;
-  rulesApplied: number;
-  ruleNames: string[];
-  totalSecurityItems: number;
-  passedSecurityItems: number;
-  securityDetails: Array<{ taskId: string; item: string; passed: boolean }>;
-  totalEvals: number;
-  passedEvals: number;
-  blockingTotal: number;
-  blockingPassed: number;
-  nonBlockingTotal: number;
-  nonBlockingPassed: number;
-  manualVerifications: string[];
-}
+import type { ReviewSummaryData } from '@/app/api/review-summary/route';
 
 export interface ReviewSummaryProps {
   /** Whether to show expanded details by default */
@@ -121,6 +99,7 @@ export function ReviewSummary({ defaultExpanded = false }: ReviewSummaryProps) {
       {/* Header */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
+        aria-expanded={isExpanded}
         className="w-full p-4 flex items-center justify-between text-left hover:bg-neutral-50 transition-colors"
       >
         <div className="flex items-center gap-3">
@@ -158,7 +137,7 @@ export function ReviewSummary({ defaultExpanded = false }: ReviewSummaryProps) {
             />
             <StatCard
               icon="📋"
-              label="Spec 遵循率"
+              label={data.isEstimated ? 'Spec 遵循率 (预估)' : 'Spec 遵循率'}
               value={data.totalCriteria > 0 ? `${specRate}%` : 'N/A'}
               subtext={data.totalCriteria > 0 ? `${data.metCriteria}/${data.totalCriteria} 项满足` : '无验收标准'}
               color={specRate >= 90 ? 'green' : specRate >= 70 ? 'amber' : data.totalCriteria > 0 ? 'red' : 'neutral'}
@@ -199,8 +178,8 @@ export function ReviewSummary({ defaultExpanded = false }: ReviewSummaryProps) {
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {data.ruleNames.map((name, i) => (
-                  <span key={i} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">
+                {data.ruleNames.map((name) => (
+                  <span key={name} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">
                     {name}
                   </span>
                 ))}
@@ -220,7 +199,7 @@ export function ReviewSummary({ defaultExpanded = false }: ReviewSummaryProps) {
                 <span className={`text-xs font-semibold ${
                   data.passedSecurityItems === data.totalSecurityItems ? 'text-green-800' : 'text-amber-800'
                 }`}>
-                  安全检查：{data.passedSecurityItems}/{data.totalSecurityItems} 项通过
+                  安全检查：{data.passedSecurityItems}/{data.totalSecurityItems} 项通过{data.isEstimated ? ' (预估)' : ''}
                 </span>
               </div>
             </div>
@@ -258,6 +237,11 @@ export function ReviewSummary({ defaultExpanded = false }: ReviewSummaryProps) {
                 {data.manualVerifications.slice(0, 5).map((v, i) => (
                   <li key={i} className="text-xs text-blue-700">{v}</li>
                 ))}
+                {data.manualVerifications.length > 5 && (
+                  <li className="text-xs text-blue-500 italic list-none mt-1">
+                    +{data.manualVerifications.length - 5} 项更多...
+                  </li>
+                )}
               </ol>
             </div>
           )}

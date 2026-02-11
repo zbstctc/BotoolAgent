@@ -29,7 +29,6 @@ export interface ReviewSummaryData {
   // Security checks ([安全] prefixed items)
   totalSecurityItems: number;
   passedSecurityItems: number;
-  securityDetails: Array<{ taskId: string; item: string; passed: boolean }>;
 
   // Evals
   totalEvals: number;
@@ -41,6 +40,9 @@ export interface ReviewSummaryData {
 
   // Manual verification suggestions
   manualVerifications: string[];
+
+  // Whether spec/security rates are estimated (no actual progress data)
+  isEstimated: boolean;
 }
 
 /**
@@ -263,6 +265,10 @@ export async function GET() {
     const progressData = progressContent ? parseProgressData(progressContent) : null;
     const codeChanges = await getCodeChanges();
 
+    // Determine if we have actual spec check data from progress.txt
+    const hasActualSpecData = (progressData?.metCriteria || 0) > 0;
+    let isEstimated = false;
+
     // Build response - use prd data as base, enrich with progress data
     const summary: ReviewSummaryData = {
       totalTasks: prdData?.totalTasks || 0,
@@ -276,11 +282,7 @@ export async function GET() {
       rulesApplied: prdData?.rulesApplied || 0,
       ruleNames: prdData?.ruleNames || [],
       totalSecurityItems: prdData?.totalSecurityItems || 0,
-      passedSecurityItems: 0, // Will be inferred from completed tasks
-      securityDetails: (prdData?.securityDetails || []).map(s => ({
-        ...s,
-        passed: false, // Default, updated below
-      })),
+      passedSecurityItems: 0,
       totalEvals: prdData?.totalEvals || 0,
       passedEvals: progressData?.passedEvals || 0,
       blockingTotal: prdData?.blockingTotal || 0,
@@ -288,19 +290,24 @@ export async function GET() {
       nonBlockingTotal: prdData?.nonBlockingTotal || 0,
       nonBlockingPassed: progressData?.nonBlockingPassed || 0,
       manualVerifications: prdData?.manualVerifications || [],
+      isEstimated: false,
     };
 
-    // Estimate security pass rate from completed tasks
+    // Estimate security pass rate from completed tasks (no actual verification data)
     if (prdData && prdData.totalSecurityItems > 0) {
       const completionRate = prdData.totalTasks > 0 ? prdData.completedTasks / prdData.totalTasks : 0;
       summary.passedSecurityItems = Math.round(prdData.totalSecurityItems * completionRate);
+      isEstimated = true;
     }
 
     // If no spec check data in progress.txt, estimate from task completion
-    if (summary.metCriteria === 0 && summary.totalCriteria > 0 && summary.completedTasks > 0) {
+    if (!hasActualSpecData && summary.totalCriteria > 0 && summary.completedTasks > 0) {
       const completionRate = summary.totalTasks > 0 ? summary.completedTasks / summary.totalTasks : 0;
       summary.metCriteria = Math.round(summary.totalCriteria * completionRate);
+      isEstimated = true;
     }
+
+    summary.isEstimated = isEstimated;
 
     return NextResponse.json(summary);
   } catch (error) {
