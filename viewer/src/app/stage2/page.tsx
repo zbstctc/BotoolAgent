@@ -6,29 +6,17 @@ import { StageIndicator } from '@/components';
 import { useProject } from '@/contexts/ProjectContext';
 import { PipelineProgress, DEFAULT_STEPS } from '@/components/pipeline/PipelineProgress';
 import { RuleCheckStep, type RuleDocument } from '@/components/pipeline/RuleCheckStep';
-import { CodeExampleStep, type CodeExample } from '@/components/pipeline/CodeExampleStep';
-import { TestCaseStep, type TestCase } from '@/components/pipeline/TestCaseStep';
-import { JsonConvertStep } from '@/components/pipeline/JsonConvertStep';
-
-interface PrdJson {
-  project: string;
-  branchName: string;
-  description: string;
-  devTasks: {
-    id: string;
-    title: string;
-    description: string;
-    acceptanceCriteria: string[];
-    priority: number;
-    passes: boolean;
-    notes: string;
-  }[];
-}
+import { AutoEnrichStep, type AutoEnrichResult } from '@/components/pipeline/AutoEnrichStep';
+import { EnrichmentSummary } from '@/components/pipeline/EnrichmentSummary';
+import type { EnrichedPrdJson, PipelineMode } from '@/lib/tool-types';
 
 export default function Stage2Page() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { activeProject, updateProject } = useProject();
+
+  // Pipeline mode from query param
+  const mode = (searchParams.get('mode') as PipelineMode) || 'feature';
 
   // Pipeline state
   const [currentStep, setCurrentStep] = useState(0);
@@ -36,8 +24,7 @@ export default function Stage2Page() {
 
   // Step results
   const [selectedRules, setSelectedRules] = useState<RuleDocument[]>([]);
-  const [codeExamples, setCodeExamples] = useState<CodeExample[]>([]);
-  const [testCases, setTestCases] = useState<TestCase[]>([]);
+  const [enrichResult, setEnrichResult] = useState<AutoEnrichResult | null>(null);
 
   // Load PRD content from URL param or session storage
   useEffect(() => {
@@ -82,17 +69,12 @@ export default function Stage2Page() {
     setCurrentStep(1);
   }, []);
 
-  const handleCodeExampleComplete = useCallback((examples: CodeExample[]) => {
-    setCodeExamples(examples);
+  const handleAutoEnrichComplete = useCallback((result: AutoEnrichResult) => {
+    setEnrichResult(result);
     setCurrentStep(2);
   }, []);
 
-  const handleTestCaseComplete = useCallback((cases: TestCase[]) => {
-    setTestCases(cases);
-    setCurrentStep(3);
-  }, []);
-
-  const handleJsonConvertComplete = useCallback((prdJson: PrdJson) => {
+  const handleEnrichmentSummaryComplete = useCallback((prdJson: EnrichedPrdJson) => {
     // Update project with branch name
     if (activeProject && prdJson.branchName) {
       updateProject(activeProject.id, {
@@ -124,26 +106,22 @@ export default function Stage2Page() {
         );
       case 1:
         return (
-          <CodeExampleStep
+          <AutoEnrichStep
             prdContent={prdContent}
-            onComplete={handleCodeExampleComplete}
+            mode={mode}
+            onComplete={handleAutoEnrichComplete}
             onBack={handleBack}
           />
         );
       case 2:
         return (
-          <TestCaseStep
-            prdContent={prdContent}
-            onComplete={handleTestCaseComplete}
-            onBack={handleBack}
-          />
-        );
-      case 3:
-        return (
-          <JsonConvertStep
+          <EnrichmentSummary
             prdContent={prdContent}
             projectName={activeProject?.name || 'New Project'}
-            onComplete={handleJsonConvertComplete}
+            mode={mode}
+            selectedRules={selectedRules}
+            enrichResult={enrichResult}
+            onComplete={handleEnrichmentSummaryComplete}
             onBack={handleBack}
           />
         );
@@ -169,7 +147,7 @@ export default function Stage2Page() {
         currentStage={2}
         completedStages={[1]}
         projectName={activeProject?.name}
-        stageStatus={`步骤 ${currentStep + 1}/4`}
+        stageStatus={`步骤 ${currentStep + 1}/3`}
       />
 
       {/* Pipeline Progress */}

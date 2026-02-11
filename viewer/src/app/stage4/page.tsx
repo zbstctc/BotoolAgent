@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { StageIndicator, TestResults, ManualChecklist, extractChecklistFromPRD, StageTransitionModal } from '@/components';
+import { StageIndicator, TestResults, ManualChecklist, extractChecklistFromPRD, StageTransitionModal, ReviewSummary } from '@/components';
 import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
 import { useProject } from '@/contexts/ProjectContext';
 import type { ChecklistItem } from '@/components/ManualChecklist';
@@ -321,8 +321,9 @@ export default function Stage4Page() {
             </p>
           </div>
 
-          {/* Checklist */}
-          <div className="flex-1 overflow-auto p-4 bg-neutral-50">
+          {/* Review Summary + Checklist */}
+          <div className="flex-1 overflow-auto p-4 bg-neutral-50 space-y-4">
+            <ReviewSummary />
             <ManualChecklist
               items={checklistItems}
               onAllComplete={handleManualCheckComplete}

@@ -8,6 +8,7 @@ import {
   PRDPreview,
   StageTransitionModal,
   ConfirmationCard,
+  ModeSelector,
   type LevelInfo,
   type CollectedSummaryItem,
 } from '@/components';
@@ -18,6 +19,7 @@ import {
   type AskUserQuestion,
   type PyramidMetadata,
   type ConfirmationSummary,
+  type PipelineMode,
   isAskUserQuestionInput,
 } from '@/lib/tool-types';
 
@@ -74,6 +76,11 @@ export default function Stage1Page() {
   // Track which questions have "Other" selected (for custom text input)
   const [otherSelected, setOtherSelected] = useState<Record<string, boolean>>({});
 
+  // Mode selection state
+  const [selectedMode, setSelectedMode] = useState<PipelineMode | null>(null);
+  // Quick fix description (for quick mode simplified input)
+  const [quickFixDescription, setQuickFixDescription] = useState<string>('');
+
   // Initial description from Dashboard
   const [initialDescription, setInitialDescription] = useState<string>('');
   // CLI session ID for resuming conversation
@@ -103,6 +110,7 @@ export default function Stage1Page() {
         if (state.codebaseScanned) setCodebaseScanned(state.codebaseScanned);
         if (state.isConfirmationPhase) setIsConfirmationPhase(state.isConfirmationPhase);
         if (state.confirmationSummary) setConfirmationSummary(state.confirmationSummary);
+        if (state.selectedMode) setSelectedMode(state.selectedMode);
         console.log('[Stage1] Restored saved state (once)', { qaHistoryCount: state.qaHistory?.length || 0 });
       } catch (e) {
         console.error('[Stage1] Failed to parse saved state:', e);
@@ -127,13 +135,14 @@ export default function Stage1Page() {
         codebaseScanned,
         isConfirmationPhase,
         confirmationSummary,
+        selectedMode,
         savedAt: new Date().toISOString(),
       };
       localStorage.setItem(storageKey, JSON.stringify(state));
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [storageKey, cliSessionId, currentLevel, completedLevels, answers, prdDraft, isStarted, qaHistory, codebaseScanned, isConfirmationPhase, confirmationSummary]);
+  }, [storageKey, cliSessionId, currentLevel, completedLevels, answers, prdDraft, isStarted, qaHistory, codebaseScanned, isConfirmationPhase, confirmationSummary, selectedMode]);
 
   // Load initial description from sessionStorage or fallback to project name
   useEffect(() => {
@@ -244,11 +253,18 @@ export default function Stage1Page() {
 
   // Start pyramid Q&A when description is ready
   const startPyramid = useCallback(() => {
-    if (!initialDescription || isStarted) return;
+    if (!initialDescription || isStarted || !selectedMode) return;
     setIsStarted(true);
-    // Trigger the pyramid skill
-    sendMessage(`/botoolagent-pyramidprd ${initialDescription}`);
-  }, [initialDescription, isStarted, sendMessage]);
+    // Trigger the pyramid skill with mode context
+    if (selectedMode === 'quick') {
+      // Quick mode: send with quick mode flag
+      sendMessage(`/botoolagent-pyramidprd [模式:快速修复] ${initialDescription}`);
+    } else if (selectedMode === 'feature') {
+      sendMessage(`/botoolagent-pyramidprd [模式:功能开发] ${initialDescription}`);
+    } else {
+      sendMessage(`/botoolagent-pyramidprd ${initialDescription}`);
+    }
+  }, [initialDescription, isStarted, selectedMode, sendMessage]);
 
   // Resume from saved state - continue from where we left off
   const resumePyramid = useCallback(() => {
@@ -311,12 +327,12 @@ export default function Stage1Page() {
     }
   }, [needsResume, cliSessionId, hasAttemptedResume, resumePyramid]);
 
-  // Auto-start when description is loaded
+  // Auto-start when description is loaded and mode is selected
   useEffect(() => {
-    if (initialDescription && !isStarted && !isLoading) {
+    if (initialDescription && !isStarted && !isLoading && selectedMode) {
       startPyramid();
     }
-  }, [initialDescription, isStarted, isLoading, startPyramid]);
+  }, [initialDescription, isStarted, isLoading, selectedMode, startPyramid]);
 
   // Handle answer selection
   const handleAnswer = useCallback((questionIndex: number, value: string | string[]) => {
@@ -461,8 +477,9 @@ export default function Stage1Page() {
     if (activeProject) {
       updateProject(activeProject.id, { currentStage: 2 });
     }
-    router.push(`/stage2?prd=${savedPrdId}`);
-  }, [activeProject, updateProject, router, savedPrdId]);
+    const modeParam = selectedMode ? `&mode=${selectedMode}` : '';
+    router.push(`/stage2?prd=${savedPrdId}${modeParam}`);
+  }, [activeProject, updateProject, router, savedPrdId, selectedMode]);
 
   const handleTransitionLater = useCallback(() => {
     setShowTransitionModal(false);
@@ -502,6 +519,18 @@ export default function Stage1Page() {
     ? '已生成 PRD'
     : `L${currentLevel} 进行中`;
 
+  // Handle mode selection
+  const handleModeSelect = useCallback((mode: PipelineMode) => {
+    setSelectedMode(mode);
+  }, []);
+
+  // Handle quick fix submission
+  const handleQuickFixSubmit = useCallback(() => {
+    if (!quickFixDescription.trim()) return;
+    setInitialDescription(quickFixDescription.trim());
+    // startPyramid will auto-trigger via the useEffect since selectedMode and initialDescription are set
+  }, [quickFixDescription]);
+
   // Redirect if no session
   if (!sessionId && !projectsLoading) {
     return (
@@ -509,6 +538,84 @@ export default function Stage1Page() {
         <StageIndicator currentStage={1} completedStages={[]} />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-neutral-500">正在跳转...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show mode selector if no mode is selected yet (and not restored from saved state)
+  if (!selectedMode) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden bg-neutral-50">
+        <StageIndicator
+          currentStage={1}
+          completedStages={[]}
+          projectName={projectName}
+          stageStatus="选择模式"
+        />
+        <div className="flex-1 overflow-y-auto bg-white">
+          <ModeSelector
+            onSelect={handleModeSelect}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Quick Fix mode: show simplified input instead of pyramid Q&A
+  if (selectedMode === 'quick' && !isStarted && !initialDescription) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden bg-neutral-50">
+        <StageIndicator
+          currentStage={1}
+          completedStages={[]}
+          projectName={projectName}
+          stageStatus="快速修复"
+        />
+        <div className="flex-1 flex items-center justify-center bg-white">
+          <div className="max-w-lg w-full px-6">
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-50 border border-green-200 mb-4">
+                <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                <span className="text-sm font-medium text-green-700">快速修复模式</span>
+              </div>
+              <h2 className="text-xl font-semibold text-neutral-900 mb-2">
+                描述你要修复的问题
+              </h2>
+              <p className="text-sm text-neutral-500">
+                简单描述 bug、样式调整或小改动，AI 将直接生成任务并执行
+              </p>
+            </div>
+
+            <textarea
+              value={quickFixDescription}
+              onChange={(e) => setQuickFixDescription(e.target.value)}
+              placeholder="例如：修复登录页面的按钮在移动端溢出问题..."
+              className="w-full p-4 border border-neutral-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-neutral-900"
+              rows={5}
+              autoFocus
+            />
+
+            <div className="flex items-center gap-3 mt-4">
+              <button
+                onClick={() => setSelectedMode(null)}
+                className="px-4 py-2.5 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-50 transition-colors"
+              >
+                返回选择
+              </button>
+              <button
+                onClick={handleQuickFixSubmit}
+                disabled={!quickFixDescription.trim()}
+                className={`flex-1 py-2.5 rounded-lg font-medium transition-colors ${
+                  quickFixDescription.trim()
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                }`}
+              >
+                开始快速修复
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );

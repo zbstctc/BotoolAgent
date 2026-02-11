@@ -1289,6 +1289,22 @@ PATTERNS_EOF
 fi
 
 # ============================================================================
+# 如果 .project-status 不存在则初始化
+# ============================================================================
+PROJECT_STATUS_FILE="$PROJECT_DIR/.project-status"
+if [ ! -f "$PROJECT_STATUS_FILE" ]; then
+  cat > "$PROJECT_STATUS_FILE" << 'EOF'
+{
+  "currentBranch": "",
+  "lastCompleted": [],
+  "inProgress": "",
+  "updatedAt": ""
+}
+EOF
+  log "INFO" "Created empty .project-status"
+fi
+
+# ============================================================================
 # 分支安全检查 - 防止丢失未合并的工作
 # ============================================================================
 check_branch_safety() {
@@ -1366,6 +1382,100 @@ check_branch_safety() {
 if [ -f "$PRD_FILE" ]; then
   check_branch_safety
 fi
+
+# ============================================================================
+# Eval Execution - 运行 prd.json 中定义的验证命令
+# ============================================================================
+run_evals() {
+  local TASK_ID="$1"
+
+  if [ ! -f "$PRD_FILE" ]; then
+    echo ">>> [Eval] 没有找到 prd.json，跳过 eval 执行"
+    return 0
+  fi
+
+  # Check if jq is available
+  if ! command -v jq &> /dev/null; then
+    echo ">>> [Eval] 警告：jq 未安装，跳过 eval 执行"
+    return 0
+  fi
+
+  # Extract evals for the current task
+  local EVALS
+  EVALS=$(jq -r ".devTasks[]? | select(.id == \"$TASK_ID\") | .evals // [] | .[] | select(.type == \"code-based\") | @base64" "$PRD_FILE" 2>/dev/null)
+
+  if [ -z "$EVALS" ]; then
+    echo ">>> [Eval] 任务 $TASK_ID 没有 code-based eval"
+    return 0
+  fi
+
+  local EVAL_PASS=0
+  local EVAL_FAIL=0
+  local BLOCKING_FAIL=0
+
+  while IFS= read -r eval_b64; do
+    [ -z "$eval_b64" ] && continue
+
+    local EVAL_DESC
+    EVAL_DESC=$(echo "$eval_b64" | base64 -d | jq -r '.description')
+    local EVAL_CMD
+    EVAL_CMD=$(echo "$eval_b64" | base64 -d | jq -r '.command')
+    local EVAL_EXPECT
+    EVAL_EXPECT=$(echo "$eval_b64" | base64 -d | jq -r '.expect')
+    local EVAL_BLOCKING
+    EVAL_BLOCKING=$(echo "$eval_b64" | base64 -d | jq -r '.blocking')
+
+    echo ">>> [Eval] 运行: $EVAL_DESC"
+    echo ">>> [Eval]   命令: $EVAL_CMD"
+
+    # Run the command
+    local OUTPUT
+    OUTPUT=$(eval "$EVAL_CMD" 2>&1)
+    local EXIT_CODE=$?
+
+    # Check expectation
+    local PASSED=false
+    case "$EVAL_EXPECT" in
+      exit-0)
+        [ $EXIT_CODE -eq 0 ] && PASSED=true
+        ;;
+      exit-non-0)
+        [ $EXIT_CODE -ne 0 ] && PASSED=true
+        ;;
+      contains:*)
+        local EXPECTED="${EVAL_EXPECT#contains:}"
+        echo "$OUTPUT" | grep -q "$EXPECTED" && PASSED=true
+        ;;
+      not-contains:*)
+        local EXPECTED="${EVAL_EXPECT#not-contains:}"
+        ! echo "$OUTPUT" | grep -q "$EXPECTED" && PASSED=true
+        ;;
+    esac
+
+    if [ "$PASSED" = true ]; then
+      echo ">>> [Eval]   PASSED: $EVAL_DESC"
+      ((EVAL_PASS++))
+    else
+      if [ "$EVAL_BLOCKING" = "true" ]; then
+        echo ">>> [Eval]   FAILED (blocking): $EVAL_DESC"
+        ((EVAL_FAIL++))
+        ((BLOCKING_FAIL++))
+      else
+        echo ">>> [Eval]   FAILED (non-blocking): $EVAL_DESC"
+        ((EVAL_FAIL++))
+      fi
+    fi
+  done <<< "$EVALS"
+
+  echo ">>> [Eval] 结果: $EVAL_PASS 通过, $EVAL_FAIL 失败 ($BLOCKING_FAIL 个 blocking)"
+
+  if [ "$BLOCKING_FAIL" -gt 0 ]; then
+    echo ">>> [Eval] 有 $BLOCKING_FAIL 个 blocking eval 失败"
+    return 1
+  fi
+
+  return 0
+}
 
 # ============================================================================
 # 响应分析器 - 语义分析 Claude 输出判断任务完成
@@ -1971,6 +2081,11 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   echo ""
 
   update_status "iteration_complete" "第 $i 次迭代完成，$COMPLETED/$TOTAL 个任务已完成"
+
+  # Update .project-status (will be further enriched by Agent via CLAUDE.md instructions)
+  if [ -f "$PROJECT_STATUS_FILE" ]; then
+    log "INFO" ".project-status will be updated by Agent"
+  fi
 
   # 检查 Circuit Breaker（只在迭代成功时检查）
   if [ "$iteration_success" = true ]; then
