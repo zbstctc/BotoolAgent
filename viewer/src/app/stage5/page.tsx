@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { StageIndicator, ChangeSummary, CompletionSummary, StageTransitionModal } from '@/components';
+import { StageIndicator, ChangeSummary, CompletionSummary, StageTransitionModal, ReviewSummary } from '@/components';
 import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
 import { useProject } from '@/contexts/ProjectContext';
 import type { DiffSummary } from '@/components/ChangeSummary';
@@ -320,6 +320,9 @@ export default function Stage5Page() {
 
           {/* Content */}
           <div className="flex-1 overflow-auto p-4 bg-neutral-50 space-y-4">
+            {/* Review Summary */}
+            <ReviewSummary defaultExpanded />
+
             {/* PR Status Card */}
             <PRStatusCard
               pageState={pageState}

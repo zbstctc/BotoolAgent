@@ -39,6 +39,8 @@ export { LevelPanel } from "./pyramid/LevelPanel";
 export type { Dimension } from "./pyramid/LevelPanel";
 export { ConfirmationCard } from "./pyramid/ConfirmationCard";
 export { ModeSelector } from "./pyramid/ModeSelector";
+export { ReviewSummary } from "./ReviewSummary";
+export type { ReviewSummaryProps } from "./ReviewSummary";
 
 // Design confirm components
 export { LayoutPreview } from "./design-confirm/LayoutPreview";
