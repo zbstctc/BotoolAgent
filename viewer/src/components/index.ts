@@ -38,6 +38,7 @@ export type { QuestionData, AnswerData } from "./pyramid/QuestionItem";
 export { LevelPanel } from "./pyramid/LevelPanel";
 export type { Dimension } from "./pyramid/LevelPanel";
 export { ConfirmationCard } from "./pyramid/ConfirmationCard";
+export { ModeSelector } from "./pyramid/ModeSelector";
 
 // Design confirm components
 export { LayoutPreview } from "./design-confirm/LayoutPreview";

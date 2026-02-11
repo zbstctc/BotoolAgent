@@ -1,12 +1,18 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { SpecCodeExample, SpecTestCase, PipelineMode } from '@/lib/tool-types';
+import type { SpecCodeExample, SpecTestCase, DevTaskEval, PipelineMode } from '@/lib/tool-types';
+
+/** DevTaskEval with taskId for matching to tasks during enrichment */
+export interface AutoEnrichEval extends DevTaskEval {
+  taskId?: string;
+}
 
 export interface AutoEnrichResult {
   codeExamples: SpecCodeExample[];
   testCases: SpecTestCase[];
   filesToModify: string[];
+  evals: AutoEnrichEval[];
 }
 
 interface AutoEnrichStepProps {
@@ -70,6 +76,9 @@ ${prdContent}
 2. 为每个涉及数据结构的任务生成 TypeScript 代码示例（接口定义、数据结构等）
 3. 为每个任务生成测试用例（单元测试和端到端测试）
 4. 列出需要修改的文件路径
+5. 为每个任务生成可执行的验证命令（evals）
+   - code-based eval: shell 命令验证（如 typecheck、grep 检查）
+   - 每个任务至少生成一个 "npx tsc --noEmit" 的 typecheck eval
 
 ## 输出格式
 
@@ -90,13 +99,23 @@ ${prdContent}
       "steps": ["步骤1", "步骤2"]
     }
   ],
-  "filesToModify": ["src/..."]
+  "filesToModify": ["src/..."],
+  "evals": [
+    {
+      "taskId": "DT-001",
+      "type": "code-based",
+      "blocking": true,
+      "description": "Typecheck 通过",
+      "command": "npx tsc --noEmit",
+      "expect": "exit-0"
+    }
+  ]
 }
 \`\`\`
 
 如果 PRD 中没有涉及数据结构或可测试的任务，请输出空数组：
 \`\`\`json
-{ "codeExamples": [], "testCases": [], "filesToModify": [] }
+{ "codeExamples": [], "testCases": [], "filesToModify": [], "evals": [] }
 \`\`\``;
 
       abortControllerRef.current = new AbortController();
@@ -239,7 +258,7 @@ ${prdContent}
             </button>
             <button
               type="button"
-              onClick={() => onComplete({ codeExamples: [], testCases: [], filesToModify: [] })}
+              onClick={() => onComplete({ codeExamples: [], testCases: [], filesToModify: [], evals: [] })}
               className="px-4 py-2 text-neutral-600 hover:text-neutral-800"
             >
               跳过此步
@@ -339,9 +358,9 @@ ${prdContent}
         <div className="p-6 border-b border-neutral-200 bg-neutral-50">
           <h2 className="text-lg font-semibold text-neutral-900">生成结果预览</h2>
           <p className="text-sm text-neutral-500 mt-1">
-            已生成 {result.codeExamples.length} 个代码示例、{result.testCases.length} 个测试用例
+            已生成 {result.codeExamples.length} 个代码示例、{result.testCases.length} 个测试用例、{result.evals.length} 个验证命令
           </p>
-          <div className="mt-2 flex gap-4 text-sm">
+          <div className="mt-2 flex gap-4 text-sm flex-wrap">
             <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
               代码示例: {result.codeExamples.length}
             </span>
@@ -350,6 +369,9 @@ ${prdContent}
             </span>
             <span className="px-2 py-1 bg-green-100 text-green-700 rounded">
               待修改文件: {result.filesToModify.length}
+            </span>
+            <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded">
+              验证命令: {result.evals.length}
             </span>
           </div>
         </div>
@@ -429,6 +451,44 @@ ${prdContent}
             </div>
           )}
 
+          {/* Evals */}
+          {result.evals.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-neutral-700 mb-3">验证命令 (Evals)</h3>
+              <div className="space-y-3">
+                {result.evals.map((evalItem, index) => (
+                  <div key={index} className="border border-neutral-200 rounded-lg p-4 bg-white">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`text-xs px-2 py-0.5 rounded ${
+                        evalItem.type === 'code-based'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-teal-100 text-teal-700'
+                      }`}>
+                        {evalItem.type === 'code-based' ? 'Code-based' : 'Model-based'}
+                      </span>
+                      {evalItem.blocking && (
+                        <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded">
+                          Blocking
+                        </span>
+                      )}
+                      <span className="text-sm text-neutral-700">{evalItem.description}</span>
+                    </div>
+                    {evalItem.command && (
+                      <div className="bg-neutral-900 rounded-lg p-3 overflow-x-auto">
+                        <code className="text-green-400 font-mono text-sm">{evalItem.command}</code>
+                      </div>
+                    )}
+                    {evalItem.expect && (
+                      <div className="mt-2 text-xs text-neutral-500">
+                        期望结果: <span className="font-mono">{evalItem.expect}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Empty state */}
           {result.codeExamples.length === 0 && result.testCases.length === 0 && (
             <div className="text-center py-12 text-neutral-500">
@@ -466,7 +526,7 @@ ${prdContent}
 
 // Parse auto-enrich result from CLI response
 function parseAutoEnrichResult(content: string): AutoEnrichResult {
-  const emptyResult: AutoEnrichResult = { codeExamples: [], testCases: [], filesToModify: [] };
+  const emptyResult: AutoEnrichResult = { codeExamples: [], testCases: [], filesToModify: [], evals: [] };
 
   try {
     // Try to find JSON block in the content
@@ -507,5 +567,18 @@ function normalizeResult(parsed: Record<string, unknown>): AutoEnrichResult {
     ? (parsed.filesToModify as string[])
     : [];
 
-  return { codeExamples, testCases, filesToModify };
+  const evals: AutoEnrichEval[] = Array.isArray(parsed.evals)
+    ? (parsed.evals as Record<string, unknown>[]).map((ev) => ({
+        type: ((ev.type as string) === 'code-based' || (ev.type as string) === 'model-based') ? (ev.type as 'code-based' | 'model-based') : 'code-based',
+        blocking: (ev.blocking as boolean) ?? true,
+        description: (ev.description as string) || '',
+        command: (ev.command as string) || undefined,
+        expect: (ev.expect as string) || undefined,
+        files: Array.isArray(ev.files) ? (ev.files as string[]) : undefined,
+        criteria: (ev.criteria as string) || undefined,
+        taskId: (ev.taskId as string) || undefined,
+      }))
+    : [];
+
+  return { codeExamples, testCases, filesToModify, evals };
 }

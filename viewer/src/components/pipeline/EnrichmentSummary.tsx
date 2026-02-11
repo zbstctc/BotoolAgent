@@ -71,18 +71,25 @@ export function EnrichmentSummary({
     }));
 
     // Enrich dev tasks with spec and evals
-    const enrichedTasks: EnrichedDevTask[] = (basePrdJson.devTasks || []).map(task => ({
-      ...task,
-      dependsOn: [],
-      contextHint: '',
-      spec: {
-        codeExamples: enrichResult?.codeExamples || [],
-        testCases: enrichResult?.testCases || [],
-        filesToModify: enrichResult?.filesToModify || [],
-        relatedFiles: [],
-      },
-      evals: [],
-    }));
+    const enrichedTasks: EnrichedDevTask[] = (basePrdJson.devTasks || []).map(task => {
+      // Match evals by taskId
+      const taskEvals = (enrichResult?.evals || [])
+        .filter(ev => ev.taskId === task.id)
+        .map(({ taskId: _taskId, ...evalData }) => evalData);
+
+      return {
+        ...task,
+        dependsOn: [],
+        contextHint: '',
+        spec: {
+          codeExamples: enrichResult?.codeExamples || [],
+          testCases: enrichResult?.testCases || [],
+          filesToModify: enrichResult?.filesToModify || [],
+          relatedFiles: [],
+        },
+        evals: taskEvals,
+      };
+    });
 
     const enriched: EnrichedPrdJson = {
       project: basePrdJson.project,
@@ -283,6 +290,7 @@ export function EnrichmentSummary({
   const codeExamplesCount = enrichResult?.codeExamples?.length || 0;
   const testCasesCount = enrichResult?.testCases?.length || 0;
   const filesToModifyCount = enrichResult?.filesToModify?.length || 0;
+  const evalsCount = enrichResult?.evals?.length || 0;
 
   // Show converting progress UI
   if (convertingState === 'converting' || convertingState === 'error') {
@@ -376,7 +384,7 @@ export function EnrichmentSummary({
           </p>
 
           {/* Summary Stats */}
-          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className="bg-white rounded-lg p-3 border border-neutral-200">
               <div className="text-2xl font-bold text-blue-600">{rulesCount}</div>
               <div className="text-xs text-neutral-500">规范已应用</div>
@@ -392,6 +400,10 @@ export function EnrichmentSummary({
             <div className="bg-white rounded-lg p-3 border border-neutral-200">
               <div className="text-2xl font-bold text-orange-600">{filesToModifyCount}</div>
               <div className="text-xs text-neutral-500">待修改文件</div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-neutral-200">
+              <div className="text-2xl font-bold text-amber-600">{evalsCount}</div>
+              <div className="text-xs text-neutral-500">验证命令</div>
             </div>
           </div>
 
