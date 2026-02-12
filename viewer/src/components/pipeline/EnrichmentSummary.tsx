@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { ConstitutionRule, EnrichedPrdJson, EnrichedDevTask, SessionGroup, PipelineMode } from '@/lib/tool-types';
+import type { EnrichedPrdJson, PipelineMode } from '@/lib/tool-types';
 import type { AutoEnrichResult } from './AutoEnrichStep';
 import type { RuleDocument } from './RuleCheckStep';
 
@@ -47,93 +47,7 @@ export function EnrichmentSummary({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Derive testCases from task description and acceptanceCriteria
-  const deriveTestCases = useCallback((task: { description: string; acceptanceCriteria: string[] }) => {
-    const testCases: Array<{ type: 'typecheck' | 'lint' | 'unit' | 'e2e' | 'manual'; desc?: string; tdd?: boolean }> = [];
-    const allText = [task.description, ...task.acceptanceCriteria].join(' ');
-
-    // Every task gets typecheck
-    testCases.push({ type: 'typecheck', desc: 'TypeScript 编译通过' });
-
-    // Keywords for unit tests (with TDD)
-    if (/映射|转换|返回|计算|解析|格式化|过滤|排序/.test(allText)) {
-      testCases.push({ type: 'unit', desc: '核心逻辑单元测试', tdd: true });
-    }
-
-    // Keywords for e2e tests
-    if (/页面|布局|渲染|显示|跳转|导航|加载|中文化|文案/.test(allText)) {
-      testCases.push({ type: 'e2e', desc: '页面功能端到端测试' });
-    }
-
-    // Keywords for manual tests
-    if (/动画|视觉|颜色|流畅|交互|体验|手动/.test(allText)) {
-      testCases.push({ type: 'manual', desc: '视觉和交互手动验证' });
-    }
-
-    return testCases;
-  }, []);
-
-  // Enrich base prd.json with constitution and spec data
-  const enrichPrdJson = useCallback((basePrdJson: {
-    project: string;
-    branchName: string;
-    description: string;
-    devTasks?: {
-      id: string;
-      title: string;
-      description: string;
-      acceptanceCriteria: string[];
-      priority: number;
-      passes: boolean;
-      notes: string;
-    }[];
-  }): EnrichedPrdJson => {
-    // Build constitution from selected rules
-    const constitutionRules: ConstitutionRule[] = selectedRules.map(rule => ({
-      id: rule.id,
-      name: rule.name,
-      category: rule.category,
-      content: rule.content,
-    }));
-
-    // Enrich dev tasks with spec and evals
-    const enrichedTasks: EnrichedDevTask[] = (basePrdJson.devTasks || []).map(task => {
-      // Match evals by taskId
-      const taskEvals = (enrichResult?.evals || [])
-        .filter(ev => ev.taskId === task.id)
-        .map(({ taskId: _taskId, ...evalData }) => evalData);
-
-      const depInfo = (enrichResult?.dependencies || []).find(d => d.taskId === task.id);
-      return {
-        ...task,
-        dependsOn: depInfo?.dependsOn || [],
-        contextHint: '',
-        spec: {
-          codeExamples: enrichResult?.codeExamples || [],
-          testCases: enrichResult?.testCases || [],
-          filesToModify: enrichResult?.filesToModify || [],
-          relatedFiles: [],
-        },
-        evals: taskEvals,
-        testCases: deriveTestCases(task),
-      };
-    });
-
-    const enriched: EnrichedPrdJson = {
-      project: basePrdJson.project,
-      branchName: basePrdJson.branchName,
-      description: basePrdJson.description,
-      constitution: constitutionRules.length > 0
-        ? { rules: constitutionRules, ruleAuditSummary: '' }
-        : undefined,
-      devTasks: enrichedTasks,
-      sessions: enrichResult?.sessions?.length ? enrichResult.sessions : generateDefaultSessions(enrichedTasks),
-    };
-
-    return enriched;
-  }, [selectedRules, enrichResult, deriveTestCases]);
-
-  // Start conversion with CLI via /api/prd/convert
+  // Start conversion: get base JSON via /api/prd/convert, then merge via /api/prd/enrich
   const handleStartConversion = useCallback(async () => {
     if (!prdContent) {
       setError('没有 PRD 内容可供转换');
@@ -196,25 +110,12 @@ export function EnrichmentSummary({
                 setConvertingProgress(progressValue);
                 setConvertingMessage('正在转换为 JSON 格式...');
               } else if (parsed.type === 'complete') {
-                // Base conversion complete - now enrich
+                // Base conversion complete - call /api/prd/enrich merge mode
                 setConvertingProgress(90);
                 setConvertingMessage('正在合并规范和生成结果...');
 
-                const basePrdJson = parsed.prdJson as {
-                  project: string;
-                  branchName: string;
-                  description: string;
-                  devTasks?: {
-                    id: string;
-                    title: string;
-                    description: string;
-                    acceptanceCriteria: string[];
-                    priority: number;
-                    passes: boolean;
-                    notes: string;
-                  }[];
-                };
-                const enriched = enrichPrdJson(basePrdJson);
+                const basePrdJson = parsed.prdJson;
+                const enriched = await callEnrichMerge(basePrdJson);
 
                 setPrdJson(enriched);
                 setJsonString(JSON.stringify(enriched, null, 2));
@@ -226,7 +127,7 @@ export function EnrichmentSummary({
                 if (parsed.rawContent) {
                   const extracted = tryExtractJson(parsed.rawContent);
                   if (extracted) {
-                    const enriched = enrichPrdJson(extracted);
+                    const enriched = await callEnrichMerge(extracted);
                     setPrdJson(enriched);
                     setJsonString(JSON.stringify(enriched, null, 2));
                     setConvertingProgress(100);
@@ -265,7 +166,41 @@ export function EnrichmentSummary({
       setConvertingState('error');
       setConvertingMessage('转换失败');
     }
-  }, [prdContent, projectName, enrichPrdJson, prdJson]);
+  }, [prdContent, projectName, enrichResult, selectedRules, prdJson]);
+
+  // Call /api/prd/enrich in merge mode to combine basePrdJson + enrichResult + rules
+  const callEnrichMerge = useCallback(async (basePrdJson: Record<string, unknown>): Promise<EnrichedPrdJson> => {
+    const rules = selectedRules.map(rule => ({
+      id: rule.id,
+      name: rule.name,
+      category: rule.category,
+      content: rule.content,
+    }));
+
+    const response = await fetch('/api/prd/enrich', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        merge: true,
+        basePrdJson,
+        enrichResult: enrichResult || {
+          codeExamples: [],
+          testCases: [],
+          filesToModify: [],
+          evals: [],
+          dependencies: [],
+          sessions: [],
+        },
+        rules,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Enrichment merge failed');
+    }
+
+    return response.json();
+  }, [selectedRules, enrichResult]);
 
   // Cancel conversion
   const cancelConversion = useCallback(() => {
@@ -610,36 +545,8 @@ export function EnrichmentSummary({
   );
 }
 
-// Generate default session groups when Claude doesn't return sessions
-function generateDefaultSessions(tasks: EnrichedDevTask[]): SessionGroup[] {
-  const MAX = 8;
-  const sessions: SessionGroup[] = [];
-  for (let i = 0; i < tasks.length; i += MAX) {
-    const batch = tasks.slice(i, i + MAX);
-    sessions.push({
-      id: `S${sessions.length + 1}`,
-      tasks: batch.map(t => t.id),
-      reason: '按优先级自动分组',
-    });
-  }
-  return sessions;
-}
-
 // Try to extract valid base PrdJson from raw CLI content
-function tryExtractJson(content: string): {
-  project: string;
-  branchName: string;
-  description: string;
-  devTasks?: {
-    id: string;
-    title: string;
-    description: string;
-    acceptanceCriteria: string[];
-    priority: number;
-    passes: boolean;
-    notes: string;
-  }[];
-} | null {
+function tryExtractJson(content: string): Record<string, unknown> | null {
   try {
     const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
     if (jsonMatch && jsonMatch[1]) {
