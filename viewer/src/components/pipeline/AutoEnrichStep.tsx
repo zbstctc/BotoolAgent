@@ -13,6 +13,8 @@ export interface AutoEnrichResult {
   testCases: SpecTestCase[];
   filesToModify: string[];
   evals: AutoEnrichEval[];
+  dependencies: { taskId: string; dependsOn: string[] }[];
+  sessions: { id: string; tasks: string[]; reason?: string }[];
 }
 
 interface AutoEnrichStepProps {
@@ -79,6 +81,15 @@ ${prdContent}
 5. 为每个任务生成可执行的验证命令（evals）
    - code-based eval: shell 命令验证（如 typecheck、grep 检查）
    - 每个任务至少生成一个 "npx tsc --noEmit" 的 typecheck eval
+6. 分析任务间的依赖关系
+   - 如果任务 B 依赖任务 A 创建的类型、组件或 API → B dependsOn A
+   - 如果任务修改同一个文件且有顺序要求 → 标记依赖
+   - 没有依赖的任务 dependsOn 为空数组
+7. 将任务分成 sessions（每 session 最多 8 个 DT）
+   - 有依赖关系的任务放同一 session
+   - 修改同一批文件的任务放同一 session
+   - 独立的任务按 priority 填充
+   - 每个 session 附带分组原因
 
 ## 输出格式
 
@@ -109,13 +120,19 @@ ${prdContent}
       "command": "npx tsc --noEmit",
       "expect": "exit-0"
     }
+  ],
+  "dependencies": [
+    { "taskId": "DT-005", "dependsOn": ["DT-003"] }
+  ],
+  "sessions": [
+    { "id": "S1", "tasks": ["DT-001", "DT-002", "DT-003"], "reason": "分组原因" }
   ]
 }
 \`\`\`
 
 如果 PRD 中没有涉及数据结构或可测试的任务，请输出空数组：
 \`\`\`json
-{ "codeExamples": [], "testCases": [], "filesToModify": [], "evals": [] }
+{ "codeExamples": [], "testCases": [], "filesToModify": [], "evals": [], "dependencies": [], "sessions": [] }
 \`\`\``;
 
       abortControllerRef.current = new AbortController();
@@ -258,7 +275,7 @@ ${prdContent}
             </button>
             <button
               type="button"
-              onClick={() => onComplete({ codeExamples: [], testCases: [], filesToModify: [], evals: [] })}
+              onClick={() => onComplete({ codeExamples: [], testCases: [], filesToModify: [], evals: [], dependencies: [], sessions: [] })}
               className="px-4 py-2 text-neutral-600 hover:text-neutral-800"
             >
               跳过此步
@@ -526,7 +543,7 @@ ${prdContent}
 
 // Parse auto-enrich result from CLI response
 function parseAutoEnrichResult(content: string): AutoEnrichResult {
-  const emptyResult: AutoEnrichResult = { codeExamples: [], testCases: [], filesToModify: [], evals: [] };
+  const emptyResult: AutoEnrichResult = { codeExamples: [], testCases: [], filesToModify: [], evals: [], dependencies: [], sessions: [] };
 
   try {
     // Try to find JSON block in the content
@@ -580,5 +597,20 @@ function normalizeResult(parsed: Record<string, unknown>): AutoEnrichResult {
       }))
     : [];
 
-  return { codeExamples, testCases, filesToModify, evals };
+  const dependencies: { taskId: string; dependsOn: string[] }[] = Array.isArray(parsed.dependencies)
+    ? (parsed.dependencies as Record<string, unknown>[]).map((dep) => ({
+        taskId: (dep.taskId as string) || '',
+        dependsOn: Array.isArray(dep.dependsOn) ? (dep.dependsOn as string[]) : [],
+      }))
+    : [];
+
+  const sessions: { id: string; tasks: string[]; reason?: string }[] = Array.isArray(parsed.sessions)
+    ? (parsed.sessions as Record<string, unknown>[]).map((s) => ({
+        id: (s.id as string) || '',
+        tasks: Array.isArray(s.tasks) ? (s.tasks as string[]) : [],
+        reason: (s.reason as string) || undefined,
+      }))
+    : [];
+
+  return { codeExamples, testCases, filesToModify, evals, dependencies, sessions };
 }

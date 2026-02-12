@@ -134,6 +134,13 @@ export interface TestCase {
   tdd?: boolean;
 }
 
+// Session grouping for batch execution
+export interface SessionGroup {
+  id: string;           // "S1", "S2", ...
+  tasks: string[];      // ["DT-001", "DT-002", ...]
+  reason?: string;      // 分组原因
+}
+
 // Enriched PrdJson (new schema)
 export interface EnrichedDevTask {
   id: string;
@@ -156,6 +163,7 @@ export interface EnrichedPrdJson {
   description: string;
   constitution?: Constitution;
   devTasks: EnrichedDevTask[];
+  sessions?: SessionGroup[];
 }
 
 // Pipeline mode type

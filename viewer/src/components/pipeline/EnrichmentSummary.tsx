@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { ConstitutionRule, EnrichedPrdJson, EnrichedDevTask, PipelineMode } from '@/lib/tool-types';
+import type { ConstitutionRule, EnrichedPrdJson, EnrichedDevTask, SessionGroup, PipelineMode } from '@/lib/tool-types';
 import type { AutoEnrichResult } from './AutoEnrichStep';
 import type { RuleDocument } from './RuleCheckStep';
 
@@ -103,9 +103,10 @@ export function EnrichmentSummary({
         .filter(ev => ev.taskId === task.id)
         .map(({ taskId: _taskId, ...evalData }) => evalData);
 
+      const depInfo = (enrichResult?.dependencies || []).find(d => d.taskId === task.id);
       return {
         ...task,
-        dependsOn: [],
+        dependsOn: depInfo?.dependsOn || [],
         contextHint: '',
         spec: {
           codeExamples: enrichResult?.codeExamples || [],
@@ -126,6 +127,7 @@ export function EnrichmentSummary({
         ? { rules: constitutionRules, ruleAuditSummary: '' }
         : undefined,
       devTasks: enrichedTasks,
+      sessions: enrichResult?.sessions?.length ? enrichResult.sessions : generateDefaultSessions(enrichedTasks),
     };
 
     return enriched;
@@ -332,6 +334,7 @@ export function EnrichmentSummary({
   const testCasesCount = enrichResult?.testCases?.length || 0;
   const filesToModifyCount = enrichResult?.filesToModify?.length || 0;
   const evalsCount = enrichResult?.evals?.length || 0;
+  const sessionsCount = prdJson?.sessions?.length || 0;
 
   // Show converting progress UI
   if (convertingState === 'converting' || convertingState === 'error') {
@@ -425,7 +428,7 @@ export function EnrichmentSummary({
           </p>
 
           {/* Summary Stats */}
-          <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-6 gap-3">
             <div className="bg-white rounded-lg p-3 border border-neutral-200">
               <div className="text-2xl font-bold text-blue-600">{rulesCount}</div>
               <div className="text-xs text-neutral-500">规范已应用</div>
@@ -445,6 +448,10 @@ export function EnrichmentSummary({
             <div className="bg-white rounded-lg p-3 border border-neutral-200">
               <div className="text-2xl font-bold text-amber-600">{evalsCount}</div>
               <div className="text-xs text-neutral-500">验证命令</div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-neutral-200">
+              <div className="text-2xl font-bold text-cyan-600">{sessionsCount}</div>
+              <div className="text-xs text-neutral-500">Sessions</div>
             </div>
           </div>
 
@@ -601,6 +608,21 @@ export function EnrichmentSummary({
       </div>
     </div>
   );
+}
+
+// Generate default session groups when Claude doesn't return sessions
+function generateDefaultSessions(tasks: EnrichedDevTask[]): SessionGroup[] {
+  const MAX = 8;
+  const sessions: SessionGroup[] = [];
+  for (let i = 0; i < tasks.length; i += MAX) {
+    const batch = tasks.slice(i, i + MAX);
+    sessions.push({
+      id: `S${sessions.length + 1}`,
+      tasks: batch.map(t => t.id),
+      reason: '按优先级自动分组',
+    });
+  }
+  return sessions;
 }
 
 // Try to extract valid base PrdJson from raw CLI content
