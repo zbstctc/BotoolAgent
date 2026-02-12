@@ -166,6 +166,12 @@ export function parsePrdJson(content: string | null): PrdData | null {
   }
 }
 
+export interface TestCase {
+  type: 'typecheck' | 'lint' | 'unit' | 'e2e' | 'manual';
+  desc?: string;
+  tdd?: boolean;
+}
+
 export interface DevTask {
   id: string;
   title: string;
@@ -174,6 +180,7 @@ export interface DevTask {
   priority: number;
   passes: boolean;
   notes: string;
+  testCases?: TestCase[];
 }
 
 export interface PrdData {

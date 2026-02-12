@@ -127,6 +127,13 @@ export interface DevTaskEval {
   criteria?: string;
 }
 
+// TestCase type for prd.json devTask.testCases field
+export interface TestCase {
+  type: 'typecheck' | 'lint' | 'unit' | 'e2e' | 'manual';
+  desc?: string;
+  tdd?: boolean;
+}
+
 // Enriched PrdJson (new schema)
 export interface EnrichedDevTask {
   id: string;
@@ -140,6 +147,7 @@ export interface EnrichedDevTask {
   notes: string;
   spec?: DevTaskSpec;
   evals?: DevTaskEval[];
+  testCases?: TestCase[];
 }
 
 export interface EnrichedPrdJson {

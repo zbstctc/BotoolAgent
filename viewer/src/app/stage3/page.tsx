@@ -548,6 +548,26 @@ export default function Stage3Page() {
                               </ul>
                             </div>
                           )}
+                          {task.testCases && task.testCases.length > 0 && (
+                            <div className="mt-2">
+                              <p className="text-xs font-medium text-neutral-500 mb-1">
+                                测试用例:
+                              </p>
+                              <div className="flex flex-wrap gap-1">
+                                {(() => {
+                                  const auto = task.testCases.filter(tc => tc.type !== 'manual').length;
+                                  const manual = task.testCases.filter(tc => tc.type === 'manual').length;
+                                  return (
+                                    <span className="text-xs text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">
+                                      {auto > 0 ? `${auto} 个自动测试` : ''}
+                                      {auto > 0 && manual > 0 ? ' + ' : ''}
+                                      {manual > 0 ? `${manual} 个手动` : ''}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          )}
                           {task.notes && (
                             <p className="text-xs text-neutral-500 mt-2 italic">{task.notes}</p>
                           )}
