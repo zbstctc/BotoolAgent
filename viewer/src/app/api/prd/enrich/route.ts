@@ -333,6 +333,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'basePrdJson is required for merge mode' }, { status: 400 });
       }
 
+      if (!basePrdJson.project || !basePrdJson.branchName || !Array.isArray(basePrdJson.devTasks)) {
+        return NextResponse.json(
+          { error: 'basePrdJson must contain project, branchName, and devTasks array' },
+          { status: 400 },
+        );
+      }
+
       const result = mergeEnrichedPrdJson(basePrdJson, enrichResult || {
         codeExamples: [],
         testCases: [],
@@ -389,6 +396,7 @@ export async function POST(request: NextRequest) {
             ),
           );
           streamController.close();
+          cliManager.stop();
         } else if (msg.type === 'error') {
           streamController.enqueue(
             encoder.encode(
@@ -396,6 +404,7 @@ export async function POST(request: NextRequest) {
             ),
           );
           streamController.close();
+          cliManager.stop();
         }
       } catch {
         // Controller may be closed
@@ -412,6 +421,7 @@ export async function POST(request: NextRequest) {
           ),
         );
         streamController.close();
+        cliManager.stop();
       } catch {
         // Controller may be closed
       }

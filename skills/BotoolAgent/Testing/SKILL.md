@@ -288,6 +288,31 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 
 **跳过条件：** `startLayer > 3` 时跳过此层。
 
+### 3a. 环境清理 + 健康检查（E2E 前置）
+
+E2E 测试依赖 dev server，必须先确保环境干净：
+
+```bash
+# 1. 杀掉残留的 Playwright 测试进程（避免端口/锁冲突）
+pkill -f "playwright test" 2>/dev/null || true
+
+# 2. 检查 dev server 是否在运行且健康
+curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:3000
+```
+
+**处理逻辑：**
+- HTTP 200 → dev server 健康，继续
+- 超时或非 200 → dev server 假死或未运行，需要重启：
+  ```bash
+  # 杀掉假死的 dev server
+  lsof -ti :3000 | xargs kill -9 2>/dev/null || true
+  sleep 2
+  # Playwright config 中的 webServer 会自动启动，无需手动启动
+  ```
+- 如果杀掉后仍无法启动（端口仍被占用）→ AskUserQuestion 让用户排查
+
+### 3b. 检测 E2E 配置
+
 检测是否有 Playwright 配置：
 
 ```bash
