@@ -11,11 +11,11 @@ interface StageIndicatorProps {
 }
 
 const stages = [
-  { id: 1, name: 'PRD 需求确认', available: true },
-  { id: 2, name: '开发规划', available: true },
-  { id: 3, name: 'Coding', available: true },
-  { id: 4, name: '测试', available: true },
-  { id: 5, name: 'Review', available: true },
+  { id: 1, name: '需求收集', available: true },
+  { id: 2, name: '任务规划', available: true },
+  { id: 3, name: '自动开发', available: true },
+  { id: 4, name: '自动验收', available: true },
+  { id: 5, name: '确认合并', available: true },
 ];
 
 export function StageIndicator({ currentStage, completedStages = [], showBackButton = true, projectName, stageStatus }: StageIndicatorProps) {
@@ -43,7 +43,7 @@ export function StageIndicator({ currentStage, completedStages = [], showBackBut
                     d="M10 19l-7-7m0 0l7-7m-7 7h18"
                   />
                 </svg>
-                <span>Dashboard</span>
+                <span>主页</span>
               </Link>
             )}
             {projectName && (

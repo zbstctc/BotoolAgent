@@ -329,8 +329,8 @@ export default function Dashboard() {
             ) : (
               <EmptyState
                 title="暂无进行中的项目"
-                description="创建你的第一个 PRD，开始自主开发流程。"
-                actionLabel="新建 PRD"
+                description="创建你的第一个需求文档(PRD)，开始自主开发流程。"
+                actionLabel="新建需求文档"
                 onAction={() => setShowNewPrdDialog(true)}
               />
             )}
@@ -340,13 +340,13 @@ export default function Dashboard() {
           <div className="flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-neutral-900">
-                PRD Documents
+                需求文档(PRD)
               </h2>
               <button
                 onClick={() => setShowNewPrdDialog(true)}
                 className="text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors"
               >
-                + New PRD
+                + 新建
               </button>
             </div>
 
@@ -374,9 +374,9 @@ export default function Dashboard() {
               </div>
             ) : (
               <EmptyState
-                title="No PRD documents yet"
-                description="Create your first PRD to start the autonomous development process."
-                actionLabel="Create PRD"
+                title="暂无需求文档"
+                description="创建你的第一个需求文档(PRD)，开始自主开发流程。"
+                actionLabel="创建需求文档"
                 onAction={() => setShowNewPrdDialog(true)}
               />
             )}
