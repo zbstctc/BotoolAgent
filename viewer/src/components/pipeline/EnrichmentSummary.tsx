@@ -47,6 +47,32 @@ export function EnrichmentSummary({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Derive testCases from task description and acceptanceCriteria
+  const deriveTestCases = useCallback((task: { description: string; acceptanceCriteria: string[] }) => {
+    const testCases: Array<{ type: 'typecheck' | 'lint' | 'unit' | 'e2e' | 'manual'; desc?: string; tdd?: boolean }> = [];
+    const allText = [task.description, ...task.acceptanceCriteria].join(' ');
+
+    // Every task gets typecheck
+    testCases.push({ type: 'typecheck', desc: 'TypeScript 编译通过' });
+
+    // Keywords for unit tests (with TDD)
+    if (/映射|转换|返回|计算|解析|格式化|过滤|排序/.test(allText)) {
+      testCases.push({ type: 'unit', desc: '核心逻辑单元测试', tdd: true });
+    }
+
+    // Keywords for e2e tests
+    if (/页面|布局|渲染|显示|跳转|导航|加载|中文化|文案/.test(allText)) {
+      testCases.push({ type: 'e2e', desc: '页面功能端到端测试' });
+    }
+
+    // Keywords for manual tests
+    if (/动画|视觉|颜色|流畅|交互|体验|手动/.test(allText)) {
+      testCases.push({ type: 'manual', desc: '视觉和交互手动验证' });
+    }
+
+    return testCases;
+  }, []);
+
   // Enrich base prd.json with constitution and spec data
   const enrichPrdJson = useCallback((basePrdJson: {
     project: string;
@@ -88,6 +114,7 @@ export function EnrichmentSummary({
           relatedFiles: [],
         },
         evals: taskEvals,
+        testCases: deriveTestCases(task),
       };
     });
 
@@ -102,7 +129,7 @@ export function EnrichmentSummary({
     };
 
     return enriched;
-  }, [selectedRules, enrichResult]);
+  }, [selectedRules, enrichResult, deriveTestCases]);
 
   // Start conversion with CLI via /api/prd/convert
   const handleStartConversion = useCallback(async () => {
