@@ -20,22 +20,22 @@ export default function Stage2Page() {
 
   // Pipeline state
   const [currentStep, setCurrentStep] = useState(0);
-  const [prdContent, setPrdContent] = useState('');
+  const [prdContent, setPrdContent] = useState(() => {
+    // Lazy initialization: read from sessionStorage synchronously on first render
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('botool-stage2-prd') || '';
+    }
+    return '';
+  });
 
   // Step results
   const [selectedRules, setSelectedRules] = useState<RuleDocument[]>([]);
   const [enrichResult, setEnrichResult] = useState<AutoEnrichResult | null>(null);
 
-  // Load PRD content from URL param or session storage
+  // Load PRD content from API if not already loaded from sessionStorage
   useEffect(() => {
-    // First try sessionStorage
-    const storedPrd = sessionStorage.getItem('botool-stage2-prd');
-    if (storedPrd) {
-      setPrdContent(storedPrd);
-      return;
-    }
+    if (prdContent) return;
 
-    // Then try loading from API using URL param
     const prdId = searchParams.get('prd');
     if (prdId) {
       fetch(`/api/prd/${encodeURIComponent(prdId)}`)
@@ -54,7 +54,7 @@ export default function Stage2Page() {
           console.error('Failed to load PRD content:', err);
         });
     }
-  }, [searchParams]);
+  }, [searchParams, prdContent]);
 
   // Handle step click (for viewing completed steps)
   const handleStepClick = useCallback((stepIndex: number) => {

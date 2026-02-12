@@ -65,6 +65,8 @@ export function StageTransitionModal({
   autoCountdown,
 }: StageTransitionModalProps) {
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  const [prevAutoCountdown, setPrevAutoCountdown] = useState(autoCountdown);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const onConfirmRef = useRef(onConfirm);
 
@@ -72,13 +74,20 @@ export function StageTransitionModal({
     onConfirmRef.current = onConfirm;
   }, [onConfirm]);
 
-  // Start countdown when modal opens with autoCountdown
-  useEffect(() => {
-    if (isOpen && autoCountdown && autoCountdown > 0) {
-      setCountdown(autoCountdown);
-    } else {
-      setCountdown(null);
+  // Derive countdown initial value from prop changes using the
+  // "setState during render" pattern (React-supported for derived state).
+  // See: https://react.dev/reference/react/useState#storing-information-from-previous-renders
+  if (isOpen !== prevIsOpen || autoCountdown !== prevAutoCountdown) {
+    setPrevIsOpen(isOpen);
+    setPrevAutoCountdown(autoCountdown);
+    const nextCountdown = (isOpen && autoCountdown && autoCountdown > 0) ? autoCountdown : null;
+    if (nextCountdown !== countdown) {
+      setCountdown(nextCountdown);
     }
+  }
+
+  // Clean up interval when modal closes or autoCountdown changes
+  useEffect(() => {
     return () => {
       if (countdownRef.current) clearInterval(countdownRef.current);
     };

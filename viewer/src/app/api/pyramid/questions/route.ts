@@ -10,6 +10,9 @@ import { parseSkillPrompts, fillPromptTemplate } from '@/lib/skill-parser';
 import { getActiveDimensions, type LevelId } from '@/lib/dimension-framework';
 import { execSync } from 'child_process';
 import { getBotoolRoot } from '@/lib/project-root';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 interface QuestionRequest {
   level: LevelId;
@@ -26,9 +29,6 @@ function runCLISync(prompt: string): string {
   const workingDir = getBotoolRoot();
 
   // Write prompt to a temp file to avoid shell escaping issues
-  const fs = require('fs');
-  const os = require('os');
-  const path = require('path');
   const tmpFile = path.join(os.tmpdir(), `botool-prompt-${Date.now()}.txt`);
   fs.writeFileSync(tmpFile, prompt);
 

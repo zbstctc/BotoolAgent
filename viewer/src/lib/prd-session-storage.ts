@@ -372,7 +372,7 @@ export function saveQuestionAnswers(
   projectName?: string
 ): void {
   // Get or create the first/current session
-  let savedSession = getSavedPrdSession();
+  const savedSession = getSavedPrdSession();
   let sessionId: string;
 
   if (!savedSession) {

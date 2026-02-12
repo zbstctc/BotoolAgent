@@ -286,7 +286,7 @@ export function RulesManager({ className }: RulesManagerProps) {
           <div className="flex-1 flex items-center justify-center text-neutral-500">
             <div className="text-center">
               <p className="text-lg mb-2">选择或创建规范</p>
-              <p className="text-sm">从左侧选择一个规范文档，或点击"新建规范"创建</p>
+              <p className="text-sm">从左侧选择一个规范文档，或点击{'"'}新建规范{'"'}创建</p>
             </div>
           </div>
         )}

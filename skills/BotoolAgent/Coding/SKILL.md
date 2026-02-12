@@ -6,7 +6,9 @@ user-invocable: true
 
 # BotoolAgent 自动开发流水线
 
-CLI 全自动流水线：前置检查 → 运行 BotoolAgent.sh → typecheck+lint+test → gh pr create → 输出 PR 链接。
+CLI 自动开发流水线：前置检查 → 运行 BotoolAgentTeams.sh（默认）或 BotoolAgent.sh → 输出完成信息。
+
+质量检查和 PR 创建由独立的 `/botoolagent-testing` 和 `/botoolagent-finalize` Skill 负责。
 
 **Announce at start:** "正在启动 BotoolAgent 自动开发流水线..."
 
@@ -14,14 +16,19 @@ CLI 全自动流水线：前置检查 → 运行 BotoolAgent.sh → typecheck+li
 
 ## 参数解析
 
-如果用户提供了参数（如 `/botoolagent-coding 20`），将第一个数字参数作为 `maxIterations`。
+如果用户提供了参数（如 `/botoolagent-coding 20`），将第一个数字参数作为 `maxIterations`（仅对 `--single` 模式有效）。
 默认值：`maxIterations=10`。
+
+检查是否包含 `--single` 标志：
+- `/botoolagent-coding --single` → 使用单 agent 模式（BotoolAgent.sh）
+- `/botoolagent-coding --single 20` → 单 agent 模式 + 20 次迭代
+- `/botoolagent-coding` → 默认使用 Teams 模式（BotoolAgentTeams.sh）
 
 ---
 
 ## Step 1: 前置检查
 
-依次执行以下 4 项检查，任一失败则**停止并告知用户**。
+依次执行以下 5 项检查，任一失败则**停止并告知用户**（1e 除外，1e 自动降级）。
 
 ### 1a. 检查 prd.json
 
@@ -67,7 +74,7 @@ git checkout <branchName> 2>/dev/null || git checkout -b <branchName>
 ### 1d. 检查是否有重复进程
 
 ```bash
-pgrep -f "BotoolAgent.sh" 2>/dev/null
+pgrep -f "BotoolAgent" 2>/dev/null
 ```
 
 **如果有进程在运行：**
@@ -80,37 +87,70 @@ pgrep -f "BotoolAgent.sh" 2>/dev/null
 ```
 Then stop here.
 
+### 1e. 检查 tmux 可用性（Teams 模式依赖）
+
+仅当未指定 `--single` 时执行此检查。
+
+```bash
+command -v tmux &>/dev/null
+```
+
+**如果 tmux 不可用：**
+```
+警告：tmux 未安装，Teams 模式不可用。自动降级到单 agent 模式。
+提示：安装 tmux 以使用 Teams 模式：brew install tmux
+```
+
+自动将运行模式降级为单 agent 模式（等同于 `--single`），**不停止流程**。
+
 **前置检查全部通过后，告知用户：** "前置检查通过，开始执行自动开发..."
+如果降级了，额外告知："（已降级到单 agent 模式）"
 
 ---
 
-## Step 2: 执行 BotoolAgent.sh
+## Step 2: 执行自动开发
 
-自动检测 BotoolAgent.sh 位置（standalone 或 portable 模式）。
+自动检测脚本位置（standalone 或 portable 模式）。
 
 ```bash
-# 自动检测路径
-if [ -f "BotoolAgent/BotoolAgent.sh" ]; then
-  AGENT_SCRIPT="BotoolAgent/BotoolAgent.sh"
+# 自动检测 BotoolAgent 目录
+if [ -d "BotoolAgent" ]; then
+  AGENT_DIR="BotoolAgent"
 else
-  AGENT_SCRIPT="$(dirname "$(find . -maxdepth 2 -name BotoolAgent.sh -type f 2>/dev/null | head -1)" 2>/dev/null)/BotoolAgent.sh"
-  [ ! -f "$AGENT_SCRIPT" ] && AGENT_SCRIPT="BotoolAgent.sh"
+  AGENT_DIR="$(dirname "$(find . -maxdepth 2 -name BotoolAgent.sh -type f 2>/dev/null | head -1)" 2>/dev/null)"
+  [ -z "$AGENT_DIR" ] && AGENT_DIR="."
 fi
-echo "Agent script: $AGENT_SCRIPT"
+echo "Agent directory: $AGENT_DIR"
 ```
 
-**如果找不到 BotoolAgent.sh：**
+**如果找不到脚本目录：**
 ```
-错误：未找到 BotoolAgent.sh。
+错误：未找到 BotoolAgent 脚本目录。
 
 恢复建议：确认 BotoolAgent 目录结构完整
 ```
 Then stop here.
 
-然后运行（使用后台模式，设置长超时）：
+### Teams 模式（默认）
+
+当未指定 `--single` 且 tmux 可用时：
 
 ```bash
-bash "$AGENT_SCRIPT" <maxIterations>
+bash "$AGENT_DIR/BotoolAgentTeams.sh"
+```
+
+**注意：** Teams 模式通过 tmux 启动交互式 Agent Teams 会话，包含自动重试的 Ralph 外循环。此命令会长时间运行。使用 `run_in_background` 参数在后台运行，定期检查 `.agent-status` 文件了解进度：
+
+```bash
+cat .agent-status 2>/dev/null
+```
+
+### 单 agent 模式（--single 或降级）
+
+当指定 `--single` 或 tmux 不可用时：
+
+```bash
+bash "$AGENT_DIR/BotoolAgent.sh" <maxIterations>
 ```
 
 **注意：** 此命令会长时间运行（每次迭代约 5-30 分钟）。使用 `run_in_background` 参数在后台运行，定期检查 `.agent-status` 文件了解进度：
@@ -119,11 +159,13 @@ bash "$AGENT_SCRIPT" <maxIterations>
 cat .agent-status 2>/dev/null
 ```
 
-**等待 BotoolAgent.sh 完成。** 检查退出码：
+### 等待完成
+
+**等待脚本完成。** 检查退出码：
 
 **如果退出码非零：**
 ```
-错误：BotoolAgent.sh 执行异常（退出码: <code>）
+错误：自动开发执行异常（退出码: <code>）
 
 恢复建议：
 - 查看 progress.txt 了解最后完成到哪个任务
@@ -134,118 +176,24 @@ Then stop here.
 
 ---
 
-## Step 3: 自动质量检查
+## Step 3: 输出完成信息
 
-### 3a. TypeCheck
-
-```bash
-# 自动检测 viewer 目录
-VIEWER_DIR="$([ -d BotoolAgent/viewer ] && echo BotoolAgent/viewer || echo viewer)"
-cd "$VIEWER_DIR" && npx tsc --noEmit
-```
-
-**如果 TypeCheck 失败：**
-```
-错误：TypeCheck 失败。
-
-恢复建议：
-- 运行 npx tsc --noEmit 查看具体错误
-- 修复类型错误后重新运行 /botoolagent-coding
-```
-Then stop here.
-
-### 3b. Lint（不阻塞）
-
-```bash
-npm run lint 2>/dev/null || echo "Lint 跳过或有警告（不阻塞）"
-```
-
-如果 Lint 失败，记录警告但**不停止流程**。
-
-**质量检查通过后，告知用户：** "质量检查通过，准备创建 PR..."
-
----
-
-## Step 4: 自动创建 PR
-
-### 4a. 推送代码
-
-```bash
-git push origin <branchName>
-```
-
-**如果推送失败：**
-```
-错误：代码推送失败。
-
-恢复建议：
-- 检查是否有未解决的冲突：git status
-- 检查远程权限：gh auth status
-- 手动推送：git push origin <branchName>
-```
-Then stop here.
-
-### 4b. 检查是否已有 PR
-
-```bash
-gh pr list --head <branchName> --state open --json url --jq '.[0].url'
-```
-
-**如果已有 PR：** 跳过创建，使用现有 PR URL，进入 Step 5。
-
-### 4c. 创建 PR
-
-从 prd.json 提取项目名称和任务列表，创建 PR：
-
-```bash
-PROJECT_NAME=$(grep -o '"project": "[^"]*"' prd.json | cut -d'"' -f4)
-```
-
-```bash
-gh pr create \
-  --title "feat: $PROJECT_NAME" \
-  --body "## 自动生成的 PR
-
-由 BotoolAgent 自动开发流水线创建。
-
-### 完成的任务
-$(python3 -c "import json; data=json.load(open('prd.json')); [print(f'- [{t[\"id\"]}] {t[\"title\"]} ({\"通过\" if t.get(\"passes\") else \"未通过\"})') for t in data.get('devTasks',[])]" 2>/dev/null || grep -o '"id": "DT-[0-9]*"' prd.json | while read line; do echo "- $line"; done)
-
-### 测试结果
-- TypeCheck: 通过
-- Lint: 通过
-"
-```
-
-**如果 PR 创建失败：**
-```
-错误：PR 创建失败。
-
-恢复建议：
-- 确认 gh CLI 已登录：gh auth status
-- 确认有仓库写权限
-- 手动创建：gh pr create --title "feat: <项目名>" --body "自动开发完成"
-```
-Then stop here.
-
----
-
-## Step 5: 输出最终结果
-
-展示完整的执行结果给用户：
+展示执行结果并提示下一步：
 
 ```
-BotoolAgent 自动开发流水线完成！
+BotoolAgent 自动开发完成！
 
-PR 链接: <PR_URL>
+运行模式: <Teams 模式 / 单 agent 模式>
 
 完成的任务:
 <列出所有 passes: true 的任务，格式: - [DT-XXX] 标题>
 
+未完成的任务:
+<列出所有 passes: false 的任务，格式: - [DT-XXX] 标题>（如果没有则显示"无"）
+
 下一步:
-1. 在 GitHub 上查看 PR: <PR_URL>
-2. 请求团队成员 Code Review
-3. 通过后合并到主分支
+1. 运行 /botoolagent-testing 进行质量检查和测试验证
+2. 运行 /botoolagent-finalize 创建 PR 并完成合并
 ```
 
 ---
@@ -254,9 +202,13 @@ PR 链接: <PR_URL>
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| maxIterations | 最大迭代次数 | 10 |
+| maxIterations | 最大迭代次数（仅 --single 模式） | 10 |
+| --single | 使用单 agent 模式（BotoolAgent.sh） | 不启用（默认 Teams） |
 
-用法：`/botoolagent-coding 20`（设置最大迭代为 20）
+用法示例：
+- `/botoolagent-coding` — Teams 模式（默认）
+- `/botoolagent-coding --single` — 单 agent 模式
+- `/botoolagent-coding --single 20` — 单 agent 模式，20 次迭代
 
 ---
 
@@ -267,19 +219,18 @@ PR 链接: <PR_URL>
 | prd.json 不存在 | 运行 `/botoolagent-prd2json` 先生成 |
 | branchName 缺失 | 在 prd.json 中添加 branchName 字段 |
 | 进程重复运行 | `kill <pid>` 终止后重试 |
-| BotoolAgent.sh 执行异常 | 查看 progress.txt 和 .agent-status，修复后重试 |
-| TypeCheck 失败 | 修复类型错误后重新运行 |
-| 代码推送失败 | 检查 git 状态和远程权限 |
-| PR 创建失败 | 确认 `gh auth status` 和仓库权限 |
+| tmux 未安装 | `brew install tmux`（或自动降级到单 agent 模式） |
+| 自动开发执行异常 | 查看 progress.txt 和 .agent-status，修复后重试 |
 
 ---
 
 ## 与 Viewer 对齐
 
-CLI 流水线对应 Viewer 的 Stage 3→4→5：
+CLI Coding Skill 专注于 Viewer 的 Stage 3（自动开发）。
+质量检查（Stage 4）和 PR 创建（Stage 5）由独立 Skill 负责。
 
-| CLI Step | Viewer Stage | 说明 |
-|----------|-------------|------|
-| Step 2 | Stage 3 | 自动开发（BotoolAgent.sh 执行） |
-| Step 3 | Stage 4 | 自动验收（typecheck + lint + test） |
-| Step 4 | Stage 5 | 确认合并（PR 创建） |
+| CLI Skill | Viewer Stage | 说明 |
+|-----------|-------------|------|
+| `/botoolagent-coding` | Stage 3 | 自动开发（Teams 或单 agent） |
+| `/botoolagent-testing` | Stage 4 | 质量检查 + 测试验证 |
+| `/botoolagent-finalize` | Stage 5 | PR 创建 + 合并 |

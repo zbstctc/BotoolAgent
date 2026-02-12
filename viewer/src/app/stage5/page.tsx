@@ -178,7 +178,7 @@ export default function Stage5Page() {
       const response = await fetch('/api/git/merge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method: 'squash' }),
+        body: JSON.stringify({ method: 'merge' }),
       });
 
       if (response.ok) {
