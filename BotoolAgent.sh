@@ -76,6 +76,12 @@ HOOK_ON_ERROR=""           # 发生错误时执行的脚本
 NOTIFICATION_ENABLED=false  # 是否启用系统通知
 NOTIFICATION_SOUND=true     # 通知时是否播放声音
 
+# Claude 模型配置
+CLAUDE_MODEL=""              # Claude 模型 (opus/sonnet/haiku/opusplan)
+CLAUDE_EFFORT=""             # 努力级别 (low/medium/high)
+CLAUDE_SUBAGENT_MODEL=""     # 子代理模型
+RATE_LIMIT_STRATEGY="personal"  # 限额策略 (team: 60s重试 / personal: 5h等待)
+
 # ============================================================================
 # 加载 .botoolrc 配置文件（如果存在）
 # ============================================================================
@@ -123,6 +129,12 @@ load_config() {
   # 通知配置
   [ -n "$BOTOOL_NOTIFICATION_ENABLED" ] && NOTIFICATION_ENABLED="$BOTOOL_NOTIFICATION_ENABLED"
   [ -n "$BOTOOL_NOTIFICATION_SOUND" ] && NOTIFICATION_SOUND="$BOTOOL_NOTIFICATION_SOUND"
+
+  # Claude 模型配置
+  [ -n "$BOTOOL_CLAUDE_MODEL" ] && CLAUDE_MODEL="$BOTOOL_CLAUDE_MODEL"
+  [ -n "$BOTOOL_CLAUDE_EFFORT" ] && CLAUDE_EFFORT="$BOTOOL_CLAUDE_EFFORT"
+  [ -n "$BOTOOL_CLAUDE_SUBAGENT_MODEL" ] && CLAUDE_SUBAGENT_MODEL="$BOTOOL_CLAUDE_SUBAGENT_MODEL"
+  [ -n "$BOTOOL_RATE_LIMIT_STRATEGY" ] && RATE_LIMIT_STRATEGY="$BOTOOL_RATE_LIMIT_STRATEGY"
 }
 
 # ============================================================================
@@ -290,7 +302,10 @@ update_status() {
     "hasToolCalls": $( [ "$resp_has_tool_calls" = "true" ] && echo "true" || echo "false" ),
     "confidence": "$resp_confidence",
     "warnings": "$resp_warnings"
-  }
+  },
+  "model": "${CLAUDE_MODEL:-default}",
+  "effort": "${CLAUDE_EFFORT:-default}",
+  "rateLimitStrategy": "$RATE_LIMIT_STRATEGY"
 }
 EOF
 }
@@ -1174,24 +1189,41 @@ run_claude_with_monitoring() {
   # 查找 claude 命令的完整路径
   local CLAUDE_CMD=$(which claude 2>/dev/null || echo "$HOME/.claude/local/claude")
 
+  # 构建 claude 命令参数
+  local CLAUDE_ARGS="--dangerously-skip-permissions --print"
+  if [ -n "$CLAUDE_MODEL" ]; then
+    CLAUDE_ARGS="$CLAUDE_ARGS --model $CLAUDE_MODEL"
+    echo ">>> 使用模型: $CLAUDE_MODEL"
+  fi
+
+  # 设置 Claude 环境变量
+  if [ -n "$CLAUDE_EFFORT" ]; then
+    export CLAUDE_CODE_EFFORT_LEVEL="$CLAUDE_EFFORT"
+    echo ">>> 努力级别: $CLAUDE_EFFORT"
+  fi
+  if [ -n "$CLAUDE_SUBAGENT_MODEL" ]; then
+    export CLAUDE_CODE_SUBAGENT_MODEL="$CLAUDE_SUBAGENT_MODEL"
+    echo ">>> 子代理模型: $CLAUDE_SUBAGENT_MODEL"
+  fi
+
   # 确保 Claude 在用户项目目录中运行
   cd "$PROJECT_DIR"
 
   # 检查 timeout 命令是否可用
   if command -v gtimeout &> /dev/null; then
     # macOS with coreutils - 后台运行并记录 PID
-    gtimeout $ITERATION_TIMEOUT "$CLAUDE_CMD" --dangerously-skip-permissions --print < "$SCRIPT_DIR/CLAUDE.md" > "$output_file" 2>&1 &
+    gtimeout $ITERATION_TIMEOUT "$CLAUDE_CMD" $CLAUDE_ARGS < "$SCRIPT_DIR/CLAUDE.md" > "$output_file" 2>&1 &
     CLAUDE_PID=$!
     wait $CLAUDE_PID
   elif command -v timeout &> /dev/null; then
     # Linux or macOS with timeout
-    timeout $ITERATION_TIMEOUT "$CLAUDE_CMD" --dangerously-skip-permissions --print < "$SCRIPT_DIR/CLAUDE.md" > "$output_file" 2>&1 &
+    timeout $ITERATION_TIMEOUT "$CLAUDE_CMD" $CLAUDE_ARGS < "$SCRIPT_DIR/CLAUDE.md" > "$output_file" 2>&1 &
     CLAUDE_PID=$!
     wait $CLAUDE_PID
   else
     # 没有 timeout 命令，使用网络健康检查作为备用保护
     echo ">>> 警告：未找到 timeout 命令（建议安装: brew install coreutils）"
-    "$CLAUDE_CMD" --dangerously-skip-permissions --print < "$SCRIPT_DIR/CLAUDE.md" > "$output_file" 2>&1 &
+    "$CLAUDE_CMD" $CLAUDE_ARGS < "$SCRIPT_DIR/CLAUDE.md" > "$output_file" 2>&1 &
     CLAUDE_PID=$!
     echo ">>> Claude PID: $CLAUDE_PID"
 

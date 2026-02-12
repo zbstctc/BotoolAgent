@@ -141,6 +141,31 @@ NOTIFICATION_ENABLED=false
 NOTIFICATION_SOUND=true
 
 # ============================================================================
+# Claude 模型配置
+# ============================================================================
+
+# Claude 模型选择
+# 可选: opus / sonnet / haiku / opusplan
+# 默认: 空（使用 claude 命令的默认模型）
+# CLAUDE_MODEL=sonnet
+
+# 努力级别
+# 可选: low / medium / high
+# 默认: 空（使用默认级别）
+# CLAUDE_EFFORT=high
+
+# 子代理模型
+# Claude Code 内部 subagent 使用的模型
+# 默认: 空
+# CLAUDE_SUBAGENT_MODEL=haiku
+
+# 限额策略
+# team: 遇到限额等待 60 秒后重试（最多 3 次）
+# personal: 遇到限额等待 5 小时（个人账号）
+# 默认: personal
+RATE_LIMIT_STRATEGY=personal
+
+# ============================================================================
 # 环境变量覆盖
 # ============================================================================
 # 所有配置项都可以通过环境变量覆盖，格式为 BOTOOL_<配置名>
