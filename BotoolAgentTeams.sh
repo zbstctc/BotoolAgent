@@ -12,6 +12,7 @@ SESSION_NAME="botool-teams"
 BOTOOL_TEAMMATE_MODE="${BOTOOL_TEAMMATE_MODE:-in-process}"
 MAX_ROUNDS=5              # Ralph 外循环最大轮次
 ROUND_COOLDOWN=10         # 轮次间冷却（秒）
+STALL_TIMEOUT=900         # 卡住检测超时（秒，默认 15 分钟）
 
 # ============================================================================
 # Signal handler: cleanup tmux session
@@ -91,6 +92,7 @@ load_config() {
   [ -n "$BOTOOL_TEAMMATE_MODE" ] && BOTOOL_TEAMMATE_MODE="$BOTOOL_TEAMMATE_MODE"
   [ -n "$BOTOOL_MAX_ROUNDS" ] && MAX_ROUNDS="$BOTOOL_MAX_ROUNDS"
   [ -n "$BOTOOL_ROUND_COOLDOWN" ] && ROUND_COOLDOWN="$BOTOOL_ROUND_COOLDOWN"
+  [ -n "$BOTOOL_STALL_TIMEOUT" ] && STALL_TIMEOUT="$BOTOOL_STALL_TIMEOUT"
 }
 
 load_config
@@ -244,9 +246,30 @@ start_session() {
   echo "    停止运行:  Ctrl+C  或  tmux kill-session -t $SESSION_NAME"
   echo ""
 
-  # 等待 tmux session 结束
+  # 等待 tmux session 结束（含卡住检测）
+  local last_commit_hash=$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null || echo "")
+  local last_progress_time=$(date +%s)
+
   while tmux has-session -t "$SESSION_NAME" 2>/dev/null; do
-    sleep 5
+    sleep 30
+
+    # 检查是否有新 commit
+    local current_commit_hash=$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null || echo "")
+    if [ "$current_commit_hash" != "$last_commit_hash" ]; then
+      last_commit_hash="$current_commit_hash"
+      last_progress_time=$(date +%s)
+    fi
+
+    # 卡住检测：超过 STALL_TIMEOUT 秒无新 commit
+    local now=$(date +%s)
+    local elapsed=$(( now - last_progress_time ))
+    if [ "$elapsed" -ge "$STALL_TIMEOUT" ]; then
+      echo ">>> 检测到卡住：${elapsed}秒无新 commit（超时 ${STALL_TIMEOUT}秒）"
+      echo ">>> 终止 session，准备下一轮..."
+      tmux kill-session -t "$SESSION_NAME" 2>/dev/null
+      sleep 2
+      break
+    fi
   done
 }
 

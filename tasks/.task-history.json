@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "botool/stage3-factory-dashboard",
+      "name": "Stage 3 工厂看板改造",
+      "description": "将 Stage 3 页面从静态展示改造为实时数据驱动的代理监控面板，接入 useAgentStatus hook 和 SSE 数据流，实现精确步骤高亮、状态指示灯、启动/停止控制，全面中文化",
+      "branchName": "botool/stage3-factory-dashboard",
+      "status": "running",
+      "stage": 2,
+      "tasksCompleted": 1,
+      "tasksTotal": 7,
+      "startTime": "2026-02-10T05:48:27.036Z",
+      "isMerged": false,
+      "lastUpdated": "2026-02-10T05:48:30.050Z"
+    }
+  ]
+}
