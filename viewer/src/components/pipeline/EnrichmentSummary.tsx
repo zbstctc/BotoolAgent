@@ -261,10 +261,24 @@ export function EnrichmentSummary({
     }
   }, []);
 
+  // Save error state
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const handleSave = useCallback(async () => {
     if (!prdJson || parseError) return;
 
+    // Schema validation: branchName required, devTasks non-empty
+    if (!prdJson.branchName || prdJson.branchName.trim() === '') {
+      setSaveError('branchName 是必填字段，请在 JSON 中填写分支名');
+      return;
+    }
+    if (!prdJson.devTasks || prdJson.devTasks.length === 0) {
+      setSaveError('devTasks 不能为空，至少需要一个开发任务');
+      return;
+    }
+
     setIsSaving(true);
+    setSaveError(null);
     try {
       const response = await fetch('/api/prd/save', {
         method: 'POST',
@@ -273,13 +287,13 @@ export function EnrichmentSummary({
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save');
+        throw new Error('保存失败，请重试');
       }
 
       onComplete(prdJson);
-    } catch {
-      // Still complete even if save fails - user can save manually
-      onComplete(prdJson);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '保存失败';
+      setSaveError(msg);
     } finally {
       setIsSaving(false);
     }
@@ -504,7 +518,10 @@ export function EnrichmentSummary({
               返回修改
             </button>
           )}
-          <div className="flex gap-3 ml-auto">
+          <div className="flex items-center gap-3 ml-auto">
+            {saveError && (
+              <span className="text-sm text-red-500">{saveError}</span>
+            )}
             <button
               type="button"
               onClick={handleSave}
@@ -512,10 +529,12 @@ export function EnrichmentSummary({
               className={`px-6 py-2 rounded-lg font-medium transition-colors ${
                 !prdJson || parseError || isSaving
                   ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-                  : 'bg-green-600 text-white hover:bg-green-700'
+                  : saveError
+                    ? 'bg-orange-500 text-white hover:bg-orange-600'
+                    : 'bg-green-600 text-white hover:bg-green-700'
               }`}
             >
-              {isSaving ? '保存中...' : '开始开发'}
+              {isSaving ? '保存中...' : saveError ? '重试' : '开始开发'}
             </button>
           </div>
         </div>
