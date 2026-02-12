@@ -2,10 +2,54 @@ import { NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import fs from 'fs';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
-import { getProjectRoot, getPrdJsonPath, getAgentScriptPath, isPortableMode } from '@/lib/project-root';
+import { getProjectRoot, getPrdJsonPath, getAgentScriptPath, getAgentPidPath, isPortableMode } from '@/lib/project-root';
 
 const PROJECT_ROOT = getProjectRoot();
 const PRD_PATH = getPrdJsonPath();
+const PID_FILE = getAgentPidPath();
+
+interface AgentPidInfo {
+  pid: number;
+  startedAt: string;
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readPidFile(): AgentPidInfo | null {
+  try {
+    if (fs.existsSync(PID_FILE)) {
+      return JSON.parse(fs.readFileSync(PID_FILE, 'utf-8'));
+    }
+  } catch {
+    // Ignore
+  }
+  return null;
+}
+
+function writePidFile(pid: number): void {
+  const info: AgentPidInfo = {
+    pid,
+    startedAt: new Date().toISOString(),
+  };
+  fs.writeFileSync(PID_FILE, JSON.stringify(info, null, 2));
+}
+
+function cleanPidFile(): void {
+  try {
+    if (fs.existsSync(PID_FILE)) {
+      fs.unlinkSync(PID_FILE);
+    }
+  } catch {
+    // Ignore
+  }
+}
 
 interface PRDJson {
   project?: string;
@@ -47,6 +91,23 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check if agent is already running (PID lock)
+    const existingPid = readPidFile();
+    if (existingPid && isProcessAlive(existingPid.pid)) {
+      return NextResponse.json(
+        {
+          error: '代理已在运行中',
+          pid: existingPid.pid,
+          startedAt: existingPid.startedAt,
+        },
+        { status: 409 }
+      );
+    }
+    // Clean stale PID file if process is dead
+    if (existingPid) {
+      cleanPidFile();
+    }
+
     // Read PRD to get task info
     const prd = readPRD();
     if (prd) {
@@ -83,6 +144,11 @@ export async function POST(request: Request) {
 
     // Allow the parent process to exit independently of the child
     child.unref();
+
+    // Write PID lock file
+    if (child.pid) {
+      writePidFile(child.pid);
+    }
 
     return NextResponse.json({
       success: true,

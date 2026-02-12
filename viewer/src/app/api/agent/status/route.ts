@@ -7,11 +7,79 @@ import {
   type TaskStatus as HistoryTaskStatus,
   type TaskStage,
 } from '@/lib/task-history';
-import { getAgentStatusPath, getPrdJsonPath } from '@/lib/project-root';
+import { getAgentStatusPath, getPrdJsonPath, getAgentPidPath } from '@/lib/project-root';
 
 // File paths
 const STATUS_FILE = getAgentStatusPath();
 const PRD_FILE = getPrdJsonPath();
+const PID_FILE = getAgentPidPath();
+
+interface AgentPidInfo {
+  pid: number;
+  startedAt: string;
+}
+
+function readPidFile(): AgentPidInfo | null {
+  try {
+    if (fs.existsSync(PID_FILE)) {
+      return JSON.parse(fs.readFileSync(PID_FILE, 'utf-8'));
+    }
+  } catch {
+    // Ignore
+  }
+  return null;
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function cleanPidFile(): void {
+  try {
+    if (fs.existsSync(PID_FILE)) {
+      fs.unlinkSync(PID_FILE);
+    }
+  } catch {
+    // Ignore
+  }
+}
+
+/**
+ * Check if agent process is alive. If status says "running" but process is dead,
+ * update status to crashed and clean PID file.
+ */
+function checkAndHandleOrphan(status: AgentStatus): AgentStatus {
+  const runningStatuses: AgentStatus['status'][] = ['running', 'waiting_network', 'iteration_complete'];
+  if (!runningStatuses.includes(status.status)) return status;
+
+  const pidInfo = readPidFile();
+  if (!pidInfo) return status; // No PID file, can't verify
+
+  if (!isProcessAlive(pidInfo.pid)) {
+    // Process is dead but status says running → orphan detected
+    cleanPidFile();
+    const crashedStatus: AgentStatus = {
+      ...status,
+      status: 'error',
+      message: '代理异常退出（进程已终止）',
+      timestamp: new Date().toISOString(),
+    };
+    // Update the status file
+    try {
+      fs.writeFileSync(STATUS_FILE, JSON.stringify(crashedStatus, null, 2));
+    } catch {
+      // Ignore write errors
+    }
+    return crashedStatus;
+  }
+
+  return status;
+}
 
 interface AgentStatus {
   status: 'idle' | 'running' | 'waiting_network' | 'timeout' | 'error' | 'failed' | 'complete' | 'iteration_complete' | 'max_iterations';
@@ -169,8 +237,9 @@ export async function GET(request: NextRequest) {
   const stream = url.searchParams.get('stream') === 'true';
 
   if (!stream) {
-    // Return current status as JSON
-    const status = readStatusFile() || getDefaultStatus();
+    // Return current status as JSON, with orphan detection
+    let status = readStatusFile() || getDefaultStatus();
+    status = checkAndHandleOrphan(status);
     return NextResponse.json(status);
   }
 
@@ -194,7 +263,12 @@ export async function GET(request: NextRequest) {
       // Poll for status changes
       const pollInterval = setInterval(() => {
         try {
-          const currentStatus = readStatusFile();
+          let currentStatus = readStatusFile();
+
+          // Orphan detection: check if process is still alive
+          if (currentStatus) {
+            currentStatus = checkAndHandleOrphan(currentStatus);
+          }
 
           // Check if status file changed
           const currentJson = JSON.stringify(currentStatus);
@@ -278,6 +352,9 @@ export async function DELETE() {
       } catch {
         // No matching processes
       }
+
+      // Clean up PID lock file
+      cleanPidFile();
 
       // Update status file
       const stoppedStatus: AgentStatus = {

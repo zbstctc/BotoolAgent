@@ -116,6 +116,10 @@ export function getAgentScriptPath(): string {
   return path.join(getBotoolRoot(), 'BotoolAgent.sh');
 }
 
+export function getAgentPidPath(): string {
+  return path.join(getBotoolRoot(), '.agent-pid');
+}
+
 /**
  * Reset cached paths (useful for testing or when env changes)
  */

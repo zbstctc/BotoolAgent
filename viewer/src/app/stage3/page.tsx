@@ -111,14 +111,21 @@ export default function Stage3Page() {
   const [agentActionLoading, setAgentActionLoading] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
 
+  // Agent start error state
+  const [agentStartError, setAgentStartError] = useState<string | null>(null);
+
   // Handle start agent
   const handleStartAgent = useCallback(async () => {
     setAgentActionLoading(true);
+    setAgentStartError(null);
     try {
       await agentStatus.startAgent(maxIterations);
       setShowIterationInput(false);
-    } catch {
-      // Error is handled inside useAgentStatus
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '启动失败';
+      setAgentStartError(msg);
+      // Refresh status in case agent is actually running
+      agentStatus.refresh();
     } finally {
       setAgentActionLoading(false);
     }
@@ -377,13 +384,18 @@ export default function Stage3Page() {
                   </button>
                 </div>
               ) : (
+                <div className="flex items-center gap-2">
+                {agentStartError && (
+                  <span className="text-xs text-red-500 max-w-[200px] truncate">{agentStartError}</span>
+                )}
                 <button
-                  onClick={() => setShowIterationInput(true)}
+                  onClick={() => { setShowIterationInput(true); setAgentStartError(null); }}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
                 >
                   <span>▶</span>
                   启动代理
                 </button>
+              </div>
               )}
             </Fragment>
           )}

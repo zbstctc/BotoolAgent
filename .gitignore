@@ -4,6 +4,7 @@ progress.txt
 .project-status
 .last-branch
 .agent-status
+.agent-pid
 .botoolrc
 logs/
 
