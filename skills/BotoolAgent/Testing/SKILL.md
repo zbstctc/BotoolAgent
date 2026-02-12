@@ -1,16 +1,16 @@
 ---
 name: botoolagent-testing
-description: "Run the 5-layer verification pipeline for BotoolAgent projects. Use when development is complete and you need to verify quality before merging. Triggers on: run tests, verify, test my code, start testing, run verification."
+description: "Run the 4-layer automated verification pipeline for BotoolAgent projects. Use when development is complete and you need to verify quality before merging. Triggers on: run tests, verify, test my code, start testing, run verification."
 user-invocable: true
 ---
 
-# BotoolAgent 5 层分层测试流水线
+# BotoolAgent 4 层自动化测试流水线
 
-CLI 端完整测试验收：Layer 1 Regression → Layer 2 Unit → Layer 3 E2E → Layer 4 Code Review → Layer 5 Manual Checklist。
+CLI 端自动化测试验收：Layer 1 Regression → Layer 2 Unit → Layer 3 E2E → Layer 4 Code Review。全部自动化，通过后直接进入 finalize。
 
 **核心升级：Ralph 弹性迭代 + Agent Teams 并行修复。** 遇到错误不停止，自动修复后重跑，直到通过或断路器触发。
 
-**Announce at start:** "正在启动 BotoolAgent 5 层分层测试流水线（Ralph 迭代模式）..."
+**Announce at start:** "正在启动 BotoolAgent 4 层自动化测试流水线（Ralph 迭代模式）..."
 
 ---
 
@@ -74,7 +74,7 @@ fi
 echo "项目目录: $VIEWER_DIR"
 ```
 
-**前置检查通过后，告知用户：** "前置检查通过，开始执行 5 层分层测试（Ralph 迭代模式）..."
+**前置检查通过后，告知用户：** "前置检查通过，开始执行 4 层自动化测试（Ralph 迭代模式）..."
 
 并显示测试计划：
 ```
@@ -83,7 +83,6 @@ echo "项目目录: $VIEWER_DIR"
   Layer 2 — Unit Tests: npm test （自动修复）
   Layer 3 — E2E Tests: Playwright （自动修复）
   Layer 4 — Code Review: Claude 审查 git diff （自动修复 HIGH）
-  Layer 5 — Manual Checklist: 人工验收项
 ```
 
 ---
@@ -118,7 +117,7 @@ echo "项目目录: $VIEWER_DIR"
   2. 让用户选择：手动修复后继续 / 跳过此层继续下一层 / 终止测试
   3. 拿到用户指示后继续执行
 - **warnings 不阻塞**：只记录，不触发修复流程
-- **Layer 5 Manual**：不自动修复，需人工确认（本身就是人工层）
+- **手动验收已移出**：不在 testing 流水线中执行，用户可在 finalize 前自行验证
 
 ---
 
@@ -442,7 +441,7 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 
    选项：
    1. 我来手动修复，修好后继续
-   2. 跳过 Code Review，继续 Layer 5
+   2. 跳过 Code Review，继续最终总结
    3. 终止测试
    ```
 
@@ -450,91 +449,17 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 
 ---
 
-## Layer 5 — Manual Checklist
-
-### 5a. 提取手动验收项
-
-从 prd.json 中提取所有 `type: "manual"` 的 testCases：
-
-```bash
-python3 -c "
-import json
-data = json.load(open('prd.json'))
-manual_items = []
-for dt in data.get('devTasks', []):
-    for tc in dt.get('testCases', []):
-        if tc.get('type') == 'manual':
-            manual_items.append({'task': dt['id'], 'desc': tc.get('desc', '手动验证项')})
-if manual_items:
-    for item in manual_items:
-        print(f'[{item[\"task\"]}] {item[\"desc\"]}')
-else:
-    print('NONE')
-"
-```
-
-### 5b. 如果没有手动验收项
-
-```
-Layer 5: 跳过（prd.json 中没有 type: manual 的 testCases）
-```
-记录跳过并进入最终总结。
-
-### 5c. 如果有手动验收项
-
-列出所有手动验收项，逐条询问用户确认：
-
-```
-Layer 5 — 手动验收 Checklist
-
-以下项目需要您手动验证：
-
-1. [DT-001] 动画流畅无卡顿
-2. [DT-003] 页面布局在移动端正常
-3. ...
-
-请逐条确认是否通过。
-```
-
-对每一项使用 **AskUserQuestion** 询问：
-
-```
-手动验收 #1: [DT-001] 动画流畅无卡顿
-
-请确认此项是否通过？(y/n)
-```
-
-- **如果用户回答 n（不通过）：**
-```
-Layer 5 FAILED: 手动验收未通过
-
-未通过项:
-- [DT-001] 动画流畅无卡顿
-
-恢复建议：
-- 修复上述问题
-- 重新运行 /botoolagent-testing 5
-```
-Then stop here.
-
-- **如果全部通过：**
-
-**Layer 5 通过后，告知用户：** "Layer 5 Manual Checklist 全部通过"
-
----
-
 ## 最终总结
 
-全部 5 层通过后，输出总结：
+全部 4 层自动化测试通过后，输出总结：
 
 ```
-BotoolAgent 5 层分层测试 — 全部通过!
+BotoolAgent 4 层自动化测试 — 全部通过!
 
-  Layer 1 — Regression:       通过 (TypeCheck + Lint)
-  Layer 2 — Unit Tests:       通过 / 跳过
-  Layer 3 — E2E Tests:        通过 / 跳过
-  Layer 4 — Code Review:      通过 (无 HIGH 级别问题)
-  Layer 5 — Manual Checklist: 通过 / 跳过
+  Layer 1 — Regression:   通过 (TypeCheck + Lint)
+  Layer 2 — Unit Tests:   通过 / 跳过
+  Layer 3 — E2E Tests:    通过 / 跳过
+  Layer 4 — Code Review:  通过 (无 HIGH 级别问题)
 
   自动修复统计:
   - TypeCheck: N 轮修复 / 直接通过
@@ -569,13 +494,12 @@ BotoolAgent 5 层分层测试 — 全部通过!
 | Layer 2 | 单元测试失败 | **Ralph 自动修复** → 修不好才问用户 |
 | Layer 3 | E2E 测试失败 | **Ralph 自动修复** → 修不好才问用户 |
 | Layer 4 | Code Review 有 HIGH | **Ralph 自动修复** → 修不好才问用户 |
-| Layer 5 | 手动验收未通过 | 停止，需人工修复 |
 
 ---
 
 ## 与 Viewer 对齐
 
-CLI 的 5 层测试对应 Viewer Stage 4 的分层验收：
+CLI 的 4 层自动化测试对应 Viewer Stage 4 的分层验收：
 
 | CLI Layer | Viewer Layer | 说明 |
 |-----------|-------------|------|
@@ -583,12 +507,11 @@ CLI 的 5 层测试对应 Viewer Stage 4 的分层验收：
 | Layer 2 — Unit Tests | 单元测试 | npm test / npm run test:unit |
 | Layer 3 — E2E Tests | E2E 测试 | npx playwright test |
 | Layer 4 — Code Review | Code Review | git diff → Claude 审查 |
-| Layer 5 — Manual Checklist | 手动验收 | prd.json 中 type: manual 的 testCases |
+
+**手动验收（Manual Checklist）已移出 testing 流水线**，用户可在 finalize 前自行验证。
 
 **行为一致性：**
 - 两端都从 prd.json 读取 testCases
-- 两端都按 5 层顺序执行
-- **CLI 端新增 Ralph 自动修复**：失败不停止，自动修 → 重跑 → 超限才问用户
+- CLI 4 层全自动（Ralph 自动修复）：失败不停止，自动修 → 重跑 → 超限才问用户
 - Layer 2/3 在没有对应 testCases 或脚本时自动跳过
-- Layer 5 无 manual testCases 时自动跳过
-- 全部通过后，CLI 提示运行 `/botoolagent-finalize`，Viewer 自动创建 PR 并跳转 Stage 5
+- 全部通过后，CLI 直接提示运行 `/botoolagent-finalize`
