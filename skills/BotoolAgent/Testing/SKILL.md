@@ -6,9 +6,11 @@ user-invocable: true
 
 # BotoolAgent 5 层分层测试流水线
 
-CLI 端完整测试验收：Layer 1 Regression → Layer 2 Unit → Layer 3 E2E → Layer 4 Code Review → Layer 5 Manual Checklist。全部 blocking，任一层失败则停止并报告。
+CLI 端完整测试验收：Layer 1 Regression → Layer 2 Unit → Layer 3 E2E → Layer 4 Code Review → Layer 5 Manual Checklist。
 
-**Announce at start:** "正在启动 BotoolAgent 5 层分层测试流水线..."
+**核心升级：Ralph 弹性迭代 + Agent Teams 并行修复。** 遇到错误不停止，自动修复后重跑，直到通过或断路器触发。
+
+**Announce at start:** "正在启动 BotoolAgent 5 层分层测试流水线（Ralph 迭代模式）..."
 
 ---
 
@@ -72,17 +74,51 @@ fi
 echo "项目目录: $VIEWER_DIR"
 ```
 
-**前置检查通过后，告知用户：** "前置检查通过，开始执行 5 层分层测试..."
+**前置检查通过后，告知用户：** "前置检查通过，开始执行 5 层分层测试（Ralph 迭代模式）..."
 
 并显示测试计划：
 ```
 测试计划:
-  Layer 1 — Regression: TypeCheck + Lint
-  Layer 2 — Unit Tests: npm test
-  Layer 3 — E2E Tests: Playwright
-  Layer 4 — Code Review: Claude 审查 git diff
+  Layer 1 — Regression: TypeCheck + Lint （自动修复）
+  Layer 2 — Unit Tests: npm test （自动修复）
+  Layer 3 — E2E Tests: Playwright （自动修复）
+  Layer 4 — Code Review: Claude 审查 git diff （自动修复 HIGH）
   Layer 5 — Manual Checklist: 人工验收项
 ```
+
+---
+
+## 自动修复规则（Ralph 迭代模式）
+
+借鉴 BotoolAgent.sh 的 Ralph 弹性迭代模式，Testing 流水线遇到错误时
+**不立即停止**，而是自动尝试修复：
+
+### 单文件修复（默认）
+1. 分析错误输出，定位问题文件和原因
+2. 直接修改代码修复问题
+3. 重新运行该层检查命令
+4. **持续循环直到通过**
+
+### 多文件并行修复（Agent Teams 模式）
+当一层发现 **3 个以上不同文件** 有错误时，启用 Agent Teams 并行修复：
+1. 按文件分组错误
+2. 使用 Task 工具并行启动多个修复 agent，每个 agent 负责一组文件
+   - subagent_type: `general-purpose`
+   - 每个 agent 的 prompt 包含：错误信息、文件路径、修复指示
+3. 等待所有 agent 完成
+4. 重新运行该层检查命令
+5. **持续循环直到通过**
+
+### Circuit Breaker（断路器）
+不设固定重试上限。持续修复直到通过，但有安全机制：
+
+- **无进展检测**：如果连续 3 次修复尝试后，错误数量和内容**完全没变化** → 触发断路器
+- **断路器触发后**：不是停止，而是用 AskUserQuestion 问用户：
+  1. 提供当前无法解决的错误详情
+  2. 让用户选择：手动修复后继续 / 跳过此层继续下一层 / 终止测试
+  3. 拿到用户指示后继续执行
+- **warnings 不阻塞**：只记录，不触发修复流程
+- **Layer 5 Manual**：不自动修复，需人工确认（本身就是人工层）
 
 ---
 
@@ -96,18 +132,37 @@ echo "项目目录: $VIEWER_DIR"
 cd "$VIEWER_DIR" && npx tsc --noEmit
 ```
 
-**如果 TypeCheck 失败：**
-```
-Layer 1 FAILED: TypeCheck 失败
+**如果 TypeCheck 通过：** 继续 Layer 1b。
 
-错误摘要:
-<列出前 20 行错误>
+**如果 TypeCheck 失败（Ralph 自动修复）：**
 
-恢复建议：
-- 修复上述类型错误
-- 重新运行 /botoolagent-testing
-```
-Then stop here. Do NOT proceed to Layer 2.
+Ralph 修复循环（持续直到通过或断路器触发）：
+
+1. 分析 tsc 错误输出，提取错误文件列表和具体错误
+2. 如果错误涉及 **≤ 3 个文件**：直接逐个修复
+3. 如果错误涉及 **> 3 个文件**：使用 Task 工具并行修复
+   - 按文件分组错误
+   - 每组启动一个修复 agent（subagent_type: `general-purpose`）
+   - agent prompt: "修复以下 TypeScript 编译错误：\n{错误详情}\n文件路径：{path}\n只修改这个文件，修复所有列出的 TS 错误。"
+   - 等待全部完成
+4. 重新运行 `cd "$VIEWER_DIR" && npx tsc --noEmit`
+5. 如果通过 → 继续 Layer 1b
+6. 如果错误没变化（连续 3 次无进展）→ Circuit Breaker → AskUserQuestion：
+   ```
+   TypeCheck 自动修复无进展。以下错误无法自动解决：
+   <错误列表>
+
+   选项：
+   1. 我来手动修复，修好后继续
+   2. 跳过 TypeCheck，继续 Lint 检查
+   3. 终止测试
+   ```
+
+常见修复模式：
+- TS2322 类型不匹配 → 修正类型注解或类型断言
+- TS6133 未使用变量 → 删除或前缀 _
+- TS2339 属性不存在 → 更新接口定义
+- TS2307 找不到模块 → 修正导入路径
 
 ### 1b. Lint
 
@@ -117,25 +172,50 @@ Then stop here. Do NOT proceed to Layer 2.
 cd "$VIEWER_DIR" && cat package.json | python3 -c "import sys,json; scripts=json.load(sys.stdin).get('scripts',{}); print('lint' if 'lint' in scripts else 'none')"
 ```
 
+**如果没有 lint 脚本：** 跳过 Lint，记录 "Lint: 跳过（未配置 lint 脚本）"。
+
 **如果有 lint 脚本：**
 ```bash
 cd "$VIEWER_DIR" && npm run lint
 ```
 
-**如果 Lint 失败：**
-```
-Layer 1 FAILED: Lint 失败
+**如果 Lint 通过（或只有 warnings）：** 记录 warnings，继续 Layer 2。
 
-错误摘要:
-<列出 lint 错误>
+**如果 Lint 失败（Ralph 自动修复）：**
 
-恢复建议：
-- 运行 npm run lint 查看完整输出
-- 修复 lint 错误后重新运行 /botoolagent-testing
-```
-Then stop here. Do NOT proceed to Layer 2.
+Ralph 修复循环（持续直到通过或断路器触发）：
 
-**如果没有 lint 脚本：** 跳过 Lint，记录 "Lint: 跳过（未配置 lint 脚本）"。
+1. 首先尝试自动修复命令：
+   ```bash
+   cd "$VIEWER_DIR" && npx eslint --fix .
+   ```
+2. 重新运行 `cd "$VIEWER_DIR" && npm run lint`
+3. 如果仍有 errors（忽略 warnings）：
+   - 分析每个 error 的类型和文件
+   - 如果 **≤ 3 文件**：直接修复
+   - 如果 **> 3 文件**：Agent Teams 并行修复
+     - 每个 agent（subagent_type: `general-purpose`）：
+     - prompt: "修复以下 ESLint 错误：\n{错误详情}\n文件路径：{path}\n只修改这个文件。"
+4. 重新运行 `cd "$VIEWER_DIR" && npm run lint`
+5. 如果只剩 warnings → 通过（记录 warnings）
+6. 如果错误没变化（连续 3 次无进展）→ Circuit Breaker → AskUserQuestion：
+   ```
+   Lint 自动修复无进展。以下错误无法自动解决：
+   <错误列表>
+
+   选项：
+   1. 我来手动修复，修好后继续
+   2. 跳过 Lint，继续 Layer 2
+   3. 终止测试
+   ```
+
+常见修复模式：
+- no-unused-vars → 删除或前缀 _
+- no-require-imports → 改为 ES import
+- prefer-const → let 改 const
+- react/no-unescaped-entities → 使用 HTML 实体
+- react-hooks/exhaustive-deps → 补全依赖数组
+- @next/next/no-img-element → 改为 next/image
 
 **Layer 1 通过后，告知用户：** "Layer 1 Regression 通过 (TypeCheck + Lint)"
 
@@ -160,6 +240,12 @@ else:
 "
 ```
 
+**如果没有测试脚本：**
+```
+Layer 2: 跳过（未检测到 test 或 test:unit 脚本）
+```
+记录跳过并继续 Layer 3。
+
 **如果有测试脚本：**
 ```bash
 cd "$VIEWER_DIR" && npm run <detected_script>
@@ -167,24 +253,32 @@ cd "$VIEWER_DIR" && npm run <detected_script>
 
 其中 `<detected_script>` 为 `test:unit` 或 `test`（优先使用 `test:unit`）。
 
-**如果没有测试脚本：**
-```
-Layer 2: 跳过（未检测到 test 或 test:unit 脚本）
-```
-记录跳过并继续 Layer 3。
+**如果测试通过：** 继续 Layer 3。
 
-**如果测试失败：**
-```
-Layer 2 FAILED: 单元测试失败
+**如果单元测试失败（Ralph 自动修复）：**
 
-失败的测试:
-<列出失败的测试名>
+Ralph 修复循环（持续直到通过或断路器触发）：
 
-恢复建议：
-- 运行 npm test 查看完整输出
-- 修复失败的测试后重新运行 /botoolagent-testing
-```
-Then stop here. Do NOT proceed to Layer 3.
+1. 分析测试输出（期望值 vs 实际值、错误堆栈）
+2. 判断根因并修复：
+   - 断言不匹配 → 检查实现逻辑，修复 bug 或更新期望值
+   - mock 问题 → 修复 mock 配置
+   - 导入错误 → 修复路径
+   - 环境问题 → 修复 setup/teardown
+3. 如果涉及多个测试文件 **> 3 个**：Agent Teams 并行修复
+   - 每个 agent（subagent_type: `general-purpose`）：
+   - prompt: "修复以下单元测试失败：\n{测试名 + 错误信息}\n文件路径：{path}\n分析根因并修复。"
+4. 重新运行 `cd "$VIEWER_DIR" && npm run <detected_script>`
+5. 如果错误没变化（连续 3 次无进展）→ Circuit Breaker → AskUserQuestion：
+   ```
+   单元测试自动修复无进展。以下测试持续失败：
+   <失败测试列表>
+
+   选项：
+   1. 我来手动修复，修好后继续
+   2. 跳过 Unit Tests，继续 Layer 3
+   3. 终止测试
+   ```
 
 **Layer 2 通过后，告知用户：** "Layer 2 Unit Tests 通过"
 
@@ -216,6 +310,12 @@ else:
 "
 ```
 
+**如果既没有 E2E 脚本也没有 Playwright 配置：**
+```
+Layer 3: 跳过（未检测到 E2E 测试配置）
+```
+记录跳过并继续 Layer 4。
+
 **如果有 E2E 脚本：**
 ```bash
 cd "$VIEWER_DIR" && npm run <detected_e2e_script>
@@ -226,25 +326,32 @@ cd "$VIEWER_DIR" && npm run <detected_e2e_script>
 cd "$VIEWER_DIR" && npx playwright test
 ```
 
-**如果既没有 E2E 脚本也没有 Playwright 配置：**
-```
-Layer 3: 跳过（未检测到 E2E 测试配置）
-```
-记录跳过并继续 Layer 4。
+**如果 E2E 测试通过：** 继续 Layer 4。
 
-**如果 E2E 测试失败：**
-```
-Layer 3 FAILED: E2E 测试失败
+**如果 E2E 测试失败（Ralph 自动修复）：**
 
-失败摘要:
-<列出失败的测试>
+Ralph 修复循环（持续直到通过或断路器触发）：
 
-恢复建议：
-- 运行 npx playwright test 查看完整输出
-- 运行 npx playwright show-report 查看测试报告
-- 修复失败的测试后重新运行 /botoolagent-testing 3
-```
-Then stop here. Do NOT proceed to Layer 4.
+1. 分析 Playwright 错误（元素未找到、超时、断言失败）
+2. 修复：
+   - 选择器过期 → 更新选择器
+   - 超时 → 增加等待时间或添加 waitFor
+   - 状态问题 → 修复 setup/teardown
+   - 实现 bug → 修复源码
+3. 只重跑失败的测试（不跑全套）：
+   ```bash
+   cd "$VIEWER_DIR" && npx playwright test --grep "<failed_test_name>"
+   ```
+4. 如果错误没变化（连续 3 次无进展）→ Circuit Breaker → AskUserQuestion：
+   ```
+   E2E 测试自动修复无进展。以下测试持续失败：
+   <失败测试列表>
+
+   选项：
+   1. 我来手动修复，修好后继续
+   2. 跳过 E2E Tests，继续 Layer 4
+   3. 终止测试
+   ```
 
 **Layer 3 通过后，告知用户：** "Layer 3 E2E Tests 通过"
 
@@ -286,21 +393,33 @@ Layer 4: 跳过（没有相对于 main 的代码改动）
 
 ### 4c. 判断审查结果
 
-- **如果审查结果包含 HIGH 级别问题：**
-```
-Layer 4 FAILED: Code Review 发现严重问题
-
-HIGH 级别问题:
-<列出所有 HIGH 级别问题>
-
-恢复建议：
-- 修复上述 HIGH 级别问题
-- 重新运行 /botoolagent-testing 4
-```
-Then stop here. Do NOT proceed to Layer 5.
-
 - **如果只有 MEDIUM / LOW 问题或无问题：**
 输出审查摘要（包含 MEDIUM/LOW 建议），继续 Layer 5。
+
+- **如果有 HIGH 级别问题（Ralph 自动修复）：**
+
+Ralph 修复循环（持续直到通过或断路器触发）：
+
+1. 逐个分析 HIGH 问题
+2. 按类型修复：
+   - 安全漏洞（SQL 注入）→ 加参数化查询
+   - 安全漏洞（XSS）→ 加转义/sanitize
+   - 数据丢失风险 → 加事务/备份检查
+   - 逻辑错误 → 修复逻辑
+3. 如果涉及多文件 **> 3 个**：Agent Teams 并行修复
+   - 每个 agent（subagent_type: `general-purpose`）：
+   - prompt: "修复以下 Code Review HIGH 问题：\n{问题描述}\n文件路径：{path}\n只修改这个文件。"
+4. 修复后重新运行 Code Review（重新获取 diff 并审查）
+5. 如果错误没变化（连续 3 次无进展）→ Circuit Breaker → AskUserQuestion：
+   ```
+   Code Review HIGH 问题自动修复无进展。以下问题无法自动解决：
+   <HIGH 问题列表>
+
+   选项：
+   1. 我来手动修复，修好后继续
+   2. 跳过 Code Review，继续 Layer 5
+   3. 终止测试
+   ```
 
 **Layer 4 通过后，告知用户：** "Layer 4 Code Review 通过"，并输出审查摘要。
 
@@ -386,11 +505,18 @@ Then stop here.
 ```
 BotoolAgent 5 层分层测试 — 全部通过!
 
-  Layer 1 — Regression:     通过 (TypeCheck + Lint)
-  Layer 2 — Unit Tests:     通过 / 跳过
-  Layer 3 — E2E Tests:      通过 / 跳过
-  Layer 4 — Code Review:    通过 (无 HIGH 级别问题)
+  Layer 1 — Regression:       通过 (TypeCheck + Lint)
+  Layer 2 — Unit Tests:       通过 / 跳过
+  Layer 3 — E2E Tests:        通过 / 跳过
+  Layer 4 — Code Review:      通过 (无 HIGH 级别问题)
   Layer 5 — Manual Checklist: 通过 / 跳过
+
+  自动修复统计:
+  - TypeCheck: N 轮修复 / 直接通过
+  - Lint: N 轮修复 / 直接通过 / eslint --fix 一次通过
+  - Unit Tests: N 轮修复 / 直接通过 / 跳过
+  - E2E Tests: N 轮修复 / 直接通过 / 跳过
+  - Code Review: N 轮修复 / 直接通过
 
 下一步：运行 /botoolagent-finalize 完成合并流程
 ```
@@ -409,16 +535,16 @@ BotoolAgent 5 层分层测试 — 全部通过!
 
 ## 错误恢复速查表
 
-| 层级 | 错误 | 恢复建议 |
+| 层级 | 错误 | 处理方式 |
 |------|------|----------|
-| 前置 | prd.json 不存在 | 运行 `/botoolagent-prd2json` 先生成 |
-| 前置 | branchName 缺失 | 在 prd.json 中添加 branchName 字段 |
-| Layer 1 | TypeCheck 失败 | 修复类型错误，重新运行 `/botoolagent-testing` |
-| Layer 1 | Lint 失败 | 修复 lint 错误，重新运行 `/botoolagent-testing` |
-| Layer 2 | 单元测试失败 | 修复测试，重新运行 `/botoolagent-testing 2` |
-| Layer 3 | E2E 测试失败 | 查看 playwright report，修复后运行 `/botoolagent-testing 3` |
-| Layer 4 | Code Review 有 HIGH 问题 | 修复严重问题，重新运行 `/botoolagent-testing 4` |
-| Layer 5 | 手动验收未通过 | 修复对应问题，重新运行 `/botoolagent-testing 5` |
+| 前置 | prd.json 不存在 | 停止，提示运行 `/botoolagent-prd2json` |
+| 前置 | branchName 缺失 | 停止，提示添加字段 |
+| Layer 1 | TypeCheck 失败 | **Ralph 自动修复** → 修不好才问用户 |
+| Layer 1 | Lint 失败 | **eslint --fix → Ralph 自动修复** → 修不好才问用户 |
+| Layer 2 | 单元测试失败 | **Ralph 自动修复** → 修不好才问用户 |
+| Layer 3 | E2E 测试失败 | **Ralph 自动修复** → 修不好才问用户 |
+| Layer 4 | Code Review 有 HIGH | **Ralph 自动修复** → 修不好才问用户 |
+| Layer 5 | 手动验收未通过 | 停止，需人工修复 |
 
 ---
 
@@ -436,7 +562,8 @@ CLI 的 5 层测试对应 Viewer Stage 4 的分层验收：
 
 **行为一致性：**
 - 两端都从 prd.json 读取 testCases
-- 两端都按 5 层顺序执行，任一层失败则停止
+- 两端都按 5 层顺序执行
+- **CLI 端新增 Ralph 自动修复**：失败不停止，自动修 → 重跑 → 超限才问用户
 - Layer 2/3 在没有对应 testCases 或脚本时自动跳过
 - Layer 5 无 manual testCases 时自动跳过
 - 全部通过后，CLI 提示运行 `/botoolagent-finalize`，Viewer 自动创建 PR 并跳转 Stage 5
