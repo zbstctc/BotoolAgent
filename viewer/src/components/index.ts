@@ -41,6 +41,8 @@ export { ConfirmationCard } from "./pyramid/ConfirmationCard";
 export { ModeSelector } from "./pyramid/ModeSelector";
 export { ReviewSummary } from "./ReviewSummary";
 export type { ReviewSummaryProps } from "./ReviewSummary";
+export { ErrorRecovery } from "./ErrorRecovery";
+export type { ErrorRecoveryProps, ErrorAction } from "./ErrorRecovery";
 
 // Design confirm components
 export { LayoutPreview } from "./design-confirm/LayoutPreview";
