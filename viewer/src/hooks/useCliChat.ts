@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 export interface CliChatMessage {
   id: string;
@@ -15,6 +15,8 @@ export interface ToolUse {
   input: Record<string, unknown>;
 }
 
+export type ConnectionState = 'connected' | 'reconnecting' | 'disconnected';
+
 interface UseCliChatOptions {
   initialMessages?: CliChatMessage[];
   initialSessionId?: string;
@@ -22,6 +24,17 @@ interface UseCliChatOptions {
   onError?: (error: string) => void;
   onSessionIdChange?: (sessionId: string) => void;
   onToolUse?: (toolUse: ToolUse) => void;
+  /** Heartbeat interval in ms (default: 10000) */
+  heartbeatInterval?: number;
+  /** Max reconnect attempts (default: 3) */
+  maxReconnectAttempts?: number;
+  /** Reconnect delay in ms (default: 5000) */
+  reconnectDelay?: number;
+}
+
+// Helper: delay for ms
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function useCliChat(options: UseCliChatOptions = {}) {
@@ -32,6 +45,9 @@ export function useCliChat(options: UseCliChatOptions = {}) {
     onError,
     onSessionIdChange,
     onToolUse,
+    heartbeatInterval = 10000,
+    maxReconnectAttempts = 3,
+    reconnectDelay = 5000,
   } = options;
 
   const [messages, setMessages] = useState<CliChatMessage[]>(initialMessages);
@@ -40,12 +56,90 @@ export function useCliChat(options: UseCliChatOptions = {}) {
   const [sessionId, setSessionId] = useState<string | undefined>(initialSessionId);
   const [pendingToolUse, setPendingToolUse] = useState<ToolUse | null>(null);
 
+  // Connection state for heartbeat
+  const [connectionState, setConnectionState] = useState<ConnectionState>('connected');
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+
   // Use ref to track abort controller for cancellation
   const abortControllerRef = useRef<AbortController | null>(null);
   // Track current assistant message ID for tool responses
   const currentAssistantMessageIdRef = useRef<string | null>(null);
   // Track if we received a tool_use in current stream (to prevent done from clearing it)
   const hasToolUseInStreamRef = useRef<boolean>(false);
+  // Track consecutive heartbeat failures
+  const heartbeatFailCountRef = useRef(0);
+
+  // Heartbeat: periodically check server health when idle
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const resp = await fetch('/api/cli/health', { signal: AbortSignal.timeout(5000) });
+        if (resp.ok) {
+          heartbeatFailCountRef.current = 0;
+          if (connectionState === 'disconnected') {
+            // Server came back
+            setConnectionState('connected');
+            setReconnectAttempt(0);
+          }
+        } else {
+          heartbeatFailCountRef.current++;
+        }
+      } catch {
+        heartbeatFailCountRef.current++;
+      }
+
+      // After 3 consecutive failures, mark as disconnected
+      if (heartbeatFailCountRef.current >= 3 && connectionState === 'connected') {
+        setConnectionState('disconnected');
+      }
+    };
+
+    const timer = setInterval(checkHealth, heartbeatInterval);
+    return () => clearInterval(timer);
+  }, [heartbeatInterval, connectionState]);
+
+  /**
+   * Fetch with auto-retry on network failures.
+   * Returns the Response on success, or throws after all retries exhausted.
+   */
+  const fetchWithRetry = useCallback(
+    async (url: string, init: RequestInit): Promise<Response> => {
+      let lastError: Error | null = null;
+
+      for (let attempt = 0; attempt <= maxReconnectAttempts; attempt++) {
+        try {
+          if (attempt > 0) {
+            setConnectionState('reconnecting');
+            setReconnectAttempt(attempt);
+            console.log(`[useCliChat] 重连尝试 ${attempt}/${maxReconnectAttempts}...`);
+            await delay(reconnectDelay);
+          }
+
+          const response = await fetch(url, init);
+
+          // Success - restore connected state
+          if (attempt > 0) {
+            setConnectionState('connected');
+            setReconnectAttempt(0);
+            heartbeatFailCountRef.current = 0;
+          }
+
+          return response;
+        } catch (err) {
+          // Don't retry on abort
+          if (err instanceof Error && err.name === 'AbortError') {
+            throw err;
+          }
+          lastError = err instanceof Error ? err : new Error(String(err));
+        }
+      }
+
+      // All retries exhausted
+      setConnectionState('disconnected');
+      throw lastError || new Error('连接失败');
+    },
+    [maxReconnectAttempts, reconnectDelay]
+  );
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -77,7 +171,7 @@ export function useCliChat(options: UseCliChatOptions = {}) {
       hasToolUseInStreamRef.current = false;
 
       try {
-        const response = await fetch('/api/cli/chat', {
+        const response = await fetchWithRetry('/api/cli/chat', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -191,7 +285,7 @@ export function useCliChat(options: UseCliChatOptions = {}) {
         abortControllerRef.current = null;
       }
     },
-    [isLoading, sessionId, mode, onError, onSessionIdChange, onToolUse]
+    [isLoading, sessionId, mode, onError, onSessionIdChange, onToolUse, fetchWithRetry]
   );
 
   const clearMessages = useCallback(() => {
@@ -203,6 +297,8 @@ export function useCliChat(options: UseCliChatOptions = {}) {
     setMessages(initialMessages);
     setSessionId(undefined);
     setError(null);
+    setConnectionState('connected');
+    setReconnectAttempt(0);
   }, [initialMessages]);
 
   const cancel = useCallback(() => {
@@ -259,7 +355,7 @@ export function useCliChat(options: UseCliChatOptions = {}) {
       hasToolUseInStreamRef.current = false;
 
       try {
-        const responseData = await fetch('/api/cli/respond', {
+        const responseData = await fetchWithRetry('/api/cli/respond', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -360,7 +456,7 @@ export function useCliChat(options: UseCliChatOptions = {}) {
         abortControllerRef.current = null;
       }
     },
-    [sessionId, pendingToolUse, mode, onError, onToolUse]
+    [sessionId, pendingToolUse, mode, onError, onToolUse, fetchWithRetry]
   );
 
   return {
@@ -369,6 +465,8 @@ export function useCliChat(options: UseCliChatOptions = {}) {
     error,
     sessionId,
     pendingToolUse,
+    connectionState,
+    reconnectAttempt,
     sendMessage,
     clearMessages,
     resetSession,

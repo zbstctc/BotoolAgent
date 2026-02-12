@@ -12,6 +12,7 @@ import {
   type LevelInfo,
   type CollectedSummaryItem,
 } from '@/components';
+import { ErrorRecovery } from '@/components/ErrorRecovery';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectValidation, useCliChat } from '@/hooks';
 import {
@@ -206,8 +207,11 @@ export default function Stage1Page() {
     isLoading,
     error: cliError,
     pendingToolUse,
+    connectionState,
+    reconnectAttempt,
     sendMessage,
     respondToTool,
+    resetSession,
     sessionId: currentCliSessionId,
   } = useCliChat({
     mode: 'default',
@@ -687,18 +691,41 @@ export default function Stage1Page() {
                 <p className="text-sm text-neutral-600">AI 正在思考...</p>
               </div>
             </div>
-          ) : cliError ? (
+          ) : connectionState === 'reconnecting' ? (
             <div className="flex items-center justify-center h-full">
-              <div className="text-center text-red-600">
-                <p className="text-lg font-medium mb-2">出错了</p>
-                <p className="text-sm">{cliError}</p>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  重试
-                </button>
+              <div className="text-center">
+                <div className="animate-spin h-8 w-8 border-4 border-orange-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                <p className="text-sm text-orange-600 font-medium">连接中断，正在重新连接...</p>
+                <p className="text-xs text-neutral-400 mt-1">
+                  第 {reconnectAttempt} / 3 次尝试
+                </p>
               </div>
+            </div>
+          ) : connectionState === 'disconnected' || cliError ? (
+            <div className="flex items-center justify-center h-full p-6">
+              <ErrorRecovery
+                error={connectionState === 'disconnected' ? '连接中断' : (cliError || '未知错误')}
+                diagnosis={
+                  connectionState === 'disconnected'
+                    ? '无法连接到服务器，可能是网络问题或服务未启动。已尝试自动重连 3 次均失败。'
+                    : undefined
+                }
+                actions={[
+                  {
+                    label: '重新开始',
+                    onClick: () => {
+                      resetSession();
+                      window.location.reload();
+                    },
+                    variant: 'primary',
+                  },
+                  {
+                    label: '返回首页',
+                    onClick: () => router.push('/'),
+                    variant: 'secondary',
+                  },
+                ]}
+              />
             </div>
           ) : currentQuestions.length > 0 ? (
             <div className="p-6 space-y-6">
