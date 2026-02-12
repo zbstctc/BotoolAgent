@@ -1,149 +1,71 @@
 # Botool 开发代理进度日志
-开始时间: Tue Feb 10 13:40:20 CST 2026
+开始时间: Thu Feb 12 10:48:23 CST 2026
 ---
 
-## Codebase Patterns
-- Stage 3 页面路径：`viewer/src/app/stage3/page.tsx`
-- `useAgentStatus` hook 位于 `src/hooks/useAgentStatus.ts`，返回 `status`、`isRunning`、`isComplete`、`hasError`、`progressPercent`、`startAgent`、`stopAgent` 等
-- `useProjectValidation({ currentStage: N })` 会在项目 currentStage < N 时重定向，浏览器验证需先确保项目处于对应 stage
-- FlowChart 接收 `agentPhase: AgentPhase`、`agentStatus?: AgentStatus`、`currentIteration: number`；当提供 agentStatus 时使用精确步骤高亮
-- FlowChart 边的自定义 CSS 动画通过 Edge `className` 属性设置，选择器模式为 `.react-flow__edge.<class-name> path.react-flow__edge-path`
-- Tailwind CSS 自定义宽度使用 `w-[Npx]` 语法
-- 后端 `.agent-status` 文件的 JSON 数据比前端 TypeScript 类型定义更丰富，API route 的 `readStatusFile()` 直接透传所有字段，前端只需更新类型定义即可使用新字段
-
-## 2026-02-10 - DT-001
-- 实现了 Stage 3 页面接入 useAgentStatus hook + 两栏改三栏布局
-- 修改了 `viewer/src/app/stage3/page.tsx`
-  - 导入并调用 `useAgentStatus({ stream: true })`
-  - 左栏从 w-80 (320px) 改为 w-[240px]
-  - 新增右侧 w-[260px] Agent Data Panel，显示迭代进度、任务完成率、当前任务状态
-  - agentPhase 逻辑改为优先使用 SSE agentStatus 数据
+## 2026-02-12 - DT-001
+- 实现了 Stage 3 代理进程防重复启动 + 孤儿检测
+- 修改了：viewer/src/app/api/agent/start/route.ts、viewer/src/app/api/agent/status/route.ts、viewer/src/app/stage3/page.tsx、viewer/src/lib/project-root.ts、.gitignore
 - **未来迭代的经验教训：**
-  - useProjectValidation 会重定向到项目的实际 stage，浏览器测试时需确保活跃项目 currentStage >= 3
-  - 右侧面板内容目前是内联的，DT-002 会将其抽取为独立的 AgentDataPanel 组件
-  - agentStatus.status 默认值为 DEFAULT_STATUS（idle），不会 null
+  - 模式：PID 锁文件放在 getBotoolRoot()/.agent-pid，用 process.kill(pid, 0) 检测存活
+  - 模式：status/route.ts 的 SSE poll 是做各种实时检测的好位置（每 500ms 执行一次）
+  - 模式：checkAndHandleOrphan() 同时在 GET 和 SSE 两种模式下都执行
+  - getAgentPidPath() 已加入 project-root.ts 工具函数库
 ---
 
-## 2026-02-10 - DT-002
-- 创建了独立的 AgentDataPanel 组件，从 Stage 3 页面内联代码中抽取
-- 新建了 `viewer/src/components/AgentDataPanel/AgentDataPanel.tsx`
-- 修改了 `viewer/src/app/stage3/page.tsx`（导入组件，替换内联代码）
-- 组件功能：
-  - 迭代进度条（蓝色，带平滑过渡动画 transition-all duration-500）
-  - 任务完成率进度条（绿色，同上动画）
-  - 当前任务卡片：显示任务 ID、执行状态标签（中文）、迭代次数和重试信息
-  - 消息展示（仅 agent 非 idle 时显示）
+## 2026-02-12 - DT-002
+- 修复了 EnrichmentSummary 保存失败后仍跳转的 bug
+- 修改了：viewer/src/components/pipeline/EnrichmentSummary.tsx
 - **未来迭代的经验教训：**
-  - AgentDataPanel 接收 agentStatus + isRunning/isComplete/hasError/progressPercent/totalTasks 作为 props
-  - totalTasks 是 fallback 值，当 agentStatus.total 为 0 时使用（PRD 中的任务总数）
-  - DT-003 将在此组件中添加状态指示灯区域
-  - AgentStatus 当前没有 rateLimit/circuitBreaker/apiRateLimit/noProgressCount 字段，DT-003 可能需要扩展类型
+  - 模式：catch 块永远不要调用成功回调（onComplete），应显示错误 + 重试
+  - 模式：保存按钮可以有三种状态：正常（绿色）、保存中、重试（橙色）
+  - updateProject() 是同步的（React state），不会抛异常
+  - prd.json schema 验证放在 handleSave 开头（branchName 必填、devTasks 非空）
 ---
 
-## 2026-02-10 - DT-003
-- 实现了 AgentDataPanel 状态指示灯（说人话版保护机制）
-- 修改了以下文件：
-  - `viewer/src/hooks/useAgentStatus.ts`：新增 RateLimitInfo、CircuitBreakerInfo、ApiRateLimitInfo 接口，AgentStatus 新增 rateLimit/circuitBreaker/apiRateLimit 可选字段
-  - `viewer/src/app/api/agent/status/route.ts`：AgentStatus 接口同步新增 rateLimit/circuitBreaker/apiRateLimit 字段
-  - `viewer/src/components/AgentDataPanel/AgentDataPanel.tsx`：新增 computeIndicators 函数和状态指示灯 UI
-- 指示灯映射规则：
-  - 网络：waiting_network → 红灯，否则 → 绿灯
-  - API 限流：apiRateLimit.waiting → 红灯，rateLimit > 80% → 黄灯，否则 → 绿灯
-  - 连续进展：noProgressCount >= 2 → 红灯，== 1 → 黄灯，否则 → 绿灯
-  - 重试：retryCount > 0 → 黄灯，否则 → 绿灯
-- 指示灯仅在 agent 非 idle 时显示
+## 2026-02-12 - DT-003
+- 新增 TestCase 类型定义，DevTask/EnrichedDevTask 支持 testCases 字段
+- 修改了：viewer/src/lib/tool-types.ts、viewer/src/hooks/useFileWatcher.ts、viewer/src/app/stage3/page.tsx
 - **未来迭代的经验教训：**
-  - 后端 `.agent-status` 文件已包含 rateLimit/circuitBreaker/apiRateLimit 等完整数据，API route 的 readStatusFile 直接 JSON.parse 整个文件，所以额外字段已传递到前端，只需更新 TypeScript 类型定义
-  - AgentStatus 的 rateLimit/circuitBreaker/apiRateLimit 是可选字段（`?`），因为 idle 状态下后端不写入这些字段
-  - 状态指示灯使用 `computeIndicators` 纯函数计算，方便测试和扩展
+  - 类型定义分散：tool-types.ts 有 EnrichedDevTask，useFileWatcher.ts 有 DevTask — 两处都需同步
+  - TestCase 定义在两处：tool-types.ts（完整版）和 useFileWatcher.ts（Stage 3 用）
+  - Stage 4 会在 DT-007 大规模重构，此处不需修改
 ---
 
-## 2026-02-10 - DT-004
-- 实现了 FlowChart 精确步骤高亮（接入 agent status）
-- 修改了以下文件：
-  - `viewer/src/components/FlowChart/types.ts`：StepStatus 新增 'error' | 'retry' 两种状态
-  - `viewer/src/components/FlowChart/FlowChart.tsx`：
-    - 新增 `getStepStatusPrecise` 函数，根据 AgentStatusType 精确映射每个步骤的状态
-    - 保留 `getStepStatusFromPhase` 作为 backward compat 降级
-    - FlowChart 组件新增 `agentStatus?: AgentStatus` prop
-    - 所有 computeNodes 调用透传 agentStatus
-  - `viewer/src/components/FlowChart/CustomNode.tsx`：
-    - 支持 error 状态（红色边框 + ✗ 图标）和 retry 状态（橙色边框 + ↻ 图标）
-    - error/retry 节点使用 custom-node-error CSS class 实现橙色闪烁动画
-  - `viewer/src/components/FlowChart/FlowChart.css`：新增 `@keyframes flowchart-error-flash` 动画
-  - `viewer/src/app/stage3/page.tsx`：将 `agentStatus.status` 传递给 FlowChart 组件
-- 精确映射规则：
-  - idle → 全 pending
-  - running → 步骤3(completed) + 步骤4(current/蓝色脉冲)
-  - waiting_network → 步骤2(current) 高亮检查 Rate Limit
-  - timeout/error/failed → 步骤5(error/retry橙色闪烁)
-  - iteration_complete → 步骤8(current) 双条件退出验证
-  - max_iterations → 步骤8(error) 超出最大迭代
-  - complete → 全 completed(绿色✓)
+## 2026-02-12 - DT-005
+- Stage 3→4 自动串联：倒计时 + 自动跳转 + Stage 4 自动开始验收
+- 修改了：viewer/src/components/StageTransitionModal.tsx、viewer/src/app/stage3/page.tsx、viewer/src/app/stage4/page.tsx
 - **未来迭代的经验教训：**
-  - FlowChart 现在同时支持粗粒度 AgentPhase 和精细 AgentStatus，优先使用 AgentStatus
-  - StepStatus 类型扩展了 'error' 和 'retry'，CustomNode 对应处理了背景色和图标
-  - 步骤索引与 constants.ts 中 ALL_STEPS 数组对应，修改步骤顺序时需同步更新 getStepStatusPrecise
+  - StageTransitionModal 现在支持 autoCountdown prop，可复用于其他 stage 转换
+  - Stage 4 的 handleRunTests 需要在 useEffect 之前定义（因为 useCallback 有依赖链）
+  - autoStarted ref 防止在 strictMode 下重复启动
 ---
 
-## 2026-02-10 - DT-005
-- 实现了 FlowChart 连线虚线流动动画
-- 修改了以下文件：
-  - `viewer/src/components/FlowChart/FlowChart.css`：新增 `@keyframes flowchart-dash-flow` 动画，使用 `stroke-dasharray` + `stroke-dashoffset` 实现虚线流动效果
-  - `viewer/src/components/FlowChart/FlowChart.tsx`：
-    - 新增 `isEdgeFlowing` 函数，根据 agentPhase 和 agentStatus 判断边是否应有流动动画
-    - `computeEdges` 新增 agentPhase/currentIteration/agentStatus 参数
-    - 所有 computeEdges 调用更新为传递完整参数
-    - useEffect 同时更新 nodes 和 edges
-    - 导入 EdgeConnection 类型
-  - `viewer/src/components/FlowChart/utils.ts`：`createEdge` 新增 `flowing` 参数，控制 className、stroke 颜色（蓝色 #3b82f6）和 markerEnd 颜色
-- 动画行为：
-  - agent running 时：source 和 target 步骤均为 completed/current/error/retry 的边显示蓝色虚线流动动画
-  - agent idle/complete 时：所有边为静态黑色实线
-  - 使用纯 CSS animation（`stroke-dasharray: 8 4; stroke-dashoffset` 动画），无 JS 开销
+## 2026-02-12 - DT-004
+- 在 CLAUDE.md 新增"测试驱动开发"章节
+- 修改了：CLAUDE.md
 - **未来迭代的经验教训：**
-  - React Flow 的 `animated` 属性会添加内置虚线动画，但使用自定义 CSS class (`flowchart-edge-flowing`) 可以更精确控制样式
-  - 边的 CSS class 通过 React Flow Edge 的 `className` 属性设置，选择器为 `.react-flow__edge.flowchart-edge-flowing path.react-flow__edge-path`
-  - `computeEdges` 和 `computeNodes` 现在都依赖 agentPhase/agentStatus，useEffect 中需同时更新两者
+  - CLAUDE.md 步骤编号需要手动维护一致性
+  - testCases 和 spec.testCases 是不同的字段：前者是 DT-003 新增的顶级字段，后者是 SDD 增强中的 spec 内部字段
 ---
 
-## 2026-02-10 - DT-006
-- 实现了左侧任务列表轻度改造
-- 修改了以下文件：
-  - `viewer/src/app/globals.css`：新增 `@keyframes task-breathing` 呼吸动画和 `.task-card-breathing` class
-  - `viewer/src/app/stage3/page.tsx`：
-    - 状态标签中文化：Completed→已完成, In Progress→执行中, Pending→等待中, Failed→失败
-    - 当前任务卡片使用 `task-card-breathing` CSS class 实现蓝色呼吸动画（border-color + box-shadow 2s ease-in-out）
-    - 新增 useEffect 监听 currentTaskId 变化自动展开对应任务详情
-    - 底部统计文案中文化："6/7 完成 · 迭代 #5" 格式
-    - 左侧面板标题 "Dev Tasks"→"开发任务"，连接状态 "Live"→"已连接"
-    - "Acceptance Criteria"→"验收标准"
-    - 空状态文案中文化
+## 2026-02-12 - DT-013
+- 重构 /botoolagent-coding skill SKILL.md 为 CLI 全自动流水线
+- 修改了：skills/BotoolAgent/Coding/SKILL.md
 - **未来迭代的经验教训：**
-  - 呼吸动画定义在 globals.css 中（不在组件级 CSS module），因为 stage3/page.tsx 是 app router 页面没有自己的 CSS module
-  - 自动展开通过 setExpandedTaskId(currentTaskId) 实现，当 currentTaskId 为 null 时不做操作（保持用户手动展开的状态）
-  - DT-007 需要继续中文化 Tab 标签（Flowchart/Progress Log/Changes/Commits）和右侧面板标题
+  - SKILL.md 的 bash 代码块应是独立命令（Claude 逐步执行），不要写成完整 shell 脚本（if/then/fi）
+  - 控制流放在 markdown 文本中（"**如果失败：**" + "Then stop here."），不放在 bash 里
+  - 其他 SKILL.md 的格式参考：skills/BotoolAgent/Main/SKILL.md、PRD2JSON/SKILL.md
+  - CLI 流水线 Step 2→3→4 对应 Viewer Stage 3→4→5
 ---
 
-## 2026-02-10 - DT-007
-- 实现了启动/停止代理按钮 + Stage 3 全面中文化
-- 修改了以下文件：
-  - `viewer/src/app/stage3/page.tsx`：
-    - 顶部右侧新增「启动代理」按钮，点击后展开最大迭代次数输入框（默认10），可配置后启动
-    - agent running 状态时，按钮变为「停止代理」（红色，带脉冲动画圆点）
-    - 停止时二次确认：点击后显示「确认停止代理？」+ 确认/取消按钮
-    - 启动/停止按钮均有 loading 状态（disabled + 文字变化）
-    - Tab 标签中文化：Flowchart→流程图, Progress Log→进度日志, Changes→文件变更, Commits→提交记录
-    - 右侧面板标题 "Agent Status"→"代理状态"
-    - 最近更新时间 "Last update:"→"最近更新:"
-    - 文件变更 Tab 内容中文化："files changed"→"个文件变更", "Refresh"→"刷新", "No changes detected"→"暂无文件变更"
-    - 提交记录 Tab 内容中文化："commits on"→"分支 · N 个提交", "Refresh"→"刷新", "No commits found..."→"该分支暂无提交记录"
-    - 进度日志空状态 "No progress log yet..."→"暂无进度日志..."
-    - 提交日期 locale 从 en-US 改为 zh-CN
-- 使用了 useAgentStatus hook 已有的 startAgent/stopAgent 方法，无需新增 API 调用
+## 2026-02-12 - DT-014
+- Stage 1 CLI 心跳检测 + 自动重连 + ErrorRecovery 集成
+- 新建了：viewer/src/app/api/cli/health/route.ts（健康检查端点）
+- 修改了：viewer/src/hooks/useCliChat.ts、viewer/src/hooks/index.ts、viewer/src/app/stage1/page.tsx
 - **未来迭代的经验教训：**
-  - StageIndicator 组件嵌入了 flex 布局中以便在右侧放置操作按钮，使用 `<div className="flex items-center">` 包裹
-  - 启动按钮使用两步交互：先点击显示迭代数输入，再点击「启动」确认。停止按钮也是两步（先显示确认区域）
-  - useAgentStatus 的 startAgent/stopAgent 已处理错误状态，调用方只需 try/catch 并管理 loading 状态
-  - 所有 Stage 3 页面英文文案已全面中文化，这是最后一个任务
+  - useCliChat 的 CLI 通信是 per-request 的（每次 sendMessage 创建新的 CLIManager），不是持久连接
+  - 心跳检测的是**服务端**可达性（/api/cli/health），不是 CLI 进程存活
+  - auto-retry 包裹在 fetchWithRetry 中，对 sendMessage 和 respondToTool 都生效
+  - ConnectionState 类型导出需要在 hooks/index.ts 中同步添加
+  - ErrorRecovery 组件来自 DT-009，props: error, diagnosis?, actions[]
 ---

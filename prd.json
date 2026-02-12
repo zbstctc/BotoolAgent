@@ -1,118 +1,241 @@
 {
-  "project": "Stage 3 工厂看板改造",
-  "branchName": "botool/stage3-factory-dashboard",
-  "description": "将 Stage 3 页面从静态展示改造为实时数据驱动的代理监控面板，接入 useAgentStatus hook 和 SSE 数据流，实现精确步骤高亮、状态指示灯、启动/停止控制，全面中文化",
+  "project": "自动化流水线 + 可靠性提升",
+  "branchName": "botool/reliability-ux-pipeline",
+  "description": "可靠性修复（进程防重复、保存失败）+ prd.json testCases schema 升级 + Stage 3→4→5 自动串联 + Playwright E2E + Claude Team 集成 + CLI skill 重构 + Stage 1 心跳",
   "devTasks": [
     {
       "id": "DT-001",
-      "title": "Stage 3 接入 useAgentStatus + 三栏布局重构",
-      "description": "在 Stage 3 页面中接入已有的 useAgentStatus hook 获取实时代理状态数据。将现有两栏布局改为三栏布局（左 240px 任务列表 | 中 flex-1 流程图+tab | 右 260px 数据面板）",
+      "title": "Stage 3 代理进程防重复启动 + 孤儿检测",
+      "description": "修复 Stage 3 最严重的可靠性问题：用户刷新页面后可能启动第二个代理实例。启动代理时写入 .agent-pid 锁文件（含 PID + 启动时间），启动前检查锁文件存在 + 进程存活则拒绝启动。SSE 每次 poll 时 kill -0 $PID 验证存活，进程不存在但锁文件在则清理 + 状态改为 crashed。页面加载时检测到 running 状态自动恢复监控",
       "acceptanceCriteria": [
-        "Stage 3 页面通过 useAgentStatus({ stream: true }) 获取实时数据",
-        "页面布局变为三栏，中间区域保持上下分割（流程图 + tab）",
-        "三栏在 >=1024px 屏幕上正常显示，不拥挤",
+        "启动代理写入 .agent-pid 文件",
+        "已有代理运行时，启动按钮显示"代理运行中"",
+        "刷新页面后自动恢复对运行中代理的监控",
+        "代理进程崩溃后，前端在 60 秒内检测到并显示"代理异常退出"",
+        "停止代理时清理锁文件",
         "Typecheck passes",
-        "在浏览器中验证布局正确"
+        "在浏览器中验证"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "修改文件：viewer/src/app/stage3/page.tsx。useAgentStatus hook 在 src/hooks/useAgentStatus.ts"
+      "notes": "修改文件：viewer/src/app/api/agent/start/route.ts、viewer/src/app/api/agent/status/route.ts、viewer/src/app/stage3/page.tsx。PID 锁文件放在 $SCRIPT_DIR/.agent-pid"
     },
     {
       "id": "DT-002",
-      "title": "创建 AgentDataPanel 组件（迭代进度 + 任务完成率）",
-      "description": "创建新组件 src/components/AgentDataPanel/AgentDataPanel.tsx，展示迭代进度条和任务完成率进度条。接收 AgentStatus 数据作为 props",
+      "title": "Stage 2 保存失败修复 + 异步跳转安全",
+      "description": "修复 Stage 2 的 EnrichmentSummary 组件中 catch 块调用 onComplete() 的 bug。确保只有保存成功才跳转到 Stage 3。catch 块改为显示错误提示 + 重试按钮，updateProject() 被 await，失败时显示错误",
       "acceptanceCriteria": [
-        "组件接收 agentStatus props，展示迭代进度（如 5/10）和任务完成率（如 6/7）",
-        "进度条使用 Tailwind CSS，数值变化时有平滑过渡动画（transition）",
-        "显示当前任务 ID 和执行状态（如 DT-006 · 执行中 · 第1次尝试）",
-        "agent 未运行时显示 idle 状态",
+        "catch 块中不再调用 onComplete()，改为显示错误提示 + 重试按钮",
+        "updateProject() 被 await，失败时显示错误",
+        "只有 updateProject 成功后才 router.push('/stage3')",
+        "prd.json schema 验证：branchName 必填、devTasks 非空",
         "Typecheck passes",
         "在浏览器中验证"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "新建文件：viewer/src/components/AgentDataPanel/AgentDataPanel.tsx。在 DT-001 的右侧面板中使用"
+      "notes": "修改文件：viewer/src/components/pipeline/EnrichmentSummary.tsx"
     },
     {
       "id": "DT-003",
-      "title": "AgentDataPanel 状态指示灯（说人话版保护机制）",
-      "description": "在 AgentDataPanel 中添加状态指示灯区域，将技术指标转化为绿/黄/红指示灯 + 一句话说明。映射规则：网络状态（waiting_network→红灯）、API调用（rateLimit>80%→黄灯，apiRateLimit.waiting→红灯）、连续进展（noProgressCount>=2→红灯）、重试状态（retryCount>0→黄灯）",
+      "title": "prd.json schema 升级 — 新增 testCases 字段",
+      "description": "扩展 prd.json 的 devTask schema，新增 testCases 数组字段。每个 testCase 包含类型（typecheck/lint/unit/e2e/manual）、描述、是否 TDD。同时更新所有读取 prd.json 的代码（Stage 2 的 JsonConvertStep、Stage 3 的任务列表、Stage 4 的测试执行器）。testCases 为可选字段，不存在时退回到现有 acceptanceCriteria 逻辑",
       "acceptanceCriteria": [
-        "每个指示灯由彩色圆点 + 一句中文说明组成",
-        "颜色和文案根据映射规则正确切换",
-        "绿灯、黄灯、红灯视觉区分清晰",
-        "Typecheck passes",
-        "在浏览器中验证"
+        "prd.json TypeScript 类型定义（DevTask interface）新增 testCases?: TestCase[]",
+        "TestCase interface：{ type: 'typecheck'|'lint'|'unit'|'e2e'|'manual', desc?: string, tdd?: boolean }",
+        "Stage 2 JsonConvertStep 生成 prd.json 时包含 testCases 字段",
+        "Stage 3 任务列表中展示 testCases 数量（如"3 个自动测试 + 1 个手动"）",
+        "向后兼容：testCases 为可选字段，不存在时退回到现有 acceptanceCriteria 逻辑",
+        "Typecheck passes"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "修改文件：viewer/src/components/AgentDataPanel/AgentDataPanel.tsx。需要从 AgentStatus 中读取 rateLimit、circuitBreaker、apiRateLimit 字段"
+      "notes": "修改文件：viewer/src/components/pipeline/JsonConvertStep.tsx、viewer/src/app/stage3/page.tsx、viewer/src/app/stage4/page.tsx 中的类型定义和渲染逻辑"
     },
     {
       "id": "DT-004",
-      "title": "FlowChart 精确步骤高亮（接入 agent status）",
-      "description": "改造 FlowChart 组件的 getStepStatus 函数，从粗略的 idle/running/done 三态改为根据 agentStatus.status 精确高亮到对应节点。映射：idle→全pending，running→高亮启动Claude实例和Claude执行任务，waiting_network→高亮检查Rate Limit，timeout/error→高亮结果处理（橙色闪烁），iteration_complete→高亮双条件退出验证，complete→全completed",
+      "title": "CLAUDE.md TDD 指令 + testCases 读取",
+      "description": "更新 CLAUDE.md 指令，让 agent 在每次迭代中读取当前任务的 testCases 字段。对 tdd: true 的 testCase，先写测试文件再写实现代码（红-绿-重构流程）。非 TDD 的 testCase 仍然在实现后验证。指令兼容无 testCases 的旧格式 prd.json",
       "acceptanceCriteria": [
-        "FlowChart 接收完整的 agentStatus 对象（不仅是 agentPhase）",
-        "节点高亮精确匹配映射规则",
-        "当前步骤有蓝色脉冲动画，已完成步骤显示绿色 ✓",
-        "错误/重试状态节点有橙色闪烁效果",
-        "Typecheck passes",
-        "在浏览器中验证"
+        "CLAUDE.md 包含 testCases 读取和 TDD 工作流指令",
+        "指令清晰说明 tdd: true 时的"红-绿-重构"流程",
+        "指令兼容无 testCases 的旧格式 prd.json",
+        "在终端中用一个示例 DT 验证 agent 确实先写了测试"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "修改文件：viewer/src/components/FlowChart/FlowChart.tsx、FlowChart.css、CustomNode.tsx。需要新增 StepStatus 类型如 error/retry"
+      "notes": "修改文件：CLAUDE.md。新增"测试驱动开发"章节，包含 testCases 读取逻辑和 TDD 流程说明"
     },
     {
       "id": "DT-005",
-      "title": "FlowChart 连线虚线流动动画",
-      "description": "当代理运行时，FlowChart 的连线（edges）添加 CSS 虚线流动动画（stroke-dashoffset animation），表示数据流动。代理停止时动画停止",
+      "title": "Stage 3→4 自动串联",
+      "description": "当 BotoolAgent.sh 完成所有任务（所有 passes: true）后，Stage 3 自动触发 Stage 4 的验收流程。Stage 3 检测到 allTasksCompleted 后显示 3 秒倒计时（用户可取消），自动更新 currentStage=4 并跳转到 /stage4。Stage 4 加载后自动开始验收。断线恢复：useProjectValidation 根据 currentStage 自动重定向",
       "acceptanceCriteria": [
-        "agent running 时，已通过的连线显示虚线流动动画",
-        "agent idle/complete 时，连线为静态实线",
-        "动画方向与流程方向一致（从源到目标）",
-        "性能良好，无卡顿（纯 CSS animation，不用 JS）",
+        "Stage 3 检测到全部完成后显示倒计时提示（可取消）",
+        "倒计时结束后自动跳转到 Stage 4",
+        "Stage 4 加载后自动开始验收流程（无需用户点击）",
+        "用户可在倒计时内取消自动跳转（停留在 Stage 3 查看结果）",
+        "断线恢复：根据 currentStage 自动进入正确的 Stage",
         "Typecheck passes",
         "在浏览器中验证"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "修改文件：viewer/src/components/FlowChart/FlowChart.css、FlowChart.tsx（传递 animated 属性给 edges）"
+      "notes": "修改文件：viewer/src/app/stage3/page.tsx（倒计时 + 自动跳转）、viewer/src/app/stage4/page.tsx（自动开始验收）"
     },
     {
       "id": "DT-006",
-      "title": "左侧任务列表轻度改造",
-      "description": "对现有任务列表做轻度改造：当前任务高亮（蓝色呼吸动画边框）、自动展开当前任务详情、状态标签中文化",
+      "title": "Playwright 安装配置",
+      "description": "引入 Playwright 测试框架，为 Stage 4 的 E2E 测试层打基础。在 viewer 目录安装 @playwright/test，创建 playwright.config.ts（baseURL: localhost:3000），创建 viewer/tests/ 目录 + smoke test，添加 npm scripts。单元测试 colocated 放组件旁边，E2E 测试放 viewer/tests/",
       "acceptanceCriteria": [
-        "当前执行的任务卡片有蓝色呼吸动画（CSS animation on border/shadow）",
-        "当 currentTaskId 变化时，自动展开对应任务的详情",
-        "状态标签中文化：Completed→已完成, In Progress→执行中, Pending→等待中",
-        "底部统计文案中文化：如 6/7 完成 · 迭代 #5",
-        "Typecheck passes",
-        "在浏览器中验证"
+        "@playwright/test 安装到 devDependencies",
+        "viewer/playwright.config.ts 配置正确",
+        "viewer/tests/smoke.spec.ts 存在并能运行",
+        "npm run test:e2e 命令可用",
+        ".gitignore 包含 Playwright 产物目录（test-results/, playwright-report/）",
+        "Typecheck passes"
       ],
       "priority": 6,
       "passes": true,
-      "notes": "修改文件：viewer/src/app/stage3/page.tsx 中的任务列表部分"
+      "notes": "新建文件：viewer/playwright.config.ts、viewer/tests/smoke.spec.ts。修改文件：viewer/package.json（新增 scripts）、viewer/.gitignore"
     },
     {
       "id": "DT-007",
-      "title": "启动/停止代理按钮 + Stage 3 全面中文化",
-      "description": "在 Stage 3 页面顶部添加启动/停止代理按钮（POST /api/agent/start 和 DELETE /api/agent/status）。启动时可设置最大迭代次数（默认10），停止时二次确认。同时将页面内所有英文标签改为中文",
+      "title": "Stage 4 重构 — PRD 驱动的智能验收",
+      "description": "重构 Stage 4，从"重复跑 typecheck+test"变为"PRD 驱动的分层验收"。读取 prd.json 中所有 DT 的 testCases，分 5 层依次执行：1.全量回归（typecheck+lint）2.单元测试（type=unit）3.E2E 测试（type=e2e，Playwright）4.Code Review（Claude 分析 git diff，输出 HIGH/MEDIUM/LOW）5.手动验收（type=manual 生成 checklist）。每层有独立状态指示，任一层失败显示"返回 Stage 3 修复"",
       "acceptanceCriteria": [
-        "顶部有启动代理按钮，running 状态时变为停止代理",
-        "启动时可设置最大迭代次数（默认 10）",
-        "按钮有 loading 状态和确认提示（停止时二次确认）",
-        "Tab 标签中文化：Flowchart→流程图, Progress Log→进度日志, Changes→文件变更, Commits→提交记录",
-        "右侧面板标题、左侧面板标题等所有英文均中文化",
+        "Stage 4 从 prd.json 读取所有 DT 的 testCases",
+        "分 5 层依次执行，每层有独立的状态指示（通过/失败/跳过）",
+        "全量回归（typecheck + lint）作为第一步",
+        "unit 和 e2e 测试从 testCases 中提取并执行",
+        "Code Review 调用 Claude 分析 git diff，输出 HIGH/MEDIUM/LOW 问题列表",
+        "无 manual testCase 时跳过手动验收层，直接可通过",
+        "任一层失败时显示"返回 Stage 3 修复"按钮",
+        "测试进程增加 5 分钟超时",
         "Typecheck passes",
         "在浏览器中验证"
       ],
       "priority": 7,
       "passes": true,
-      "notes": "修改文件：viewer/src/app/stage3/page.tsx。API 已存在：POST /api/agent/start、DELETE /api/agent/status"
+      "notes": "修改文件：viewer/src/app/stage4/page.tsx（重构页面逻辑）、viewer/src/app/api/test/run/route.ts（分层测试执行）。Code Review 通过 /api/cli/chat 调用 Claude"
+    },
+    {
+      "id": "DT-008",
+      "title": "Stage 4→5 自动串联 + PR 自动创建",
+      "description": "Stage 4 全部验收通过后，自动创建 PR 并进入 Stage 5。显示"验收通过，正在创建 PR..."，调用 POST /api/git/pr 创建 PR，更新 currentStage=5 并跳转到 /stage5。PR 创建失败时显示错误 + 重试按钮。Stage 5 加载时检测已有 PR，不重复创建",
+      "acceptanceCriteria": [
+        "Stage 4 验收全部通过后自动调用 PR 创建 API",
+        "PR 创建成功后自动跳转到 Stage 5",
+        "PR 创建失败时显示错误 + 重试按钮（不自动跳转）",
+        "Stage 5 加载时不再重复创建 PR（检测已有 PR）",
+        "[安全] 错误响应不泄露内部信息",
+        "[安全] 添加权限检查",
+        "Typecheck passes",
+        "在浏览器中验证"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "修改文件：viewer/src/app/stage4/page.tsx（自动创建 PR + 跳转）、viewer/src/app/stage5/page.tsx（检测已有 PR）。API 已存在：POST /api/git/pr"
+    },
+    {
+      "id": "DT-009",
+      "title": "全局 ErrorRecovery 组件",
+      "description": "创建统一的错误恢复组件，替换所有 Stage 的"显示错误 + 刷新页面"模式。应用场景：Stage 1 CLI 崩溃（自动重连 3 次）、Stage 3 代理崩溃（查看日志 + 重新启动）、Stage 4 测试超时（强制终止 + 重新运行）、Stage 5 PR 失败（重试 + 手动创建）。所有错误消息中文化",
+      "acceptanceCriteria": [
+        "创建 ErrorRecovery 组件，props: error, diagnosis, actions[]",
+        "替换 Stage 1/3/4/5 的错误展示",
+        "所有错误消息中文化",
+        "Typecheck passes",
+        "在浏览器中验证"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "新建文件：viewer/src/components/ErrorRecovery/ErrorRecovery.tsx。修改文件：viewer/src/app/stage1/page.tsx、stage3/page.tsx、stage4/page.tsx、stage5/page.tsx"
+    },
+    {
+      "id": "DT-010",
+      "title": "BotoolAgent.sh Claude Team 模型配置",
+      "description": "为 BotoolAgent.sh 增加 --model 和 effort level 支持。.botoolrc 新增配置项：CLAUDE_MODEL（opus/sonnet/haiku/opusplan）、CLAUDE_EFFORT（low/medium/high）、CLAUDE_SUBAGENT_MODEL（子代理模型）、RATE_LIMIT_STRATEGY（team 60s重试/personal 5h等待）。调用 claude 时传递 --model 和设置环境变量",
+      "acceptanceCriteria": [
+        "BotoolAgent.sh 读取 .botoolrc 中的 CLAUDE_MODEL 配置",
+        "调用 claude 时传递 --model $CLAUDE_MODEL",
+        "设置 CLAUDE_CODE_EFFORT_LEVEL 环境变量",
+        "设置 CLAUDE_CODE_SUBAGENT_MODEL 环境变量",
+        "team 策略：遇到限额等待 60 秒后重试（最多 3 次）",
+        ".agent-status 中记录当前使用的模型名",
+        ".botoolrc.example 包含新配置项及注释",
+        "在终端中验证"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "修改文件：BotoolAgent.sh（读取配置 + 传递参数）、.botoolrc.example（新增配置项文档）。.botoolrc 已存在，有网络/重试配置"
+    },
+    {
+      "id": "DT-011",
+      "title": "Stage 2 testCases 自动推导",
+      "description": "在 Stage 2 的 prd2json 转换过程中，根据每个 DT 的 description 和 acceptanceCriteria 自动推导 testCases。推导规则：每个 DT 默认加 typecheck，含"映射/转换/返回/计算"关键词加 unit+tdd:true，含"页面/布局/渲染/显示"加 e2e，含"动画/视觉/颜色/流畅"加 manual，含"中文化/文案"加 e2e 快照。用户可在 JSON 编辑器中修改",
+      "acceptanceCriteria": [
+        "JsonConvertStep 输出的 prd.json 包含 testCases 字段",
+        "推导规则基于关键词匹配 acceptanceCriteria",
+        "用户可在 JSON 编辑器中添加/删除/修改 testCases",
+        "无匹配时仅添加 typecheck（不报错）",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "修改文件：viewer/src/components/pipeline/JsonConvertStep.tsx（新增 testCases 推导逻辑）。依赖 DT-003 的 TestCase 类型定义"
+    },
+    {
+      "id": "DT-012",
+      "title": "术语中文化",
+      "description": "全面排查 Viewer 中残留的英文和技术术语，替换为非技术用户可理解的中文表达。术语替换清单：PRD→需求文档(PRD)、Acceptance Criteria→完成条件、testCases→测试用例、Rule Check→规范检查、Auto Enrich→智能补充、Coding→自动开发、Testing→自动验收、Review→确认合并",
+      "acceptanceCriteria": [
+        "所有 Stage 导航标签使用中文",
+        "Dashboard 中"PRD"有括号说明",
+        "Stage 2 步骤名中文化",
+        "Stage 4 显示"测试用例"和"完成条件"",
+        "Typecheck passes",
+        "在浏览器中验证"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "修改文件：viewer/src/components/StageIndicator.tsx、viewer/src/app/page.tsx（Dashboard）、viewer/src/app/stage2/page.tsx、viewer/src/components/pipeline/ 各步骤组件"
+    },
+    {
+      "id": "DT-013",
+      "title": "/botoolagent-coding skill 重构 — CLI 全自动流水线",
+      "description": "将当前仅作为文档引导的 /botoolagent-coding skill 重构为真正执行 BotoolAgent.sh 的 CLI 自动化入口。流程：前置检查（prd.json 存在、branchName 分支、无重复进程）→ 运行 BotoolAgent.sh → 自动 typecheck+lint+test → 自动 gh pr create → 输出 PR 链接。每步失败有明确恢复建议",
+      "acceptanceCriteria": [
+        "/botoolagent-coding skill SKILL.md 重写为完整执行流程",
+        "前置检查：prd.json 存在、branchName 分支、无重复进程",
+        "执行 BotoolAgent.sh 并等待完成",
+        "完成后自动运行 typecheck + lint + test",
+        "测试全部通过后自动 gh pr create",
+        "输出 PR 链接作为最终结果",
+        "每步失败有明确的错误消息和恢复建议",
+        "支持可选参数 maxIterations（默认 10）",
+        "在终端中验证完整流程"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": "修改文件：~/.claude/skills/botoolagent-coding/SKILL.md。CLI 与 Viewer 对齐：/botoolagent-coding ←→ Stage 3→4→5"
+    },
+    {
+      "id": "DT-014",
+      "title": "Stage 1 CLI 心跳 + 自动重连",
+      "description": "为 Stage 1 的 CLI 对话添加心跳检测和自动重连机制。前端定期检测 CLI 进程存活（心跳间隔 10 秒），断开后 3 次自动重连（每次间隔 5 秒），重连失败使用 ErrorRecovery 组件显示"连接中断" + "重新开始"。依赖 DT-009 的 ErrorRecovery 组件",
+      "acceptanceCriteria": [
+        "Stage 1 前端有心跳检测机制",
+        "CLI 进程断开后自动尝试重连（最多 3 次）",
+        "重连成功时无感知恢复对话",
+        "重连失败时显示 ErrorRecovery 组件",
+        "错误消息中文化："连接中断，正在重新连接..."",
+        "Typecheck passes",
+        "在浏览器中验证"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": "修改文件：viewer/src/app/stage1/page.tsx、viewer/src/hooks/useCliChat.ts。依赖 DT-009 的 ErrorRecovery 组件"
     }
   ]
 }
