@@ -306,6 +306,58 @@ export default function Stage4Page() {
   const allLayersPassed = layers.length > 0 && layers.every(l => l.status === 'passed' || l.status === 'skipped');
   const anyFailed = layers.some(l => l.status === 'failed');
 
+  // PR creation state
+  const [prCreating, setPrCreating] = useState(false);
+  const [prError, setPrError] = useState<string | null>(null);
+  const prCreated = useRef(false);
+
+  // Auto-create PR when all layers pass
+  useEffect(() => {
+    if (allLayersPassed && !prCreated.current && !prCreating) {
+      prCreated.current = true;
+      setPrCreating(true);
+
+      (async () => {
+        try {
+          // Check if PR already exists
+          const checkRes = await fetch('/api/git/pr');
+          if (checkRes.ok) {
+            const checkData = await checkRes.json();
+            if (checkData.hasPR) {
+              setPrCreating(false);
+              setShowTransitionModal(true);
+              return;
+            }
+          }
+
+          // Create PR
+          const createRes = await fetch('/api/git/pr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+
+          if (!createRes.ok) {
+            const errData = await createRes.json().catch(() => ({}));
+            throw new Error(errData.error || 'PR 创建失败');
+          }
+
+          setPrCreating(false);
+          setShowTransitionModal(true);
+        } catch (err) {
+          setPrCreating(false);
+          setPrError(err instanceof Error ? err.message : 'PR 创建失败');
+        }
+      })();
+    }
+  }, [allLayersPassed, prCreating]);
+
+  // Retry PR creation
+  const handleRetryPR = useCallback(() => {
+    prCreated.current = false;
+    setPrError(null);
+  }, []);
+
   // Transition handlers
   const handleProceedToStage5 = useCallback(() => {
     setShowTransitionModal(true);
@@ -460,6 +512,18 @@ export default function Stage4Page() {
                 重新运行验收
               </button>
             )}
+            {prCreating && (
+              <span className="text-sm text-blue-600 flex items-center gap-2">
+                <span className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin inline-block" />
+                正在创建 PR...
+              </span>
+            )}
+            {prError && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-red-500">{prError}</span>
+                <button onClick={handleRetryPR} className="text-sm text-blue-600 underline">重试</button>
+              </div>
+            )}
           </div>
 
           <button
@@ -484,9 +548,10 @@ export default function Stage4Page() {
         isOpen={showTransitionModal}
         fromStage={4}
         toStage={5}
-        summary={`分层验收全部通过。${layers.filter(l => l.status === 'passed').length} 层验证通过，${layers.filter(l => l.status === 'skipped').length} 层跳过。`}
+        summary={`验收通过，PR 已创建。${layers.filter(l => l.status === 'passed').length} 层验证通过，${layers.filter(l => l.status === 'skipped').length} 层跳过。`}
         onConfirm={handleTransitionConfirm}
         onLater={handleTransitionLater}
+        autoCountdown={3}
       />
     </div>
   );
