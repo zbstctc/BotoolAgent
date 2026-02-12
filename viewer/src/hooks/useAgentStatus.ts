@@ -5,13 +5,17 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 export type AgentStatusType =
   | 'idle'
   | 'running'
+  | 'starting'
   | 'waiting_network'
   | 'timeout'
   | 'error'
   | 'failed'
+  | 'stopped'
   | 'complete'
   | 'iteration_complete'
-  | 'max_iterations';
+  | 'session_done'
+  | 'max_iterations'
+  | 'max_rounds';
 
 export interface RateLimitInfo {
   enabled: boolean;
@@ -242,12 +246,12 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
   }, []);
 
   // Start agent
-  const startAgent = useCallback(async (maxIterations: number = 10) => {
+  const startAgent = useCallback(async (maxIterations: number = 10, mode: 'single' | 'teams' = 'single') => {
     try {
       const response = await fetch('/api/agent/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maxIterations }),
+        body: JSON.stringify({ maxIterations, mode }),
       });
 
       if (!response.ok) {
@@ -294,8 +298,10 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
 
   // Helper to check if agent is actively running
   const isRunning = state.status?.status === 'running' ||
+    state.status?.status === 'starting' ||
     state.status?.status === 'waiting_network' ||
-    state.status?.status === 'iteration_complete';
+    state.status?.status === 'iteration_complete' ||
+    state.status?.status === 'session_done';
 
   // Helper to check if agent completed
   const isComplete = state.status?.status === 'complete';
@@ -303,8 +309,10 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
   // Helper to check if agent has errors
   const hasError = state.status?.status === 'error' ||
     state.status?.status === 'failed' ||
+    state.status?.status === 'stopped' ||
     state.status?.status === 'timeout' ||
-    state.status?.status === 'max_iterations';
+    state.status?.status === 'max_iterations' ||
+    state.status?.status === 'max_rounds';
 
   // Progress percentage
   const progressPercent = state.status?.total

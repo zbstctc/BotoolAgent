@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import fs from 'fs';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
-import { getProjectRoot, getPrdJsonPath, getAgentScriptPath, getAgentPidPath, isPortableMode } from '@/lib/project-root';
+import { getProjectRoot, getPrdJsonPath, getAgentScriptPath, getAgentTeamsScriptPath, getAgentPidPath, isPortableMode } from '@/lib/project-root';
 
 const PROJECT_ROOT = getProjectRoot();
 const PRD_PATH = getPrdJsonPath();
@@ -71,14 +71,15 @@ function readPRD(): PRDJson | null {
 
 export async function POST(request: Request) {
   try {
-    const { maxIterations = 10 } = await request.json().catch(() => ({}));
+    const { maxIterations = 10, mode = 'single' } = await request.json().catch(() => ({}));
 
-    const SCRIPT_PATH = getAgentScriptPath();
+    const SCRIPT_PATH = mode === 'teams' ? getAgentTeamsScriptPath() : getAgentScriptPath();
 
     // Check if script exists
     if (!fs.existsSync(SCRIPT_PATH)) {
+      const scriptName = mode === 'teams' ? 'BotoolAgentTeams.sh' : 'BotoolAgent.sh';
       return NextResponse.json(
-        { error: 'BotoolAgent.sh not found', path: SCRIPT_PATH },
+        { error: `${scriptName} not found`, path: SCRIPT_PATH },
         { status: 404 }
       );
     }
@@ -129,11 +130,19 @@ export async function POST(request: Request) {
       });
     }
 
-    // Start BotoolAgent.sh in background
+    // Start agent script in background
     // In portable mode, pass --project-dir so the agent operates on the user's project
-    const args = [SCRIPT_PATH, String(maxIterations)];
-    if (isPortableMode()) {
-      args.push('--project-dir', PROJECT_ROOT);
+    const args = [SCRIPT_PATH];
+    if (mode === 'teams') {
+      // Teams script uses --project-dir, no positional maxIterations
+      if (isPortableMode()) {
+        args.push('--project-dir', PROJECT_ROOT);
+      }
+    } else {
+      args.push(String(maxIterations));
+      if (isPortableMode()) {
+        args.push('--project-dir', PROJECT_ROOT);
+      }
     }
 
     const child = spawn('bash', args, {
@@ -152,8 +161,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: 'BotoolAgent started in background',
+      message: `BotoolAgent started in background (${mode} mode)`,
       pid: child.pid,
+      mode,
       maxIterations,
     });
   } catch (error) {

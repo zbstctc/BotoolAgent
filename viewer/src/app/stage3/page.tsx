@@ -107,6 +107,7 @@ export default function Stage3Page() {
 
   // Agent control state
   const [maxIterations, setMaxIterations] = useState(10);
+  const agentMode = 'teams' as const;
   const [showIterationInput, setShowIterationInput] = useState(false);
   const [agentActionLoading, setAgentActionLoading] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
@@ -119,7 +120,7 @@ export default function Stage3Page() {
     setAgentActionLoading(true);
     setAgentStartError(null);
     try {
-      await agentStatus.startAgent(maxIterations);
+      await agentStatus.startAgent(maxIterations, agentMode);
       setShowIterationInput(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '启动失败';
@@ -129,7 +130,7 @@ export default function Stage3Page() {
     } finally {
       setAgentActionLoading(false);
     }
-  }, [agentStatus, maxIterations]);
+  }, [agentStatus, maxIterations, agentMode]);
 
   // Handle stop agent (with confirmation)
   const handleStopAgent = useCallback(async () => {
@@ -360,15 +361,7 @@ export default function Stage3Page() {
             <Fragment>
               {showIterationInput ? (
                 <div className="flex items-center gap-2 bg-white border border-blue-200 rounded-lg px-3 py-1.5 shadow-sm">
-                  <label className="text-xs text-neutral-600">最大迭代:</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={maxIterations}
-                    onChange={(e) => setMaxIterations(Math.max(1, Math.min(100, Number(e.target.value))))}
-                    className="w-14 px-1.5 py-0.5 text-xs border border-neutral-300 rounded text-center bg-white"
-                  />
+                  <span className="text-xs text-neutral-500">Teams 模式</span>
                   <button
                     onClick={handleStartAgent}
                     disabled={agentActionLoading}
