@@ -39,6 +39,39 @@ export function EnrichmentSummary({
   const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Call /api/prd/merge to combine basePrdJson + enrichResult + rules
+  const callEnrichMerge = useCallback(async (basePrdJson: Record<string, unknown>): Promise<EnrichedPrdJson> => {
+    const rules = selectedRules.map(rule => ({
+      id: rule.id,
+      name: rule.name,
+      category: rule.category,
+      content: rule.content,
+    }));
+
+    const response = await fetch('/api/prd/merge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        basePrdJson,
+        enrichResult: enrichResult || {
+          codeExamples: [],
+          testCases: [],
+          filesToModify: [],
+          evals: [],
+          dependencies: [],
+          sessions: [],
+        },
+        rules,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Enrichment merge failed');
+    }
+
+    return response.json();
+  }, [selectedRules, enrichResult]);
+
   // Auto-start conversion on mount
   useEffect(() => {
     if (convertingState === 'idle' && !prdJson) {
@@ -47,7 +80,7 @@ export function EnrichmentSummary({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Start conversion: get base JSON via /api/prd/convert, then merge via /api/prd/enrich
+  // Start conversion: get base JSON via /api/prd/convert, then merge via /api/prd/merge
   const handleStartConversion = useCallback(async () => {
     if (!prdContent) {
       setError('没有 PRD 内容可供转换');
@@ -166,41 +199,7 @@ export function EnrichmentSummary({
       setConvertingState('error');
       setConvertingMessage('转换失败');
     }
-  }, [prdContent, projectName, enrichResult, selectedRules, prdJson]);
-
-  // Call /api/prd/enrich in merge mode to combine basePrdJson + enrichResult + rules
-  const callEnrichMerge = useCallback(async (basePrdJson: Record<string, unknown>): Promise<EnrichedPrdJson> => {
-    const rules = selectedRules.map(rule => ({
-      id: rule.id,
-      name: rule.name,
-      category: rule.category,
-      content: rule.content,
-    }));
-
-    const response = await fetch('/api/prd/enrich', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        merge: true,
-        basePrdJson,
-        enrichResult: enrichResult || {
-          codeExamples: [],
-          testCases: [],
-          filesToModify: [],
-          evals: [],
-          dependencies: [],
-          sessions: [],
-        },
-        rules,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Enrichment merge failed');
-    }
-
-    return response.json();
-  }, [selectedRules, enrichResult]);
+  }, [prdContent, projectName, prdJson, callEnrichMerge]);
 
   // Cancel conversion
   const cancelConversion = useCallback(() => {
