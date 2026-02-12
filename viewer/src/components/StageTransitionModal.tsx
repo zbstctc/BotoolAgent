@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 
 export interface StageTransitionModalProps {
   isOpen: boolean;
@@ -14,6 +14,8 @@ export interface StageTransitionModalProps {
   onConfirm: () => void;
   /** Called when user clicks "Later" */
   onLater: () => void;
+  /** Auto-countdown in seconds. If set, auto-confirms after countdown. */
+  autoCountdown?: number;
 }
 
 const STAGE_NAMES: Record<number, string> = {
@@ -60,23 +62,72 @@ export function StageTransitionModal({
   summary,
   onConfirm,
   onLater,
+  autoCountdown,
 }: StageTransitionModalProps) {
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const onConfirmRef = useRef(onConfirm);
+
+  useEffect(() => {
+    onConfirmRef.current = onConfirm;
+  }, [onConfirm]);
+
+  // Start countdown when modal opens with autoCountdown
+  useEffect(() => {
+    if (isOpen && autoCountdown && autoCountdown > 0) {
+      setCountdown(autoCountdown);
+    } else {
+      setCountdown(null);
+    }
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [isOpen, autoCountdown]);
+
+  // Countdown timer tick
+  useEffect(() => {
+    if (countdown === null || countdown <= 0) return;
+
+    countdownRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev === null || prev <= 1) {
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          // Auto-confirm when countdown reaches 0
+          setTimeout(() => onConfirmRef.current(), 0);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [countdown]);
+
+  const cancelCountdown = useCallback(() => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    setCountdown(null);
+  }, []);
+
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (e.target === e.currentTarget) {
+        cancelCountdown();
         onLater();
       }
     },
-    [onLater]
+    [onLater, cancelCountdown]
   );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Escape') {
+        cancelCountdown();
         onLater();
       }
     },
-    [onLater]
+    [onLater, cancelCountdown]
   );
 
   if (!isOpen) return null;
@@ -142,16 +193,18 @@ export function StageTransitionModal({
         {/* Actions */}
         <div className="flex gap-3 p-4 pt-2 border-t border-neutral-100">
           <button
-            onClick={onLater}
+            onClick={() => { cancelCountdown(); onLater(); }}
             className="flex-1 px-4 py-2.5 text-sm font-medium text-neutral-700 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors"
           >
-            稍后继续
+            {countdown !== null && countdown > 0 ? '取消' : '稍后继续'}
           </button>
           <button
-            onClick={onConfirm}
+            onClick={() => { cancelCountdown(); onConfirm(); }}
             className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
           >
-            {isCompletion ? '返回首页' : '继续'}
+            {countdown !== null && countdown > 0
+              ? `${countdown}s 后自动继续`
+              : isCompletion ? '返回首页' : '继续'}
           </button>
         </div>
       </div>

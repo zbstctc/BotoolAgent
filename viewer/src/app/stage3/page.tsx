@@ -410,6 +410,7 @@ export default function Stage3Page() {
         summary={`全部 ${totalTasks} 个开发任务已完成，准备进入质量验证阶段。`}
         onConfirm={handleTransitionConfirm}
         onLater={handleTransitionLater}
+        autoCountdown={3}
       />
 
       {/* Main Content - Three Column Layout */}

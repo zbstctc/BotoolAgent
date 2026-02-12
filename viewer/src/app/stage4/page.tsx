@@ -195,6 +195,15 @@ export default function Stage4Page() {
     }
   }, [handleSSEEvent]);
 
+  // Auto-start tests when PRD data is loaded and tests haven't been run yet
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (prdData && availableTests.length > 0 && !isRunningTests && !testSummary && !autoStarted.current) {
+      autoStarted.current = true;
+      handleRunTests();
+    }
+  }, [prdData, availableTests, isRunningTests, testSummary, handleRunTests]);
+
   // Handle manual check completion
   const handleManualCheckComplete = useCallback(() => {
     setIsManualCheckComplete(true);
