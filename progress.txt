@@ -1,4 +1,62 @@
 # Botool 开发代理进度日志
-开始时间: Wed Feb 12 2026
-功能: Skill-Pipeline 架构对齐
+开始时间: Thu Feb 12 19:08:16 CST 2026
+---
+
+## Codebase Patterns
+- Viewer API 路由使用 Next.js App Router（`viewer/src/app/api/`）
+- CLI Skills 使用 Markdown 格式（`skills/BotoolAgent/*/SKILL.md`）
+- enrichment 业务逻辑集中在 `/api/prd/enrich` API，React 组件为纯展示层
+- SSE 流式响应模式：`data: JSON\n\n` 格式，含 progress/complete/error 事件
+- 合并方式统一使用普通 merge（非 squash），保留提交历史
+
+## 2026-02-12 - DT-001
+- 实现了 enrichment 逻辑从 React 下沉到 API
+- 新建 viewer/src/app/api/prd/enrich/route.ts
+- 简化 viewer/src/components/pipeline/AutoEnrichStep.tsx（纯展示层）
+- 简化 viewer/src/components/pipeline/EnrichmentSummary.tsx（纯展示层）
+- **未来迭代的经验教训：**
+  - buildEnrichmentPrompt、parseAutoEnrichResult、normalizeEnrichResult 现在在 API 层
+  - deriveTestCases、generateDefaultSessions、mergeEnrichedPrdJson 也在 API 层
+  - /api/prd/enrich 支持两种模式：SSE streaming（enrichment）和同步 merge 模式
+---
+
+## 2026-02-12 - DT-002
+- 实现了 CLI fallback 走完整 enrichment
+- 修改 skills/BotoolAgent/PRD2JSON/SKILL.md
+- **未来迭代的经验教训：**
+  - CLI 和 Viewer 共享同一个 EnrichedPrdJson schema（定义在 tool-types.ts）
+  - CLI 一步生成完整 enriched prd.json，不分两步
+  - 规则扫描使用 rules/ 目录，默认全选 + AskUserQuestion 确认排除
+---
+
+## 2026-02-12 - DT-003
+- 实现了 coding skill 更新为 Teams 模式
+- 修改 skills/BotoolAgent/Coding/SKILL.md
+- **未来迭代的经验教训：**
+  - Teams 模式依赖 tmux，不可用时自动降级到单 agent
+  - 质量检查和 PR 创建已拆分为独立 Skill（Testing、Finalize）
+  - --single 参数可强制使用单 agent 模式
+---
+
+## 2026-02-12 - DT-004
+- 实现了 5 层分层测试 Skill
+- 新建 skills/BotoolAgent/Testing/SKILL.md
+- **未来迭代的经验教训：**
+  - 5 层都是 blocking：Regression → Unit → E2E → Code Review → Manual
+  - Layer 2/3 在没有脚本/配置时自动跳过
+  - startLayer 参数可从特定层开始（跳过之前的层）
+---
+
+## 2026-02-12 - DT-005
+- 实现了 finalize Skill + 修复 stage5 合并方式
+- 新建 skills/BotoolAgent/Finalize/SKILL.md
+- 修改 viewer/src/app/stage5/page.tsx（method: 'merge'）
+- **未来迭代的经验教训：**
+  - 合并使用普通 merge（gh pr merge --merge），不用 squash
+  - CLI 额外提供交互式 Review 确认步骤
+  - Step 6 清理包含删除远程分支和切换到 main
+---
+
+## Session 结束 — 已完成 5 个，剩余 0 个
+所有任务已完成。TypeCheck 通过。
 ---

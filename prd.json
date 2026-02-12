@@ -21,7 +21,7 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "dependsOn": [],
       "contextHint": "重点阅读 AutoEnrichStep.tsx 中的 enrichment prompt 和 normalizeResult，以及 EnrichmentSummary.tsx 中的 deriveTestCases/generateDefaultSessions/enrichPrdJson 三个函数",
       "notes": "",
@@ -60,7 +60,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [],
       "contextHint": "参考 viewer/src/lib/tool-types.ts 中的 EnrichedPrdJson 类型定义确保 schema 一致",
       "notes": "",
@@ -96,7 +96,7 @@
         "不修改 Viewer 代码（stage3 + api/agent/start 已完成）"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependsOn": [],
       "contextHint": "Viewer 侧已完成（stage3/page.tsx 硬编码 teams，api/agent/start 支持 mode），只需更新 SKILL.md",
       "notes": "",
@@ -134,7 +134,7 @@
         "不修改 Viewer 代码（stage4 + api/test/run 已完成）"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "dependsOn": [],
       "contextHint": "参考 viewer/src/app/api/test/run/route.ts 中的测试执行逻辑和 stage4/page.tsx 的分层结构",
       "notes": "",
@@ -173,7 +173,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "dependsOn": [],
       "contextHint": "参考 viewer/src/app/stage5/page.tsx 和 api/git/merge/route.ts 的现有逻辑",
       "notes": "",
