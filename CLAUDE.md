@@ -16,16 +16,17 @@
    - `spec.codeExamples` → 期望的代码结构
    - `spec.testCases` → 需要通过的测试场景
 8. 读取该任务的 `evals` 字段（如果存在）
-9. 执行上下文检索（见下文"上下文检索"部分）
-10. 实现该单个开发任务
-11. 运行 evals（见下文"Eval 执行"部分）
-12. 执行 Spec 对照检查（见下文"Spec 对照检查"部分）
-13. 运行质量检查（如 typecheck、lint、test - 使用项目所需的检查工具）
-14. 如果发现可复用的模式，更新 `patterns.json`（优先）或 CLAUDE.md 文件（见下文）
-15. 如果检查通过，提交所有更改，提交信息格式：`feat: [任务ID] - [任务标题]`
-16. **推送到远程**：`git push origin <branchName>` - 确保进度同步到 GitHub
-17. 更新 prd.json（将已完成任务的 `passes` 设为 `true`）+ 更新 `.project-status`
-18. 将进度追加到 `progress.txt`
+9. 读取该任务的 `testCases` 字段（如果存在）— 见下文"测试驱动开发"部分
+10. 执行上下文检索（见下文"上下文检索"部分）
+11. 实现该单个开发任务（对 `tdd: true` 的 testCase，先写测试再实现）
+12. 运行 evals（见下文"Eval 执行"部分）
+13. 执行 Spec 对照检查（见下文"Spec 对照检查"部分）
+14. 运行质量检查（如 typecheck、lint、test - 使用项目所需的检查工具）
+15. 如果发现可复用的模式，更新 `patterns.json`（优先）或 CLAUDE.md 文件（见下文）
+16. 如果检查通过，提交所有更改，提交信息格式：`feat: [任务ID] - [任务标题]`
+17. **推送到远程**：`git push origin <branchName>` - 确保进度同步到 GitHub
+18. 更新 prd.json（将已完成任务的 `passes` 设为 `true`）+ 更新 `.project-status`
+19. 将进度追加到 `progress.txt`
 
 ## 进度报告格式
 
@@ -52,6 +53,49 @@
    b. 只深度阅读高相关性文件（最多 5 个）
 4. 如果有 `dependsOn`，读取依赖任务在 progress.txt 中的日志
 5. 如果有 `contextHint`，按提示重点关注特定上下文
+
+## 测试驱动开发（testCases）
+
+如果当前任务有 `testCases` 字段（数组），按以下流程处理：
+
+### testCases 结构
+
+```json
+{
+  "testCases": [
+    { "type": "typecheck", "desc": "TypeScript 编译通过" },
+    { "type": "unit", "desc": "映射函数返回正确结果", "tdd": true },
+    { "type": "e2e", "desc": "页面正确渲染任务列表" },
+    { "type": "manual", "desc": "动画流畅无卡顿" }
+  ]
+}
+```
+
+类型说明：
+- `typecheck` — 运行 `npx tsc --noEmit`
+- `lint` — 运行项目 lint 命令
+- `unit` — 单元测试（`tdd: true` 时先写测试）
+- `e2e` — 端到端测试（Playwright 等）
+- `manual` — 需要人工验证，记录到 checklist
+
+### TDD 流程（tdd: true）
+
+当 testCase 标记 `tdd: true` 时，严格执行"红-绿-重构"流程：
+
+1. **红（Red）**：先写测试文件，运行确认测试失败（因为功能未实现）
+2. **绿（Green）**：编写最小实现代码使测试通过
+3. **重构（Refactor）**：在测试保护下清理代码
+
+### 非 TDD 的 testCase
+
+- `tdd: false` 或未指定 `tdd`：先实现功能，再运行验证
+- `typecheck` 和 `lint` 类型始终在实现后运行
+
+### 兼容无 testCases 的旧格式
+
+如果任务没有 `testCases` 字段，退回到现有逻辑：
+- 按 `acceptanceCriteria` 逐条验证
+- 运行标准质量检查（typecheck、lint、test）
 
 ## Eval 执行（提交前）
 
