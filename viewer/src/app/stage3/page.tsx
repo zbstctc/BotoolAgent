@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator, StageTransitionModal } from '@/components';
 import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
 import type { DevTask, PrdData } from '@/hooks';
@@ -79,6 +79,8 @@ function getStatusLabel(status: TaskStatus): string {
 
 export default function Stage3Page() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get('projectId') || undefined;
 
   // Project context
   const { activeProject, updateProject } = useProject();
@@ -87,7 +89,7 @@ export default function Stage3Page() {
   useProjectValidation({ currentStage: 3 });
 
   // Agent status via SSE
-  const agentStatus = useAgentStatus({ stream: true });
+  const agentStatus = useAgentStatus({ stream: true, projectId });
 
   const [prdData, setPrdData] = useState<PrdData | null>(null);
   const [progressLog, setProgressLog] = useState<string>('');
@@ -149,6 +151,7 @@ export default function Stage3Page() {
 
   // Use file watcher to get real-time updates
   const { prd, progress, isConnected, lastUpdated } = useFileWatcher({
+    projectId,
     enabled: true,
     onPrdUpdate: (content) => {
       const parsed = parsePrdJson(content);

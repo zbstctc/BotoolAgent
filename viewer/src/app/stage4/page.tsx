@@ -36,6 +36,7 @@ export default function Stage4Page() {
 
   // File watcher for PRD
   const { prd } = useFileWatcher({
+    projectId,
     enabled: true,
     onPrdUpdate: (content) => {
       const parsed = parsePrdJson(content);

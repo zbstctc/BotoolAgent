@@ -17,13 +17,14 @@ interface FileWatcherState {
 }
 
 interface UseFileWatcherOptions {
+  projectId?: string | null;
   enabled?: boolean;
   onPrdUpdate?: (content: string | null) => void;
   onProgressUpdate?: (content: string | null) => void;
 }
 
 export function useFileWatcher(options: UseFileWatcherOptions = {}) {
-  const { enabled = true, onPrdUpdate, onProgressUpdate } = options;
+  const { projectId, enabled = true, onPrdUpdate, onProgressUpdate } = options;
 
   const [state, setState] = useState<FileWatcherState>({
     prd: null,
@@ -82,7 +83,8 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
       eventSourceRef.current.close();
     }
 
-    const eventSource = new EventSource('/api/watch');
+    const watchUrl = projectId ? `/api/watch?projectId=${encodeURIComponent(projectId)}` : '/api/watch';
+    const eventSource = new EventSource(watchUrl);
     eventSourceRef.current = eventSource;
 
     eventSource.onopen = () => {
@@ -142,7 +144,7 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [enabled, scheduleReconnect, state.error]); // state.error triggers reconnect
+  }, [enabled, projectId, scheduleReconnect, state.error]); // state.error triggers reconnect
 
   const reconnect = useCallback(() => {
     shouldReconnectRef.current = true;

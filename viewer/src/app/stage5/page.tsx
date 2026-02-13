@@ -53,6 +53,7 @@ export default function Stage5Page() {
 
   // Use file watcher for PRD and progress
   const { prd, progress } = useFileWatcher({
+    projectId,
     enabled: true,
     onPrdUpdate: (content) => {
       const parsed = parsePrdJson(content);

@@ -158,9 +158,9 @@ function readPRD(projectId?: string | null): PRDJson | null {
 /**
  * Update task history based on agent status
  */
-function syncTaskHistory(agentStatus: AgentStatus): void {
+function syncTaskHistory(agentStatus: AgentStatus, projectId?: string | null): void {
   try {
-    const prd = readPRD();
+    const prd = readPRD(projectId);
     if (!prd || !prd.branchName) return;
 
     const tasks = prd.devTasks || [];
@@ -287,7 +287,7 @@ export async function GET(request: NextRequest) {
 
             // Sync task history on status change
             if (currentStatus) {
-              syncTaskHistory(currentStatus);
+              syncTaskHistory(currentStatus, projectId);
             }
           }
         } catch {

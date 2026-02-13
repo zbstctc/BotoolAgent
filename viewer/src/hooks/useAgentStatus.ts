@@ -66,6 +66,7 @@ interface UseAgentStatusState {
 }
 
 interface UseAgentStatusOptions {
+  projectId?: string | null;
   enabled?: boolean;
   stream?: boolean;
   pollInterval?: number;
@@ -86,6 +87,7 @@ const DEFAULT_STATUS: AgentStatus = {
 
 export function useAgentStatus(options: UseAgentStatusOptions = {}) {
   const {
+    projectId,
     enabled = true,
     stream = true,
     pollInterval = 2000,
@@ -112,7 +114,8 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
   // Fetch status via polling (non-streaming mode)
   const fetchStatus = useCallback(async () => {
     try {
-      const response = await fetch('/api/agent/status');
+      const statusUrl = projectId ? `/api/agent/status?projectId=${encodeURIComponent(projectId)}` : '/api/agent/status';
+      const response = await fetch(statusUrl);
       if (!response.ok) throw new Error('Failed to fetch status');
 
       const data: AgentStatus = await response.json();
@@ -133,7 +136,7 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
         error: err instanceof Error ? err.message : 'Failed to fetch status',
       }));
     }
-  }, []);
+  }, [projectId]);
 
   // Schedule reconnect for streaming mode
   const scheduleReconnect = useCallback(() => {
@@ -175,7 +178,10 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
       eventSourceRef.current.close();
     }
 
-    const eventSource = new EventSource('/api/agent/status?stream=true');
+    const streamUrl = projectId
+      ? `/api/agent/status?stream=true&projectId=${encodeURIComponent(projectId)}`
+      : '/api/agent/status?stream=true';
+    const eventSource = new EventSource(streamUrl);
     eventSourceRef.current = eventSource;
 
     eventSource.onopen = () => {
@@ -215,7 +221,7 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [enabled, stream, scheduleReconnect, state.error]);
+  }, [enabled, stream, projectId, scheduleReconnect, state.error]);
 
   // Polling mode effect
   useEffect(() => {
@@ -237,7 +243,7 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
         clearTimeout(pollTimeoutRef.current);
       }
     };
-  }, [enabled, stream, pollInterval, fetchStatus]);
+  }, [enabled, stream, projectId, pollInterval, fetchStatus]);
 
   // Reconnect function
   const reconnect = useCallback(() => {
@@ -251,7 +257,7 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
       const response = await fetch('/api/agent/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maxIterations, mode }),
+        body: JSON.stringify({ maxIterations, mode, projectId }),
       });
 
       if (!response.ok) {
@@ -267,7 +273,7 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
       }));
       throw err;
     }
-  }, []);
+  }, [projectId]);
 
   // Stop agent
   const stopAgent = useCallback(async () => {

@@ -129,11 +129,16 @@ export async function POST(request: Request) {
 
     if (mode === 'testing') {
       // Testing mode: run Claude CLI with /botoolagent-testing skill
+      let prompt = '/botoolagent-testing';
+      if (projectId) {
+        prompt += `\n\nProject: ${projectId}\nPRD path: ${PRD_PATH}`;
+      }
+
       const claudeArgs = [
         'claude',
         '--dangerously-skip-permissions',
         '--output-format', 'stream-json',
-        '-p', '/botoolagent-testing',
+        '-p', prompt,
       ];
 
       child = spawn(claudeArgs[0], claudeArgs.slice(1), {

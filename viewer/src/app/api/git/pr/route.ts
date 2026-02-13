@@ -277,12 +277,15 @@ export async function POST(request: NextRequest) {
     let baseBranch = 'main';
     let draft = false;
 
+    let projectId: string | undefined;
+
     try {
       const requestBody = await request.json();
       title = requestBody.title;
       body = requestBody.body;
       baseBranch = requestBody.baseBranch || 'main';
       draft = requestBody.draft || false;
+      projectId = requestBody.projectId;
     } catch {
       // Empty body is OK, use defaults
     }
@@ -321,10 +324,10 @@ export async function POST(request: NextRequest) {
 
     // Generate title and body if not provided
     if (!title) {
-      title = await generatePRTitle();
+      title = await generatePRTitle(projectId);
     }
     if (!body) {
-      body = await generatePRDescription();
+      body = await generatePRDescription(projectId);
     }
 
     // Push current branch to remote first
