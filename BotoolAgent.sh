@@ -156,6 +156,10 @@ while [[ $# -gt 0 ]]; do
       PROJECT_DIR="$2"
       shift 2
       ;;
+    --prd-path)
+      PRD_PATH_OVERRIDE="$2"
+      shift 2
+      ;;
     *)
       # 如果是数字，假设是最大迭代次数
       if [[ "$1" =~ ^[0-9]+$ ]]; then
@@ -197,8 +201,18 @@ RATE_LIMIT_STATE_FILE="$SCRIPT_DIR/.rate-limit-state"
 CIRCUIT_BREAKER_STATE_FILE="$SCRIPT_DIR/.circuit-breaker-state"
 
 # 用户项目的文件路径（在 PROJECT_DIR）
-PRD_FILE="$PROJECT_DIR/prd.json"
-PROGRESS_FILE="$PROJECT_DIR/progress.txt"
+# --prd-path 覆盖：支持多 PRD 模式，progress 文件自动从 prd 路径推导
+if [ -n "$PRD_PATH_OVERRIDE" ]; then
+  PRD_FILE="$PRD_PATH_OVERRIDE"
+  # 推导 progress 文件：prd-xxx.json → progress-xxx.txt
+  PRD_BASENAME="$(basename "$PRD_PATH_OVERRIDE")"
+  PROGRESS_BASENAME="${PRD_BASENAME/prd-/progress-}"
+  PROGRESS_BASENAME="${PROGRESS_BASENAME/.json/.txt}"
+  PROGRESS_FILE="$(dirname "$PRD_PATH_OVERRIDE")/$PROGRESS_BASENAME"
+else
+  PRD_FILE="$PROJECT_DIR/prd.json"
+  PROGRESS_FILE="$PROJECT_DIR/progress.txt"
+fi
 
 if [ "$PROJECT_DIR" != "$SCRIPT_DIR" ]; then
   echo ">>> 可移植模式: 项目目录 = $PROJECT_DIR"

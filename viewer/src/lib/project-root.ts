@@ -100,6 +100,30 @@ export function getRulesDir(): string {
   return path.join(getBotoolRoot(), 'rules');
 }
 
+export function getRegistryPath(): string {
+  return path.join(getTasksDir(), 'registry.json');
+}
+
+/**
+ * Get the path to a project's prd.json.
+ * If projectId is provided, reads from tasks/prd-{projectId}.json
+ * Otherwise falls back to the root prd.json (backward compatible).
+ */
+export function getProjectPrdJsonPath(projectId?: string | null): string {
+  if (!projectId) return getPrdJsonPath();
+  return path.join(getTasksDir(), `prd-${projectId}.json`);
+}
+
+/**
+ * Get the path to a project's progress file.
+ * If projectId is provided, reads from tasks/progress-{projectId}.txt
+ * Otherwise falls back to the root progress.txt (backward compatible).
+ */
+export function getProjectProgressPath(projectId?: string | null): string {
+  if (!projectId) return getProgressPath();
+  return path.join(getTasksDir(), `progress-${projectId}.txt`);
+}
+
 export function getPrdJsonPath(): string {
   return path.join(getProjectRoot(), 'prd.json');
 }

@@ -4,12 +4,11 @@ import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
-import { getProjectRoot, getPrdJsonPath } from '@/lib/project-root';
+import { getProjectRoot, getPrdJsonPath, getProjectPrdJsonPath } from '@/lib/project-root';
 
 const execAsync = promisify(exec);
 
 const PROJECT_ROOT = getProjectRoot();
-const PRD_FILE = getPrdJsonPath();
 
 interface PRDJson {
   project?: string;
@@ -18,10 +17,11 @@ interface PRDJson {
   devTasks?: Array<{ id: string; passes: boolean }>;
 }
 
-function readPRD(): PRDJson | null {
+function readPRD(projectId?: string): PRDJson | null {
   try {
-    if (fs.existsSync(PRD_FILE)) {
-      return JSON.parse(fs.readFileSync(PRD_FILE, 'utf-8'));
+    const prdFile = getProjectPrdJsonPath(projectId);
+    if (fs.existsSync(prdFile)) {
+      return JSON.parse(fs.readFileSync(prdFile, 'utf-8'));
     }
   } catch {
     // Ignore
@@ -110,12 +110,14 @@ export async function POST(request: NextRequest) {
     let method: 'merge' | 'squash' | 'rebase' = 'squash';
     let deleteBranch = true;
     let baseBranch = 'main';
+    let projectId: string | undefined;
 
     try {
       const requestBody = await request.json();
       method = requestBody.method || 'squash';
       deleteBranch = requestBody.deleteBranch !== false; // default true
       baseBranch = requestBody.baseBranch || 'main';
+      projectId = requestBody.projectId;
     } catch {
       // Empty body is OK, use defaults
     }
@@ -201,7 +203,7 @@ export async function POST(request: NextRequest) {
       };
 
       // Update task history to mark as completed (merged)
-      const prd = readPRD();
+      const prd = readPRD(projectId);
       if (prd && prd.branchName) {
         const tasks = prd.devTasks || [];
         const tasksCompleted = tasks.filter(t => t.passes).length;

@@ -143,7 +143,8 @@ Once you understand what you're building:
 
 After all sections are validated:
 - Compile into final PRD format
-- Save to `tasks/prd-[feature-name].md`
+- Auto-detect tasks directory: `TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"`
+- Save to `$TASKS_DIR/prd-[feature-name].md`
 - Announce: "PRD saved. Use BotoolAgent:PRD2JSON to convert for autonomous execution."
 
 ---
@@ -244,11 +245,11 @@ Each task must be **small enough to complete in one iteration**:
 
 Offer next steps:
 
-"PRD complete and saved to `tasks/prd-[name].md`. Next steps:
+"PRD complete and saved. Next steps:
 
 1. **Open Viewer** - Use `/botoolagent` to open the web interface and continue from Stage 2
 2. **Convert to JSON** - Use `/botoolagent-prd2json` to create prd.json
-3. **Run autonomously** - Execute `./BotoolAgent.sh` to implement
+3. **Run autonomously** - Run `/botoolagent-coding` to implement
 
 Which would you like to do?"
 
@@ -269,4 +270,4 @@ Before saving the PRD:
 - [ ] Dev tasks are small and specific
 - [ ] Acceptance criteria are verifiable
 - [ ] Non-goals section defines clear boundaries
-- [ ] Saved to `tasks/prd-[feature-name].md`
+- [ ] Saved to `$TASKS_DIR/prd-[feature-name].md` (auto-detect portable mode)

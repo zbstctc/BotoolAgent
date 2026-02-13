@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { getPrdJsonPath, getProgressPath, getProjectRoot } from '@/lib/project-root';
+import { getPrdJsonPath, getProgressPath, getProjectPrdJsonPath, getProjectProgressPath, getProjectRoot } from '@/lib/project-root';
 
 const execAsync = promisify(exec);
 const PROJECT_ROOT = getProjectRoot();
@@ -240,10 +240,13 @@ async function getCodeChanges(): Promise<{ filesChanged: number; additions: numb
  * GET /api/review-summary
  * Returns structured review summary data for Stage 4/5 panels.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const url = new URL(request.url);
+    const projectId = url.searchParams.get('projectId') || undefined;
+
     // Read prd.json
-    const prdPath = getPrdJsonPath();
+    const prdPath = getProjectPrdJsonPath(projectId);
     let prdContent = '';
     try {
       if (fs.existsSync(prdPath)) {
@@ -252,7 +255,7 @@ export async function GET() {
     } catch { /* ignore */ }
 
     // Read progress.txt
-    const progressPath = getProgressPath();
+    const progressPath = getProjectProgressPath(projectId);
     let progressContent = '';
     try {
       if (fs.existsSync(progressPath)) {

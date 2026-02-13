@@ -88,14 +88,19 @@ From here you can:
 | http://localhost:3000/stage1 | Stage 1 - Create PRD with AI chat |
 | http://localhost:3000/stage2 | Stage 2 - Select PRD and convert to JSON |
 | http://localhost:3000/stage3 | Stage 3 - Monitor autonomous development |
+| http://localhost:3000/stage4 | Stage 4 - Testing & verification |
+| http://localhost:3000/stage5 | Stage 5 - Finalize, PR & merge |
 
 ---
 
 ## Related Skills
 
 - **BotoolAgent:GeneratePRD** (`/botoolagent-generateprd`) - Create a new PRD through dialogue
+- **BotoolAgent:PyramidPRD** (`/botoolagent-pyramidprd`) - Create PRD via pyramid Q&A
 - **BotoolAgent:PRD2JSON** (`/botoolagent-prd2json`) - Convert PRD to JSON format
 - **BotoolAgent:Coding** (`/botoolagent-coding`) - Jump directly to Stage 3
+- **BotoolAgent:Testing** (`/botoolagent-testing`) - Run 4-layer verification pipeline
+- **BotoolAgent:Finalize** (`/botoolagent-finalize`) - Create PR, review & merge
 
 ---
 
@@ -103,11 +108,11 @@ From here you can:
 
 ### Server won't start
 - Check if port 3000 is already in use: `lsof -i :3000`
-- Check for errors in viewer directory: `cd viewer && npm run dev`
+- Check for errors in viewer directory: `cd BotoolAgent/viewer 2>/dev/null || cd viewer && npm run dev`
 
 ### Browser doesn't open
 - Manually navigate to http://localhost:3000 in your browser
 
 ### Page shows error
 - Ensure you're in the BotoolAgent project directory
-- Run `cd viewer && npm install` if dependencies are missing
+- Run `cd BotoolAgent/viewer 2>/dev/null || cd viewer && npm install` if dependencies are missing

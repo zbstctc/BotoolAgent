@@ -1,16 +1,11 @@
 export { Header } from "./Header";
 export { Main } from "./Main";
 export { StageIndicator } from "./StageIndicator";
-export { ChatInterface } from "./ChatInterface";
-export type { Message, ChatInterfaceProps } from "./ChatInterface";
 export { OptionCard } from "./OptionCard";
 export type { Option, OptionCardProps } from "./OptionCard";
 export { PRDPreview } from "./PRDPreview";
 export type { PRDPreviewProps } from "./PRDPreview";
 export { TaskEditor } from "./TaskEditor";
-export { SessionResumeDialog } from "./SessionResumeDialog";
-export { ToolRenderer } from "./ToolRenderer";
-export type { ToolUseData, ToolRendererProps } from "./ToolRenderer";
 export { TestResults } from "./TestResults";
 export type { TestResult, TestSummary, TestResultsProps, TestType } from "./TestResults";
 export { ManualChecklist, extractChecklistFromPRD } from "./ManualChecklist";
@@ -22,11 +17,11 @@ export type { CompletedTask, CodebasePattern, ProgressSummary, CompletionSummary
 export { TaskHistory } from "./TaskHistory";
 export type { TaskHistoryItem, TaskHistoryProps, TaskStatus, TaskStage } from "./TaskHistory";
 export { NewPrdDialog } from "./NewPrdDialog";
-export { PrdSessionList } from "./PrdSessionList";
 export { StageTransitionModal } from "./StageTransitionModal";
 export type { StageTransitionModalProps } from "./StageTransitionModal";
 export { ProjectCard } from "./ProjectCard";
 export type { ProjectCardProps } from "./ProjectCard";
+export { ProjectSwitcher } from "./ProjectSwitcher";
 
 // Pyramid components
 export { PyramidNavigation } from "./pyramid/PyramidNavigation";
@@ -43,10 +38,3 @@ export { ReviewSummary } from "./ReviewSummary";
 export type { ReviewSummaryProps } from "./ReviewSummary";
 export { ErrorRecovery } from "./ErrorRecovery";
 export type { ErrorRecoveryProps, ErrorAction } from "./ErrorRecovery";
-
-// Design confirm components
-export { LayoutPreview } from "./design-confirm/LayoutPreview";
-export type { LayoutData, LayoutArea } from "./design-confirm/LayoutPreview";
-export { VersionHistory } from "./design-confirm/VersionHistory";
-export type { Version } from "./design-confirm/VersionHistory";
-export { DesignConfirmPage } from "./design-confirm/DesignConfirmPage";

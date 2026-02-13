@@ -253,6 +253,15 @@ export function EnrichmentSummary({
         throw new Error('保存失败，请重试');
       }
 
+      // Also persist enriched JSON to prd.json so BotoolAgent can use it
+      await fetch('/api/prd/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(prdJson),
+      }).catch(() => {
+        // Non-critical: enriched data saved to file, prd.json update is best-effort
+      });
+
       onComplete(prdJson);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '保存失败';

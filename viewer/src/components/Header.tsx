@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import { ProjectSwitcher } from "./ProjectSwitcher";
 
 export function Header() {
   return (
@@ -13,6 +15,9 @@ export function Header() {
           </span>
         </div>
         <nav className="flex items-center gap-4">
+          <Suspense fallback={null}>
+            <ProjectSwitcher />
+          </Suspense>
           <Link
             href="/"
             className="text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors"

@@ -17,22 +17,33 @@ CLI 端自动化测试验收：Layer 1 Regression → Layer 2 Unit → Layer 3 E
 ## 参数解析
 
 如果用户提供了参数（如 `/botoolagent-testing 3`），将第一个数字参数作为 `startLayer`，表示从第 N 层开始执行。
-默认值：`startLayer=1`（从头执行全部 5 层）。
+默认值：`startLayer=1`（从头执行全部 4 层）。
 
 用法示例：
-- `/botoolagent-testing` — 执行全部 5 层
+- `/botoolagent-testing` — 执行全部 4 层
 - `/botoolagent-testing 3` — 从 Layer 3 (E2E) 开始执行
-- `/botoolagent-testing 4` — 只执行 Layer 4 (Code Review) 和 Layer 5 (Manual)
+- `/botoolagent-testing 4` — 只执行 Layer 4 (Code Review)
 
 ---
 
-## Step 0: 前置检查
+## Step 0: 项目选择 + 前置检查
+
+### 项目选择（多 PRD 模式）
+
+检查 `tasks/registry.json`（或 `BotoolAgent/tasks/registry.json`）是否存在：
+- 如果存在且有多个项目 → 用 AskUserQuestion 列出项目让用户选择
+- 选择后，使用 `tasks/prd-{projectId}.json` 作为 prd.json 路径
+- 如果不存在 registry 或只有一个项目 → 直接读根目录 `prd.json`（向后兼容）
+
+### 前置检查
 
 依次执行以下检查，任一失败则**停止并告知用户**。
 
 ### 0a. 检查 prd.json
 
 ```bash
+# 如果选定了 projectId，检查 tasks/prd-{projectId}.json
+# 否则检查根目录 prd.json
 ls prd.json 2>/dev/null
 ```
 
@@ -63,15 +74,15 @@ Then stop here.
 ### 0c. 自动检测项目目录
 
 ```bash
-# 检测 viewer 目录（用于 typecheck/lint/test）
-if [ -d "BotoolAgent/viewer" ]; then
-  VIEWER_DIR="BotoolAgent/viewer"
-elif [ -d "viewer" ]; then
-  VIEWER_DIR="viewer"
+# 检测项目目录（优先项目根目录的 package.json，兼容 standalone 和 portable 模式）
+if [ -f "package.json" ]; then
+  PROJECT_DIR="."
+elif [ -f "viewer/package.json" ]; then
+  PROJECT_DIR="viewer"
 else
-  VIEWER_DIR="."
+  PROJECT_DIR="."
 fi
-echo "项目目录: $VIEWER_DIR"
+echo "项目目录: $PROJECT_DIR"
 ```
 
 **前置检查通过后，告知用户：** "前置检查通过，开始执行 4 层自动化测试（Ralph 迭代模式）..."
@@ -128,7 +139,7 @@ echo "项目目录: $VIEWER_DIR"
 ### 1a. TypeCheck
 
 ```bash
-cd "$VIEWER_DIR" && npx tsc --noEmit
+cd "$PROJECT_DIR" && npx tsc --noEmit
 ```
 
 **如果 TypeCheck 通过：** 继续 Layer 1b。
@@ -144,7 +155,7 @@ Ralph 修复循环（持续直到通过或断路器触发）：
    - 每组启动一个修复 agent（subagent_type: `general-purpose`）
    - agent prompt: "修复以下 TypeScript 编译错误：\n{错误详情}\n文件路径：{path}\n只修改这个文件，修复所有列出的 TS 错误。"
    - 等待全部完成
-4. 重新运行 `cd "$VIEWER_DIR" && npx tsc --noEmit`
+4. 重新运行 `cd "$PROJECT_DIR" && npx tsc --noEmit`
 5. 如果通过 → 继续 Layer 1b
 6. 如果错误没变化（连续 3 次无进展）→ Circuit Breaker → AskUserQuestion：
    ```
@@ -168,14 +179,14 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 检测项目中是否有 lint 脚本：
 
 ```bash
-cd "$VIEWER_DIR" && cat package.json | python3 -c "import sys,json; scripts=json.load(sys.stdin).get('scripts',{}); print('lint' if 'lint' in scripts else 'none')"
+cd "$PROJECT_DIR" && cat package.json | python3 -c "import sys,json; scripts=json.load(sys.stdin).get('scripts',{}); print('lint' if 'lint' in scripts else 'none')"
 ```
 
 **如果没有 lint 脚本：** 跳过 Lint，记录 "Lint: 跳过（未配置 lint 脚本）"。
 
 **如果有 lint 脚本：**
 ```bash
-cd "$VIEWER_DIR" && npm run lint
+cd "$PROJECT_DIR" && npm run lint
 ```
 
 **如果 Lint 通过（或只有 warnings）：** 记录 warnings，继续 Layer 2。
@@ -186,16 +197,16 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 
 1. 首先尝试自动修复命令：
    ```bash
-   cd "$VIEWER_DIR" && npx eslint --fix .
+   cd "$PROJECT_DIR" && npx eslint --fix .
    ```
-2. 重新运行 `cd "$VIEWER_DIR" && npm run lint`
+2. 重新运行 `cd "$PROJECT_DIR" && npm run lint`
 3. 如果仍有 errors（忽略 warnings）：
    - 分析每个 error 的类型和文件
    - 如果 **≤ 3 文件**：直接修复
    - 如果 **> 3 文件**：Agent Teams 并行修复
      - 每个 agent（subagent_type: `general-purpose`）：
      - prompt: "修复以下 ESLint 错误：\n{错误详情}\n文件路径：{path}\n只修改这个文件。"
-4. 重新运行 `cd "$VIEWER_DIR" && npm run lint`
+4. 重新运行 `cd "$PROJECT_DIR" && npm run lint`
 5. 如果只剩 warnings → 通过（记录 warnings）
 6. 如果错误没变化（连续 3 次无进展）→ Circuit Breaker → AskUserQuestion：
    ```
@@ -227,7 +238,7 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 检测项目中是否有测试脚本：
 
 ```bash
-cd "$VIEWER_DIR" && cat package.json | python3 -c "
+cd "$PROJECT_DIR" && cat package.json | python3 -c "
 import sys, json
 scripts = json.load(sys.stdin).get('scripts', {})
 if 'test:unit' in scripts:
@@ -247,7 +258,7 @@ Layer 2: 跳过（未检测到 test 或 test:unit 脚本）
 
 **如果有测试脚本：**
 ```bash
-cd "$VIEWER_DIR" && npm run <detected_script>
+cd "$PROJECT_DIR" && npm run <detected_script>
 ```
 
 其中 `<detected_script>` 为 `test:unit` 或 `test`（优先使用 `test:unit`）。
@@ -267,7 +278,7 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 3. 如果涉及多个测试文件 **> 3 个**：Agent Teams 并行修复
    - 每个 agent（subagent_type: `general-purpose`）：
    - prompt: "修复以下单元测试失败：\n{测试名 + 错误信息}\n文件路径：{path}\n分析根因并修复。"
-4. 重新运行 `cd "$VIEWER_DIR" && npm run <detected_script>`
+4. 重新运行 `cd "$PROJECT_DIR" && npm run <detected_script>`
 5. 如果错误没变化（连续 3 次无进展）→ Circuit Breaker → AskUserQuestion：
    ```
    单元测试自动修复无进展。以下测试持续失败：
@@ -316,13 +327,13 @@ curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:3000
 
 ```bash
 # 检测 Playwright 配置
-ls playwright.config.* 2>/dev/null || ls "$VIEWER_DIR/playwright.config."* 2>/dev/null
+ls playwright.config.* 2>/dev/null || ls "$PROJECT_DIR/playwright.config."* 2>/dev/null
 ```
 
 同时检测 package.json 中的 E2E 脚本：
 
 ```bash
-cd "$VIEWER_DIR" && cat package.json | python3 -c "
+cd "$PROJECT_DIR" && cat package.json | python3 -c "
 import sys, json
 scripts = json.load(sys.stdin).get('scripts', {})
 if 'test:e2e' in scripts:
@@ -342,12 +353,12 @@ Layer 3: 跳过（未检测到 E2E 测试配置）
 
 **如果有 E2E 脚本：**
 ```bash
-cd "$VIEWER_DIR" && npm run <detected_e2e_script>
+cd "$PROJECT_DIR" && npm run <detected_e2e_script>
 ```
 
 **如果没有 E2E 脚本但有 Playwright 配置：**
 ```bash
-cd "$VIEWER_DIR" && npx playwright test
+cd "$PROJECT_DIR" && npx playwright test
 ```
 
 **如果 E2E 测试通过：** 继续 Layer 4。
@@ -364,7 +375,7 @@ Ralph 修复循环（持续直到通过或断路器触发）：
    - 实现 bug → 修复源码
 3. 只重跑失败的测试（不跑全套）：
    ```bash
-   cd "$VIEWER_DIR" && npx playwright test --grep "<failed_test_name>"
+   cd "$PROJECT_DIR" && npx playwright test --grep "<failed_test_name>"
    ```
 4. 如果错误没变化（连续 3 次无进展）→ Circuit Breaker → AskUserQuestion：
    ```
@@ -395,7 +406,7 @@ git diff main...HEAD
 ```
 Layer 4: 跳过（没有相对于 main 的代码改动）
 ```
-记录跳过并继续 Layer 5。
+记录跳过并继续最终总结。
 
 ### 4b. Claude 审查
 
@@ -418,7 +429,7 @@ Layer 4: 跳过（没有相对于 main 的代码改动）
 ### 4c. 判断审查结果
 
 - **如果只有 MEDIUM / LOW 问题或无问题：**
-输出审查摘要（包含 MEDIUM/LOW 建议），继续 Layer 5。
+输出审查摘要（包含 MEDIUM/LOW 建议），继续最终总结。
 
 - **如果有 HIGH 级别问题（Ralph 自动修复）：**
 

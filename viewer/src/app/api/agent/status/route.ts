@@ -7,11 +7,10 @@ import {
   type TaskStatus as HistoryTaskStatus,
   type TaskStage,
 } from '@/lib/task-history';
-import { getAgentStatusPath, getPrdJsonPath, getAgentPidPath } from '@/lib/project-root';
+import { getAgentStatusPath, getPrdJsonPath, getProjectPrdJsonPath, getAgentPidPath } from '@/lib/project-root';
 
 // File paths
 const STATUS_FILE = getAgentStatusPath();
-const PRD_FILE = getPrdJsonPath();
 const PID_FILE = getAgentPidPath();
 
 interface AgentPidInfo {
@@ -129,10 +128,11 @@ function readStatusFile(): AgentStatus | null {
   return null;
 }
 
-function getProgressFromFiles(): { completed: number; total: number } {
+function getProgressFromFiles(projectId?: string | null): { completed: number; total: number } {
   try {
-    if (fs.existsSync(PRD_FILE)) {
-      const content = fs.readFileSync(PRD_FILE, 'utf-8');
+    const prdFile = getProjectPrdJsonPath(projectId);
+    if (fs.existsSync(prdFile)) {
+      const content = fs.readFileSync(prdFile, 'utf-8');
       const completed = (content.match(/"passes": true/g) || []).length;
       const total = (content.match(/"id": "DT-/g) || []).length;
       return { completed, total };
@@ -143,10 +143,11 @@ function getProgressFromFiles(): { completed: number; total: number } {
   return { completed: 0, total: 0 };
 }
 
-function readPRD(): PRDJson | null {
+function readPRD(projectId?: string | null): PRDJson | null {
   try {
-    if (fs.existsSync(PRD_FILE)) {
-      return JSON.parse(fs.readFileSync(PRD_FILE, 'utf-8'));
+    const prdFile = getProjectPrdJsonPath(projectId);
+    if (fs.existsSync(prdFile)) {
+      return JSON.parse(fs.readFileSync(prdFile, 'utf-8'));
     }
   } catch {
     // Ignore
@@ -216,8 +217,8 @@ function syncTaskHistory(agentStatus: AgentStatus): void {
   }
 }
 
-function getDefaultStatus(): AgentStatus {
-  const progress = getProgressFromFiles();
+function getDefaultStatus(projectId?: string | null): AgentStatus {
+  const progress = getProgressFromFiles(projectId);
   return {
     status: 'idle',
     message: 'Agent not running',
@@ -235,10 +236,11 @@ function getDefaultStatus(): AgentStatus {
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const stream = url.searchParams.get('stream') === 'true';
+  const projectId = url.searchParams.get('projectId') || undefined;
 
   if (!stream) {
     // Return current status as JSON, with orphan detection
-    let status = readStatusFile() || getDefaultStatus();
+    let status = readStatusFile() || getDefaultStatus(projectId);
     status = checkAndHandleOrphan(status);
     return NextResponse.json(status);
   }
@@ -252,7 +254,7 @@ export async function GET(request: NextRequest) {
       let lastStatus = readStatusFile();
 
       // Send initial status
-      const initialStatus = lastStatus || getDefaultStatus();
+      const initialStatus = lastStatus || getDefaultStatus(projectId);
       const initialEvent = {
         type: 'status',
         data: initialStatus,
@@ -277,7 +279,7 @@ export async function GET(request: NextRequest) {
           if (currentJson !== lastJson) {
             const event = {
               type: 'status',
-              data: currentStatus || getDefaultStatus(),
+              data: currentStatus || getDefaultStatus(projectId),
               timestamp: Date.now(),
             };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));

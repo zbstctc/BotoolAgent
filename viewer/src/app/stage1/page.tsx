@@ -1,5 +1,8 @@
 'use client';
 
+const isDev = process.env.NODE_ENV === 'development';
+const debugLog = (...args: unknown[]) => { if (isDev) console.log(...args); };
+
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -112,7 +115,7 @@ export default function Stage1Page() {
         if (state.isConfirmationPhase) setIsConfirmationPhase(state.isConfirmationPhase);
         if (state.confirmationSummary) setConfirmationSummary(state.confirmationSummary);
         if (state.selectedMode) setSelectedMode(state.selectedMode);
-        console.log('[Stage1] Restored saved state (once)', { qaHistoryCount: state.qaHistory?.length || 0 });
+        debugLog('[Stage1] Restored saved state (once)', { qaHistoryCount: state.qaHistory?.length || 0 });
       } catch (e) {
         console.error('[Stage1] Failed to parse saved state:', e);
       }
@@ -162,19 +165,19 @@ export default function Stage1Page() {
 
   // Handle tool use from CLI
   const handleToolUse = useCallback((toolUse: { id: string; name: string; input: Record<string, unknown> }) => {
-    console.log('[Stage1] Tool use received:', toolUse.name);
+    debugLog('[Stage1] Tool use received:', toolUse.name);
     // Track current tool for progress feedback
     setCurrentTool(toolUse.name);
 
     if (toolUse.name === 'AskUserQuestion' && isAskUserQuestionInput(toolUse.input)) {
       const input = toolUse.input as AskUserQuestionToolInput;
-      console.log('[Stage1] AskUserQuestion received, questions:', input.questions.length);
+      debugLog('[Stage1] AskUserQuestion received, questions:', input.questions.length);
       setCurrentQuestions(input.questions);
 
       // Update level from metadata
       if (input.metadata) {
         const metadata = input.metadata as PyramidMetadata;
-        console.log('[Stage1] Level from metadata:', metadata.level, 'phase:', metadata.phase);
+        debugLog('[Stage1] Level from metadata:', metadata.level, 'phase:', metadata.phase);
         setCurrentLevel(metadata.level);
 
         // Track codebase scan status
@@ -219,7 +222,7 @@ export default function Stage1Page() {
     onToolUse: handleToolUse,
     onError: (error) => console.error('CLI error:', error),
     onSessionIdChange: (newSessionId) => {
-      console.log('[Stage1] CLI session ID changed:', newSessionId);
+      debugLog('[Stage1] CLI session ID changed:', newSessionId);
       setCliSessionId(newSessionId);
     },
   });
@@ -235,16 +238,16 @@ export default function Stage1Page() {
   useEffect(() => {
     // Look for PRD content in any assistant message
     // The PRD is generated after L4 is completed, look for "# PRD:" marker
-    console.log('[Stage1] Checking messages for PRD, count:', messages.length);
+    debugLog('[Stage1] Checking messages for PRD, count:', messages.length);
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
       if (msg.role === 'assistant') {
-        console.log('[Stage1] Assistant message preview:', msg.content.slice(0, 100));
+        debugLog('[Stage1] Assistant message preview:', msg.content.slice(0, 100));
         if (msg.content.includes('# PRD:')) {
           // Extract PRD content starting from "# PRD:" to the end
           const prdMatch = msg.content.match(/(# PRD:[\s\S]+)/);
           if (prdMatch) {
-            console.log('[Stage1] PRD found!');
+            debugLog('[Stage1] PRD found!');
             setPrdDraft(prdMatch[1]);
             // Mark all levels as completed when PRD is generated
             setCompletedLevels([1, 2, 3, 4, 5]);
@@ -287,7 +290,7 @@ export default function Stage1Page() {
   const needsResume = isStarted && !isLoading && currentQuestions.length === 0 && !prdDraft && !cliError && !needsPrdGeneration;
 
   // Debug logging
-  console.log('[Stage1] State:', {
+  debugLog('[Stage1] State:', {
     isStarted,
     isLoading,
     currentLevel,
@@ -307,9 +310,9 @@ export default function Stage1Page() {
 
   // Auto-generate PRD when L4 is completed but no PRD yet
   useEffect(() => {
-    console.log('[Stage1] PRD generation check:', { needsPrdGeneration, cliSessionId: !!cliSessionId, hasAttemptedPrdGeneration, qaHistoryCount: qaHistory.length });
+    debugLog('[Stage1] PRD generation check:', { needsPrdGeneration, cliSessionId: !!cliSessionId, hasAttemptedPrdGeneration, qaHistoryCount: qaHistory.length });
     if (needsPrdGeneration && cliSessionId && !hasAttemptedPrdGeneration && qaHistory.length > 0) {
-      console.log('[Stage1] Auto-requesting PRD generation with Q&A history...');
+      debugLog('[Stage1] Auto-requesting PRD generation with Q&A history...');
       setHasAttemptedPrdGeneration(true);
 
       // Build Q&A summary from history
@@ -323,9 +326,9 @@ export default function Stage1Page() {
 
   // Auto-resume when needed (only once)
   useEffect(() => {
-    console.log('[Stage1] Auto-resume check:', { needsResume, cliSessionId: !!cliSessionId, hasAttemptedResume });
+    debugLog('[Stage1] Auto-resume check:', { needsResume, cliSessionId: !!cliSessionId, hasAttemptedResume });
     if (needsResume && cliSessionId && !hasAttemptedResume) {
-      console.log('[Stage1] Auto-resuming from saved state...');
+      debugLog('[Stage1] Auto-resuming from saved state...');
       setHasAttemptedResume(true);
       resumePyramid();
     }

@@ -14,11 +14,22 @@ CLI 端的 PR 创建、Code Review 摘要、合并、清理流程。
 
 ---
 
+## Step 0: 项目选择（多 PRD 模式）
+
+检查 `tasks/registry.json`（或 `BotoolAgent/tasks/registry.json`）是否存在：
+- 如果存在且有多个项目 → 用 AskUserQuestion 列出项目让用户选择
+- 选择后，使用 `tasks/prd-{projectId}.json` 作为 prd.json 路径
+- 如果不存在 registry 或只有一个项目 → 直接读根目录 `prd.json`（向后兼容）
+
+---
+
 ## Step 1: 前置检查 & 推送代码
 
 ### 1a. 检查 prd.json 和 branchName
 
 ```bash
+# 如果 Step 0 选定了 projectId，检查 tasks/prd-{projectId}.json
+# 否则检查根目录 prd.json
 ls prd.json 2>/dev/null
 ```
 
@@ -101,7 +112,7 @@ gh pr list --head <branchName> --json number,title,url,state --jq '.[0]'
 读取 prd.json 中的 `project`（项目名称）和 `description`（项目描述）。
 
 ```bash
-gh pr create --title "feat: $PROJECT_NAME" --body "$(cat <<'EOF'
+gh pr create --title "feat: $PROJECT_NAME" --body "$(cat <<EOF
 ## 自动生成 PR
 
 **项目：** $PROJECT_NAME

@@ -3,7 +3,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
-import { getProjectRoot, getProgressPath, getPrdJsonPath } from '@/lib/project-root';
+import { getProjectRoot, getProgressPath, getPrdJsonPath, getProjectPrdJsonPath, getProjectProgressPath } from '@/lib/project-root';
 
 const execAsync = promisify(exec);
 
@@ -31,8 +31,8 @@ interface CompletedTask {
 /**
  * Parse progress.txt to extract completed task IDs and titles
  */
-async function getCompletedTasks(): Promise<CompletedTask[]> {
-  const progressPath = getProgressPath();
+async function getCompletedTasks(projectId?: string): Promise<CompletedTask[]> {
+  const progressPath = getProjectProgressPath(projectId);
   const tasks: CompletedTask[] = [];
 
   try {
@@ -56,8 +56,8 @@ async function getCompletedTasks(): Promise<CompletedTask[]> {
 /**
  * Get task titles from prd.json
  */
-async function getTaskTitles(taskIds: string[]): Promise<Map<string, string>> {
-  const prdPath = getPrdJsonPath();
+async function getTaskTitles(taskIds: string[], projectId?: string): Promise<Map<string, string>> {
+  const prdPath = getProjectPrdJsonPath(projectId);
   const titleMap = new Map<string, string>();
 
   try {
@@ -81,8 +81,8 @@ async function getTaskTitles(taskIds: string[]): Promise<Map<string, string>> {
 /**
  * Generate PR title from project name and branch
  */
-async function generatePRTitle(): Promise<string> {
-  const prdPath = getPrdJsonPath();
+async function generatePRTitle(projectId?: string): Promise<string> {
+  const prdPath = getProjectPrdJsonPath(projectId);
 
   try {
     const content = await fs.readFile(prdPath, 'utf-8');
@@ -104,10 +104,10 @@ async function generatePRTitle(): Promise<string> {
 /**
  * Generate PR description with completed tasks
  */
-async function generatePRDescription(): Promise<string> {
-  const completedTasks = await getCompletedTasks();
+async function generatePRDescription(projectId?: string): Promise<string> {
+  const completedTasks = await getCompletedTasks(projectId);
   const taskIds = completedTasks.map(t => t.id);
-  const titleMap = await getTaskTitles(taskIds);
+  const titleMap = await getTaskTitles(taskIds, projectId);
 
   // Fill in titles
   for (const task of completedTasks) {
@@ -117,7 +117,7 @@ async function generatePRDescription(): Promise<string> {
   // Get PRD description
   let projectDescription = '';
   try {
-    const prdPath = getPrdJsonPath();
+    const prdPath = getProjectPrdJsonPath(projectId);
     const content = await fs.readFile(prdPath, 'utf-8');
     const prd = JSON.parse(content);
     projectDescription = prd.description || '';

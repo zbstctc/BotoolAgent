@@ -42,6 +42,10 @@ while [[ $# -gt 0 ]]; do
       PROJECT_DIR="$2"
       shift 2
       ;;
+    --prd-path)
+      PRD_PATH_OVERRIDE="$2"
+      shift 2
+      ;;
     *)
       shift
       ;;
@@ -71,8 +75,17 @@ fi
 ARCHIVE_DIR="$SCRIPT_DIR/archive"
 LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch"
 STATUS_FILE="$SCRIPT_DIR/.agent-status"
-PRD_FILE="$PROJECT_DIR/prd.json"
-PROGRESS_FILE="$PROJECT_DIR/progress.txt"
+# --prd-path 覆盖：支持多 PRD 模式
+if [ -n "$PRD_PATH_OVERRIDE" ]; then
+  PRD_FILE="$PRD_PATH_OVERRIDE"
+  PRD_BASENAME="$(basename "$PRD_PATH_OVERRIDE")"
+  PROGRESS_BASENAME="${PRD_BASENAME/prd-/progress-}"
+  PROGRESS_BASENAME="${PROGRESS_BASENAME/.json/.txt}"
+  PROGRESS_FILE="$(dirname "$PRD_PATH_OVERRIDE")/$PROGRESS_BASENAME"
+else
+  PRD_FILE="$PROJECT_DIR/prd.json"
+  PROGRESS_FILE="$PROJECT_DIR/progress.txt"
+fi
 
 if [ "$PROJECT_DIR" != "$SCRIPT_DIR" ]; then
   echo ">>> 可移植模式: 项目目录 = $PROJECT_DIR"

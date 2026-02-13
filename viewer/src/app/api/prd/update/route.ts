@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getPrdJsonPath } from '@/lib/project-root';
+import { getPrdJsonPath, getProjectPrdJsonPath } from '@/lib/project-root';
 
 interface DevTask {
   id: string;
@@ -22,7 +22,7 @@ interface PrdJson {
 
 export async function POST(request: NextRequest) {
   try {
-    const body: PrdJson = await request.json();
+    const body: PrdJson & { projectId?: string } = await request.json();
 
     // Validate required fields
     if (!body.project || !body.branchName || !body.devTasks) {
@@ -49,9 +49,15 @@ export async function POST(request: NextRequest) {
       })),
     };
 
-    // Write to prd.json
-    const prdJsonPath = getPrdJsonPath();
+    // Write to prd.json (project-specific if projectId provided, otherwise root)
+    const prdJsonPath = getProjectPrdJsonPath(body.projectId);
     fs.writeFileSync(prdJsonPath, JSON.stringify(updatedPrd, null, 2));
+
+    // Also update root prd.json for backward compatibility
+    if (body.projectId) {
+      const rootPath = getPrdJsonPath();
+      fs.writeFileSync(rootPath, JSON.stringify(updatedPrd, null, 2));
+    }
 
     return NextResponse.json({
       success: true,

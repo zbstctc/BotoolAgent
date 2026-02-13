@@ -536,10 +536,10 @@ Or open http://localhost:3000/stage3 to monitor development visually.
 
 **Option 2: Run from terminal**
 ```bash
-./BotoolAgent.sh 10
+/botoolagent-coding
 ```
 
-This will run up to 10 iterations, implementing one task per iteration."
+This will start autonomous development, implementing one task per iteration."
 
 ---
 

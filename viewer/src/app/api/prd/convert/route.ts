@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CLIManager, CLIMessage } from '@/lib/cli-manager';
-import { getProjectRoot, getPrdJsonPath, getProgressPath, getArchiveDir } from '@/lib/project-root';
+import { getProjectRoot, getPrdJsonPath, getProgressPath, getProjectPrdJsonPath, getProjectProgressPath, getArchiveDir, getRegistryPath } from '@/lib/project-root';
 
 const PROJECT_ROOT = getProjectRoot();
 
@@ -58,6 +58,7 @@ Output ONLY the JSON object, nothing else.`;
 interface ConvertRequest {
   prdContent: string;
   prdId: string;
+  projectId?: string;
 }
 
 /**
@@ -67,7 +68,7 @@ interface ConvertRequest {
 export async function POST(request: NextRequest) {
   try {
     const body: ConvertRequest = await request.json();
-    const { prdContent, prdId } = body;
+    const { prdContent, prdId, projectId } = body;
 
     if (!prdContent) {
       return NextResponse.json({ error: 'PRD content is required' }, { status: 400 });
@@ -120,12 +121,20 @@ export async function POST(request: NextRequest) {
             // Archive existing prd.json if it has a different branch
             await archiveIfNeeded(prdJson);
 
-            // Write prd.json to project root
-            const prdJsonPath = getPrdJsonPath();
+            // Write prd.json - to project-specific path if projectId provided
+            const prdJsonPath = getProjectPrdJsonPath(projectId);
             fs.writeFileSync(prdJsonPath, JSON.stringify(prdJson, null, 2));
 
+            // Also write to root prd.json for backward compatibility
+            if (projectId) {
+              const rootPrdPath = getPrdJsonPath();
+              fs.writeFileSync(rootPrdPath, JSON.stringify(prdJson, null, 2));
+              // Update registry
+              updateRegistry(projectId, prdJson.project || prdId, prdJson.branchName, 'coding');
+            }
+
             // Reset progress.txt with fresh header
-            const progressPath = getProgressPath();
+            const progressPath = getProjectProgressPath(projectId);
             const header = `# Botool Dev Agent Progress Log\nStarted: ${new Date().toLocaleString()}\n---\n\n## Codebase Patterns\n- (patterns will be added here as discovered)\n\n---\n`;
             fs.writeFileSync(progressPath, header);
 
@@ -256,5 +265,53 @@ async function archiveIfNeeded(newPrdJson: { branchName: string }) {
   } catch (error) {
     console.error('Archive error:', error);
     // Continue even if archiving fails
+  }
+}
+
+interface RegistryProject {
+  name: string;
+  prdMd: string;
+  prdJson: string;
+  progress: string;
+  branch: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Registry {
+  version: number;
+  projects: Record<string, RegistryProject>;
+  activeProject: string | null;
+}
+
+function updateRegistry(projectId: string, name: string, branch?: string, status?: string): void {
+  try {
+    const registryPath = getRegistryPath();
+    let registry: Registry = { version: 1, projects: {}, activeProject: null };
+
+    if (fs.existsSync(registryPath)) {
+      registry = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
+    }
+
+    const now = new Date().toISOString();
+    const existing = registry.projects[projectId];
+
+    registry.projects[projectId] = {
+      name: name || existing?.name || projectId,
+      prdMd: `prd-${projectId}.md`,
+      prdJson: `prd-${projectId}.json`,
+      progress: `progress-${projectId}.txt`,
+      branch: branch || existing?.branch || `botool/${projectId}`,
+      status: status || existing?.status || 'draft',
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+
+    registry.activeProject = projectId;
+
+    fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2));
+  } catch (error) {
+    console.error('Registry update error:', error);
   }
 }

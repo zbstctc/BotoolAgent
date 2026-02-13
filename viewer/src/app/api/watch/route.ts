@@ -1,12 +1,6 @@
 import { NextRequest } from 'next/server';
 import * as fs from 'fs';
-import { getPrdJsonPath, getProgressPath } from '@/lib/project-root';
-
-// File paths to watch
-const WATCHED_FILES = {
-  prd: getPrdJsonPath(),
-  progress: getProgressPath(),
-};
+import { getPrdJsonPath, getProgressPath, getProjectPrdJsonPath, getProjectProgressPath } from '@/lib/project-root';
 
 interface FileContent {
   prd: string | null;
@@ -24,14 +18,24 @@ function readFileContent(filePath: string): string | null {
   return null;
 }
 
-function getFileContents(): FileContent {
+function getWatchedFiles(projectId?: string | null) {
   return {
-    prd: readFileContent(WATCHED_FILES.prd),
-    progress: readFileContent(WATCHED_FILES.progress),
+    prd: getProjectPrdJsonPath(projectId),
+    progress: getProjectProgressPath(projectId),
+  };
+}
+
+function getFileContents(projectId?: string | null): FileContent {
+  const files = getWatchedFiles(projectId);
+  return {
+    prd: readFileContent(files.prd),
+    progress: readFileContent(files.progress),
   };
 }
 
 export async function GET(request: NextRequest) {
+  const url = new URL(request.url);
+  const projectId = url.searchParams.get('projectId') || undefined;
   const encoder = new TextEncoder();
 
   // Get the abort signal from the request
@@ -39,7 +43,7 @@ export async function GET(request: NextRequest) {
 
   const stream = new ReadableStream({
     start(controller) {
-      let lastContents = getFileContents();
+      let lastContents = getFileContents(projectId);
 
       // Send initial data
       const initialData = {
@@ -52,7 +56,7 @@ export async function GET(request: NextRequest) {
       // Set up file watching with polling (more reliable than fs.watch for cross-platform)
       const pollInterval = setInterval(() => {
         try {
-          const currentContents = getFileContents();
+          const currentContents = getFileContents(projectId);
 
           // Check for changes in prd.json
           if (currentContents.prd !== lastContents.prd) {

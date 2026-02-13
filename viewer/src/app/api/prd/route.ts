@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getTasksDir, getPrdJsonPath } from '@/lib/project-root';
+import { getTasksDir, getPrdJsonPath, getRegistryPath, getProjectPrdJsonPath } from '@/lib/project-root';
 
 const TASKS_DIR = getTasksDir();
 
@@ -63,16 +63,40 @@ function extractPreview(content: string): string {
 }
 
 function determinePRDStatus(filename: string): PRDItem['status'] {
-  // Check if there's an active prd.json that references this PRD
+  const baseName = filename.replace(/^prd-/, '').replace(/\.md$/, '');
+
+  // First check registry for project-specific prd.json
+  try {
+    const registryPath = getRegistryPath();
+    if (fs.existsSync(registryPath)) {
+      const registry = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
+      if (registry.projects?.[baseName]) {
+        const projectPrdPath = getProjectPrdJsonPath(baseName);
+        if (fs.existsSync(projectPrdPath)) {
+          const prdJson = JSON.parse(fs.readFileSync(projectPrdPath, 'utf-8'));
+          const tasks = prdJson.devTasks || [];
+          if (tasks.length > 0) {
+            const allComplete = tasks.every((t: { passes: boolean }) => t.passes);
+            const hasInProgress = tasks.some((t: { passes: boolean }) => !t.passes);
+            if (allComplete) return 'completed';
+            if (hasInProgress) return 'in-progress';
+          }
+          return registry.projects[baseName].status === 'coding' ? 'in-progress' : 'ready';
+        }
+      }
+    }
+  } catch {
+    // Fall through to legacy check
+  }
+
+  // Fallback: check root prd.json
   try {
     const prdJsonPath = getPrdJsonPath();
     if (fs.existsSync(prdJsonPath)) {
       const prdJson = JSON.parse(fs.readFileSync(prdJsonPath, 'utf-8'));
-      const baseName = filename.replace(/^prd-/, '').replace(/\.md$/, '');
       const projectName = prdJson.project?.toLowerCase() || '';
 
       if (projectName.includes(baseName.toLowerCase()) || baseName.toLowerCase().includes(projectName.toLowerCase())) {
-        // Check if any tasks are in progress
         const tasks = prdJson.devTasks || [];
         const hasInProgress = tasks.some((t: { passes: boolean }) => !t.passes);
         const allComplete = tasks.every((t: { passes: boolean }) => t.passes);
