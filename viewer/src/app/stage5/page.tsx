@@ -258,7 +258,7 @@ export default function Stage5Page() {
 
           <div className="flex-1 overflow-auto p-4 bg-neutral-50 space-y-4">
             {/* Review Summary */}
-            <ReviewSummary defaultExpanded />
+            <ReviewSummary projectId={projectId} defaultExpanded />
 
             {/* PR Status */}
             <div className="bg-white border border-neutral-200 rounded-lg p-4">

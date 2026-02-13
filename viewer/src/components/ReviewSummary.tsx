@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import type { ReviewSummaryData } from '@/app/api/review-summary/route';
 
 export interface ReviewSummaryProps {
+  /** Project ID for multi-project support */
+  projectId?: string;
   /** Whether to show expanded details by default */
   defaultExpanded?: boolean;
 }
@@ -36,7 +38,7 @@ function StatCard({ icon, label, value, subtext, color }: {
   );
 }
 
-export function ReviewSummary({ defaultExpanded = false }: ReviewSummaryProps) {
+export function ReviewSummary({ projectId, defaultExpanded = false }: ReviewSummaryProps) {
   const [data, setData] = useState<ReviewSummaryData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
@@ -46,7 +48,10 @@ export function ReviewSummary({ defaultExpanded = false }: ReviewSummaryProps) {
     const fetchSummary = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch('/api/review-summary');
+        const reviewUrl = projectId
+          ? `/api/review-summary?projectId=${encodeURIComponent(projectId)}`
+          : '/api/review-summary';
+        const response = await fetch(reviewUrl);
         if (response.ok) {
           const summary = await response.json();
           setData(summary);
@@ -60,7 +65,7 @@ export function ReviewSummary({ defaultExpanded = false }: ReviewSummaryProps) {
       }
     };
     fetchSummary();
-  }, []);
+  }, [projectId]);
 
   if (isLoading) {
     return (

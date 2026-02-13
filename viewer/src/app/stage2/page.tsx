@@ -83,8 +83,9 @@ export default function Stage2Page() {
       });
     }
 
-    // Navigate to Stage 3
-    router.push('/stage3');
+    // Navigate to Stage 3 (carry projectId for multi-project support)
+    const params = activeProject?.id ? `?projectId=${activeProject.id}` : '';
+    router.push(`/stage3${params}`);
   }, [activeProject, updateProject, router]);
 
   // Back handlers
@@ -118,6 +119,7 @@ export default function Stage2Page() {
           <EnrichmentSummary
             prdContent={prdContent}
             projectName={activeProject?.name || 'New Project'}
+            projectId={activeProject?.id}
             mode={mode}
             selectedRules={selectedRules}
             enrichResult={enrichResult}

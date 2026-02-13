@@ -8,6 +8,7 @@ import type { RuleDocument } from './RuleCheckStep';
 interface EnrichmentSummaryProps {
   prdContent: string;
   projectName: string;
+  projectId?: string;
   mode: PipelineMode;
   selectedRules: RuleDocument[];
   enrichResult: AutoEnrichResult | null;
@@ -20,6 +21,7 @@ type ConvertingState = 'idle' | 'converting' | 'completed' | 'error';
 export function EnrichmentSummary({
   prdContent,
   projectName,
+  projectId,
   mode,
   selectedRules,
   enrichResult,
@@ -97,12 +99,14 @@ export function EnrichmentSummary({
     try {
       abortControllerRef.current = new AbortController();
 
+      const prdId = projectId || projectName?.toLowerCase().replace(/\s+/g, '-') || 'new-project';
       const response = await fetch('/api/prd/convert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prdContent,
-          prdId: projectName?.toLowerCase().replace(/\s+/g, '-') || 'new-project',
+          prdId,
+          projectId,
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -199,7 +203,7 @@ export function EnrichmentSummary({
       setConvertingState('error');
       setConvertingMessage('转换失败');
     }
-  }, [prdContent, projectName, prdJson, callEnrichMerge]);
+  }, [prdContent, projectName, projectId, prdJson, callEnrichMerge]);
 
   // Cancel conversion
   const cancelConversion = useCallback(() => {
@@ -257,7 +261,7 @@ export function EnrichmentSummary({
       await fetch('/api/prd/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(prdJson),
+        body: JSON.stringify({ ...prdJson, projectId }),
       }).catch(() => {
         // Non-critical: enriched data saved to file, prd.json update is best-effort
       });
@@ -269,7 +273,7 @@ export function EnrichmentSummary({
     } finally {
       setIsSaving(false);
     }
-  }, [prdJson, parseError, onComplete]);
+  }, [prdJson, parseError, projectId, onComplete]);
 
   // Summary stats
   const rulesCount = selectedRules.length;

@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import fs from 'fs';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
-import { getProjectRoot, getPrdJsonPath, getProjectPrdJsonPath, getAgentScriptPath, getAgentTeamsScriptPath, getAgentPidPath, isPortableMode } from '@/lib/project-root';
+import { getProjectRoot, getPrdJsonPath, getProjectPrdJsonPath, getAgentScriptPath, getAgentTeamsScriptPath, getAgentPidPath, getAgentStatusPath, isPortableMode } from '@/lib/project-root';
 
 const PROJECT_ROOT = getProjectRoot();
 const PID_FILE = getAgentPidPath();
+const STATUS_FILE = getAgentStatusPath();
 
 interface AgentPidInfo {
   pid: number;
@@ -50,6 +51,26 @@ function cleanPidFile(): void {
   }
 }
 
+function writeAgentStatus(fields: Record<string, unknown>): void {
+  const status = {
+    status: 'idle',
+    message: '',
+    timestamp: new Date().toISOString(),
+    iteration: 0,
+    maxIterations: 0,
+    completed: 0,
+    total: 0,
+    currentTask: 'none',
+    retryCount: 0,
+    ...fields,
+  };
+  try {
+    fs.writeFileSync(STATUS_FILE, JSON.stringify(status, null, 2));
+  } catch {
+    // Ignore
+  }
+}
+
 interface PRDJson {
   project?: string;
   description?: string;
@@ -71,7 +92,7 @@ function readPRD(projectId?: string): PRDJson | null {
 
 export async function POST(request: Request) {
   try {
-    const { maxIterations = 10, mode = 'single', projectId } = await request.json().catch(() => ({}));
+    const { maxIterations = 10, mode = 'teams', projectId } = await request.json().catch(() => ({}));
 
     const PRD_PATH = getProjectPrdJsonPath(projectId);
 
@@ -141,10 +162,27 @@ export async function POST(request: Request) {
         '-p', prompt,
       ];
 
+      // Write initial .agent-status so Stage 4 UI can track progress
+      writeAgentStatus({
+        status: 'running',
+        message: 'Testing pipeline started (4-layer verification)',
+        currentTask: 'testing',
+      });
+
       child = spawn(claudeArgs[0], claudeArgs.slice(1), {
         cwd: PROJECT_ROOT,
         detached: true,
         stdio: 'ignore',
+      });
+
+      // Listen for exit to write final status (works even with detached+unref
+      // because Next.js server keeps the event loop alive)
+      child.on('exit', (code) => {
+        writeAgentStatus({
+          status: code === 0 ? 'complete' : 'error',
+          message: code === 0 ? 'Testing pipeline completed' : `Testing failed (exit code ${code})`,
+        });
+        cleanPidFile();
       });
     } else {
       // Coding mode: run BotoolAgent scripts

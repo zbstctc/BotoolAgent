@@ -252,7 +252,7 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
   }, []);
 
   // Start agent
-  const startAgent = useCallback(async (maxIterations: number = 10, mode: 'single' | 'teams' = 'single') => {
+  const startAgent = useCallback(async (maxIterations: number = 10, mode: 'single' | 'teams' = 'teams') => {
     try {
       const response = await fetch('/api/agent/start', {
         method: 'POST',
