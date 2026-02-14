@@ -6,8 +6,8 @@ import { getProjectRoot, getPrdJsonPath, getProgressPath, getProjectPrdJsonPath,
 
 const PROJECT_ROOT = getProjectRoot();
 
-// System prompt for PRD to JSON conversion
-const SYSTEM_PROMPT = `You are a PRD to JSON converter for BotoolAgent. Your task is to convert a PRD markdown document into a structured JSON format.
+// System prompt for PRD to JSON conversion (slim index format)
+const SYSTEM_PROMPT = `You are a PRD to JSON converter for BotoolAgent. Convert a PRD markdown document into a **slim prd.json** — an automation index. The PRD.md is the Single Source of Truth; prd.json only contains automation fields.
 
 ## Output Format
 
@@ -16,20 +16,15 @@ You must output ONLY valid JSON, no explanations or markdown. The format is:
 {
   "project": "[Project Name - extract from PRD title]",
   "branchName": "botool/[feature-name-kebab-case]",
-  "description": "[Feature description from PRD introduction]",
+  "description": "[Feature description from PRD § 1 or introduction]",
   "devTasks": [
     {
       "id": "DT-001",
       "title": "[Task title]",
-      "description": "As a [user], I want [feature] so that [benefit]",
-      "acceptanceCriteria": [
-        "Criterion 1",
-        "Criterion 2",
-        "Typecheck passes"
-      ],
+      "prdSection": "7.1",
       "priority": 1,
       "passes": false,
-      "notes": ""
+      "dependsOn": []
     }
   ]
 }
@@ -38,20 +33,23 @@ You must output ONLY valid JSON, no explanations or markdown. The format is:
 
 1. **Project Name**: Extract from the PRD title (after "PRD:")
 2. **Branch Name**: Derive from feature name, kebab-case, prefixed with "botool/"
-3. **Description**: Use the introduction/overview text
-4. **Dev Tasks**: Convert each DT-xxx section from the PRD
+3. **Description**: Use the introduction/overview text from PRD § 1
+4. **prdSection Mapping**: Map each task to its PRD Phase section number
+   - Tasks under "## 7.1 Phase 1" → prdSection: "7.1"
+   - Tasks under "## 7.2 Phase 2" → prdSection: "7.2"
+   - If PRD uses flat DT list (no Phases) → prdSection: "7"
+5. **Dev Tasks**: Extract from PRD § 7 (开发计划)
    - Keep the task ID format (DT-001, DT-002, etc.)
-   - Extract title, description, and acceptance criteria
+   - Extract ONLY: id, title, prdSection, priority, passes, dependsOn
+   - Do NOT include description or acceptanceCriteria (these stay in PRD.md)
    - Priority follows document order (first task = 1, second = 2, etc.)
-   - All tasks start with passes: false and empty notes
-5. **Acceptance Criteria**:
-   - Convert checkbox items to array strings (remove "- [ ]" prefix)
-   - Always ensure "Typecheck passes" is included
-   - UI tasks should have "Verify in browser"
+   - All tasks start with passes: false
+6. **Dependencies**: If Phase N depends on Phase M, all tasks in N depend on tasks in M
+   - Also check explicit dependency markers in the PRD
 
 ## Task Size Validation
 
-Each task should be completable in ONE iteration. If a task seems too large, keep it as-is but note it - the user can split it later.
+Each task should be completable in ONE iteration. If a task seems too large, keep it as-is.
 
 Output ONLY the JSON object, nothing else.`;
 
@@ -117,6 +115,12 @@ export async function POST(request: NextRequest) {
             }
 
             const prdJson = JSON.parse(jsonMatch[0]);
+
+            // Inject prdFile if not present (points to the source PRD)
+            if (!prdJson.prdFile && prdId) {
+              const tasksDir = projectId ? 'tasks' : 'tasks';
+              prdJson.prdFile = `${tasksDir}/prd-${prdId}.md`;
+            }
 
             // Archive existing prd.json if it has a different branch
             await archiveIfNeeded(prdJson);

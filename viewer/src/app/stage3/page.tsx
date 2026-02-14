@@ -522,14 +522,19 @@ export default function Stage3Page() {
                       {/* Expanded details */}
                       {isExpanded && (
                         <div className="px-3 pb-3 border-t border-neutral-100">
-                          <p className="text-xs text-neutral-600 mt-2">{task.description}</p>
-                          {task.acceptanceCriteria.length > 0 && (
+                          {task.description && (
+                            <p className="text-xs text-neutral-600 mt-2">{task.description}</p>
+                          )}
+                          {task.prdSection && !task.description && (
+                            <p className="text-xs text-neutral-400 mt-2 italic">PRD § {task.prdSection}</p>
+                          )}
+                          {(task.acceptanceCriteria?.length ?? 0) > 0 && (
                             <div className="mt-2">
                               <p className="text-xs font-medium text-neutral-500 mb-1">
                                 验收标准:
                               </p>
                               <ul className="space-y-1">
-                                {task.acceptanceCriteria.map((criterion, idx) => (
+                                {(task.acceptanceCriteria || []).map((criterion, idx) => (
                                   <li
                                     key={idx}
                                     className={`text-xs flex items-start gap-1.5 ${

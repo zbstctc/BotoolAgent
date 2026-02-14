@@ -5,11 +5,12 @@ import { useState, useCallback } from 'react';
 interface DevTask {
   id: string;
   title: string;
-  description: string;
-  acceptanceCriteria: string[];
+  prdSection?: string;
+  description?: string;
+  acceptanceCriteria?: string[];
   priority: number;
   passes: boolean;
-  notes: string;
+  notes?: string;
 }
 
 interface TaskEditorProps {
@@ -73,7 +74,7 @@ export function TaskEditor({ tasks, onTasksChange, onSave, isSaving }: TaskEdito
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
 
-    const newCriteria = [...task.acceptanceCriteria];
+    const newCriteria = [...(task.acceptanceCriteria || [])];
     if (value === '') {
       // Remove empty criteria
       newCriteria.splice(index, 1);
@@ -88,7 +89,7 @@ export function TaskEditor({ tasks, onTasksChange, onSave, isSaving }: TaskEdito
     if (!task) return;
 
     handleTaskUpdate(taskId, {
-      acceptanceCriteria: [...task.acceptanceCriteria, ''],
+      acceptanceCriteria: [...(task.acceptanceCriteria || []), ''],
     });
   }, [tasks, handleTaskUpdate]);
 
@@ -166,9 +167,13 @@ export function TaskEditor({ tasks, onTasksChange, onSave, isSaving }: TaskEdito
                   <h4 className="font-medium text-neutral-900 mt-1">
                     {task.title}
                   </h4>
-                  <p className="text-sm text-neutral-500 mt-0.5 line-clamp-2">
-                    {task.description}
-                  </p>
+                  {task.description ? (
+                    <p className="text-sm text-neutral-500 mt-0.5 line-clamp-2">
+                      {task.description}
+                    </p>
+                  ) : task.prdSection ? (
+                    <p className="text-sm text-neutral-400 mt-0.5 italic">PRD § {task.prdSection}</p>
+                  ) : null}
                 </div>
 
                 {/* Expand/Collapse Icon */}
@@ -206,7 +211,7 @@ export function TaskEditor({ tasks, onTasksChange, onSave, isSaving }: TaskEdito
                       Description
                     </label>
                     <textarea
-                      value={task.description}
+                      value={task.description || ''}
                       onChange={(e) => handleTaskUpdate(task.id, { description: e.target.value })}
                       rows={2}
                       className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
@@ -219,7 +224,7 @@ export function TaskEditor({ tasks, onTasksChange, onSave, isSaving }: TaskEdito
                       Acceptance Criteria
                     </label>
                     <div className="space-y-2">
-                      {task.acceptanceCriteria.map((criterion, criteriaIndex) => (
+                      {(task.acceptanceCriteria || []).map((criterion, criteriaIndex) => (
                         <div key={criteriaIndex} className="flex items-center gap-2">
                           <span className="text-neutral-400 text-sm">•</span>
                           <input

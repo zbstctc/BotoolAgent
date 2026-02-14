@@ -100,8 +100,9 @@
 
 ### 兼容无 testCases 的旧格式
 
-如果任务没有 `testCases` 字段，退回到现有逻辑：
-- 按 `acceptanceCriteria` 逐条验证
+如果任务没有 `testCases` 字段，退回到以下逻辑：
+- 如果有 `prdSection`：读取 PRD.md 对应章节的 DT checklist 作为验收标准
+- 如果有 `acceptanceCriteria`（旧格式）：逐条验证
 - 运行标准质量检查（typecheck、lint、test）
 
 ## Eval 执行（提交前）
@@ -118,10 +119,10 @@
 2. lint 通过
 3. test 通过
 4. evals 通过（blocking 类型必须全部通过）
-5. 逐条核对 acceptanceCriteria：
+5. 逐条核对验收标准：
+   - 如果有 `prdSection`：打开 PRD.md 对应章节（§ 7.X），核对该 Phase 下的 DT checklist
+   - 如果无 `prdSection`（旧格式）：核对 prd.json 中的 `acceptanceCriteria`
    - 每条标注：✅ 已满足 / ❌ 未满足（附原因）/ ⬚ 不适用
-   - 检查 `spec.testCases` 覆盖情况
-   - 检查 `spec.codeExamples` 符合度
    - 检查 `constitution.rules` 遵循情况
    - 将结果写入 progress.txt
 

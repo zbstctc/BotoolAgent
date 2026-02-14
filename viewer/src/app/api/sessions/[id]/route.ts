@@ -8,6 +8,7 @@ const ARCHIVE_DIR = getArchiveDir();
 interface DevTask {
   id: string;
   title: string;
+  prdSection?: string;
   description?: string;
   passes: boolean;
   acceptanceCriteria?: string[];
@@ -58,9 +59,10 @@ export async function GET(
     const tasks: DevTask[] = (prdJson.devTasks || []).map((t: DevTask) => ({
       id: t.id,
       title: t.title,
-      description: t.description,
+      description: t.description || '',
       passes: t.passes,
-      acceptanceCriteria: t.acceptanceCriteria,
+      acceptanceCriteria: t.acceptanceCriteria || [],
+      prdSection: t.prdSection,
     }));
 
     const tasksCompleted = tasks.filter(t => t.passes).length;

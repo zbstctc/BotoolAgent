@@ -177,11 +177,12 @@ export interface TestCase {
 export interface DevTask {
   id: string;
   title: string;
-  description: string;
-  acceptanceCriteria: string[];
+  prdSection?: string;           // NEW: PRD section number (e.g., "7.1")
+  description?: string;          // Optional for new slim format
+  acceptanceCriteria?: string[]; // Optional for new slim format
   priority: number;
   passes: boolean;
-  notes: string;
+  notes?: string;                // Optional for new slim format
   testCases?: TestCase[];
 }
 
@@ -189,5 +190,6 @@ export interface PrdData {
   project: string;
   branchName: string;
   description: string;
+  prdFile?: string;              // NEW: path to PRD markdown file
   devTasks: DevTask[];
 }

@@ -269,7 +269,7 @@ export function extractChecklistFromPRD(prdTasks: Array<{
 
   for (const task of prdTasks) {
     // Check if any acceptance criteria contains "Verify in browser"
-    const hasVerifyInBrowser = task.acceptanceCriteria.some((criteria) =>
+    const hasVerifyInBrowser = (task.acceptanceCriteria || []).some((criteria) =>
       criteria.toLowerCase().includes('verify in browser')
     );
 

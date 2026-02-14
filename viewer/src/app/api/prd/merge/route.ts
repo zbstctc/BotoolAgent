@@ -54,11 +54,12 @@ interface BasePrdJson {
 // ============================================================================
 
 function deriveTestCases(task: {
-  description: string;
-  acceptanceCriteria: string[];
+  description?: string;
+  acceptanceCriteria?: string[];
+  title?: string;
 }): TestCase[] {
   const testCases: TestCase[] = [];
-  const allText = [task.description, ...task.acceptanceCriteria].join(' ');
+  const allText = [task.title || '', task.description || '', ...(task.acceptanceCriteria || [])].join(' ');
 
   testCases.push({ type: 'typecheck', desc: 'TypeScript 编译通过' });
 

@@ -141,18 +141,19 @@ export interface SessionGroup {
   reason?: string;      // 分组原因
 }
 
-// Enriched PrdJson (new schema)
+// Enriched PrdJson (new schema — slim index + backward compat)
 export interface EnrichedDevTask {
   id: string;
   title: string;
-  description: string;
-  acceptanceCriteria: string[];
+  prdSection?: string;          // NEW: PRD section number (e.g., "7.1")
+  description?: string;         // Optional: stays in PRD.md for new format
+  acceptanceCriteria?: string[]; // Optional: stays in PRD.md for new format
   priority: number;
   passes: boolean;
   dependsOn?: string[];
-  contextHint?: string;
-  notes: string;
-  spec?: DevTaskSpec;
+  contextHint?: string;         // Deprecated: replaced by prdSection
+  notes?: string;               // Optional: stays in progress.txt
+  spec?: DevTaskSpec;           // Optional: stays in PRD.md §3-6
   evals?: DevTaskEval[];
   testCases?: TestCase[];
 }
@@ -161,6 +162,7 @@ export interface EnrichedPrdJson {
   project: string;
   branchName: string;
   description: string;
+  prdFile?: string;             // NEW: path to PRD markdown file
   constitution?: Constitution;
   devTasks: EnrichedDevTask[];
   sessions?: SessionGroup[];
