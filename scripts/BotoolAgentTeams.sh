@@ -56,6 +56,10 @@ done
 # 设置路径
 # ============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Normalize to BotoolAgent root when running from scripts/ subdirectory
+if [ "$(basename "$SCRIPT_DIR")" = "scripts" ]; then
+  SCRIPT_DIR="$(dirname "$SCRIPT_DIR")"
+fi
 
 # 自动检测项目目录
 # 优先级: --project-dir 参数 > 环境变量 > 自动检测

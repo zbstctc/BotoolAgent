@@ -20,7 +20,7 @@ BotoolAgent 是一个自主 AI 开发代理，通过循环运行 Claude Code 来
 
 ```bash
 # 生成分发包
-cd BotoolAgent && ./pack.sh
+cd BotoolAgent && ./scripts/pack.sh
 
 # 将分发包给团队成员，他们在自己的项目中：
 tar -xzf BotoolAgent.tar.gz
@@ -76,7 +76,7 @@ my-project/           ← 你的项目（git 仓库）
 │   ├── viewer/       ← Web 界面
 │   ├── tasks/        ← PRD 文档存放
 │   ├── rules/        ← 编码规范
-│   ├── BotoolAgent.sh
+│   ├── scripts/     ← Shell 脚本
 │   └── setup.sh
 ├── src/              ← 你的代码
 ├── prd.json          ← 自动生成到项目根目录
@@ -119,17 +119,17 @@ claude
 /botoolagent-prd2json
 
 # 3. 运行自动开发
-./BotoolAgent/BotoolAgent.sh 10
+./BotoolAgent/scripts/BotoolAgent.sh 10
 ```
 
 ### 方式 C：纯命令行
 
 ```bash
 # 直接运行代理（需要先手动创建 prd.json）
-./BotoolAgent/BotoolAgent.sh [最大迭代次数]
+./BotoolAgent/scripts/BotoolAgent.sh [最大迭代次数]
 
 # 指定项目目录（可选）
-./BotoolAgent/BotoolAgent.sh 10 --project-dir /path/to/project
+./BotoolAgent/scripts/BotoolAgent.sh 10 --project-dir /path/to/project
 ```
 
 ## 关键文件
@@ -138,7 +138,7 @@ claude
 |------|------|------|
 | `prd.json` | 项目根目录 | 开发任务列表，含 `passes` 状态 |
 | `progress.txt` | 项目根目录 | 迭代学习日志（只追加） |
-| `BotoolAgent.sh` | BotoolAgent/ | 代理循环脚本 |
+| `BotoolAgent.sh` | scripts/ | 代理循环脚本 |
 | `CLAUDE.md` | BotoolAgent/ | 代理指令（每次迭代读取） |
 | `tasks/` | BotoolAgent/ | PRD 文档存放目录 |
 | `rules/` | BotoolAgent/ | 编码规范文档 |
@@ -188,7 +188,7 @@ claude
 在 BotoolAgent 目录创建 `.botoolrc` 自定义配置：
 
 ```bash
-cp BotoolAgent/.botoolrc.example BotoolAgent/.botoolrc
+cp BotoolAgent/docs/examples/botoolrc.example BotoolAgent/.botoolrc
 ```
 
 可配置项：超时时间、重试次数、Rate Limiting、Circuit Breaker、通知等。
@@ -221,8 +221,8 @@ cat BotoolAgent/.agent-status | jq .
 
 ```bash
 cd BotoolAgent
-./pack.sh                    # 生成 BotoolAgent.tar.gz (~3MB)
-./pack.sh my-custom-name     # 自定义输出名
+./scripts/pack.sh                    # 生成 BotoolAgent.tar.gz (~3MB)
+./scripts/pack.sh my-custom-name     # 自定义输出名
 ```
 
 分发包不含 `node_modules` 和构建缓存，接收者解压后运行 `./setup.sh` 一次即可。

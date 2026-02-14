@@ -137,11 +137,11 @@ export function getAgentStatusPath(): string {
 }
 
 export function getAgentScriptPath(): string {
-  return path.join(getBotoolRoot(), 'BotoolAgent.sh');
+  return path.join(getBotoolRoot(), 'scripts', 'BotoolAgent.sh');
 }
 
 export function getAgentTeamsScriptPath(): string {
-  return path.join(getBotoolRoot(), 'BotoolAgentTeams.sh');
+  return path.join(getBotoolRoot(), 'scripts', 'BotoolAgentTeams.sh');
 }
 
 export function getAgentPidPath(): string {

@@ -94,7 +94,7 @@ load_config() {
     source "$config_file"
   else
     echo ">>> 配置文件不存在，使用默认值"
-    echo "    提示: 复制 .botoolrc.example 为 .botoolrc 可自定义配置"
+    echo "    提示: 复制 docs/examples/botoolrc.example 为 .botoolrc 可自定义配置"
   fi
 
   # 环境变量覆盖配置文件（优先级最高）
@@ -174,6 +174,10 @@ done
 # 设置路径
 # ============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Normalize to BotoolAgent root when running from scripts/ subdirectory
+if [ "$(basename "$SCRIPT_DIR")" = "scripts" ]; then
+  SCRIPT_DIR="$(dirname "$SCRIPT_DIR")"
+fi
 
 # 自动检测项目目录（可移植模式支持）
 # 优先级: --project-dir 参数 > 环境变量 > 自动检测

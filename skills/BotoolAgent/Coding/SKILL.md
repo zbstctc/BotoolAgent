@@ -130,7 +130,7 @@ command -v tmux &>/dev/null
 if [ -d "BotoolAgent" ]; then
   AGENT_DIR="BotoolAgent"
 else
-  AGENT_DIR="$(dirname "$(find . -maxdepth 2 -name BotoolAgent.sh -type f 2>/dev/null | head -1)" 2>/dev/null)"
+  AGENT_DIR="$(dirname "$(dirname "$(find . -maxdepth 3 -path '*/scripts/BotoolAgent.sh' -type f 2>/dev/null | head -1)")" 2>/dev/null)"
   [ -z "$AGENT_DIR" ] && AGENT_DIR="."
 fi
 echo "Agent directory: $AGENT_DIR"
@@ -149,7 +149,7 @@ Then stop here.
 当未指定 `--single` 且 tmux 可用时：
 
 ```bash
-bash "$AGENT_DIR/BotoolAgentTeams.sh"
+bash "$AGENT_DIR/scripts/BotoolAgentTeams.sh"
 ```
 
 **注意：** Teams 模式通过 tmux 启动交互式 Agent Teams 会话，包含自动重试的 Ralph 外循环。此命令会长时间运行。使用 `run_in_background` 参数在后台运行，定期检查 `.agent-status` 文件了解进度：
@@ -163,7 +163,7 @@ cat .agent-status 2>/dev/null
 当指定 `--single` 或 tmux 不可用时：
 
 ```bash
-bash "$AGENT_DIR/BotoolAgent.sh" <maxIterations>
+bash "$AGENT_DIR/scripts/BotoolAgent.sh" <maxIterations>
 ```
 
 **注意：** 此命令会长时间运行（每次迭代约 5-30 分钟）。使用 `run_in_background` 参数在后台运行，定期检查 `.agent-status` 文件了解进度：
