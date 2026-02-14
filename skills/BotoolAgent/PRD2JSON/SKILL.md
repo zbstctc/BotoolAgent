@@ -1,12 +1,12 @@
 ---
 name: botoolagent-prd2json
-description: "Convert PRDs to prd.json format for BotoolAgent autonomous execution. Use when you have an existing PRD and need to convert it to JSON format. Triggers on: convert this prd, turn this into json, create prd.json, prd to json."
+description: "Convert PRDs to slim prd.json format for BotoolAgent autonomous execution. PRD.md is the single source of truth; prd.json only contains automation fields. Triggers on: convert this prd, turn this into json, create prd.json, prd to json."
 user-invocable: true
 ---
 
-# BotoolAgent PRD to JSON Converter
+# BotoolAgent PRD to JSON Converter (Slim Index)
 
-Converts PRDs to the prd.json format that BotoolAgent uses for autonomous execution.
+Converts PRDs to a **slim prd.json** — an automation index that points back to the PRD for design content. The PRD.md is the Single Source of Truth.
 
 ---
 
@@ -17,6 +17,32 @@ This skill supports two modes:
 2. **CLI Mode (Fallback)** - Direct conversion in the terminal if Viewer is unavailable
 
 **Announce at start:** "Using BotoolAgent:PRD2JSON to convert a PRD to JSON format."
+
+---
+
+## Core Design Principle
+
+```
+PRD.md (人读 + agent 读内容)          prd.json (机器读 + 自动化循环)
+════════════════════════════          ════════════════════════════════
+
+完整的设计信息：                        精简的自动化信息：
+- 架构设计 (ASCII)                    - 任务列表 (id/title/passes)
+- 数据模型 (SQL)                      - 依赖关系 (dependsOn)
+- UI 设计 (ASCII)                     - 验证命令 (evals)
+- 业务规则 (表格)                     - 进度追踪 (passes: true/false)
+- 开发计划 (每个任务完整描述)          - 会话分组 (sessions)
+- 代码示例                            - 编码规范 (constitution)
+- 测试用例描述                        - prdFile 指向 PRD 路径
+- 安全检查项                          - prdSection 指向对应章节
+
+Coding Agent 工作流：
+1. 读 prd.json → 找到下一个 passes:false 的任务
+2. 读 prdSection → 跳读 PRD.md 对应章节 → 获取完整设计上下文
+3. 实现 → 验证 → 更新 prd.json 的 passes
+```
+
+**prd.json 不再重复 PRD 中的设计内容（description/acceptanceCriteria/spec）。** 这些信息留在 PRD.md 中，coding agent 通过 `prdSection` 跳读获取。
 
 ---
 
@@ -49,10 +75,8 @@ lsof -i :3000 | grep LISTEN
 **If server is NOT running:**
 ```bash
 # Start the Viewer dev server in background
-# Auto-detect: standalone (viewer/) or portable (BotoolAgent/viewer/)
 VIEWER_DIR="$([ -d BotoolAgent/viewer ] && echo BotoolAgent/viewer || echo viewer)"
 cd "$VIEWER_DIR" && npm run dev &
-# Wait for server to be ready (3-5 seconds)
 sleep 3
 ```
 
@@ -60,9 +84,6 @@ sleep 3
 ```bash
 # macOS
 open http://localhost:3000/stage2
-
-# Linux
-xdg-open http://localhost:3000/stage2
 ```
 
 **Announce to user:**
@@ -70,13 +91,6 @@ xdg-open http://localhost:3000/stage2
 BotoolAgent Viewer is ready!
 
 Opening PRD Converter at: http://localhost:3000/stage2
-
-The web interface provides:
-- Visual PRD selection list
-- Full PRD preview before conversion
-- Streaming conversion progress
-- Task preview and editing
-- One-click start development
 
 If you prefer the CLI experience, let me know and we can continue here.
 ```
@@ -91,18 +105,10 @@ If the Viewer fails to start or the user prefers CLI, continue with the CLI proc
 
 ## CLI Mode (Fallback)
 
-Use this mode when:
-- User explicitly requests CLI mode
-- Viewer is unavailable or not installed
-- Running in a headless environment
-
 ### Step 1: Scan Available Rules
 
 ```bash
-# Auto-detect project root
 RULES_DIR="$([ -d BotoolAgent/rules ] && echo BotoolAgent/rules || echo rules)"
-
-# List all rule files by category
 find "$RULES_DIR" -name "*.md" -type f 2>/dev/null | sort
 ```
 
@@ -113,8 +119,7 @@ Found the following coding standards in rules/:
 
   [1] backend/API设计规范.md
   [2] frontend/命名规范.md
-  [3] frontend/样式规范.md
-  [4] testing/测试用例规范.md
+  [3] testing/测试用例规范.md
   ...
 
 All rules are selected by default.
@@ -132,54 +137,47 @@ Options:
 ```
 
 - If "全部保留" → use all discovered rules
-- If "排除部分规范" → follow up with a multi-select question listing each rule, let user pick which to exclude
+- If "排除部分规范" → follow up with a multi-select question listing each rule
 
-After confirmation, **read the content of each selected rule file** so it can be embedded as `constitution.rules` in the output.
+After confirmation, **read the content of each selected rule file** to embed as `constitution.rules`.
 
-### Step 3: One-Step Enriched prd.json Generation
+### Step 3: Slim Conversion
 
-Take the PRD content + selected rules and generate a **complete enriched prd.json in a single pass**.
+Take the PRD content + selected rules and generate a **slim prd.json**.
 
-The prompt to Claude must include **all enrichment requirements inline** so the output contains everything in one step (no separate enrichment pass):
+**Conversion process:**
 
-**Inline Enrichment Requirements (embed these in the conversion prompt):**
+1. **Parse PRD § 7 (开发计划)** — extract all DT entries from each Phase
+2. **Map each DT to its PRD section** — the Phase number becomes `prdSection`
+3. **Extract automation-only fields** — evals, testCases, dependsOn
+4. **Group tasks into sessions** — based on dependencies and file overlap
+5. **Embed constitution** — selected rule files as `constitution.rules`
 
-1. **constitution** — Embed the selected rule files as `constitution.rules` array entries
-2. **dependsOn** — Analyze task dependencies:
-   - If task B depends on types/components/APIs created by task A → `B.dependsOn = ["A"]`
-   - If tasks modify the same file with ordering constraints → mark dependency
-   - Tasks with no dependencies → `dependsOn: []`
-3. **contextHint** — Brief hint about what context to load for this task (e.g., "Read the auth middleware before implementing")
-4. **spec** — Per-task implementation details:
-   - `codeExamples`: TypeScript code snippets showing expected interfaces/structures
-   - `testCases`: Unit and E2E test case descriptions with steps
-   - `filesToModify`: Files this task will change
-   - `relatedFiles`: Files to read for context
-5. **evals** — Executable verification commands per task:
-   - Every task must have at least one `typecheck` eval: `{ type: "code-based", blocking: true, command: "npx tsc --noEmit", expect: "exit-0" }`
-   - Add grep/test commands for specific acceptance criteria where applicable
-6. **testCases** — Per-task test case metadata:
-   - Every task gets `{ type: "typecheck", desc: "TypeScript 编译通过" }`
-   - Add `{ type: "unit", desc: "...", tdd: true }` for tasks with transformations/logic
-   - Add `{ type: "e2e", desc: "..." }` for UI/page rendering tasks
-   - Add `{ type: "manual", desc: "..." }` for visual/animation tasks
-7. **sessions** — Group tasks into sessions (max 8 tasks per session):
-   - Tasks with dependencies go in the same session
-   - Tasks modifying the same files go in the same session
-   - Independent tasks fill by priority
-   - Each session has a `reason` explaining the grouping
+**What to extract (put in prd.json):**
+- DT id, title, priority
+- `prdSection` — the Phase section number (e.g., "7.1")
+- `dependsOn` — task dependency analysis
+- `evals` — executable verification commands
+- `testCases` — test metadata with TDD flags
+- `sessions` — task grouping
+
+**What NOT to extract (stays in PRD.md):**
+- ~~description~~ → in PRD § 7 Phase description
+- ~~acceptanceCriteria~~ → in PRD § 7 DT checklist
+- ~~spec (codeExamples, testCases descriptions, filesToModify, relatedFiles)~~ → in PRD § 3-6
+- ~~contextHint~~ → in PRD § 7 Phase "对应设计" references
+- ~~notes~~ → in progress.txt
 
 ---
 
-## Output Format (EnrichedPrdJson Schema)
-
-The generated `prd.json` must conform to this schema:
+## Output Format (Slim prd.json Schema)
 
 ```json
 {
   "project": "[Project Name]",
   "branchName": "botool/[feature-name-kebab-case]",
-  "description": "[Feature description from PRD]",
+  "description": "[Feature description from PRD § 1]",
+  "prdFile": "tasks/prd-[feature-name].md",
   "constitution": {
     "rules": [
       {
@@ -194,36 +192,11 @@ The generated `prd.json` must conform to this schema:
   "devTasks": [
     {
       "id": "DT-001",
-      "title": "[Task title]",
-      "description": "As a [user], I want [feature] so that [benefit]",
-      "acceptanceCriteria": [
-        "Criterion 1",
-        "Criterion 2",
-        "Typecheck passes"
-      ],
+      "title": "[Task title from PRD § 7]",
+      "prdSection": "7.1",
       "priority": 1,
       "passes": false,
       "dependsOn": [],
-      "contextHint": "",
-      "notes": "",
-      "spec": {
-        "codeExamples": [
-          {
-            "language": "typescript",
-            "description": "Expected interface",
-            "code": "export interface Task { id: string; title: string; }"
-          }
-        ],
-        "testCases": [
-          {
-            "type": "unit",
-            "description": "Task mapping returns correct shape",
-            "steps": ["Create mock input", "Call mapTask()", "Assert output matches expected"]
-          }
-        ],
-        "filesToModify": ["src/lib/tasks.ts"],
-        "relatedFiles": ["src/types/index.ts"]
-      },
       "evals": [
         {
           "type": "code-based",
@@ -243,12 +216,7 @@ The generated `prd.json` must conform to this schema:
     {
       "id": "S1",
       "tasks": ["DT-001", "DT-002", "DT-003"],
-      "reason": "基础 schema 和后端逻辑，有依赖关系"
-    },
-    {
-      "id": "S2",
-      "tasks": ["DT-004", "DT-005"],
-      "reason": "UI 组件，依赖 S1 的后端实现"
+      "reason": "Phase 1 数据库基础，有依赖关系"
     }
   ]
 }
@@ -260,16 +228,85 @@ The generated `prd.json` must conform to this schema:
 |-------|------|----------|-------------|
 | `project` | string | Yes | Project name |
 | `branchName` | string | Yes | Git branch, prefixed with `botool/` |
-| `description` | string | Yes | Feature description |
+| `description` | string | Yes | Feature description (from PRD § 1) |
+| `prdFile` | string | Yes | **NEW** Path to the PRD markdown file |
 | `constitution` | object | No | Coding standards from `rules/` |
-| `constitution.rules[]` | ConstitutionRule[] | - | Rule entries with `id`, `name`, `category`, `content` |
-| `devTasks[]` | EnrichedDevTask[] | Yes | Development tasks |
+| `devTasks[]` | SlimDevTask[] | Yes | Development tasks (slim version) |
+| `devTasks[].id` | string | Yes | Task ID (DT-001, DT-002, ...) |
+| `devTasks[].title` | string | Yes | Task title |
+| `devTasks[].prdSection` | string | Yes | **NEW** PRD section number (e.g., "7.1") |
+| `devTasks[].priority` | number | Yes | Execution order |
+| `devTasks[].passes` | boolean | Yes | Always `false` initially |
 | `devTasks[].dependsOn` | string[] | No | IDs of tasks this task depends on |
-| `devTasks[].contextHint` | string | No | Hint for context loading |
-| `devTasks[].spec` | DevTaskSpec | No | Code examples, test cases, files to modify |
 | `devTasks[].evals` | DevTaskEval[] | No | Verification commands |
 | `devTasks[].testCases` | TestCase[] | No | Test case metadata with type and tdd flag |
 | `sessions[]` | SessionGroup[] | No | Task grouping for batch execution |
+
+### Removed Fields (compared to old schema)
+
+| Removed Field | Where it lives now |
+|---------------|-------------------|
+| `devTasks[].description` | PRD § 7 Phase description |
+| `devTasks[].acceptanceCriteria` | PRD § 7 DT checklist items |
+| `devTasks[].contextHint` | PRD § 7 Phase "对应设计: Section X.X" |
+| `devTasks[].notes` | progress.txt |
+| `devTasks[].spec` | PRD § 3-6 (architecture, data, UI, rules) |
+| `devTasks[].spec.codeExamples` | PRD § 4 (data design) and § 5 (UI design) |
+| `devTasks[].spec.testCases` | PRD § 8.C (testing strategy) |
+| `devTasks[].spec.filesToModify` | PRD § 7 DT entries (file paths in parentheses) |
+| `devTasks[].spec.relatedFiles` | PRD § 7 Phase "对应设计" references |
+
+---
+
+## prdSection Mapping Rules
+
+PRD2JSON automatically maps each DT to its corresponding PRD section:
+
+```
+PRD § 7.1 Phase 1 下的 DT-001, DT-002, DT-003 → prdSection: "7.1"
+PRD § 7.2 Phase 2 下的 DT-004, DT-005         → prdSection: "7.2"
+PRD § 7.3 Phase 3 下的 DT-006, DT-007, DT-008 → prdSection: "7.3"
+```
+
+**How the coding agent uses prdSection:**
+
+1. Read `prdFile` to open the PRD markdown
+2. Find heading `## 7.X` matching `prdSection`
+3. Read that Phase section for:
+   - Prerequisites ("前置")
+   - Expected output ("产出")
+   - Design references ("对应设计: Section 3.X, 4.X, 5.X")
+   - Task checklist with file paths and API routes
+4. Jump-read referenced design sections (§ 3-6) for ASCII diagrams, SQL schemas, UI layouts, business rules
+
+---
+
+## Eval Generation Rules
+
+Every task must have at least one eval:
+
+```json
+{ "type": "code-based", "blocking": true, "command": "npx tsc --noEmit", "expect": "exit-0" }
+```
+
+Additional evals based on task content:
+- Database tasks → `test -f [migration-file]`
+- Component tasks → `test -f [component-file]`
+- API tasks → `test -f [route-file]`
+
+---
+
+## testCases Generation Rules
+
+Every task gets:
+```json
+{ "type": "typecheck", "desc": "TypeScript 编译通过" }
+```
+
+Additional testCases based on task content:
+- Tasks with transformation logic → `{ "type": "unit", "desc": "...", "tdd": true }`
+- UI/page rendering tasks → `{ "type": "e2e", "desc": "..." }`
+- Visual/animation tasks → `{ "type": "manual", "desc": "..." }`
 
 ---
 
@@ -277,18 +314,15 @@ The generated `prd.json` must conform to this schema:
 
 **Each task must be completable in ONE iteration (one context window).**
 
-The agent spawns a fresh Claude instance per iteration with no memory of previous work. If a task is too big, the LLM runs out of context before finishing.
-
 ### Right-sized tasks:
-- Add a database column and migration
+- Add a database table and migration
 - Add a UI component to an existing page
 - Update a server action with new logic
 - Add a filter dropdown to a list
 
 ### Too big (split these):
-- "Build the entire dashboard" - Split into: schema, queries, UI components, filters
-- "Add authentication" - Split into: schema, middleware, login UI, session handling
-- "Refactor the API" - Split into one task per endpoint or pattern
+- "Build the entire dashboard" → Split into: schema, queries, UI components, filters
+- "Add authentication" → Split into: schema, middleware, login UI, session handling
 
 **Rule of thumb:** If you cannot describe the change in 2-3 sentences, it's too big.
 
@@ -304,49 +338,15 @@ Tasks execute in priority order. Earlier tasks must not depend on later ones.
 3. UI components that use the backend
 4. Dashboard/summary views that aggregate data
 
-**Wrong order:**
-1. UI component (depends on schema that doesn't exist yet)
-2. Schema change
-
 ---
 
-## Acceptance Criteria: Must Be Verifiable
+## Session Grouping Rules
 
-Each criterion must be something the agent can CHECK, not something vague.
-
-### Good criteria (verifiable):
-- "Add `status` column to tasks table with default 'pending'"
-- "Filter dropdown has options: All, Active, Completed"
-- "Clicking delete shows confirmation dialog"
-- "Typecheck passes"
-- "Tests pass"
-
-### Bad criteria (vague):
-- "Works correctly"
-- "User can do X easily"
-- "Good UX"
-- "Handles edge cases"
-
-### Always include as final criterion:
-```
-"Typecheck passes"
-```
-
-### For UI tasks, also include:
-```
-"Verify in browser"
-```
-
----
-
-## Conversion Rules
-
-1. **Each dev task becomes one JSON entry**
-2. **IDs**: Sequential (DT-001, DT-002, etc.)
-3. **Priority**: Based on dependency order, then document order
-4. **All tasks**: `passes: false` and empty `notes`
-5. **branchName**: Derive from feature name, kebab-case, prefixed with `botool/`
-6. **Always add**: "Typecheck passes" to every task's acceptance criteria
+- Tasks with dependencies go in the same session
+- Tasks modifying the same files go in the same session
+- Independent tasks fill by priority
+- Max 8 tasks per session
+- Each session has a `reason` explaining the grouping
 
 ---
 
@@ -361,50 +361,59 @@ Each criterion must be something the agent can CHECK, not something vague.
    - Copy current `prd.json` and `progress.txt` to archive
    - Reset `progress.txt` with fresh header
 
-The `BotoolAgent.sh` script handles this automatically, but if manually updating between runs, archive first.
-
 ---
 
 ## Example
 
-**Input PRD:**
+**Input PRD (new multi-dimensional format):**
+
 ```markdown
 # PRD: Task Status Feature
 
-## Introduction
+## 1. 项目概述
+### 1.1 背景与动机
 Add ability to mark tasks with different statuses.
 
-## Dev Tasks
+## 4. 数据设计
+### 4.2 Schema 定义
+CREATE TABLE task_status (...)
 
-### DT-001: Add status field to database
-**Description:** As a developer, I need to store task status.
-**Acceptance Criteria:**
-- [ ] Add status column: 'pending' | 'in_progress' | 'done'
-- [ ] Typecheck passes
+## 5. UI 设计
+### 5.2 组件清单
+| StatusBadge | { status: TaskStatus } | TaskList | 新建 |
 
-### DT-002: Display status badge
-**Description:** As a user, I want to see status at a glance.
-**Acceptance Criteria:**
-- [ ] Colored badge on each task
-- [ ] Typecheck passes
-- [ ] Verify in browser
+## 7. 开发计划
+
+### 7.1 Phase 1: 数据库 (P0)
+> **前置**: 无
+> **产出**: status 字段
+> **对应设计**: Section 4.2
+
+- [ ] DT-001: 添加 status 字段 (`文件: src/db/schema.ts`)
+
+### 7.2 Phase 2: UI (P1)
+> **前置**: Phase 1
+> **产出**: 状态标签组件
+> **对应设计**: Section 5.2, 5.3
+
+- [ ] DT-002: 实现 StatusBadge 组件 (`组件: <StatusBadge>`, `文件: src/components/StatusBadge.tsx`)
 ```
 
-**Selected rules:** `backend/API设计规范.md`
+**Output prd.json (slim):**
 
-**Output prd.json (enriched):**
 ```json
 {
   "project": "MyApp",
   "branchName": "botool/task-status",
   "description": "Task Status Feature - Track task progress with status indicators",
+  "prdFile": "tasks/prd-task-status.md",
   "constitution": {
     "rules": [
       {
         "id": "rule-001",
         "name": "API设计规范",
         "category": "backend",
-        "content": "# API 设计规范\n\n## URL 设计\n- 使用 RESTful 风格..."
+        "content": "# API 设计规范\n..."
       }
     ],
     "ruleAuditSummary": ""
@@ -412,35 +421,11 @@ Add ability to mark tasks with different statuses.
   "devTasks": [
     {
       "id": "DT-001",
-      "title": "Add status field to database",
-      "description": "As a developer, I need to store task status.",
-      "acceptanceCriteria": [
-        "Add status column: 'pending' | 'in_progress' | 'done'",
-        "Typecheck passes"
-      ],
+      "title": "添加 status 字段",
+      "prdSection": "7.1",
       "priority": 1,
       "passes": false,
       "dependsOn": [],
-      "contextHint": "Read existing schema/migration files first",
-      "notes": "",
-      "spec": {
-        "codeExamples": [
-          {
-            "language": "typescript",
-            "description": "Task status type definition",
-            "code": "export type TaskStatus = 'pending' | 'in_progress' | 'done';"
-          }
-        ],
-        "testCases": [
-          {
-            "type": "unit",
-            "description": "Status column has correct default value",
-            "steps": ["Insert a new task without status", "Assert status defaults to 'pending'"]
-          }
-        ],
-        "filesToModify": ["src/db/schema.ts", "src/db/migrations/add-status.sql"],
-        "relatedFiles": ["src/db/schema.ts"]
-      },
       "evals": [
         {
           "type": "code-based",
@@ -457,36 +442,11 @@ Add ability to mark tasks with different statuses.
     },
     {
       "id": "DT-002",
-      "title": "Display status badge",
-      "description": "As a user, I want to see status at a glance.",
-      "acceptanceCriteria": [
-        "Colored badge on each task",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
+      "title": "实现 StatusBadge 组件",
+      "prdSection": "7.2",
       "priority": 2,
       "passes": false,
       "dependsOn": ["DT-001"],
-      "contextHint": "Read DT-001 type definitions and task list component",
-      "notes": "",
-      "spec": {
-        "codeExamples": [
-          {
-            "language": "typescript",
-            "description": "StatusBadge component props",
-            "code": "interface StatusBadgeProps { status: TaskStatus; }"
-          }
-        ],
-        "testCases": [
-          {
-            "type": "e2e",
-            "description": "Status badge renders with correct color",
-            "steps": ["Navigate to task list", "Check badge color for 'pending' status"]
-          }
-        ],
-        "filesToModify": ["src/components/StatusBadge.tsx", "src/components/TaskList.tsx"],
-        "relatedFiles": ["src/db/schema.ts"]
-      },
       "evals": [
         {
           "type": "code-based",
@@ -505,8 +465,7 @@ Add ability to mark tasks with different statuses.
       ],
       "testCases": [
         { "type": "typecheck", "desc": "TypeScript 编译通过" },
-        { "type": "e2e", "desc": "页面正确渲染状态标签" },
-        { "type": "manual", "desc": "颜色视觉确认" }
+        { "type": "e2e", "desc": "页面正确渲染状态标签" }
       ]
     }
   ],
@@ -514,7 +473,7 @@ Add ability to mark tasks with different statuses.
     {
       "id": "S1",
       "tasks": ["DT-001", "DT-002"],
-      "reason": "DT-002 依赖 DT-001 的类型定义，放在同一 session"
+      "reason": "DT-002 依赖 DT-001，放在同一 session"
     }
   ]
 }
@@ -526,29 +485,31 @@ Add ability to mark tasks with different statuses.
 
 Announce next steps:
 
-"prd.json created. Ready for autonomous execution:
+"prd.json created (slim index). Ready for autonomous execution:
 
 **Option 1: Use the Viewer (Recommended)**
-```
-/botoolagent-coding
-```
-Or open http://localhost:3000/stage3 to monitor development visually.
+Open http://localhost:3000/stage3 to monitor development visually.
 
 **Option 2: Run from terminal**
 ```bash
 /botoolagent-coding
 ```
 
-This will start autonomous development, implementing one task per iteration."
+The coding agent will:
+1. Read prd.json to find the next task
+2. Jump-read PRD.md § 7.X for task context
+3. Jump-read PRD.md § 3-6 for design details (ASCII, SQL, UI, rules)
+4. Implement, verify, and update passes"
 
 ---
 
 ## Checklist Before Saving
 
 - [ ] Previous run archived (if prd.json exists with different branchName)
+- [ ] `prdFile` points to correct PRD markdown path
+- [ ] Each task has `prdSection` mapping to a valid PRD heading
 - [ ] Each task completable in one iteration
 - [ ] Tasks ordered by dependency
-- [ ] Every task has "Typecheck passes"
-- [ ] UI tasks have "Verify in browser"
-- [ ] Acceptance criteria are verifiable
+- [ ] Every task has at least one eval (typecheck)
 - [ ] No task depends on a later task
+- [ ] Sessions have max 8 tasks each

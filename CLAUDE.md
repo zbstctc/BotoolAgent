@@ -12,9 +12,8 @@
    b. 读取 `progress.txt` 中的 Codebase Patterns（fallback，如果 patterns.json 不存在）
 5. 检查你是否在 PRD 中指定的 `branchName` 分支上。如果不是，切换到该分支或从 main 创建
 6. 选择优先级最高且 `passes: false` 的开发任务
-7. 读取该任务的 `spec` 字段（如果存在）：
-   - `spec.codeExamples` → 期望的代码结构
-   - `spec.testCases` → 需要通过的测试场景
+7. 读取该任务的 `prdSection`（如果存在），跳读 PRD 对应章节获取设计上下文
+   - 如果 `prdSection` 不存在（旧格式），读取 `spec` 字段作为 fallback
 8. 读取该任务的 `evals` 字段（如果存在）
 9. 读取该任务的 `testCases` 字段（如果存在）— 见下文"测试驱动开发"部分
 10. 执行上下文检索（见下文"上下文检索"部分）
@@ -46,13 +45,21 @@
 
 ## 上下文检索（实现前）
 
-1. 读取当前任务的 `spec.filesToModify` 和 `spec.relatedFiles`
-2. 如果存在，直接读取这些文件
-3. 如果为空或不存在，执行搜索：
-   a. 用任务关键词搜索相关文件
-   b. 只深度阅读高相关性文件（最多 5 个）
-4. 如果有 `dependsOn`，读取依赖任务在 progress.txt 中的日志
-5. 如果有 `contextHint`，按提示重点关注特定上下文
+1. 读取 prd.json 的 `prdFile` 字段，定位 PRD markdown 文件
+2. 读取当前任务的 `prdSection`，在 PRD 中找到对应章节（如 `## 7.1`）
+3. 从该章节提取上下文：
+   - 「前置」和「产出」— 理解任务边界
+   - 「对应设计: Section X.X」— 跳读相关设计节获取：
+     - 架构 ASCII 图（§ 3）
+     - 数据 Schema（§ 4）
+     - UI ASCII 布局（§ 5）
+     - 业务规则（§ 6）
+   - 任务清单中的 API 路径、组件名、文件路径
+4. 如果 `prdSection` 不存在（兼容旧格式），回退到现有逻辑：
+   a. 读取 `spec.filesToModify` 和 `spec.relatedFiles`
+   b. 如果为空，用任务关键词搜索相关文件
+   c. 只深度阅读高相关性文件（最多 5 个）
+5. 如果有 `dependsOn`，读取依赖任务在 progress.txt 中的日志
 
 ## 测试驱动开发（testCases）
 

@@ -129,15 +129,33 @@ Before settling on a design:
 Once you understand what you're building:
 - Present the design in sections (200-300 words each)
 - After each section, ask: "Does this look right so far?"
-- Cover: architecture, components, data flow, error handling
+- Cover: architecture, data model, UI structure, business rules, dev tasks
 - Be ready to go back and clarify
 
-**Sections to cover:**
+**Sections to cover (adapt by complexity):**
+
+For **simple features** (1-2 files):
 1. Overview & Goals
-2. Dev Tasks (one by one, get approval)
-3. Functional Requirements
-4. Non-Goals / Out of Scope
-5. Technical Considerations
+2. Dev Tasks
+3. Non-Goals
+
+For **medium features** (3-8 files):
+1. Overview & Goals
+2. Architecture overview (1 ASCII diagram)
+3. Data model (table if applicable)
+4. Component list (table)
+5. Dev Tasks (with file paths, API routes)
+6. Non-Goals
+
+For **complex features** (8+ files):
+1. Overview & Goals
+2. Current state analysis (if existing codebase)
+3. Architecture (ASCII: concepts, roles, workflows)
+4. Data design (Schema + ER diagram)
+5. UI design (ASCII layouts + component list)
+6. Business rules (tables + decision trees)
+7. Dev Tasks grouped by Phase (with dependencies)
+8. Appendix (file index, risks, testing strategy, non-goals)
 
 ### Phase 4: Generate PRD
 
@@ -173,59 +191,77 @@ Each task must be **small enough to complete in one iteration**:
 **Always include:**
 - "Typecheck passes" for every task
 - "Verify in browser" for UI tasks
+- File paths, API routes, or component names in each DT
+- Phase "对应设计" references to §3-§6 sections
 
 ---
 
 ## PRD Output Format
 
+Use the **new multi-dimensional PRD template** (same as PyramidPRD). Adapt sections by complexity:
+
+### Full Template (complex features)
+
 ```markdown
 # PRD: [Feature Name]
 
-## Introduction
+## 1. 项目概述
+### 1.1 背景与动机
+### 1.2 核心目标
+### 1.3 成功指标
 
-[Brief description of the feature and the problem it solves]
+## 2. 当前状态
+### 2.1 已有能力 (表格: 模块|状态|说明)
+### 2.2 缺口分析
 
-## Goals
+## 3. 架构设计
+### 3.1 核心概念 (ASCII 关系图)
+### 3.2 用户角色 (ASCII 角色权限图)
+### 3.3 核心工作流 (ASCII 流程图)
+### 3.4 状态机 (ASCII, 如有)
 
-- [Specific, measurable objective 1]
-- [Specific, measurable objective 2]
+## 4. 数据设计
+### 4.1 数据模型概览 (表格)
+### 4.2 Schema 定义 (SQL CREATE)
+### 4.3 模型关系 (ASCII ER 图)
+### 4.4 约束与规则
 
-## Dev Tasks
+## 5. UI 设计
+### 5.1 页面清单 (表格)
+### 5.2 组件清单 (表格: 组件|Props|复用|状态)
+### 5.3 关键页面布局 (ASCII)
+### 5.4 关键弹窗/交互 (ASCII)
 
-### DT-001: [Title]
-**Description:** As a [user], I want [feature] so that [benefit].
+## 6. 业务规则
+### 6.1 [领域] 规则 (表格)
+### 6.2 决策树 (ASCII)
 
-**Acceptance Criteria:**
-- [ ] Specific verifiable criterion
-- [ ] Another criterion
-- [ ] Typecheck passes
-- [ ] [UI only] Verify in browser
+## 7. 开发计划
+### 7.0 Phase 依赖图 (ASCII)
+### 7.1 Phase 1: [名称] (P0)
+> **前置**: 无
+> **产出**: [具体产出]
+> **对应设计**: Section 3.3, 4.2
+- [ ] DT-001: [任务] (`API: /api/xxx`, `文件: src/xxx`)
 
-### DT-002: [Title]
-...
+### 7.2 Phase 2: [名称] (P1)
+> **前置**: Phase 1
+> **产出**: [具体产出]
+> **对应设计**: Section 5.3, 5.4
+- [ ] DT-002: [任务]
 
-## Functional Requirements
-
-- FR-1: The system must...
-- FR-2: When a user clicks X, the system must...
-
-## Non-Goals (Out of Scope)
-
-- [What this feature will NOT include]
-
-## Technical Considerations
-
-- [Known constraints or dependencies]
-- [Integration points]
-
-## Success Metrics
-
-- [How success will be measured]
-
-## Open Questions
-
-- [Remaining questions or areas needing clarification]
+## 8. 附录
+### A. 代码文件索引 (表格: 文件|状态|Phase|任务)
+### B. 风险与缓解措施
+### C. 测试策略
+### D. 非目标 (Out of Scope)
+### E. 安全检查项
 ```
+
+### Simplified Template (simple/medium features)
+
+For simple features, skip §2/3/4/5/6 and use flat DT list without Phases.
+For medium features, include §3(概要)/§4(表格)/§5(组件清单) but skip §2/§6.
 
 ---
 
