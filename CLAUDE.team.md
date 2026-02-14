@@ -15,7 +15,7 @@
 4. 读取 `$BOTOOL_PROJECT_DIR/prd.json` — 了解所有开发任务
 5. 读取 `$BOTOOL_PROJECT_DIR/progress.txt` 中的 Codebase Patterns（如果存在）
 6. 确认 git 分支 = `prd.json.branchName`（不是则切换/创建）
-7. 通过 Bash 工具更新 `$BOTOOL_SCRIPT_DIR/.agent-status` → `"status": "running"`
+7. 通过 Bash 工具更新 `$BOTOOL_SCRIPT_DIR/.state/agent-status` → `"status": "running"`
 
 ## 第二步: 构建执行计划
 
@@ -73,13 +73,13 @@
 3. 等所有 teammate 完成
 4. 验证：typecheck 通过、commit 存在
 5. 更新 `prd.json`（`passes` → `true`）
-6. 更新 `.agent-status`
+6. 更新 `.state/agent-status`
 7. 写 `progress.txt`
 8. 执行 `/compact` 释放上下文
 
 ### 批次间
 
-- 更新 `.agent-status`（iteration 递增）
+- 更新 `.state/agent-status`（iteration 递增）
 - `progress.txt` 追加日志
 - `/compact` 释放上下文
 
@@ -87,12 +87,12 @@
 
 1. 全量 `npx tsc --noEmit`
 2. `git push origin {branchName}`
-3. `.agent-status` → `"status": "complete"`
+3. `.state/agent-status` → `"status": "complete"`
 4. `progress.txt` 最终记录
 
 ## .agent-status 更新
 
-通过 Bash 工具写入 `$BOTOOL_SCRIPT_DIR/.agent-status`：
+通过 Bash 工具写入 `$BOTOOL_SCRIPT_DIR/.state/agent-status`：
 
 ```json
 {
@@ -152,7 +152,7 @@
 
 如果本 session 规划的 DT 已全部完成，但仍有其他 `passes: false` 的任务：
 
-1. 写 `.agent-status` → `"status": "session_done"`，message 写明剩余任务数
+1. 写 `.state/agent-status` → `"status": "session_done"`，message 写明剩余任务数
 2. `progress.txt` 追加：`## Session 结束 — 已完成 N 个，剩余 M 个留给下一 session`
 3. `git push origin {branchName}`
 4. **主动结束会话**（外层 Ralph 循环会启动新 session 继续）
@@ -161,6 +161,6 @@
 
 所有任务的 `passes` 都为 `true` 后：
 
-1. 写 `.agent-status` → `"status": "complete"`
+1. 写 `.state/agent-status` → `"status": "complete"`
 2. `progress.txt` 记录最终状态
 3. 结束会话

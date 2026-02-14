@@ -8,7 +8,7 @@ import * as fs from 'fs';
  * we need to distinguish between two root directories:
  *
  * 1. botoolRoot: Where BotoolAgent itself lives (parent of viewer/)
- *    - Contains: tasks/, archive/, rules/, BotoolAgent.sh, .agent-status, skills/
+ *    - Contains: tasks/, archive/, rules/, scripts/, .state/, skills/
  *
  * 2. projectRoot: Where the user's actual project/git repo lives
  *    - Used for: git operations, Claude CLI working directory, prd.json, progress.txt
@@ -133,7 +133,7 @@ export function getProgressPath(): string {
 }
 
 export function getAgentStatusPath(): string {
-  return path.join(getBotoolRoot(), '.agent-status');
+  return path.join(getBotoolRoot(), '.state', 'agent-status');
 }
 
 export function getAgentScriptPath(): string {
@@ -145,7 +145,7 @@ export function getAgentTeamsScriptPath(): string {
 }
 
 export function getAgentPidPath(): string {
-  return path.join(getBotoolRoot(), '.agent-pid');
+  return path.join(getBotoolRoot(), '.state', 'agent-pid');
 }
 
 /**

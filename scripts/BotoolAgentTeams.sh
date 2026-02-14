@@ -77,8 +77,8 @@ if [ -z "$PROJECT_DIR" ]; then
 fi
 
 ARCHIVE_DIR="$SCRIPT_DIR/archive"
-LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch"
-STATUS_FILE="$SCRIPT_DIR/.agent-status"
+LAST_BRANCH_FILE="$SCRIPT_DIR/.state/last-branch"
+STATUS_FILE="$SCRIPT_DIR/.state/agent-status"
 # --prd-path 覆盖：支持多 PRD 模式
 if [ -n "$PRD_PATH_OVERRIDE" ]; then
   PRD_FILE="$PRD_PATH_OVERRIDE"
@@ -100,7 +100,7 @@ fi
 # 加载 .botoolrc 配置文件（如果存在）
 # ============================================================================
 load_config() {
-  local config_file="$SCRIPT_DIR/.botoolrc"
+  local config_file="$SCRIPT_DIR/.state/botoolrc"
   if [ -f "$config_file" ]; then
     echo ">>> 加载配置文件: $config_file"
     # shellcheck source=/dev/null
@@ -111,6 +111,9 @@ load_config() {
   [ -n "$BOTOOL_ROUND_COOLDOWN" ] && ROUND_COOLDOWN="$BOTOOL_ROUND_COOLDOWN"
   [ -n "$BOTOOL_STALL_TIMEOUT" ] && STALL_TIMEOUT="$BOTOOL_STALL_TIMEOUT"
 }
+
+# 创建必要目录
+mkdir -p "$SCRIPT_DIR/.state"
 
 load_config
 

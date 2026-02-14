@@ -152,10 +152,10 @@ Then stop here.
 bash "$AGENT_DIR/scripts/BotoolAgentTeams.sh"
 ```
 
-**注意：** Teams 模式通过 tmux 启动交互式 Agent Teams 会话，包含自动重试的 Ralph 外循环。此命令会长时间运行。使用 `run_in_background` 参数在后台运行，定期检查 `.agent-status` 文件了解进度：
+**注意：** Teams 模式通过 tmux 启动交互式 Agent Teams 会话，包含自动重试的 Ralph 外循环。此命令会长时间运行。使用 `run_in_background` 参数在后台运行，定期检查 `.state/agent-status` 文件了解进度：
 
 ```bash
-cat .agent-status 2>/dev/null
+cat .state/agent-status 2>/dev/null
 ```
 
 ### 单 agent 模式（--single 或降级）
@@ -166,10 +166,10 @@ cat .agent-status 2>/dev/null
 bash "$AGENT_DIR/scripts/BotoolAgent.sh" <maxIterations>
 ```
 
-**注意：** 此命令会长时间运行（每次迭代约 5-30 分钟）。使用 `run_in_background` 参数在后台运行，定期检查 `.agent-status` 文件了解进度：
+**注意：** 此命令会长时间运行（每次迭代约 5-30 分钟）。使用 `run_in_background` 参数在后台运行，定期检查 `.state/agent-status` 文件了解进度：
 
 ```bash
-cat .agent-status 2>/dev/null
+cat .state/agent-status 2>/dev/null
 ```
 
 ### 等待完成
@@ -182,7 +182,7 @@ cat .agent-status 2>/dev/null
 
 恢复建议：
 - 查看 progress.txt 了解最后完成到哪个任务
-- 查看 .agent-status 了解失败原因
+- 查看 .state/agent-status 了解失败原因
 - 修复问题后重新运行 /botoolagent-coding
 ```
 Then stop here.
@@ -233,7 +233,7 @@ BotoolAgent 自动开发完成！
 | branchName 缺失 | 在 prd.json 中添加 branchName 字段 |
 | 进程重复运行 | `kill <pid>` 终止后重试 |
 | tmux 未安装 | `brew install tmux`（或自动降级到单 agent 模式） |
-| 自动开发执行异常 | 查看 progress.txt 和 .agent-status，修复后重试 |
+| 自动开发执行异常 | 查看 progress.txt 和 .state/agent-status，修复后重试 |
 
 ---
 

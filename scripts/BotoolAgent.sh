@@ -86,7 +86,7 @@ RATE_LIMIT_STRATEGY="personal"  # 限额策略 (team: 60s重试 / personal: 5h�
 # 加载 .botoolrc 配置文件（如果存在）
 # ============================================================================
 load_config() {
-  local config_file="$SCRIPT_DIR/.botoolrc"
+  local config_file="$SCRIPT_DIR/.state/botoolrc"
 
   if [ -f "$config_file" ]; then
     echo ">>> 加载配置文件: $config_file"
@@ -94,7 +94,7 @@ load_config() {
     source "$config_file"
   else
     echo ">>> 配置文件不存在，使用默认值"
-    echo "    提示: 复制 docs/examples/botoolrc.example 为 .botoolrc 可自定义配置"
+    echo "    提示: 复制 docs/examples/botoolrc.example 为 .state/botoolrc 可自定义配置"
   fi
 
   # 环境变量覆盖配置文件（优先级最高）
@@ -198,11 +198,11 @@ fi
 
 # BotoolAgent 自身的文件路径（始终在 SCRIPT_DIR）
 ARCHIVE_DIR="$SCRIPT_DIR/archive"
-LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch"
+LAST_BRANCH_FILE="$SCRIPT_DIR/.state/last-branch"
 LOG_DIR="$SCRIPT_DIR/logs"
-STATUS_FILE="$SCRIPT_DIR/.agent-status"
-RATE_LIMIT_STATE_FILE="$SCRIPT_DIR/.rate-limit-state"
-CIRCUIT_BREAKER_STATE_FILE="$SCRIPT_DIR/.circuit-breaker-state"
+STATUS_FILE="$SCRIPT_DIR/.state/agent-status"
+RATE_LIMIT_STATE_FILE="$SCRIPT_DIR/.state/rate-limit-state"
+CIRCUIT_BREAKER_STATE_FILE="$SCRIPT_DIR/.state/circuit-breaker-state"
 
 # 用户项目的文件路径（在 PROJECT_DIR）
 # --prd-path 覆盖：支持多 PRD 模式，progress 文件自动从 prd 路径推导
@@ -223,8 +223,9 @@ if [ "$PROJECT_DIR" != "$SCRIPT_DIR" ]; then
   echo ">>> BotoolAgent 目录 = $SCRIPT_DIR"
 fi
 
-# 创建日志目录
+# 创建必要目录
 mkdir -p "$LOG_DIR"
+mkdir -p "$SCRIPT_DIR/.state"
 
 # 加载配置
 load_config

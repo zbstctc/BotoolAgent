@@ -183,12 +183,12 @@ claude
 
 ## 配置
 
-### .botoolrc
+### botoolrc
 
-在 BotoolAgent 目录创建 `.botoolrc` 自定义配置：
+在 BotoolAgent 目录创建 `.state/botoolrc` 自定义配置：
 
 ```bash
-cp BotoolAgent/docs/examples/botoolrc.example BotoolAgent/.botoolrc
+cp BotoolAgent/docs/examples/botoolrc.example BotoolAgent/.state/botoolrc
 ```
 
 可配置项：超时时间、重试次数、Rate Limiting、Circuit Breaker、通知等。
@@ -214,7 +214,7 @@ cat progress.txt
 git log --oneline -10
 
 # 查看代理状态
-cat BotoolAgent/.agent-status | jq .
+cat BotoolAgent/.state/agent-status | jq .
 ```
 
 ## 打包分发

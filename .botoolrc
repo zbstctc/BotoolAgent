@@ -1,8 +1,0 @@
-# BotoolAgent 配置
-# 进程健康检查（改进版：检测输出文件增长 + CPU 活动）
-NETWORK_HEALTH_CHECK_ENABLED=true
-NETWORK_HEALTH_CHECK_INTERVAL=60      # 每 60 秒检查一次
-NETWORK_NO_ACTIVITY_THRESHOLD=480     # 8 分钟无活动才终止
-
-# 重试配置
-MAX_RETRIES=5                         # 每次迭代最多重试 5 次

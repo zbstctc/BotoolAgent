@@ -1,12 +1,13 @@
 # ===== BotoolAgent Runtime (generated during runs) =====
 prd.json
 progress.txt
+patterns.json
 .project-status
-.last-branch
-.agent-status
-.agent-pid
-.botoolrc
+.state/
 logs/
+
+# ===== User PRD documents (external project examples) =====
+v1.6_Botool_Present_*.md
 
 # Archive is optional to commit
 # archive/
@@ -42,8 +43,6 @@ node_modules/
 # ===== Build Artifacts =====
 viewer/.next/
 viewer/.turbo/
-flowchart/dist/
-flowchart/node_modules/
 
 # ===== Temporary Files =====
 *.tmp
@@ -55,15 +54,13 @@ flowchart/node_modules/
 *.zip
 
 # ===== Runtime State =====
-.circuit-breaker-state
-.rate-limit-state
+# (all runtime state now in .state/ directory)
 
 # ===== Screenshots / Images (test artifacts) =====
 *.png
 *.webp
 !skills/**/*.png
 !viewer/public/**/*.png
-!flowchart/public/**/*
 
 # ===== Test Coverage =====
 coverage/
