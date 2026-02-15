@@ -142,9 +142,8 @@ cd my-project && claude
 ```bash
 cd my-project && claude
 
-# Stage 1: 生成 PRD（二选一）
-/botoolagent-pyramidprd 做一个文档管理系统    # 金字塔问答（推荐）
-/botoolagent-generateprd 做一个文档管理系统   # 对话式（简单场景）
+# Stage 1: 生成 PRD
+/botoolagent-pyramidprd 做一个文档管理系统    # 支持 Quick Fix / 功能开发 / 完整规划 / PRD 导入
 
 # Stage 2: PRD 转 JSON
 /botoolagent-prd2json
@@ -262,13 +261,12 @@ PRD2JSON 会将任务按依赖关系和可并行性分成 sessions：
 
 当所有任务的 `passes` 都为 `true` 时，代理输出 `<promise>COMPLETE</promise>` 并退出。
 
-## 7 个 Skills
+## 6 个 Skills
 
 | Skill | 命令 | 用途 |
 |-------|------|------|
 | **Main** | `/botoolagent` | 启动 Web Viewer（localhost:3000） |
-| **PyramidPRD** | `/botoolagent-pyramidprd` | 5 层金字塔问答生成 PRD（推荐） |
-| **GeneratePRD** | `/botoolagent-generateprd` | 对话式生成 PRD（简单场景） |
+| **PyramidPRD** | `/botoolagent-pyramidprd` | 生成 PRD（Quick Fix / 功能开发 / 完整规划 / PRD 导入） |
 | **PRD2JSON** | `/botoolagent-prd2json` | PRD → prd.json 转换 + Enrichment |
 | **Coding** | `/botoolagent-coding` | 启动自动开发（Agent Teams + tmux） |
 | **Testing** | `/botoolagent-testing` | 4 层自动验证 + Ralph 自动修复 |

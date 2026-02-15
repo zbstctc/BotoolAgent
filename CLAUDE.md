@@ -7,7 +7,7 @@ BotoolAgent 是一个自主 AI 开发代理，通过 tmux + Agent Teams 模式�
 - **`scripts/BotoolAgent.sh`** — Ralph 外循环 (tmux launcher)，驱动 Lead Agent 执行
 - **`CLAUDE.lead.md`** — Lead Agent 运行时指令（被 BotoolAgent.sh 显式读取）
 - **`viewer/`** — Next.js Web 界面（5 阶段工作流）
-- **`skills/`** — 7 个 Claude Code Skill
+- **`skills/`** — 6 个 Claude Code Skill
 
 ## 质量要求
 

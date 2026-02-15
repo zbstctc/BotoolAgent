@@ -101,8 +101,8 @@ export async function POST(request: NextRequest) {
     // Prepare message - trigger skill for first message in prd mode
     let messageToSend = message;
     if (mode === 'prd' && !sessionId) {
-      // First message in PRD mode - trigger the generateprd skill
-      messageToSend = `/botoolagent-generateprd ${message}`;
+      // First message in PRD mode - trigger the pyramidprd skill
+      messageToSend = `/botoolagent-pyramidprd ${message}`;
     }
 
     // Send the message to CLI

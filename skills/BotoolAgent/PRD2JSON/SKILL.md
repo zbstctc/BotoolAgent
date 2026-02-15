@@ -60,7 +60,7 @@ ls "$TASKS_DIR"/prd-*.md 2>/dev/null
 ```
 No PRD files found in tasks/ directory.
 
-Please create a PRD first using /botoolagent-generateprd or through the Viewer at:
+Please create a PRD first using /botoolagent-pyramidprd or through the Viewer at:
 http://localhost:3000/stage1
 ```
 Then stop here.

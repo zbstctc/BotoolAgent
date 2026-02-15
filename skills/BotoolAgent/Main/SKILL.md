@@ -95,8 +95,7 @@ From here you can:
 
 ## Related Skills
 
-- **BotoolAgent:GeneratePRD** (`/botoolagent-generateprd`) - Create a new PRD through dialogue
-- **BotoolAgent:PyramidPRD** (`/botoolagent-pyramidprd`) - Create PRD via pyramid Q&A
+- **BotoolAgent:PyramidPRD** (`/botoolagent-pyramidprd`) - Create PRD via structured Q&A (supports Quick Fix / Feature Build / Full Planning / PRD Import modes)
 - **BotoolAgent:PRD2JSON** (`/botoolagent-prd2json`) - Convert PRD to JSON format
 - **BotoolAgent:Coding** (`/botoolagent-coding`) - Jump directly to Stage 3
 - **BotoolAgent:Testing** (`/botoolagent-testing`) - Run 4-layer verification pipeline
