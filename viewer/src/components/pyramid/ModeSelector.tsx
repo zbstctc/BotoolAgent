@@ -59,6 +59,18 @@ const MODE_CONFIGS: ModeConfig[] = [
     selectedBgClass: 'bg-red-50',
     dotClass: 'bg-red-500',
   },
+  {
+    mode: 'transform',
+    name: 'PRD 导入',
+    time: '约 15-20 分钟',
+    suitable: '已有需求文档/PRD，需转换为标准格式',
+    flow: '导入文档 → 分析覆盖度 → 补充缺口 → 拆解任务 → 生成标准 PRD',
+    colorClass: 'text-violet-700',
+    hoverColorClass: 'hover:border-violet-400',
+    selectedBorderClass: 'border-violet-500',
+    selectedBgClass: 'bg-violet-50',
+    dotClass: 'bg-violet-500',
+  },
 ];
 
 export function ModeSelector({ recommendedMode, recommendReason, onSelect }: ModeSelectorProps) {
@@ -89,7 +101,7 @@ export function ModeSelector({ recommendedMode, recommendReason, onSelect }: Mod
         </div>
 
         {/* Mode Cards */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {MODE_CONFIGS.map((config) => {
             const isRecommended = config.mode === recommendedMode;
             const isSelected = config.mode === selectedMode;

@@ -47,6 +47,19 @@ export interface PyramidMetadata {
   codebaseSummary?: string;
   /** Structured confirmation summary for L5 */
   confirmationSummary?: ConfirmationSummary;
+  /** Transform mode: current phase */
+  transformPhase?: 'source-input' | 'extraction' | 'gap-analysis' | 'targeted-qa' | 'dt-decomposition';
+  /** Transform mode: gap analysis result */
+  gapAnalysis?: {
+    dimensions: Array<{
+      section: string;      // "§ 1", "§ 3", etc.
+      name: string;         // "项目概述", "架构设计", etc.
+      coverage: 'full' | 'high' | 'partial' | 'sparse';
+      note: string;
+    }>;
+  };
+  /** Transform mode: source PRD file path */
+  sourcePrdPath?: string;
 }
 
 export interface AskUserQuestionToolInput {
@@ -169,4 +182,4 @@ export interface EnrichedPrdJson {
 }
 
 // Pipeline mode type
-export type PipelineMode = 'quick' | 'feature' | 'full';
+export type PipelineMode = 'quick' | 'feature' | 'full' | 'transform';

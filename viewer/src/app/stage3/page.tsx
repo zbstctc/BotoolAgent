@@ -109,8 +109,7 @@ export default function Stage3Page() {
 
   // Agent control state
   const [maxIterations, setMaxIterations] = useState(10);
-  // Teams mode is the default and recommended mode (uses BotoolAgentTeams.sh with tmux)
-  // Single mode (BotoolAgent.sh) is available via CLI: /botoolagent-coding --single
+  // BotoolAgent uses tmux + Agent Teams mode (BotoolAgent.sh)
   const agentMode = 'teams' as const;
   const [showIterationInput, setShowIterationInput] = useState(false);
   const [agentActionLoading, setAgentActionLoading] = useState(false);

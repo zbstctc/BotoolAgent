@@ -1,10 +1,24 @@
 # BotoolAgent
 
-BotoolAgent 是一个自主 AI 开发代理，通过循环运行 Claude Code 来完成 PRD 中定义的所有开发任务。每次迭代是一个全新的 Claude 实例，通过 git 历史、`progress.txt` 和 `prd.json` 保持记忆。
+BotoolAgent 是一个自主 AI 开发代理，基于 [Ralph 模式](https://ghuntley.com/ralph/)，通过 tmux + Agent Teams 循环执行开发任务。Lead Agent 读取 `CLAUDE.team.md` 指令，编排多任务并行执行。每次迭代通过 git 历史、`progress.txt` 和 `prd.json` 保持跨迭代记忆。
 
 提供两种使用方式：
 - **Web Viewer** — 5 阶段可视化工作流，适合非技术用户
 - **CLI Skills** — 在终端通过 `/botoolagent` 命令使用，适合开发者
+
+```
+用户想法
+  ↓
+Stage 1: 金字塔问答 → PRD.md（需求文档）
+  ↓
+Stage 2: 规则选择 + Enrichment → prd.json（自动化索引）
+  ↓
+Stage 3: 自动开发（Agent Teams 模式循环执行）
+  ↓
+Stage 4: 4 层自动验证（TypeCheck → Unit → E2E → Code Review）
+  ↓
+Stage 5: 推送 → PR → 审查 → 合并
+```
 
 ## 快速开始
 
@@ -13,21 +27,29 @@ BotoolAgent 是一个自主 AI 开发代理，通过循环运行 Claude Code 来
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`npm install -g @anthropic-ai/claude-code`)
 - Node.js 18+
 - Git
+- tmux (`brew install tmux`)
 
 ### 安装到你的项目
 
-**方式 1：使用分发包（推荐）**
+**方式 1：使用分发包（推荐，适合分发给团队）**
 
 ```bash
-# 生成分发包
+# 在 BotoolAgent 源码中生成分发包
 cd BotoolAgent && ./scripts/pack.sh
 
-# 将分发包给团队成员，他们在自己的项目中：
+# 将 BotoolAgent.tar.gz 分享给团队成员
+# 他们在自己的项目中解压并运行 setup.sh：
+cd my-project
 tar -xzf BotoolAgent.tar.gz
 cd BotoolAgent && ./setup.sh
 ```
 
-**方式 2：手动复制**
+> `setup.sh` 由 `pack.sh` 自动生成并打包在 tar.gz 中，它会：
+> 1. 安装 Viewer 的 npm 依赖
+> 2. 设置脚本可执行权限
+> 3. 将 Skills 以符号链接安装到 `~/.claude/skills/`
+
+**方式 2：直接复制（适合个人使用）**
 
 ```bash
 # 将 BotoolAgent 目录复制到你的项目中
@@ -35,31 +57,36 @@ cp -r /path/to/BotoolAgent your-project/BotoolAgent
 
 # 安装 Viewer 依赖
 cd your-project/BotoolAgent/viewer && npm install
+
+# 手动安装 Skills（符号链接到 ~/.claude/skills/）
+cd your-project/BotoolAgent
+for skill_dir in skills/BotoolAgent/*/; do
+  name=$(grep '^name:' "$skill_dir/SKILL.md" | head -1 | sed 's/name: *//;s/"//g')
+  mkdir -p ~/.claude/skills/$name
+  ln -sf "$(pwd)/$skill_dir/SKILL.md" ~/.claude/skills/$name/SKILL.md
+done
 ```
 
-### 安装 Skills
+### 安装后验证
 
-Skills 让你在任何项目中通过 Claude Code 调用 BotoolAgent：
+安装完成后，在项目目录启动 Claude Code，输入 `/botoolagent` 即可验证：
 
 ```bash
-# 复制 skills 到 Claude Code 用户目录
-cp -r BotoolAgent/skills/BotoolAgent/* ~/.claude/skills/
+cd my-project
+claude
+# 在 Claude Code 中输入: /botoolagent
 ```
 
-安装后，在任何项目的 Claude Code 中都可以使用：
-- `/botoolagent` — 启动 Web Viewer
-- `/botoolagent-generateprd` — 生成 PRD
-- `/botoolagent-prd2json` — PRD 转 JSON
-- `/botoolagent-coding` — 启动自动开发监控
+## 两种运行模式
 
-## 两种使用模式
+BotoolAgent 会自动检测所处模式（通过 `.git` 目录位置判断），无需手动配置。
 
 ### 独立模式
 
 BotoolAgent 本身就是一个 git 仓库，直接在其中开发：
 
 ```
-BotoolAgent/          ← 就是项目本身
+BotoolAgent/          <-- 就是项目本身
 ├── viewer/
 ├── prd.json
 ├── progress.txt
@@ -71,135 +98,243 @@ BotoolAgent/          ← 就是项目本身
 BotoolAgent 作为子目录放在你的项目中：
 
 ```
-my-project/           ← 你的项目（git 仓库）
-├── BotoolAgent/      ← 工具包
-│   ├── viewer/       ← Web 界面
-│   ├── tasks/        ← PRD 文档存放
-│   ├── rules/        ← 编码规范
-│   ├── scripts/     ← Shell 脚本
-│   └── setup.sh
-├── src/              ← 你的代码
-├── prd.json          ← 自动生成到项目根目录
-├── progress.txt      ← 自动生成到项目根目录
+my-project/           <-- 你的项目（git 仓库）
+├── BotoolAgent/      <-- 工具包
+│   ├── scripts/      <-- BotoolAgent.sh
+│   ├── skills/       <-- 7 个 Claude Code Skill
+│   ├── viewer/       <-- Next.js Web 界面
+│   ├── tasks/        <-- PRD 文档存放
+│   ├── rules/        <-- 编码规范文档
+│   ├── .state/       <-- 运行时状态（agent-status, botoolrc 等）
+│   ├── archive/      <-- 历史运行存档
+│   ├── CLAUDE.md     <-- 项目级指令（auto-loaded）
+│   └── CLAUDE.team.md <-- Lead Agent 运行时指令
+├── src/              <-- 你的代码
+├── prd.json          <-- 自动生成到项目根目录
+├── progress.txt      <-- 自动生成到项目根目录
 └── .git/
 ```
 
-BotoolAgent 会自动检测所处模式（通过 `.git` 目录位置判断），无需手动配置。
+## 完整工作流
 
-## 工作流
+### 5 阶段概览
 
-### 方式 A：Web Viewer（5 阶段）
+| 阶段 | Skill | 功能 | 说明 |
+|------|-------|------|------|
+| Stage 1 | `/botoolagent-pyramidprd` | PRD 编写 | 5 层金字塔问答 + ASCII 可视化确认门控 |
+| Stage 2 | `/botoolagent-prd2json` | 任务规划 | 规则选择 → Enrichment → testCases/evals/sessions → prd.json |
+| Stage 3 | `/botoolagent-coding` | 自动开发 | Agent Teams 模式循环执行，实时监控 |
+| Stage 4 | `/botoolagent-testing` | 测试验证 | 4 层自动验证 + Ralph 自动修复 + 手动验收 |
+| Stage 5 | `/botoolagent-finalize` | 合并发布 | 推送 → 创建 PR → Claude 代码审查 → Merge |
+
+### 方式 A：Web Viewer
 
 ```bash
-# 在你的项目中启动 Claude Code
-cd my-project
-claude
-
-# 输入
+cd my-project && claude
+# 输入:
 /botoolagent
 ```
 
-浏览器会打开 `http://localhost:3000`，进入 5 阶段工作流：
-
-| 阶段 | 功能 | 说明 |
-|------|------|------|
-| Stage 1 | PRD 编写 | 通过 4 层金字塔问答收集需求，生成 PRD |
-| Stage 2 | 任务规划 | 规则检查 → 代码示例 → 测试用例 → JSON 转换 |
-| Stage 3 | 自动开发 | 实时监控代理执行、任务进度、文件变更 |
-| Stage 4 | 测试验证 | 自动化测试 + 手动验收清单 |
-| Stage 5 | 合并发布 | 创建 PR、代码审查、Squash Merge |
+浏览器打开 `http://localhost:3000`，按 5 阶段引导操作。
 
 ### 方式 B：CLI Skills
 
 ```bash
-# 1. 生成 PRD
-/botoolagent-generateprd 做一个用户登录功能
+cd my-project && claude
 
-# 2. 转换为 JSON
+# Stage 1: 生成 PRD（二选一）
+/botoolagent-pyramidprd 做一个文档管理系统    # 金字塔问答（推荐）
+/botoolagent-generateprd 做一个文档管理系统   # 对话式（简单场景）
+
+# Stage 2: PRD 转 JSON
 /botoolagent-prd2json
 
-# 3. 运行自动开发
-./BotoolAgent/scripts/BotoolAgent.sh 10
+# Stage 3: 启动自动开发
+/botoolagent-coding
+
+# Stage 4: 运行测试
+/botoolagent-testing             # 从第 1 层开始
+/botoolagent-testing 3           # 从第 3 层（E2E）开始
+
+# Stage 5: 合并发布
+/botoolagent-finalize
 ```
 
-### 方式 C：纯命令行
+### 方式 C：纯命令行（跳过 Claude Code Skills）
 
 ```bash
-# 直接运行代理（需要先手动创建 prd.json）
-./BotoolAgent/scripts/BotoolAgent.sh [最大迭代次数]
-
-# 指定项目目录（可选）
-./BotoolAgent/scripts/BotoolAgent.sh 10 --project-dir /path/to/project
+./BotoolAgent/scripts/BotoolAgent.sh [--project-dir /path]
 ```
 
-## 关键文件
+### 使用已有 PRD 的流程
 
-| 文件 | 位置 | 说明 |
-|------|------|------|
-| `prd.json` | 项目根目录 | 开发任务列表，含 `passes` 状态 |
-| `progress.txt` | 项目根目录 | 迭代学习日志（只追加） |
-| `BotoolAgent.sh` | scripts/ | 代理循环脚本 |
-| `CLAUDE.md` | BotoolAgent/ | 代理指令（每次迭代读取） |
-| `tasks/` | BotoolAgent/ | PRD 文档存放目录 |
-| `rules/` | BotoolAgent/ | 编码规范文档 |
-| `archive/` | BotoolAgent/ | 历史运行存档 |
-| `viewer/` | BotoolAgent/ | Next.js Web 界面 |
-| `skills/` | BotoolAgent/ | Claude Code Skill 定义 |
+如果你已经有一份写好的 PRD 文档（如 `v1.6_feature_PRD.md`），可以跳过 Stage 1：
+
+```bash
+# 1. 将 PRD 放入 tasks/ 目录
+cp your-prd.md BotoolAgent/tasks/
+
+# 2. 用 PRD2JSON 转换
+/botoolagent-prd2json
+# 选择你的 PRD 文件，转换为 prd.json
+
+# 3. 启动自动开发
+/botoolagent-coding
+```
+
+> PRD2JSON 会从 PRD 的开发计划章节提取任务，生成 `prdSection` 引用指回 PRD 原文。
+> 编码代理在实现每个任务时，通过 `prdSection` 跳读 PRD 对应章节获取完整设计上下文。
 
 ## 核心概念
+
+### PRD.md 是唯一真相源
+
+```
+PRD.md（完整设计文档）              prd.json（自动化索引）
+========================           ========================
+§ 1-8 完整设计内容                   project, branchName
+§ 9 开发计划                         devTasks: [
+  ## 9.1 Phase 1                       { id: "DT-001",
+    - [ ] 创建数据库表                     prdSection: "9.1",  <-- 引用回 PRD
+    - [ ] 验证 RLS 策略                    passes: false }
+  ## 9.2 Phase 2                       { id: "DT-002",
+    - [ ] 实现 CRUD API                    prdSection: "9.2",
+    ...                                    dependsOn: ["DT-001"] }
+                                       ]
+                                     sessions: [...]
+                                     constitution: { rules: [...] }
+```
+
+- **PRD.md** 保存完整设计（架构图、数据模型、UI 布局、业务规则）
+- **prd.json** 只保存自动化所需字段（任务列表、依赖关系、通过状态）
+- 编码代理通过 `prdSection` 字段跳读 PRD 对应章节获取实现细节
 
 ### 每次迭代 = 全新上下文
 
 每次迭代启动一个**全新的 Claude 实例**，没有上一次的记忆。迭代之间的记忆靠：
 - Git 历史（已提交的代码）
-- `progress.txt`（发现的模式和教训）
-- `prd.json`（任务完成状态）
+- `progress.txt`（发现的模式和教训，只追加）
+- `prd.json`（任务完成状态 `passes: true/false`）
+- `patterns.json`（可复用模式，按置信度加权）
 
-### 任务要小
+### 执行架构
 
-每个 PRD 任务必须能在一次迭代中完成。如果任务太大，Claude 会在完成前耗尽上下文。
+```
+BotoolAgent.sh (Ralph 外循环, tmux)
+  └─ Lead Agent (读取 CLAUDE.team.md)
+       ├─ 单任务 → Lead 直接执行
+       └─ 多任务 → spawn teammates 并行
+```
 
-合适的任务大小：
-- 添加一个数据库表和迁移
-- 在现有页面添加一个 UI 组件
-- 更新一个 Server Action 的逻辑
-- 添加一个过滤下拉框
+1. Lead Agent 读取 `prd.json` 中的 `sessions` 分组
+2. 找到第一个有未完成任务的 session
+3. 单任务 → Lead 直接执行；多任务 → 用 Task 工具 spawn teammates 并行
+4. 外层 Ralph 循环（最多 5 轮）驱动 session 间切换
 
-太大的任务（需要拆分）：
-- "构建整个仪表盘"
-- "添加用户认证"
-- "重构 API"
+### Sessions：并行执行分组
 
-### 反馈循环
+PRD2JSON 会将任务按依赖关系和可并行性分成 sessions：
 
-代理依赖反馈循环来保证质量：
-- TypeCheck 捕获类型错误
-- 测试验证行为
-- CI 必须保持绿色
+```json
+{
+  "sessions": [
+    { "id": "S1", "tasks": ["DT-001"], "reason": "数据库初始化，必须先行" },
+    { "id": "S2", "tasks": ["DT-002", "DT-003"], "reason": "文档库 + 版本管理，可并行" },
+    { "id": "S3", "tasks": ["DT-004", "DT-005"], "reason": "导入导出 + 分类，可并行" }
+  ]
+}
+```
+
+同一 session 内的任务并行执行，session 间按顺序执行。
+
+### 任务粒度要求
+
+每个任务必须能在一次迭代中完成。太大的任务需要拆分。
+
+| 合适 | 太大（需拆分） |
+|------|---------------|
+| 添加一个数据库表 | "构建整个仪表盘" |
+| 实现一个 API 路由 | "添加用户认证" |
+| 添加一个 UI 组件 | "重构 API 层" |
+| 更新一个 Server Action | "实现完整翻译系统" |
 
 ### 停止条件
 
 当所有任务的 `passes` 都为 `true` 时，代理输出 `<promise>COMPLETE</promise>` 并退出。
 
+## 7 个 Skills
+
+| Skill | 命令 | 用途 |
+|-------|------|------|
+| **Main** | `/botoolagent` | 启动 Web Viewer（localhost:3000） |
+| **PyramidPRD** | `/botoolagent-pyramidprd` | 5 层金字塔问答生成 PRD（推荐） |
+| **GeneratePRD** | `/botoolagent-generateprd` | 对话式生成 PRD（简单场景） |
+| **PRD2JSON** | `/botoolagent-prd2json` | PRD → prd.json 转换 + Enrichment |
+| **Coding** | `/botoolagent-coding` | 启动自动开发（Agent Teams + tmux） |
+| **Testing** | `/botoolagent-testing` | 4 层自动验证 + Ralph 自动修复 |
+| **Finalize** | `/botoolagent-finalize` | 推送 → PR → 审查 → 合并 → 清理 |
+
+## 关键文件
+
+| 文件 | 位置 | 说明 |
+|------|------|------|
+| `prd.json` | 项目根目录 | 自动化任务索引（passes 状态、依赖、sessions） |
+| `progress.txt` | 项目根目录 | 迭代学习日志（只追加，含 Codebase Patterns） |
+| `patterns.json` | BotoolAgent/ | 可复用模式库（置信度加权，自动淘汰） |
+| `CLAUDE.md` | BotoolAgent/ | 项目级指令（Claude Code auto-loaded） |
+| `CLAUDE.team.md` | BotoolAgent/ | Lead Agent 运行时指令 |
+| `BotoolAgent.sh` | scripts/ | Ralph 外循环 + tmux launcher |
+| `pack.sh` | scripts/ | 打包分发脚本（生成 tar.gz + setup.sh） |
+| `tasks/` | BotoolAgent/ | PRD 文档存放目录 |
+| `rules/` | BotoolAgent/ | 编码规范文档（backend/frontend/testing） |
+| `.state/` | BotoolAgent/ | 运行时状态（agent-status, botoolrc, 限流/熔断） |
+| `archive/` | BotoolAgent/ | 历史运行存档（按日期 + 分支名） |
+| `viewer/` | BotoolAgent/ | Next.js Web 界面（5 阶段 + 16 组 API） |
+| `skills/` | BotoolAgent/ | 7 个 Claude Code Skill 定义 |
+
 ## 配置
 
 ### botoolrc
 
-在 BotoolAgent 目录创建 `.state/botoolrc` 自定义配置：
+在 `.state/botoolrc` 自定义运行配置：
 
 ```bash
 cp BotoolAgent/docs/examples/botoolrc.example BotoolAgent/.state/botoolrc
 ```
 
-可配置项：超时时间、重试次数、Rate Limiting、Circuit Breaker、通知等。
+可配置项：
+
+| 类别 | 配置项 | 默认值 |
+|------|--------|--------|
+| 轮次 | `BOTOOL_MAX_ROUNDS` | 5 |
+| 冷却 | `BOTOOL_ROUND_COOLDOWN` | 10s |
+| 卡住检测 | `BOTOOL_STALL_TIMEOUT` | 900s (15min) |
+| 模型 | `CLAUDE_MODEL` / `CLAUDE_EFFORT` | opus / high |
+| Teams 模式 | `BOTOOL_TEAMMATE_MODE` | in-process |
 
 ### 环境变量
 
 | 变量 | 说明 |
 |------|------|
 | `BOTOOL_PROJECT_ROOT` | 覆盖自动检测的项目根目录 |
-| `BOTOOL_MAX_ITERATIONS` | 最大迭代次数 |
-| `BOTOOL_TIMEOUT` | 每次迭代超时（秒） |
+| `BOTOOL_MAX_ROUNDS` | 最大轮次（默认 5） |
+| `BOTOOL_TEAMMATE_MODE` | Teams 模式: `in-process`（默认） |
+
+## 韧性机制
+
+| 机制 | 说明 |
+|------|------|
+| Ralph 外循环 | 最多 5 轮自动重启 session |
+| Commit 监控 | 15 分钟无新 commit → kill session，启动下一轮 |
+| Lead AI 接管 | Teammate 失败 → Lead Agent 直接完成该任务 |
+| Rate limit 恢复 | Claude CLI 内部处理 + Lead Agent 等待重试 |
+| 上下文管理 | Lead Agent 在批次间执行 /compact 释放上下文 |
+
+测试阶段额外的 Ralph 自动修复：
+- TypeCheck/Lint 失败 → 自动修复循环
+- 单元测试失败 → 分析错误 + 修复 + 重跑
+- Code Review 发现 HIGH 问题 → 自动修复
+- 3 次修复无进展 → 触发熔断，询问用户
 
 ## 调试
 
@@ -207,14 +342,20 @@ cp BotoolAgent/docs/examples/botoolrc.example BotoolAgent/.state/botoolrc
 # 查看任务状态
 cat prd.json | jq '.devTasks[] | {id, title, passes}'
 
+# 查看 sessions 分组
+cat prd.json | jq '.sessions'
+
 # 查看学习日志
 cat progress.txt
 
 # 查看最近提交
 git log --oneline -10
 
-# 查看代理状态
+# 查看代理实时状态
 cat BotoolAgent/.state/agent-status | jq .
+
+# 查看模式库
+cat BotoolAgent/patterns.json | jq '.[] | select(.status=="active") | {trigger, action, confidence}'
 ```
 
 ## 打包分发
@@ -225,7 +366,15 @@ cd BotoolAgent
 ./scripts/pack.sh my-custom-name     # 自定义输出名
 ```
 
-分发包不含 `node_modules` 和构建缓存，接收者解压后运行 `./setup.sh` 一次即可。
+分发包内容：
+- scripts/（BotoolAgent.sh）
+- skills/（7 个 SKILL.md）
+- viewer/（源码，不含 node_modules/.next）
+- rules/（编码规范模板）
+- CLAUDE.md, CLAUDE.team.md, README.md
+- setup.sh（自动生成，一键安装）
+
+接收者解压后运行 `cd BotoolAgent && ./setup.sh` 一次即可。
 
 ## 参考
 

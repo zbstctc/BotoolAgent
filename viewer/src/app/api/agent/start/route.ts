@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import fs from 'fs';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
-import { getProjectRoot, getPrdJsonPath, getProjectPrdJsonPath, getAgentScriptPath, getAgentTeamsScriptPath, getAgentPidPath, getAgentStatusPath, isPortableMode } from '@/lib/project-root';
+import { getProjectRoot, getPrdJsonPath, getProjectPrdJsonPath, getAgentScriptPath, getAgentPidPath, getAgentStatusPath, isPortableMode } from '@/lib/project-root';
 
 const PROJECT_ROOT = getProjectRoot();
 const PID_FILE = getAgentPidPath();
@@ -92,7 +92,7 @@ function readPRD(projectId?: string): PRDJson | null {
 
 export async function POST(request: Request) {
   try {
-    const { maxIterations = 10, mode = 'teams', projectId } = await request.json().catch(() => ({}));
+    const { mode = 'teams', projectId } = await request.json().catch(() => ({}));
 
     const PRD_PATH = getProjectPrdJsonPath(projectId);
 
@@ -125,8 +125,7 @@ export async function POST(request: Request) {
     const prd = readPRD(projectId);
 
     // Determine stage based on mode
-    const stageMap: Record<string, 3 | 4> = { single: 3, teams: 3, testing: 4 };
-    const stage = stageMap[mode] || 3;
+    const stage = mode === 'testing' ? 4 : 3;
 
     if (prd) {
       const tasks = prd.devTasks || [];
@@ -185,33 +184,22 @@ export async function POST(request: Request) {
         cleanPidFile();
       });
     } else {
-      // Coding mode: run BotoolAgent scripts
-      const SCRIPT_PATH = mode === 'teams' ? getAgentTeamsScriptPath() : getAgentScriptPath();
+      // Coding mode: run BotoolAgent.sh (tmux + Agent Teams)
+      const SCRIPT_PATH = getAgentScriptPath();
 
       if (!fs.existsSync(SCRIPT_PATH)) {
-        const scriptName = mode === 'teams' ? 'BotoolAgentTeams.sh' : 'BotoolAgent.sh';
         return NextResponse.json(
-          { error: `${scriptName} not found`, path: SCRIPT_PATH },
+          { error: 'BotoolAgent.sh not found', path: SCRIPT_PATH },
           { status: 404 }
         );
       }
 
       const args = [SCRIPT_PATH];
-      if (mode === 'teams') {
-        if (isPortableMode()) {
-          args.push('--project-dir', PROJECT_ROOT);
-        }
-        if (projectId) {
-          args.push('--prd-path', PRD_PATH);
-        }
-      } else {
-        args.push(String(maxIterations));
-        if (isPortableMode()) {
-          args.push('--project-dir', PROJECT_ROOT);
-        }
-        if (projectId) {
-          args.push('--prd-path', PRD_PATH);
-        }
+      if (isPortableMode()) {
+        args.push('--project-dir', PROJECT_ROOT);
+      }
+      if (projectId) {
+        args.push('--prd-path', PRD_PATH);
       }
 
       child = spawn('bash', args, {
@@ -231,10 +219,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `BotoolAgent started in background (${mode} mode)`,
+      message: `BotoolAgent started in background`,
       pid: child.pid,
       mode,
-      maxIterations,
     });
   } catch (error) {
     console.error('Failed to start agent:', error);

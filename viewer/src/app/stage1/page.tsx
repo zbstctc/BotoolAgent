@@ -84,6 +84,8 @@ export default function Stage1Page() {
   const [selectedMode, setSelectedMode] = useState<PipelineMode | null>(null);
   // Quick fix description (for quick mode simplified input)
   const [quickFixDescription, setQuickFixDescription] = useState<string>('');
+  // Transform mode: source PRD file path
+  const [transformFilePath, setTransformFilePath] = useState<string>('');
 
   // Initial description from Dashboard
   const [initialDescription, setInitialDescription] = useState<string>('');
@@ -268,6 +270,8 @@ export default function Stage1Page() {
       sendMessage(`/botoolagent-pyramidprd [模式:快速修复] ${initialDescription}`);
     } else if (selectedMode === 'feature') {
       sendMessage(`/botoolagent-pyramidprd [模式:功能开发] ${initialDescription}`);
+    } else if (selectedMode === 'transform') {
+      sendMessage(`/botoolagent-pyramidprd [模式:导入] ${initialDescription}`);
     } else {
       sendMessage(`/botoolagent-pyramidprd ${initialDescription}`);
     }
@@ -538,6 +542,13 @@ export default function Stage1Page() {
     // startPyramid will auto-trigger via the useEffect since selectedMode and initialDescription are set
   }, [quickFixDescription]);
 
+  // Handle transform mode submission
+  const handleTransformSubmit = useCallback(() => {
+    if (!transformFilePath.trim()) return;
+    setInitialDescription(transformFilePath.trim());
+    // startPyramid will auto-trigger via the useEffect since selectedMode and initialDescription are set
+  }, [transformFilePath]);
+
   // Redirect if no session
   if (!sessionId && !projectsLoading) {
     return (
@@ -620,6 +631,69 @@ export default function Stage1Page() {
                 }`}
               >
                 开始快速修复
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Transform mode: show file path input instead of pyramid Q&A
+  if (selectedMode === 'transform' && !isStarted && !initialDescription) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden bg-neutral-50">
+        <StageIndicator
+          currentStage={1}
+          completedStages={[]}
+          projectName={projectName}
+          stageStatus="PRD 导入"
+        />
+        <div className="flex-1 flex items-center justify-center bg-white">
+          <div className="max-w-lg w-full px-6">
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-violet-50 border border-violet-200 mb-4">
+                <span className="w-2.5 h-2.5 rounded-full bg-violet-500" />
+                <span className="text-sm font-medium text-violet-700">PRD 导入模式</span>
+              </div>
+              <h2 className="text-xl font-semibold text-neutral-900 mb-2">
+                输入现有 PRD 文件路径
+              </h2>
+              <p className="text-sm text-neutral-500">
+                系统将分析你的 PRD 文档，评估覆盖度，针对性补问后生成标准格式 PRD
+              </p>
+            </div>
+
+            <input
+              type="text"
+              value={transformFilePath}
+              onChange={(e) => setTransformFilePath(e.target.value)}
+              placeholder="例如：tasks/my-project-prd.md"
+              className="w-full p-4 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 bg-white text-neutral-900"
+              autoFocus
+            />
+
+            <p className="text-xs text-neutral-400 mt-2">
+              支持 Markdown (.md) 格式的 PRD 文件，输入相对于项目根目录的路径
+            </p>
+
+            <div className="flex items-center gap-3 mt-4">
+              <button
+                onClick={() => setSelectedMode(null)}
+                className="px-4 py-2.5 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-50 transition-colors"
+              >
+                返回选择
+              </button>
+              <button
+                onClick={handleTransformSubmit}
+                disabled={!transformFilePath.trim()}
+                className={`flex-1 py-2.5 rounded-lg font-medium transition-colors ${
+                  transformFilePath.trim()
+                    ? 'bg-violet-600 text-white hover:bg-violet-700'
+                    : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                }`}
+              >
+                开始导入分析
               </button>
             </div>
           </div>

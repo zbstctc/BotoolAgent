@@ -25,9 +25,8 @@ mkdir -p "$PACKAGE_DIR"
 # Copy essential files
 echo "  Copying core files..."
 cp "$SCRIPT_DIR/scripts/BotoolAgent.sh" "$PACKAGE_DIR/"
-cp "$SCRIPT_DIR/scripts/BotoolAgentTeams.sh" "$PACKAGE_DIR/"
 cp "$SCRIPT_DIR/CLAUDE.md" "$PACKAGE_DIR/"
-cp "$SCRIPT_DIR/CLAUDE.team.md" "$PACKAGE_DIR/" 2>/dev/null || true
+cp "$SCRIPT_DIR/CLAUDE.team.md" "$PACKAGE_DIR/"
 cp "$SCRIPT_DIR/README.md" "$PACKAGE_DIR/"
 cp "$SCRIPT_DIR/LICENSE" "$PACKAGE_DIR/" 2>/dev/null || true
 cp "$SCRIPT_DIR/docs/examples/prd.json.example" "$PACKAGE_DIR/" 2>/dev/null || true
@@ -79,7 +78,6 @@ cd "$SCRIPT_DIR"
 
 # Make scripts executable
 chmod +x "$SCRIPT_DIR/BotoolAgent.sh"
-chmod +x "$SCRIPT_DIR/BotoolAgentTeams.sh" 2>/dev/null || true
 
 # Install skills as symlinks to ~/.claude/skills/
 echo "  Installing skills..."
