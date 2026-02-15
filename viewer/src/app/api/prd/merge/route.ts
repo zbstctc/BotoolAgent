@@ -38,14 +38,19 @@ interface BasePrdJson {
   project: string;
   branchName: string;
   description: string;
+  prdFile?: string;
   devTasks?: {
     id: string;
     title: string;
-    description: string;
-    acceptanceCriteria: string[];
+    prdSection?: string;
+    description?: string;
+    acceptanceCriteria?: string[];
     priority: number;
     passes: boolean;
-    notes: string;
+    notes?: string;
+    dependsOn?: string[];
+    evals?: DevTaskEval[];
+    testCases?: TestCase[];
   }[];
 }
 
@@ -110,9 +115,21 @@ function mergeEnrichedPrdJson(
       .map(({ taskId: _taskId, ...evalData }) => evalData);
 
     const depInfo = enrichResult.dependencies.find((d) => d.taskId === task.id);
+
+    // Slim prd.json may already have testCases from convert API — use them if present
+    const resolvedTestCases = task.testCases?.length
+      ? task.testCases
+      : deriveTestCases(task);
+
+    // Slim prd.json may already have evals — merge with enriched evals
+    const resolvedEvals = taskEvals.length ? taskEvals : (task.evals || []);
+
+    // Slim prd.json may already have dependsOn
+    const resolvedDeps = depInfo?.dependsOn || task.dependsOn || [];
+
     return {
       ...task,
-      dependsOn: depInfo?.dependsOn || [],
+      dependsOn: resolvedDeps,
       contextHint: '',
       spec: {
         codeExamples: enrichResult.codeExamples,
@@ -120,8 +137,8 @@ function mergeEnrichedPrdJson(
         filesToModify: enrichResult.filesToModify,
         relatedFiles: [],
       },
-      evals: taskEvals,
-      testCases: deriveTestCases(task),
+      evals: resolvedEvals,
+      testCases: resolvedTestCases,
     };
   });
 
@@ -129,6 +146,7 @@ function mergeEnrichedPrdJson(
     project: basePrdJson.project,
     branchName: basePrdJson.branchName,
     description: basePrdJson.description,
+    prdFile: basePrdJson.prdFile,
     constitution:
       constitutionRules.length > 0
         ? { rules: constitutionRules, ruleAuditSummary: '' }

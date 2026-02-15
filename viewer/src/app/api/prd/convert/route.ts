@@ -21,11 +21,20 @@ You must output ONLY valid JSON, no explanations or markdown. The format is:
     {
       "id": "DT-001",
       "title": "[Task title]",
-      "prdSection": "7.1",
+      "prdSection": "7.1 (L15-32)",
       "priority": 1,
       "passes": false,
-      "dependsOn": []
+      "dependsOn": [],
+      "evals": [
+        { "type": "code-based", "blocking": true, "description": "Typecheck passes", "command": "npx tsc --noEmit", "expect": "exit-0" }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" }
+      ]
     }
+  ],
+  "sessions": [
+    { "id": "S1", "tasks": ["DT-001", "DT-002"], "reason": "Phase 1 基础任务" }
   ]
 }
 
@@ -34,18 +43,32 @@ You must output ONLY valid JSON, no explanations or markdown. The format is:
 1. **Project Name**: Extract from the PRD title (after "PRD:")
 2. **Branch Name**: Derive from feature name, kebab-case, prefixed with "botool/"
 3. **Description**: Use the introduction/overview text from PRD § 1
-4. **prdSection Mapping**: Map each task to its PRD Phase section number
-   - Tasks under "## 7.1 Phase 1" → prdSection: "7.1"
-   - Tasks under "## 7.2 Phase 2" → prdSection: "7.2"
+4. **prdSection Mapping**: Map each task to its PRD Phase section **with line number range**
+   - Count line numbers in the PRD content provided
+   - Tasks under "## 7.1 Phase 1" starting at line 15, next heading at line 33 → prdSection: "7.1 (L15-32)"
+   - Tasks under "## 7.2 Phase 2" starting at line 33, next heading at line 50 → prdSection: "7.2 (L33-49)"
    - If PRD uses flat DT list (no Phases) → prdSection: "7"
+   - The line range lets the coding agent jump-read the exact section with Read tool offset/limit
 5. **Dev Tasks**: Extract from PRD § 7 (开发计划)
    - Keep the task ID format (DT-001, DT-002, etc.)
-   - Extract ONLY: id, title, prdSection, priority, passes, dependsOn
+   - Extract: id, title, prdSection (with line range), priority, passes, dependsOn, evals, testCases
    - Do NOT include description or acceptanceCriteria (these stay in PRD.md)
    - Priority follows document order (first task = 1, second = 2, etc.)
    - All tasks start with passes: false
 6. **Dependencies**: If Phase N depends on Phase M, all tasks in N depend on tasks in M
    - Also check explicit dependency markers in the PRD
+7. **Evals**: Every task must have at least one eval:
+   - Always include: { "type": "code-based", "blocking": true, "description": "Typecheck passes", "command": "npx tsc --noEmit", "expect": "exit-0" }
+   - Database tasks: add { "type": "code-based", "blocking": true, "description": "Migration file exists", "command": "test -f [migration-file]", "expect": "exit-0" }
+   - Component tasks: add file existence check for the component
+8. **testCases**: Every task gets { "type": "typecheck", "desc": "TypeScript 编译通过" }. Additionally:
+   - Tasks with transformation/parsing/filtering logic → add { "type": "unit", "desc": "核心逻辑单元测试", "tdd": true }
+   - UI/page/rendering tasks → add { "type": "e2e", "desc": "页面功能端到端测试" }
+   - Visual/animation tasks → add { "type": "manual", "desc": "视觉和交互手动验证" }
+9. **Sessions**: Group tasks into sessions (max 8 tasks per session):
+   - Tasks with dependencies go in the same session
+   - Tasks modifying the same files go in the same session
+   - Each session has a "reason" explaining the grouping
 
 ## Task Size Validation
 
