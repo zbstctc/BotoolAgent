@@ -85,6 +85,7 @@ export function JsonConvertStep({
       const decoder = new TextDecoder();
       let buffer = '';
       let progressValue = 0;
+      let didReceiveComplete = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -110,6 +111,7 @@ export function JsonConvertStep({
               } else if (parsed.type === 'complete') {
                 // Conversion complete - prdJson is already saved by the API
                 const resultJson = parsed.prdJson as PrdJson;
+                didReceiveComplete = true;
                 setPrdJson(resultJson);
                 setJsonString(JSON.stringify(resultJson, null, 2));
                 setConvertingProgress(100);
@@ -121,6 +123,7 @@ export function JsonConvertStep({
                   // Try to extract JSON from raw content
                   const extracted = tryExtractJson(parsed.rawContent);
                   if (extracted) {
+                    didReceiveComplete = true;
                     setPrdJson(extracted);
                     setJsonString(JSON.stringify(extracted, null, 2));
                     setConvertingProgress(100);
@@ -144,7 +147,7 @@ export function JsonConvertStep({
       }
 
       // If stream ended without a complete event, check if we have data
-      if (convertingState !== 'completed' && !prdJson) {
+      if (!didReceiveComplete) {
         setConvertingState('completed');
         setConvertingMessage('转换完成！');
       }

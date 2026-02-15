@@ -4,6 +4,7 @@ import "./globals.css";
 import { Header } from "@/components/Header";
 import { Main } from "@/components/Main";
 import { ProjectProvider } from "@/contexts/ProjectContext";
+import { computeWorkspaceId } from "@/lib/workspace-id.server";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,12 +26,14 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const workspaceId = computeWorkspaceId();
+
   return (
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased flex h-screen flex-col overflow-hidden bg-neutral-50`}
       >
-        <ProjectProvider>
+        <ProjectProvider workspaceId={workspaceId}>
           <Header />
           <Main>{children}</Main>
         </ProjectProvider>

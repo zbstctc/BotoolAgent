@@ -14,6 +14,15 @@ interface FileChange {
   deletions: number;
 }
 
+function isSafeGitRef(ref: string): boolean {
+  return (
+    /^[A-Za-z0-9._/-]+$/.test(ref) &&
+    !ref.startsWith('-') &&
+    !ref.includes('..') &&
+    !ref.includes('//')
+  );
+}
+
 export async function GET() {
   try {
     // Get the current branch name
@@ -21,6 +30,13 @@ export async function GET() {
       cwd: PROJECT_ROOT,
     });
     const currentBranch = branchStdout.trim();
+
+    if (!isSafeGitRef(currentBranch)) {
+      return NextResponse.json(
+        { error: 'Unsafe branch name detected' },
+        { status: 400 }
+      );
+    }
 
     // Get file changes with stats compared to main branch
     // Use --numstat to get line additions/deletions

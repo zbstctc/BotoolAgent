@@ -43,6 +43,25 @@ interface DiffSummary {
   };
 }
 
+function isSafeGitRef(ref: string): boolean {
+  return (
+    /^[A-Za-z0-9._/-]+$/.test(ref) &&
+    !ref.startsWith('-') &&
+    !ref.includes('..') &&
+    !ref.includes('//')
+  );
+}
+
+function isSafeGitPath(filePath: string): boolean {
+  return (
+    /^[A-Za-z0-9._/\-]+$/.test(filePath) &&
+    !filePath.startsWith('/') &&
+    !filePath.startsWith('-') &&
+    !filePath.includes('..') &&
+    !filePath.includes('//')
+  );
+}
+
 /**
  * Parse a unified diff output into structured hunks
  */
@@ -140,11 +159,31 @@ export async function GET(request: NextRequest) {
     const specificFile = searchParams.get('file');
     const baseBranch = searchParams.get('baseBranch') || 'main';
 
+    if (!isSafeGitRef(baseBranch)) {
+      return NextResponse.json(
+        { error: 'Invalid baseBranch parameter' },
+        { status: 400 }
+      );
+    }
+    if (specificFile && !isSafeGitPath(specificFile)) {
+      return NextResponse.json(
+        { error: 'Invalid file parameter' },
+        { status: 400 }
+      );
+    }
+
     // Get the current branch name
     const { stdout: branchStdout } = await execAsync('git branch --show-current', {
       cwd: PROJECT_ROOT,
     });
     const currentBranch = branchStdout.trim();
+
+    if (!isSafeGitRef(currentBranch)) {
+      return NextResponse.json(
+        { error: 'Unsafe branch name detected' },
+        { status: 400 }
+      );
+    }
 
     // Check if base branch exists
     try {

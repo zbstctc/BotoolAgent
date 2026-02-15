@@ -24,7 +24,8 @@ mkdir -p "$PACKAGE_DIR"
 
 # Copy essential files
 echo "  Copying core files..."
-cp "$SCRIPT_DIR/scripts/BotoolAgent.sh" "$PACKAGE_DIR/"
+mkdir -p "$PACKAGE_DIR/scripts"
+cp "$SCRIPT_DIR/scripts/BotoolAgent.sh" "$PACKAGE_DIR/scripts/"
 cp "$SCRIPT_DIR/CLAUDE.md" "$PACKAGE_DIR/"
 cp "$SCRIPT_DIR/CLAUDE.lead.md" "$PACKAGE_DIR/"
 cp "$SCRIPT_DIR/README.md" "$PACKAGE_DIR/"
@@ -59,6 +60,14 @@ cp "$SCRIPT_DIR/.gitignore" "$PACKAGE_DIR/.gitignore"
 mkdir -p "$PACKAGE_DIR/.claude-plugin"
 cp "$SCRIPT_DIR/.claude-plugin/plugin.json" "$PACKAGE_DIR/.claude-plugin/" 2>/dev/null || true
 
+# Create root wrapper script for backward compatibility
+cat > "$PACKAGE_DIR/BotoolAgent.sh" << 'AGENT_WRAPPER_EOF'
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "$SCRIPT_DIR/scripts/BotoolAgent.sh" "$@"
+AGENT_WRAPPER_EOF
+chmod +x "$PACKAGE_DIR/BotoolAgent.sh"
+
 # Create setup script
 cat > "$PACKAGE_DIR/setup.sh" << 'SETUP_EOF'
 #!/bin/bash
@@ -73,11 +82,27 @@ echo "Setting up BotoolAgent..."
 
 # Install viewer dependencies
 echo "  Installing viewer dependencies (this may take a minute)..."
-cd "$SCRIPT_DIR/viewer" && npm install --silent
+cd "$SCRIPT_DIR/viewer"
+
+# Ensure optional native deps are installed (required by lightningcss/tailwind on arm64)
+if [ -f "package-lock.json" ]; then
+  npm ci --include=optional --no-fund --no-audit
+else
+  npm install --include=optional --no-fund --no-audit
+fi
+
+# Verify lightningcss native binding is loadable; attempt one auto-repair if missing
+if ! node -e "require('lightningcss')" >/dev/null 2>&1; then
+  echo "  ⚠️ lightningcss native binding missing, attempting repair..."
+  rm -rf node_modules/lightningcss
+  npm install lightningcss --include=optional --no-fund --no-audit
+fi
+
 cd "$SCRIPT_DIR"
 
 # Make scripts executable
 chmod +x "$SCRIPT_DIR/BotoolAgent.sh"
+chmod +x "$SCRIPT_DIR/scripts/BotoolAgent.sh"
 
 # Install skills as symlinks to ~/.claude/skills/
 echo "  Installing skills..."

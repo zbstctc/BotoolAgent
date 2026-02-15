@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator, ChangeSummary, CompletionSummary, StageTransitionModal, ReviewSummary } from '@/components';
 import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
@@ -29,7 +29,7 @@ interface MergeStatus {
 
 type PageState = 'loading' | 'no_pr' | 'creating_pr' | 'ready' | 'merging' | 'merged' | 'error';
 
-export default function Stage5Page() {
+function Stage5PageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get('projectId') || undefined;
@@ -79,6 +79,19 @@ export default function Stage5Page() {
     }
   }, [progress]);
 
+  // Fetch merge status
+  const fetchMergeStatus = useCallback(async () => {
+    try {
+      const response = await fetch('/api/git/merge');
+      if (response.ok) {
+        const data = await response.json();
+        setMergeStatus(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch merge status:', err);
+    }
+  }, []);
+
   // Fetch diff summary
   useEffect(() => {
     const fetchDiff = async () => {
@@ -122,20 +135,7 @@ export default function Stage5Page() {
     if (!isLoadingDiff && !isLoadingProgress) {
       checkExistingPR();
     }
-  }, [isLoadingDiff, isLoadingProgress]);
-
-  // Fetch merge status
-  const fetchMergeStatus = useCallback(async () => {
-    try {
-      const response = await fetch('/api/git/merge');
-      if (response.ok) {
-        const data = await response.json();
-        setMergeStatus(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch merge status:', err);
-    }
-  }, []);
+  }, [isLoadingDiff, isLoadingProgress, fetchMergeStatus]);
 
   // Create PR (user-initiated)
   const handleCreatePR = useCallback(async () => {
@@ -420,5 +420,21 @@ export default function Stage5Page() {
         onLater={handleCompletionLater}
       />
     </div>
+  );
+}
+
+function Stage5Fallback() {
+  return (
+    <div className="flex h-full items-center justify-center bg-neutral-50 text-sm text-neutral-500">
+      加载中...
+    </div>
+  );
+}
+
+export default function Stage5Page() {
+  return (
+    <Suspense fallback={<Stage5Fallback />}>
+      <Stage5PageContent />
+    </Suspense>
   );
 }

@@ -6,9 +6,6 @@ import {
   previewSkillContent,
   getSkillsDir,
 } from '@/lib/rules-to-skill';
-import { readFile } from 'fs/promises';
-import { join, dirname } from 'path';
-import { existsSync } from 'fs';
 
 // GET: List all generated skills or preview a skill
 export async function GET(request: NextRequest) {

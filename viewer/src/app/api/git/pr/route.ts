@@ -3,7 +3,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
-import { getProjectRoot, getProgressPath, getPrdJsonPath, getProjectPrdJsonPath, getProjectProgressPath } from '@/lib/project-root';
+import { getProjectRoot, getProjectPrdJsonPath, getProjectProgressPath } from '@/lib/project-root';
 
 const execAsync = promisify(exec);
 
@@ -26,6 +26,19 @@ interface PRInfo {
 interface CompletedTask {
   id: string;
   title: string;
+}
+
+function isSafeGitRef(ref: string): boolean {
+  return (
+    /^[A-Za-z0-9._/-]+$/.test(ref) &&
+    !ref.startsWith('-') &&
+    !ref.includes('..') &&
+    !ref.includes('//')
+  );
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 /**
@@ -199,6 +212,13 @@ export async function GET() {
     });
     const currentBranch = branchStdout.trim();
 
+    if (!isSafeGitRef(currentBranch)) {
+      return NextResponse.json(
+        { error: 'Unsafe branch name detected' },
+        { status: 400 }
+      );
+    }
+
     // Check if PR exists for this branch
     try {
       const { stdout: prJson } = await execAsync(
@@ -290,11 +310,25 @@ export async function POST(request: NextRequest) {
       // Empty body is OK, use defaults
     }
 
+    if (!isSafeGitRef(baseBranch)) {
+      return NextResponse.json(
+        { error: 'Invalid baseBranch' },
+        { status: 400 }
+      );
+    }
+
     // Get current branch
     const { stdout: branchStdout } = await execAsync('git branch --show-current', {
       cwd: PROJECT_ROOT,
     });
     const currentBranch = branchStdout.trim();
+
+    if (!isSafeGitRef(currentBranch)) {
+      return NextResponse.json(
+        { error: 'Unsafe branch name detected' },
+        { status: 400 }
+      );
+    }
 
     // Check if on main branch
     if (currentBranch === baseBranch) {
@@ -332,7 +366,7 @@ export async function POST(request: NextRequest) {
 
     // Push current branch to remote first
     try {
-      await execAsync(`git push -u origin ${currentBranch}`, { cwd: PROJECT_ROOT });
+      await execAsync(`git push -u origin ${shellQuote(currentBranch)}`, { cwd: PROJECT_ROOT });
     } catch (pushError) {
       // Branch might already be pushed, try to continue
       console.warn('Push warning:', pushError);
@@ -346,8 +380,16 @@ export async function POST(request: NextRequest) {
     await fs.writeFile(tempBodyFile, body, 'utf-8');
 
     try {
+      const createCmd = [
+        'gh pr create',
+        `--base ${shellQuote(baseBranch)}`,
+        `--title ${shellQuote(title)}`,
+        `--body-file ${shellQuote(tempBodyFile)}`,
+        draftFlag,
+      ].filter(Boolean).join(' ');
+
       const { stdout: prOutput } = await execAsync(
-        `gh pr create --base ${baseBranch} --title "${title.replace(/"/g, '\\"')}" --body-file "${tempBodyFile}" ${draftFlag}`,
+        createCmd,
         { cwd: PROJECT_ROOT }
       );
 

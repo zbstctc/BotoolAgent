@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import path from 'path';
 import fs from 'fs';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
-import { getProjectRoot, getPrdJsonPath, getProjectPrdJsonPath } from '@/lib/project-root';
+import { getProjectRoot, getProjectPrdJsonPath } from '@/lib/project-root';
 
 const execAsync = promisify(exec);
 
@@ -39,6 +38,19 @@ interface MergeResult {
   deletedBranch: boolean;
   commitSha?: string;
   message: string;
+}
+
+function isSafeGitRef(ref: string): boolean {
+  return (
+    /^[A-Za-z0-9._/-]+$/.test(ref) &&
+    !ref.startsWith('-') &&
+    !ref.includes('..') &&
+    !ref.includes('//')
+  );
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 /**
@@ -122,11 +134,25 @@ export async function POST(request: NextRequest) {
       // Empty body is OK, use defaults
     }
 
+    if (!isSafeGitRef(baseBranch)) {
+      return NextResponse.json(
+        { error: 'Invalid baseBranch' },
+        { status: 400 }
+      );
+    }
+
     // Get current branch
     const { stdout: branchStdout } = await execAsync('git branch --show-current', {
       cwd: PROJECT_ROOT,
     });
     const currentBranch = branchStdout.trim();
+
+    if (!isSafeGitRef(currentBranch)) {
+      return NextResponse.json(
+        { error: 'Unsafe branch name detected' },
+        { status: 400 }
+      );
+    }
 
     // Check if on base branch
     if (currentBranch === baseBranch) {
@@ -168,9 +194,9 @@ export async function POST(request: NextRequest) {
       let commitSha: string | undefined;
       try {
         // Switch to base branch and get the latest commit
-        await execAsync(`git fetch origin ${baseBranch}`, { cwd: PROJECT_ROOT });
+        await execAsync(`git fetch origin ${shellQuote(baseBranch)}`, { cwd: PROJECT_ROOT });
         const { stdout: shaOutput } = await execAsync(
-          `git rev-parse origin/${baseBranch}`,
+          `git rev-parse origin/${shellQuote(baseBranch)}`,
           { cwd: PROJECT_ROOT }
         );
         commitSha = shaOutput.trim();
@@ -181,10 +207,10 @@ export async function POST(request: NextRequest) {
       // If branch was deleted, switch to base branch locally
       if (deleteBranch) {
         try {
-          await execAsync(`git checkout ${baseBranch}`, { cwd: PROJECT_ROOT });
-          await execAsync(`git pull origin ${baseBranch}`, { cwd: PROJECT_ROOT });
+          await execAsync(`git checkout ${shellQuote(baseBranch)}`, { cwd: PROJECT_ROOT });
+          await execAsync(`git pull origin ${shellQuote(baseBranch)}`, { cwd: PROJECT_ROOT });
           // Delete local branch if it still exists
-          await execAsync(`git branch -D ${currentBranch}`, { cwd: PROJECT_ROOT }).catch(() => {});
+          await execAsync(`git branch -D ${shellQuote(currentBranch)}`, { cwd: PROJECT_ROOT }).catch(() => {});
         } catch {
           // Ignore checkout errors
         }
@@ -288,6 +314,13 @@ export async function GET() {
       cwd: PROJECT_ROOT,
     });
     const currentBranch = branchStdout.trim();
+
+    if (!isSafeGitRef(currentBranch)) {
+      return NextResponse.json(
+        { error: 'Unsafe branch name detected' },
+        { status: 400 }
+      );
+    }
 
     // Get PR info with merge status
     try {

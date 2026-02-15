@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
-import * as path from 'path';
 import { getPrdJsonPath, getProjectPrdJsonPath } from '@/lib/project-root';
 
 interface DevTask {

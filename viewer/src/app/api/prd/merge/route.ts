@@ -112,7 +112,11 @@ function mergeEnrichedPrdJson(
   const enrichedTasks: EnrichedDevTask[] = (basePrdJson.devTasks || []).map((task) => {
     const taskEvals = enrichResult.evals
       .filter((ev) => ev.taskId === task.id)
-      .map(({ taskId: _taskId, ...evalData }) => evalData);
+      .map((ev) => {
+        const evalData = { ...ev };
+        delete evalData.taskId;
+        return evalData;
+      });
 
     const depInfo = enrichResult.dependencies.find((d) => d.taskId === task.id);
 

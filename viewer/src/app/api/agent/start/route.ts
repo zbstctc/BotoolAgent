@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import fs from 'fs';
+import path from 'path';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
-import { getProjectRoot, getPrdJsonPath, getProjectPrdJsonPath, getAgentScriptPath, getAgentPidPath, getAgentStatusPath, isPortableMode } from '@/lib/project-root';
+import { getProjectRoot, getProjectPrdJsonPath, getAgentScriptPath, getAgentPidPath, getAgentStatusPath, isPortableMode } from '@/lib/project-root';
 
 const PROJECT_ROOT = getProjectRoot();
 const PID_FILE = getAgentPidPath();
 const STATUS_FILE = getAgentStatusPath();
+const TESTING_LOG_FILE = path.join(path.dirname(STATUS_FILE), 'agent-testing.log');
 
 interface AgentPidInfo {
   pid: number;
@@ -78,6 +80,13 @@ interface PRDJson {
   devTasks?: Array<{ id: string; passes: boolean }>;
 }
 
+type TeammateMode = 'in-process' | 'tmux';
+
+function normalizeTeammateMode(value: unknown): TeammateMode {
+  if (value === 'tmux') return 'tmux';
+  return 'in-process';
+}
+
 function readPRD(projectId?: string): PRDJson | null {
   try {
     const prdPath = getProjectPrdJsonPath(projectId);
@@ -92,7 +101,29 @@ function readPRD(projectId?: string): PRDJson | null {
 
 export async function POST(request: Request) {
   try {
-    const { mode = 'teams', projectId } = await request.json().catch(() => ({}));
+    const requestBody = await request.json().catch(() => ({}));
+    const { mode = 'teams', projectId } = requestBody as {
+      mode?: 'teams' | 'testing';
+      projectId?: string;
+      maxIterations?: number;
+      startLayer?: number;
+      testingUseTeams?: boolean;
+      testingTeammateMode?: TeammateMode;
+    };
+    const rawMaxIterations = requestBody?.maxIterations;
+    const maxIterations = Number.isFinite(rawMaxIterations)
+      ? Math.max(1, Math.min(50, Math.floor(rawMaxIterations)))
+      : undefined;
+    const rawStartLayer = requestBody?.startLayer;
+    const startLayer = Number.isFinite(rawStartLayer)
+      ? Math.max(1, Math.min(4, Math.floor(rawStartLayer)))
+      : undefined;
+    const testingUseTeams = typeof requestBody?.testingUseTeams === 'boolean'
+      ? requestBody.testingUseTeams
+      : true;
+    const testingTeammateMode = normalizeTeammateMode(
+      requestBody?.testingTeammateMode || process.env.BOTOOL_TEAMMATE_MODE
+    );
 
     const PRD_PATH = getProjectPrdJsonPath(projectId);
 
@@ -150,6 +181,9 @@ export async function POST(request: Request) {
     if (mode === 'testing') {
       // Testing mode: run Claude CLI with /botoolagent-testing skill
       let prompt = '/botoolagent-testing';
+      if (startLayer && startLayer > 1) {
+        prompt += ` ${startLayer}`;
+      }
       if (projectId) {
         prompt += `\n\nProject: ${projectId}\nPRD path: ${PRD_PATH}`;
       }
@@ -157,29 +191,69 @@ export async function POST(request: Request) {
       const claudeArgs = [
         'claude',
         '--dangerously-skip-permissions',
-        '--output-format', 'stream-json',
-        '-p', prompt,
       ];
+      if (testingUseTeams) {
+        claudeArgs.push('--teammate-mode', testingTeammateMode);
+      }
+      claudeArgs.push('-p', prompt);
 
       // Write initial .agent-status so Stage 4 UI can track progress
       writeAgentStatus({
         status: 'running',
-        message: 'Testing pipeline started (4-layer verification)',
+        message: testingUseTeams
+          ? `Testing pipeline started (Agent Teams: ${testingTeammateMode})`
+          : 'Testing pipeline started (single agent mode)',
         currentTask: 'testing',
       });
 
+      // Reset testing log for this run
+      try {
+        fs.writeFileSync(TESTING_LOG_FILE, '');
+      } catch {
+        // Ignore log initialization failures
+      }
+
+      let stderrTail = '';
       child = spawn(claudeArgs[0], claudeArgs.slice(1), {
         cwd: PROJECT_ROOT,
-        detached: true,
-        stdio: 'ignore',
+        detached: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          CLAUDE_CODE_NON_INTERACTIVE: '1',
+          ...(testingUseTeams ? { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' } : {}),
+        },
       });
 
-      // Listen for exit to write final status (works even with detached+unref
-      // because Next.js server keeps the event loop alive)
+      const appendLog = (chunk: string) => {
+        try {
+          fs.appendFileSync(TESTING_LOG_FILE, chunk);
+        } catch {
+          // Ignore log write failures
+        }
+      };
+
+      child.stdout?.on('data', (data: Buffer) => {
+        appendLog(data.toString());
+      });
+
+      child.stderr?.on('data', (data: Buffer) => {
+        const text = data.toString();
+        appendLog(text);
+        stderrTail = (stderrTail + text).slice(-2000);
+      });
+
+      // Listen for exit to write final status.
+      // Keep testing child attached so this callback can reliably update status.
       child.on('exit', (code) => {
+        const tailMessage = stderrTail.trim().split('\n').slice(-1)[0];
         writeAgentStatus({
           status: code === 0 ? 'complete' : 'error',
-          message: code === 0 ? 'Testing pipeline completed' : `Testing failed (exit code ${code})`,
+          message: code === 0
+            ? 'Testing pipeline completed'
+            : tailMessage
+              ? `Testing failed (exit code ${code}): ${tailMessage}`
+              : `Testing failed (exit code ${code})`,
         });
         cleanPidFile();
       });
@@ -206,11 +280,17 @@ export async function POST(request: Request) {
         cwd: PROJECT_ROOT,
         detached: true,
         stdio: 'ignore',
+        env: {
+          ...process.env,
+          ...(maxIterations ? { BOTOOL_MAX_ROUNDS: String(maxIterations) } : {}),
+        },
       });
     }
 
-    // Allow the parent process to exit independently of the child
-    child.unref();
+    // Allow coding mode process to continue independently.
+    if (mode !== 'testing') {
+      child.unref();
+    }
 
     // Write PID lock file
     if (child.pid) {
@@ -222,6 +302,10 @@ export async function POST(request: Request) {
       message: `BotoolAgent started in background`,
       pid: child.pid,
       mode,
+      maxIterations: maxIterations ?? null,
+      startLayer: startLayer ?? null,
+      testingUseTeams: mode === 'testing' ? testingUseTeams : null,
+      testingTeammateMode: mode === 'testing' && testingUseTeams ? testingTeammateMode : null,
     });
   } catch (error) {
     console.error('Failed to start agent:', error);

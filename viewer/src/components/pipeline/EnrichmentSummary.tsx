@@ -9,6 +9,7 @@ interface EnrichmentSummaryProps {
   prdContent: string;
   projectName: string;
   projectId?: string;
+  sourcePrdId?: string;
   mode: PipelineMode;
   selectedRules: RuleDocument[];
   enrichResult: AutoEnrichResult | null;
@@ -22,6 +23,7 @@ export function EnrichmentSummary({
   prdContent,
   projectName,
   projectId,
+  sourcePrdId,
   mode,
   selectedRules,
   enrichResult,
@@ -74,14 +76,6 @@ export function EnrichmentSummary({
     return response.json();
   }, [selectedRules, enrichResult]);
 
-  // Auto-start conversion on mount
-  useEffect(() => {
-    if (convertingState === 'idle' && !prdJson) {
-      handleStartConversion();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Start conversion: get base JSON via /api/prd/convert, then merge via /api/prd/merge
   const handleStartConversion = useCallback(async () => {
     if (!prdContent) {
@@ -99,7 +93,7 @@ export function EnrichmentSummary({
     try {
       abortControllerRef.current = new AbortController();
 
-      const prdId = projectId || projectName?.toLowerCase().replace(/\s+/g, '-') || 'new-project';
+      const prdId = sourcePrdId || projectId || projectName?.toLowerCase().replace(/\s+/g, '-') || 'new-project';
       const response = await fetch('/api/prd/convert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -203,7 +197,15 @@ export function EnrichmentSummary({
       setConvertingState('error');
       setConvertingMessage('转换失败');
     }
-  }, [prdContent, projectName, projectId, prdJson, callEnrichMerge]);
+  }, [prdContent, projectName, projectId, sourcePrdId, prdJson, callEnrichMerge]);
+
+  // Auto-start conversion once PRD content is ready.
+  useEffect(() => {
+    if (!prdContent) return;
+    if (convertingState !== 'idle') return;
+    if (prdJson) return;
+    handleStartConversion();
+  }, [prdContent, convertingState, prdJson, handleStartConversion]);
 
   // Cancel conversion
   const cancelConversion = useCallback(() => {

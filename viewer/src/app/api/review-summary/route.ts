@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { getPrdJsonPath, getProgressPath, getProjectPrdJsonPath, getProjectProgressPath, getProjectRoot } from '@/lib/project-root';
+import { getProjectPrdJsonPath, getProjectProgressPath, getProjectRoot } from '@/lib/project-root';
 
 const execAsync = promisify(exec);
 const PROJECT_ROOT = getProjectRoot();

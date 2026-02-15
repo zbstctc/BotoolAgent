@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
+import { Suspense, useState, useEffect, useRef, useCallback, Fragment } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator, StageTransitionModal } from '@/components';
 import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
@@ -77,7 +77,7 @@ function getStatusLabel(status: TaskStatus): string {
   }
 }
 
-export default function Stage3Page() {
+function Stage3PageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get('projectId') || undefined;
@@ -365,7 +365,22 @@ export default function Stage3Page() {
             <Fragment>
               {showIterationInput ? (
                 <div className="flex items-center gap-2 bg-white border border-blue-200 rounded-lg px-3 py-1.5 shadow-sm">
-                  <span className="text-xs text-neutral-500">Teams 模式</span>
+                  <span className="text-xs text-neutral-500">最大轮次</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={maxIterations}
+                    onChange={(e) => {
+                      const parsed = Number.parseInt(e.target.value, 10);
+                      if (Number.isNaN(parsed)) {
+                        setMaxIterations(1);
+                        return;
+                      }
+                      setMaxIterations(Math.max(1, Math.min(50, parsed)));
+                    }}
+                    className="w-14 rounded border border-neutral-300 px-1.5 py-0.5 text-xs text-neutral-700"
+                  />
                   <button
                     onClick={handleStartAgent}
                     disabled={agentActionLoading}
@@ -823,5 +838,21 @@ export default function Stage3Page() {
         </div>
       </div>
     </div>
+  );
+}
+
+function Stage3Fallback() {
+  return (
+    <div className="flex h-full items-center justify-center bg-neutral-50 text-sm text-neutral-500">
+      加载中...
+    </div>
+  );
+}
+
+export default function Stage3Page() {
+  return (
+    <Suspense fallback={<Stage3Fallback />}>
+      <Stage3PageContent />
+    </Suspense>
   );
 }

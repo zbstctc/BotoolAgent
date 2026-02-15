@@ -60,3 +60,112 @@
 ## Session 结束 — 已完成 5 个，剩余 0 个
 所有任务已完成。TypeCheck 通过。
 ---
+
+## 2026-02-15 - DT-006
+- 实现了大型 PRD Viewer 端到端回归（Stage2 -> Stage3）并补齐真实可运行脚本
+- 新建 `viewer/tests/large-prd.spec.ts`
+- 新增 `viewer/package.json` 脚本：`test:e2e:large`
+- 修改 `viewer/src/app/stage2/page.tsx`，将 URL `prd` 参数透传到 Summary 阶段
+- 修改 `viewer/src/components/pipeline/EnrichmentSummary.tsx`，修复两处时序/数据问题
+- **发现并修复的问题：**
+  - 问题 1：`prdFile` 可能错误指向 `projectId` 对应文件，而非真实源 PRD 文件
+  - 修复：新增 `sourcePrdId` 透传优先级，`/api/prd/convert` 使用真实源 PRD id
+  - 问题 2：当 Summary 首次渲染时 `prdContent` 尚未加载，自动转换只触发一次后失效
+  - 修复：自动转换逻辑改为“在 `prdContent` 就绪后触发”，并加入完整依赖
+- **未来迭代的经验教训：**
+  - Stage2 的异步内容加载与步骤切换存在竞态，自动流程必须绑定“数据就绪”而非“组件挂载”
+  - 步骤条文案（如“确认并生成 prd.json”）不能作为完成信号，应以可操作按钮/状态作为断言依据
+- 大型 PRD 回归应保持默认可跳过（通过 env 打开），避免拖慢常规 CI
+---
+
+## 2026-02-15 - DT-007
+- 实现了 Stage3/Stage4 的 viewer 端到端回归（真实触发 agent start/status/stop）
+- 新建 `viewer/tests/stage34-agent.spec.ts`
+- 新增 `viewer/package.json` 脚本：`test:e2e:stage34`
+- **验证覆盖：**
+  - Stage3：页面触发“启动代理”→ `/api/agent/start` 成功 → `/api/agent/status` 非 idle
+  - Stage4：页面触发“Start Testing”→ `/api/agent/start` 成功 → `/api/agent/status` 状态流转并可回到 idle
+- **未来迭代的经验教训：**
+  - Stage3/4 涉及真实进程启动，测试前必须检测并避开已有 agent 进程，防止误杀用户现场任务
+  - 进程类回归需默认通过 env 开关启用，避免常规 CI 持续启动长任务
+- 回归用例必须带文件备份与恢复（`tasks/`、`.state/`），确保测试后目录干净
+---
+
+## 2026-02-15 - DT-008
+- 实测了 Stage4 的“自然完成”路径，并补充了专项长测入口
+- 修改 `viewer/package.json`：新增 `test:e2e:stage4full`
+- 修改 `viewer/tests/stage34-agent.spec.ts`：
+  - Stage3/4 集成用例串行执行（避免并发触发 agent PID 锁 409）
+  - 增加 Stage4 full test（可选 env 开关，带状态轮询输出）
+- 修改 `viewer/src/app/api/agent/start/route.ts`：
+  - testing 模式支持 `startLayer` 参数（默认行为不变）
+  - 增加 `.state/agent-testing.log` 日志落盘
+  - 调整 testing 启动参数，修复 `stream-json` 参数冲突导致的快速失败
+- **发现并修复的问题：**
+  - 问题 1：Stage4 testing 子进程之前会快速失败，日志报错参数冲突
+  - 修复：移除 testing 模式不必要的 `stream-json` 参数路径，保留非交互启动
+  - 问题 2：Stage3/4 集成测试在并发执行时会互相抢占 agent 锁
+  - 修复：将 `stage34-agent.spec.ts` 改为 serial 执行
+- **当前结论：**
+  - Stage3/Stage4 快速链路（启动、状态流转、停止）已通过
+  - Stage4 “自然完成”长路径在 90 秒窗口内仍可能持续 `running`（未稳定收敛到 terminal）
+  - 这属于性能/收敛时长风险，不影响当前快速链路可用性
+---
+
+## 2026-02-15 - DT-009
+- Stage4 testing 模式已支持 Agent Teams（默认开启）
+- 修改 `viewer/src/app/api/agent/start/route.ts`：
+  - 新增 `testingUseTeams` 参数（默认 `true`，可关闭）
+  - 新增 `testingTeammateMode` 参数（`in-process | tmux`，默认读取 `BOTOOL_TEAMMATE_MODE`，兜底 `in-process`）
+  - testing 启动命令在启用时增加 `--teammate-mode`，并设置 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
+  - `/api/agent/start` 返回体增加 `testingUseTeams` 与 `testingTeammateMode` 字段
+- 修改 `viewer/tests/stage34-agent.spec.ts`：
+  - Stage4 用例新增断言：确认返回 `mode=testing` 且 `testingUseTeams=true`
+- **验证结果：**
+  - `npm run lint` 通过
+  - `npm run typecheck` 通过
+  - `npm run test:e2e:stage34` 通过（2 passed, 1 skipped）
+---
+
+## 2026-02-15 - DT-010
+- 文档对齐修复（避免迁移到目标项目后认知偏差）
+- 修改 `README.md`：
+  - `skills/` 数量从 7 更正为 6（目录结构、关键文件、打包内容三处）
+  - Stage4 描述更新为“4 层自动验证 + Ralph 自动修复（默认 Agent Teams）”
+- 修改 `CLAUDE.md`：
+  - Stage4 描述去除“手动验证”，明确手动验收在 finalize 前由用户自行执行
+---
+
+## 2026-02-15 - DT-011
+- 发布前打包链路冒烟验证完成
+- 执行 `./scripts/pack.sh BotoolAgent-smoke-20260215` 成功，产出 `BotoolAgent-smoke-20260215.tar.gz`
+- 执行 `tar -tzf BotoolAgent-smoke-20260215.tar.gz`，确认包含 `scripts/`、`viewer/`、`skills/`、`rules/`、`setup.sh`
+- 观察到 `tar: Failed to set default locale` 警告，但不影响打包结果（归档已正常生成）
+---
+
+## 2026-02-15 - DT-012
+- 审核并回归了 localStorage workspace 隔离改动（可移植部署关键路径）
+- 修改 `viewer/src/lib/workspace-id.ts`：
+  - 保留客户端 key 作用域逻辑（`scopedKey`），移除服务端 `require` 实现
+- 新建 `viewer/src/lib/workspace-id.server.ts`：
+  - 服务端 `computeWorkspaceId()`（基于项目根路径 md5 前 8 位）
+- 修改 `viewer/src/app/layout.tsx`：
+  - 改为从 `workspace-id.server` 注入 `workspaceId` 到 `ProjectProvider`
+- **发现并修复的问题：**
+  - 问题：`workspace-id.ts` 中 `require()` 触发 ESLint 错误（`@typescript-eslint/no-require-imports`），影响发布质量门槛
+  - 修复：拆分 server/client 文件，避免客户端共享模块里出现 Node `require`
+- **验证结果：**
+  - `npm run lint` 通过
+  - `npm run typecheck` 通过
+  - `npm run build` 通过
+- `npm run test:e2e` 通过（19 passed, 4 skipped）
+---
+
+## 2026-02-15 - DT-013
+- 修复分发安装在 Apple Silicon 上可能出现的 `lightningcss` 原生模块缺失问题
+- 修改 `scripts/pack.sh` 生成的 `setup.sh`：
+  - `viewer` 依赖安装改为 `npm ci/install --include=optional`（确保可选原生依赖安装）
+  - 增加 `node -e "require('lightningcss')"` 校验
+  - 校验失败时自动重装 `lightningcss` 进行一次修复
+- 重新打包产出 `BotoolAgent.tar.gz`（可直接拖拽到目标项目）
+---

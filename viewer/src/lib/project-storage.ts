@@ -4,8 +4,7 @@
  */
 
 import type { ProjectState, ProjectStatus, ProjectStage } from '../contexts/ProjectContext';
-
-const STORAGE_KEY = 'botool-projects';
+import { scopedKey } from './workspace-id';
 
 export interface ProjectStorage {
   version: number;
@@ -33,7 +32,13 @@ export function loadProjects(): ProjectStorage {
   }
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const key = scopedKey('projects');
+    let stored = localStorage.getItem(key);
+    // Migration: if scoped key has no data, try legacy key
+    if (!stored && key !== 'botool-projects') {
+      stored = localStorage.getItem('botool-projects');
+      if (stored) localStorage.setItem(key, stored);
+    }
     if (!stored) {
       return { version: 1, projects: {}, activeProjectId: null };
     }
@@ -50,7 +55,7 @@ export function saveProjects(data: ProjectStorage): void {
   if (typeof window === 'undefined') return;
 
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(scopedKey('projects'), JSON.stringify(data));
   } catch (err) {
     console.error('Failed to save projects:', err);
   }

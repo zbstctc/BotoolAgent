@@ -50,10 +50,20 @@ interface ArchivedPRD {
   }>;
 }
 
+function isSafeGitRef(ref: string): boolean {
+  return (
+    /^[A-Za-z0-9._/-]+$/.test(ref) &&
+    !ref.startsWith('-') &&
+    !ref.includes('..') &&
+    !ref.includes('//')
+  );
+}
+
 /**
  * Check if a branch has been merged into main
  */
 async function isBranchMerged(branchName: string): Promise<boolean> {
+  if (!isSafeGitRef(branchName)) return false;
   try {
     // Check if the branch exists in merged branches list
     const { stdout } = await execAsync(
@@ -70,6 +80,7 @@ async function isBranchMerged(branchName: string): Promise<boolean> {
  * Get PR URL for a branch if it exists
  */
 async function getPRUrl(branchName: string): Promise<string | undefined> {
+  if (!isSafeGitRef(branchName)) return undefined;
   try {
     const { stdout } = await execAsync(
       `gh pr view ${branchName} --json url --jq '.url' 2>/dev/null || true`,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { Suspense, useState, useCallback, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator } from '@/components';
 import { useProject } from '@/contexts/ProjectContext';
@@ -10,10 +10,11 @@ import { AutoEnrichStep, type AutoEnrichResult } from '@/components/pipeline/Aut
 import { EnrichmentSummary } from '@/components/pipeline/EnrichmentSummary';
 import type { EnrichedPrdJson, PipelineMode } from '@/lib/tool-types';
 
-export default function Stage2Page() {
+function Stage2PageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { activeProject, updateProject } = useProject();
+  const sourcePrdId = searchParams.get('prd') || undefined;
 
   // Pipeline mode from query param
   const mode = (searchParams.get('mode') as PipelineMode) || 'feature';
@@ -36,9 +37,8 @@ export default function Stage2Page() {
   useEffect(() => {
     if (prdContent) return;
 
-    const prdId = searchParams.get('prd');
-    if (prdId) {
-      fetch(`/api/prd/${encodeURIComponent(prdId)}`)
+    if (sourcePrdId) {
+      fetch(`/api/prd/${encodeURIComponent(sourcePrdId)}`)
         .then(res => {
           if (!res.ok) throw new Error('PRD not found');
           return res.json();
@@ -54,7 +54,7 @@ export default function Stage2Page() {
           console.error('Failed to load PRD content:', err);
         });
     }
-  }, [searchParams, prdContent]);
+  }, [sourcePrdId, prdContent]);
 
   // Handle step click (for viewing completed steps)
   const handleStepClick = useCallback((stepIndex: number) => {
@@ -120,6 +120,7 @@ export default function Stage2Page() {
             prdContent={prdContent}
             projectName={activeProject?.name || 'New Project'}
             projectId={activeProject?.id}
+            sourcePrdId={sourcePrdId}
             mode={mode}
             selectedRules={selectedRules}
             enrichResult={enrichResult}
@@ -164,5 +165,21 @@ export default function Stage2Page() {
         {renderStepContent()}
       </div>
     </div>
+  );
+}
+
+function Stage2Fallback() {
+  return (
+    <div className="flex h-full items-center justify-center bg-neutral-50 text-sm text-neutral-500">
+      加载中...
+    </div>
+  );
+}
+
+export default function Stage2Page() {
+  return (
+    <Suspense fallback={<Stage2Fallback />}>
+      <Stage2PageContent />
+    </Suspense>
   );
 }

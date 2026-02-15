@@ -3,7 +3,8 @@
  * Supports multiple concurrent PRD sessions with progress tracking.
  */
 
-const STORAGE_KEY = 'botool-prd-sessions';
+import { scopedKey } from './workspace-id';
+
 const OLD_STORAGE_KEY = 'botool-prd-session'; // For migration
 
 export interface QuestionAnswer {
@@ -73,7 +74,13 @@ function getStorage(): PrdSessionsStorage {
     // First, try to migrate old data if it exists
     migrateOldSession();
 
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const key = scopedKey('prd-sessions');
+    let stored = localStorage.getItem(key);
+    // Migration: if scoped key has no data, try legacy key
+    if (!stored && key !== 'botool-prd-sessions') {
+      stored = localStorage.getItem('botool-prd-sessions');
+      if (stored) localStorage.setItem(key, stored);
+    }
     if (!stored) {
       return { version: 2, sessions: {} };
     }
@@ -92,7 +99,7 @@ function saveStorage(storage: PrdSessionsStorage): void {
   if (typeof window === 'undefined') return;
 
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(storage));
+    localStorage.setItem(scopedKey('prd-sessions'), JSON.stringify(storage));
   } catch (err) {
     console.error('Failed to save PRD sessions:', err);
   }
@@ -120,7 +127,7 @@ function migrateOldSession(): void {
     };
 
     // Check if already migrated
-    const existingStorage = localStorage.getItem(STORAGE_KEY);
+    const existingStorage = localStorage.getItem(scopedKey('prd-sessions'));
     if (existingStorage) {
       // Storage exists, just remove old key
       localStorage.removeItem(OLD_STORAGE_KEY);
@@ -145,7 +152,7 @@ function migrateOldSession(): void {
       version: 2,
       sessions: { [sessionId]: newSession },
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newStorage));
+    localStorage.setItem(scopedKey('prd-sessions'), JSON.stringify(newStorage));
 
     // Remove old key
     localStorage.removeItem(OLD_STORAGE_KEY);

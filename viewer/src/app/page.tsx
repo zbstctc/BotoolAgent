@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { TaskHistory, NewPrdDialog, ProjectCard, type TaskHistoryItem, type TaskStatus, type TaskStage } from '@/components';
 import { useProject, type ProjectState } from '@/contexts/ProjectContext';
@@ -56,11 +56,10 @@ interface SessionDetails {
   progressLog?: string;
 }
 
-export default function Dashboard() {
+function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const {
-    activeProject,
     activeProjectId,
     getAllProjects,
     deleteProject,
@@ -893,6 +892,22 @@ function SessionDetailsModal({
         </div>
       </div>
     </div>
+  );
+}
+
+function DashboardFallback() {
+  return (
+    <div className="flex h-full items-center justify-center bg-neutral-50 text-sm text-neutral-500">
+      加载中...
+    </div>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <Suspense fallback={<DashboardFallback />}>
+      <DashboardContent />
+    </Suspense>
   );
 }
 

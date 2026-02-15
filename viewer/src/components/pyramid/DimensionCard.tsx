@@ -112,8 +112,6 @@ function QuestionItem({
   answer?: Answer;
   onAnswer: (value: string | string[]) => void;
 }) {
-  const isAnswered = !!answer;
-
   if (question.type === 'text') {
     return (
       <div className="space-y-2">

@@ -252,12 +252,12 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
   }, []);
 
   // Start agent
-  const startAgent = useCallback(async (_maxIterations?: number, mode: 'teams' | 'testing' = 'teams') => {
+  const startAgent = useCallback(async (maxIterations?: number, mode: 'teams' | 'testing' = 'teams') => {
     try {
       const response = await fetch('/api/agent/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, projectId }),
+        body: JSON.stringify({ mode, projectId, maxIterations }),
       });
 
       if (!response.ok) {

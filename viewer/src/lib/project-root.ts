@@ -22,6 +22,26 @@ import * as fs from 'fs';
 let _botoolRoot: string | null = null;
 let _projectRoot: string | null = null;
 
+function normalizeProjectId(projectId?: string | null): string | null {
+  if (!projectId) return null;
+
+  const trimmed = projectId.trim();
+  if (!trimmed) return null;
+
+  // Guard against path traversal and path separator injection.
+  if (
+    trimmed.includes('/') ||
+    trimmed.includes('\\') ||
+    trimmed.includes('..') ||
+    trimmed.includes('\0')
+  ) {
+    console.warn(`[project-root] Ignoring invalid projectId: ${projectId}`);
+    return null;
+  }
+
+  return trimmed;
+}
+
 /**
  * Get the BotoolAgent directory (parent of viewer/).
  * This is where BotoolAgent's own files live: tasks/, archive/, rules/, etc.
@@ -110,8 +130,9 @@ export function getRegistryPath(): string {
  * Otherwise falls back to the root prd.json (backward compatible).
  */
 export function getProjectPrdJsonPath(projectId?: string | null): string {
-  if (!projectId) return getPrdJsonPath();
-  return path.join(getTasksDir(), `prd-${projectId}.json`);
+  const safeProjectId = normalizeProjectId(projectId);
+  if (!safeProjectId) return getPrdJsonPath();
+  return path.join(getTasksDir(), `prd-${safeProjectId}.json`);
 }
 
 /**
@@ -120,8 +141,9 @@ export function getProjectPrdJsonPath(projectId?: string | null): string {
  * Otherwise falls back to the root progress.txt (backward compatible).
  */
 export function getProjectProgressPath(projectId?: string | null): string {
-  if (!projectId) return getProgressPath();
-  return path.join(getTasksDir(), `progress-${projectId}.txt`);
+  const safeProjectId = normalizeProjectId(projectId);
+  if (!safeProjectId) return getProgressPath();
+  return path.join(getTasksDir(), `progress-${safeProjectId}.txt`);
 }
 
 export function getPrdJsonPath(): string {

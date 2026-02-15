@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator, StageTransitionModal } from '@/components';
 import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
@@ -18,7 +18,7 @@ interface AgentStatus {
   currentTask: string;
 }
 
-export default function Stage4Page() {
+function Stage4PageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get('projectId') || undefined;
@@ -322,5 +322,21 @@ export default function Stage4Page() {
         autoCountdown={3}
       />
     </div>
+  );
+}
+
+function Stage4Fallback() {
+  return (
+    <div className="flex h-full items-center justify-center bg-neutral-50 text-sm text-neutral-500">
+      加载中...
+    </div>
+  );
+}
+
+export default function Stage4Page() {
+  return (
+    <Suspense fallback={<Stage4Fallback />}>
+      <Stage4PageContent />
+    </Suspense>
   );
 }

@@ -7,6 +7,7 @@ import {
   generateProjectId,
   type ProjectStorage,
 } from '../lib/project-storage';
+import { setWorkspaceId } from '../lib/workspace-id';
 
 /**
  * Project stage in the development workflow
@@ -73,25 +74,19 @@ const ProjectContext = createContext<ProjectContextValue | null>(null);
 /**
  * Project Provider component
  */
-export function ProjectProvider({ children }: { children: React.ReactNode }) {
-  const [projects, setProjects] = useState<Record<string, ProjectState>>({});
-  const [activeProjectId, setActiveProjectIdState] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export function ProjectProvider({ workspaceId, children }: { workspaceId?: string; children: React.ReactNode }) {
+  // Must be set before any storage access (including useState initializers below)
+  if (workspaceId) setWorkspaceId(workspaceId);
 
-  // Load from localStorage on mount (using project-storage module)
-  useEffect(() => {
-    const storage = loadProjects();
-    setProjects(storage.projects);
-    setActiveProjectIdState(storage.activeProjectId);
-    setIsLoading(false);
-  }, []);
+  const [projects, setProjects] = useState<Record<string, ProjectState>>(() => loadProjects().projects);
+  const [activeProjectId, setActiveProjectIdState] = useState<string | null>(() => loadProjects().activeProjectId);
+  const isLoading = false;
 
   // Save to localStorage when state changes (using project-storage module)
   useEffect(() => {
-    if (isLoading) return;
     const storage: ProjectStorage = { version: 1, projects, activeProjectId };
     saveProjects(storage);
-  }, [projects, activeProjectId, isLoading]);
+  }, [projects, activeProjectId]);
 
   // Get active project
   const activeProject = useMemo(() => {
@@ -152,8 +147,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   // Delete a project
   const deleteProject = useCallback((id: string) => {
     setProjects((prev) => {
-      const { [id]: _, ...rest } = prev;
-      return rest;
+      const next = { ...prev };
+      delete next[id];
+      return next;
     });
 
     setActiveProjectIdState((prev) => (prev === id ? null : prev));

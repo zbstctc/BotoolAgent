@@ -3,7 +3,7 @@
 const isDev = process.env.NODE_ENV === 'development';
 const debugLog = (...args: unknown[]) => { if (isDev) console.log(...args); };
 
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Suspense, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   StageIndicator,
@@ -41,7 +41,7 @@ interface QAHistoryItem {
   answer: string | string[];
 }
 
-export default function Stage1Page() {
+function Stage1PageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session');
@@ -165,6 +165,13 @@ export default function Stage1Page() {
     }
   }, [sessionId, activeProject?.name]);
 
+  // Redirect invalid direct access without session context
+  useEffect(() => {
+    if (!sessionId && !projectsLoading) {
+      router.replace('/');
+    }
+  }, [sessionId, projectsLoading, router]);
+
   // Handle tool use from CLI
   const handleToolUse = useCallback((toolUse: { id: string; name: string; input: Record<string, unknown> }) => {
     debugLog('[Stage1] Tool use received:', toolUse.name);
@@ -217,7 +224,6 @@ export default function Stage1Page() {
     sendMessage,
     respondToTool,
     resetSession,
-    sessionId: currentCliSessionId,
   } = useCliChat({
     mode: 'default',
     initialSessionId: cliSessionId,
@@ -502,7 +508,6 @@ export default function Stage1Page() {
     return [1, 2, 3, 4, 5].map((level) => {
       const isCompleted = completedLevels.includes(level as LevelId);
       const isCurrent = level === currentLevel;
-      const isLocked = level > currentLevel && !completedLevels.includes(level as LevelId);
 
       let summary: string | undefined;
       if (isCompleted) {
@@ -1013,5 +1018,21 @@ export default function Stage1Page() {
         </div>
       </div>
     </div>
+  );
+}
+
+function Stage1Fallback() {
+  return (
+    <div className="flex h-full items-center justify-center bg-neutral-50 text-sm text-neutral-500">
+      加载中...
+    </div>
+  );
+}
+
+export default function Stage1Page() {
+  return (
+    <Suspense fallback={<Stage1Fallback />}>
+      <Stage1PageContent />
+    </Suspense>
   );
 }

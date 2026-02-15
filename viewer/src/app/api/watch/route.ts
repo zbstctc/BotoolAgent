@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import * as fs from 'fs';
-import { getPrdJsonPath, getProgressPath, getProjectPrdJsonPath, getProjectProgressPath } from '@/lib/project-root';
+import { getProjectPrdJsonPath, getProjectProgressPath } from '@/lib/project-root';
 
 interface FileContent {
   prd: string | null;

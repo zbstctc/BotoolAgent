@@ -7,7 +7,7 @@ import {
   type TaskStatus as HistoryTaskStatus,
   type TaskStage,
 } from '@/lib/task-history';
-import { getAgentStatusPath, getPrdJsonPath, getProjectPrdJsonPath, getAgentPidPath } from '@/lib/project-root';
+import { getAgentStatusPath, getProjectPrdJsonPath, getAgentPidPath } from '@/lib/project-root';
 
 // File paths
 const STATUS_FILE = getAgentStatusPath();
@@ -325,59 +325,86 @@ export async function GET(request: NextRequest) {
 // DELETE: Stop the agent (kill the process)
 export async function DELETE() {
   try {
-    // Find and kill BotoolAgent.sh process
-    const { exec } = await import('child_process');
-    const { promisify } = await import('util');
-    const execAsync = promisify(exec);
+    const killedPids: number[] = [];
 
-    try {
-      // Find the BotoolAgent.sh process
-      const { stdout } = await execAsync("pgrep -f 'BotoolAgent.sh' || true");
-      const pids = stdout.trim().split('\n').filter(Boolean);
-
-      if (pids.length === 0) {
-        return NextResponse.json({ success: true, message: 'No agent process found' });
+    // Prefer PID lock file to avoid killing unrelated Claude processes.
+    const pidInfo = readPidFile();
+    if (pidInfo?.pid && isProcessAlive(pidInfo.pid)) {
+      try {
+        process.kill(pidInfo.pid, 'SIGTERM');
+        killedPids.push(pidInfo.pid);
+      } catch {
+        // Ignore termination race conditions
       }
 
-      // Kill the processes
-      for (const pid of pids) {
+      // Allow graceful shutdown first.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      if (isProcessAlive(pidInfo.pid)) {
         try {
-          await execAsync(`kill -9 ${pid}`);
+          process.kill(pidInfo.pid, 'SIGKILL');
         } catch {
-          // Process might have already exited
+          // Ignore force-kill race conditions
         }
       }
-
-      // Also kill any claude processes spawned by the agent
-      try {
-        await execAsync("pkill -9 -f 'claude --dangerously-skip-permissions' || true");
-      } catch {
-        // No matching processes
-      }
-
-      // Clean up PID lock file
+    } else if (pidInfo) {
+      // Stale PID lock.
       cleanPidFile();
-
-      // Update status file
-      const stoppedStatus: AgentStatus = {
-        ...getDefaultStatus(),
-        status: 'idle',
-        message: 'Agent stopped by user',
-      };
-      fs.writeFileSync(STATUS_FILE, JSON.stringify(stoppedStatus, null, 2));
-
-      return NextResponse.json({
-        success: true,
-        message: `Stopped agent process(es): ${pids.join(', ')}`,
-        killedPids: pids,
-      });
-    } catch (error) {
-      console.error('Error stopping agent:', error);
-      return NextResponse.json(
-        { error: 'Failed to stop agent process' },
-        { status: 500 }
-      );
     }
+
+    // Fallback if PID lock is missing: only target BotoolAgent script process.
+    if (killedPids.length === 0) {
+      try {
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execAsync = promisify(exec);
+        const { stdout } = await execAsync("pgrep -f 'BotoolAgent.sh' || true");
+        const pids = stdout
+          .trim()
+          .split('\n')
+          .filter(Boolean)
+          .map((pid) => Number(pid))
+          .filter((pid) => Number.isInteger(pid) && pid > 0);
+
+        for (const pid of pids) {
+          try {
+            process.kill(pid, 'SIGKILL');
+            killedPids.push(pid);
+          } catch {
+            // Process may already be gone
+          }
+        }
+      } catch {
+        // Ignore fallback lookup errors
+      }
+    }
+
+    // Best-effort tmux session cleanup.
+    try {
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+      await execAsync("tmux kill-session -t botool-teams 2>/dev/null || true");
+    } catch {
+      // Ignore tmux cleanup errors
+    }
+
+    cleanPidFile();
+
+    const stoppedStatus: AgentStatus = {
+      ...getDefaultStatus(),
+      status: 'idle',
+      message: 'Agent stopped by user',
+    };
+    fs.writeFileSync(STATUS_FILE, JSON.stringify(stoppedStatus, null, 2));
+
+    return NextResponse.json({
+      success: true,
+      message: killedPids.length > 0
+        ? `Stopped agent process(es): ${killedPids.join(', ')}`
+        : 'No running agent process found',
+      killedPids,
+    });
   } catch (error) {
     console.error('Failed to stop agent:', error);
     return NextResponse.json(

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { readdir, readFile, writeFile, unlink, mkdir } from 'fs/promises';
+import { readdir, writeFile, unlink, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { getRulesDir } from '@/lib/project-root';

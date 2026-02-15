@@ -4,8 +4,6 @@ import * as path from 'path';
 import { CLIManager, CLIMessage } from '@/lib/cli-manager';
 import { getProjectRoot, getPrdJsonPath, getProgressPath, getProjectPrdJsonPath, getProjectProgressPath, getArchiveDir, getRegistryPath, isPortableMode } from '@/lib/project-root';
 
-const PROJECT_ROOT = getProjectRoot();
-
 // System prompt for PRD to JSON conversion (slim index format)
 const SYSTEM_PROMPT = `You are a PRD to JSON converter for BotoolAgent. Convert a PRD markdown document into a **slim prd.json** — an automation index. The PRD.md is the Single Source of Truth; prd.json only contains automation fields.
 

@@ -9,6 +9,9 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:e2e": "npx playwright test",
+    "test:e2e:large": "BOTOOL_E2E_LARGE_PRD=1 npx playwright test tests/large-prd.spec.ts",
+    "test:e2e:stage34": "BOTOOL_E2E_STAGE34=1 npx playwright test tests/stage34-agent.spec.ts",
+    "test:e2e:stage4full": "BOTOOL_E2E_STAGE34=1 BOTOOL_E2E_STAGE4_FULL=1 npx playwright test tests/stage34-agent.spec.ts --grep \"finish naturally\"",
     "test:e2e:ui": "npx playwright test --ui"
   },
   "dependencies": {

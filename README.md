@@ -101,7 +101,7 @@ BotoolAgent 作为子目录放在你的项目中：
 my-project/           <-- 你的项目（git 仓库）
 ├── BotoolAgent/      <-- 工具包
 │   ├── scripts/      <-- BotoolAgent.sh
-│   ├── skills/       <-- 7 个 Claude Code Skill
+│   ├── skills/       <-- 6 个 Claude Code Skill
 │   ├── viewer/       <-- Next.js Web 界面
 │   ├── tasks/        <-- PRD 文档存放
 │   ├── rules/        <-- 编码规范文档
@@ -124,7 +124,7 @@ my-project/           <-- 你的项目（git 仓库）
 | Stage 1 | `/botoolagent-pyramidprd` | PRD 编写 | 5 层金字塔问答 + ASCII 可视化确认门控 |
 | Stage 2 | `/botoolagent-prd2json` | 任务规划 | 规则选择 → Enrichment → testCases/evals/sessions → prd.json |
 | Stage 3 | `/botoolagent-coding` | 自动开发 | Agent Teams 模式循环执行，实时监控 |
-| Stage 4 | `/botoolagent-testing` | 测试验证 | 4 层自动验证 + Ralph 自动修复 + 手动验收 |
+| Stage 4 | `/botoolagent-testing` | 测试验证 | 4 层自动验证 + Ralph 自动修复（默认 Agent Teams） |
 | Stage 5 | `/botoolagent-finalize` | 合并发布 | 推送 → 创建 PR → Claude 代码审查 → Merge |
 
 ### 方式 A：Web Viewer
@@ -288,7 +288,7 @@ PRD2JSON 会将任务按依赖关系和可并行性分成 sessions：
 | `.state/` | BotoolAgent/ | 运行时状态（agent-status, botoolrc, 限流/熔断） |
 | `archive/` | BotoolAgent/ | 历史运行存档（按日期 + 分支名） |
 | `viewer/` | BotoolAgent/ | Next.js Web 界面（5 阶段 + 16 组 API） |
-| `skills/` | BotoolAgent/ | 7 个 Claude Code Skill 定义 |
+| `skills/` | BotoolAgent/ | 6 个 Claude Code Skill 定义 |
 
 ## 配置
 
@@ -366,7 +366,7 @@ cd BotoolAgent
 
 分发包内容：
 - scripts/（BotoolAgent.sh）
-- skills/（7 个 SKILL.md）
+- skills/（6 个 SKILL.md）
 - viewer/（源码，不含 node_modules/.next）
 - rules/（编码规范模板）
 - CLAUDE.md, CLAUDE.lead.md, README.md
