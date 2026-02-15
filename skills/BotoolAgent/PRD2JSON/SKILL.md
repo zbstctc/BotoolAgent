@@ -148,7 +148,7 @@ Take the PRD content + selected rules and generate a **slim prd.json**.
 **Conversion process:**
 
 1. **Parse PRD § 7 (开发计划)** — extract all DT entries from each Phase
-2. **Map each DT to its PRD section** — the Phase number becomes `prdSection`
+2. **Map each DT to its PRD section with line numbers** — 使用 Grep 或 Read 获取 `### 7.X` 标题的行号，计算 Phase 的行号范围，生成 `"7.X (LSTART-LEND)"` 格式的 `prdSection`
 3. **Extract automation-only fields** — evals, testCases, dependsOn
 4. **Group tasks into sessions** — based on dependencies and file overlap
 5. **Embed constitution** — selected rule files as `constitution.rules`
@@ -193,7 +193,7 @@ Take the PRD content + selected rules and generate a **slim prd.json**.
     {
       "id": "DT-001",
       "title": "[Task title from PRD § 7]",
-      "prdSection": "7.1",
+      "prdSection": "7.1 (L15-22)",
       "priority": 1,
       "passes": false,
       "dependsOn": [],
@@ -234,7 +234,7 @@ Take the PRD content + selected rules and generate a **slim prd.json**.
 | `devTasks[]` | SlimDevTask[] | Yes | Development tasks (slim version) |
 | `devTasks[].id` | string | Yes | Task ID (DT-001, DT-002, ...) |
 | `devTasks[].title` | string | Yes | Task title |
-| `devTasks[].prdSection` | string | Yes | **NEW** PRD section number (e.g., "7.1") |
+| `devTasks[].prdSection` | string | Yes | **NEW** PRD section with line range (e.g., "7.1 (L519-528)") |
 | `devTasks[].priority` | number | Yes | Execution order |
 | `devTasks[].passes` | boolean | Yes | Always `false` initially |
 | `devTasks[].dependsOn` | string[] | No | IDs of tasks this task depends on |
@@ -260,24 +260,33 @@ Take the PRD content + selected rules and generate a **slim prd.json**.
 
 ## prdSection Mapping Rules
 
-PRD2JSON automatically maps each DT to its corresponding PRD section:
+PRD2JSON automatically maps each DT to its corresponding PRD section **with line number ranges**:
 
 ```
-PRD § 7.1 Phase 1 下的 DT-001, DT-002, DT-003 → prdSection: "7.1"
-PRD § 7.2 Phase 2 下的 DT-004, DT-005         → prdSection: "7.2"
-PRD § 7.3 Phase 3 下的 DT-006, DT-007, DT-008 → prdSection: "7.3"
+PRD § 7.1 Phase 1 (lines 519-528) 下的 DT-001 ~ DT-003 → prdSection: "7.1 (L519-528)"
+PRD § 7.2 Phase 2 (lines 530-547) 下的 DT-004, DT-005   → prdSection: "7.2 (L530-547)"
+PRD § 7.3 Phase 3 (lines 549-559) 下的 DT-006 ~ DT-008  → prdSection: "7.3 (L549-559)"
 ```
 
-**How the coding agent uses prdSection:**
+### 行号生成流程
 
-1. Read `prdFile` to open the PRD markdown
-2. Find heading `## 7.X` matching `prdSection`
-3. Read that Phase section for:
+转换 PRD.md 时，PRD2JSON 必须：
+
+1. **读取 PRD.md 全文**，使用 Grep 或 Read 获取 `## 7.X` 标题的行号
+2. **计算每个 Phase 的行号范围**：从当前 `## 7.X` 标题到下一个 `## 7.Y` 标题（或文件末尾）
+3. **写入 prdSection 格式**：`"7.X (LSTART-LEND)"`
+
+### Coding Agent 如何使用 prdSection
+
+1. 读取 `prdFile` 打开 PRD markdown
+2. 使用 `prdSection` 中的行号范围（如 `L519-528`）**精准跳读** Phase 章节
+   - 使用 Read 工具的 `offset` 和 `limit` 参数：`offset: 519, limit: 10`
+3. 从 Phase 章节中提取：
    - Prerequisites ("前置")
    - Expected output ("产出")
    - Design references ("对应设计: Section 3.X, 4.X, 5.X")
    - Task checklist with file paths and API routes
-4. Jump-read referenced design sections (§ 3-6) for ASCII diagrams, SQL schemas, UI layouts, business rules
+4. 根据 "对应设计" 引用，跳读 PRD § 3-6 中的设计章节（SQL schemas, UI layouts, business rules）
 
 ---
 
@@ -422,7 +431,7 @@ CREATE TABLE task_status (...)
     {
       "id": "DT-001",
       "title": "添加 status 字段",
-      "prdSection": "7.1",
+      "prdSection": "7.1 (L25-32)",
       "priority": 1,
       "passes": false,
       "dependsOn": [],
@@ -443,7 +452,7 @@ CREATE TABLE task_status (...)
     {
       "id": "DT-002",
       "title": "实现 StatusBadge 组件",
-      "prdSection": "7.2",
+      "prdSection": "7.2 (L34-43)",
       "priority": 2,
       "passes": false,
       "dependsOn": ["DT-001"],
@@ -507,7 +516,7 @@ The coding agent will:
 
 - [ ] Previous run archived (if prd.json exists with different branchName)
 - [ ] `prdFile` points to correct PRD markdown path
-- [ ] Each task has `prdSection` mapping to a valid PRD heading
+- [ ] Each task has `prdSection` with line number range (e.g., "7.1 (L519-528)")
 - [ ] Each task completable in one iteration
 - [ ] Tasks ordered by dependency
 - [ ] Every task has at least one eval (typecheck)

@@ -158,7 +158,7 @@ export interface SessionGroup {
 export interface EnrichedDevTask {
   id: string;
   title: string;
-  prdSection?: string;          // NEW: PRD section number (e.g., "7.1")
+  prdSection?: string;          // PRD section with line range (e.g., "7.1 (L519-528)")
   description?: string;         // Optional: stays in PRD.md for new format
   acceptanceCriteria?: string[]; // Optional: stays in PRD.md for new format
   priority: number;
