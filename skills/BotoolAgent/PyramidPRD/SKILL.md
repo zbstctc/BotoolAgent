@@ -170,9 +170,10 @@ L5: 确认门控 - ASCII 多维度可视化确认（架构/数据/UI/规则/计�
 2. 执行代码库扫描（如果有代码库）
 3. AI 自动生成 1-3 个 DT 任务
 4. 使用 AskUserQuestion 确认任务列表
-5. 生成极简 PRD.md（只含 § 1 项目概述 + § 7 开发计划，无 § 2-6）
-6. 跳过 Stage 2 的规则选择（constitution 可选）
-7. 生成 prd.json（含 prdFile 指向 PRD.md、每个 DT 有 prdSection）
+5. 自动检测 tasks 目录：`TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"`
+6. 生成极简 PRD.md 到 `$TASKS_DIR/prd-[feature-name].md`（只含 § 1 项目概述 + § 7 开发计划，无 § 2-6）
+7. 跳过 Stage 2 的规则选择（constitution 可选）
+8. 生成 prd.json 到项目根目录（含 prdFile 指向 `$TASKS_DIR/prd-xxx.md`、每个 DT 有 prdSection）
 8. 执行安全关键词扫描（仅对高风险关键词：认证/支付）
 
 ---
@@ -793,6 +794,13 @@ LOW:    [风险项]
 
 **L5 确认门控通过后，根据收集的所有信息和代码库扫描结果，生成多维度、高颗粒度的 PRD 文档。**
 
+**输出路径（兼容 portable 模式）：**
+```bash
+TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"
+# PRD 写入: $TASKS_DIR/prd-[feature-name].md
+# prd.json 写入: 项目根目录（Claude Code 的 cwd）
+```
+
 #### 复杂度裁剪规则
 
 | PRD 节 | 快速修复 | 功能开发 | 完整规划 |
@@ -1374,13 +1382,18 @@ Phase T6 输出 → 喂入现有 Phase 6 (L5 Confirmation Gate, 2 轮 Tabs)
 
 #### 文件管理
 
+**自动检测 tasks 目录（兼容 standalone 和 portable 模式）：**
+```bash
+TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"
 ```
-tasks/
+
+```
+$TASKS_DIR/
   [user-original].md         ← 用户原始 PRD（不修改，保持原位）
   prd-[feature-name].md      ← 生成的 BotoolAgent PRD（标准格式）
 ```
 
-用户原始文件不动，不复制。BotoolAgent PRD 作为新文件写入 tasks/。
+用户原始文件不动，不复制。BotoolAgent PRD 作为新文件写入 `$TASKS_DIR/`。
 
 ---
 

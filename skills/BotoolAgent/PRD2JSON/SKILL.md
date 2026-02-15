@@ -145,6 +145,14 @@ After confirmation, **read the content of each selected rule file** to embed as 
 
 Take the PRD content + selected rules and generate a **slim prd.json**.
 
+**输出路径（兼容 portable 模式）：**
+```bash
+# prd.json 写入项目根目录（Claude Code 的 cwd）
+# prdFile 字段使用相对于项目根目录的路径：
+TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"
+# prdFile: "$TASKS_DIR/prd-[feature-name].md"
+```
+
 **Conversion process:**
 
 1. **Parse PRD § 7 (开发计划)** — extract all DT entries from each Phase
@@ -152,6 +160,7 @@ Take the PRD content + selected rules and generate a **slim prd.json**.
 3. **Extract automation-only fields** — evals, testCases, dependsOn
 4. **Group tasks into sessions** — based on dependencies and file overlap
 5. **Embed constitution** — selected rule files as `constitution.rules`
+6. **Set `prdFile`** — use `$TASKS_DIR/prd-[feature-name].md`（相对于项目根目录）
 
 **What to extract (put in prd.json):**
 - DT id, title, priority
@@ -359,6 +368,21 @@ Tasks execute in priority order. Earlier tasks must not depend on later ones.
 
 ---
 
+## prd.json 输出位置
+
+**prd.json 始终写入项目根目录**（Claude Code 的当前工作目录），而不是 `BotoolAgent/tasks/` 中。
+这是因为 `BotoolAgent.sh` 和 `CLAUDE.lead.md` 从 `$PROJECT_DIR/prd.json` 读取。
+
+```bash
+# 正确：写入项目根目录
+Write prd.json → ./prd.json (项目根目录)
+
+# 错误：不要写入 BotoolAgent/ 内
+# Write prd.json → BotoolAgent/tasks/prd.json  ← 不要这样做
+```
+
+---
+
 ## Archiving Previous Runs
 
 **Before writing a new prd.json, check if there's an existing one from a different feature:**
@@ -515,7 +539,7 @@ The coding agent will:
 ## Checklist Before Saving
 
 - [ ] Previous run archived (if prd.json exists with different branchName)
-- [ ] `prdFile` points to correct PRD markdown path
+- [ ] `prdFile` points to correct PRD markdown path (portable mode: `BotoolAgent/tasks/prd-xxx.md`; standalone: `tasks/prd-xxx.md`)
 - [ ] Each task has `prdSection` with line number range (e.g., "7.1 (L519-528)")
 - [ ] Each task completable in one iteration
 - [ ] Tasks ordered by dependency

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CLIManager, CLIMessage } from '@/lib/cli-manager';
-import { getProjectRoot, getPrdJsonPath, getProgressPath, getProjectPrdJsonPath, getProjectProgressPath, getArchiveDir, getRegistryPath } from '@/lib/project-root';
+import { getProjectRoot, getPrdJsonPath, getProgressPath, getProjectPrdJsonPath, getProjectProgressPath, getArchiveDir, getRegistryPath, isPortableMode } from '@/lib/project-root';
 
 const PROJECT_ROOT = getProjectRoot();
 
@@ -140,9 +140,10 @@ export async function POST(request: NextRequest) {
             const prdJson = JSON.parse(jsonMatch[0]);
 
             // Inject prdFile if not present (points to the source PRD)
+            // In portable mode, prefix with BotoolAgent/ since prd.json lives at project root
             if (!prdJson.prdFile && prdId) {
-              const tasksDir = projectId ? 'tasks' : 'tasks';
-              prdJson.prdFile = `${tasksDir}/prd-${prdId}.md`;
+              const tasksPrefix = isPortableMode() ? 'BotoolAgent/tasks' : 'tasks';
+              prdJson.prdFile = `${tasksPrefix}/prd-${prdId}.md`;
             }
 
             // Archive existing prd.json if it has a different branch
