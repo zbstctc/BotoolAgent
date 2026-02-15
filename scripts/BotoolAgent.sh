@@ -254,7 +254,7 @@ start_session() {
   # 发送初始 prompt
   tmux send-keys -t "$SESSION_NAME" C-u
   sleep 0.5
-  INITIAL_PROMPT="读取 $SCRIPT_DIR/CLAUDE.team.md 的全部内容，按照其中的指令执行。"
+  INITIAL_PROMPT="读取 $SCRIPT_DIR/CLAUDE.lead.md 的全部内容，按照其中的指令执行。"
   tmux send-keys -t "$SESSION_NAME" "$INITIAL_PROMPT"
   sleep 1
   tmux send-keys -t "$SESSION_NAME" Enter

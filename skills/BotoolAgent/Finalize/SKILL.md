@@ -74,6 +74,18 @@ git checkout <branchName>
 ```
 Then stop here.
 
+### 1c-pre. 检查未提交的更改
+
+```bash
+git status --porcelain
+```
+
+如果有未提交的更改（Testing 自动修复残留）：
+```bash
+git add -A
+git commit -m "fix: commit testing auto-fixes before finalize"
+```
+
 ### 1c. 推送代码到远程
 
 ```bash

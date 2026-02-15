@@ -26,7 +26,7 @@ mkdir -p "$PACKAGE_DIR"
 echo "  Copying core files..."
 cp "$SCRIPT_DIR/scripts/BotoolAgent.sh" "$PACKAGE_DIR/"
 cp "$SCRIPT_DIR/CLAUDE.md" "$PACKAGE_DIR/"
-cp "$SCRIPT_DIR/CLAUDE.team.md" "$PACKAGE_DIR/"
+cp "$SCRIPT_DIR/CLAUDE.lead.md" "$PACKAGE_DIR/"
 cp "$SCRIPT_DIR/README.md" "$PACKAGE_DIR/"
 cp "$SCRIPT_DIR/LICENSE" "$PACKAGE_DIR/" 2>/dev/null || true
 cp "$SCRIPT_DIR/docs/examples/prd.json.example" "$PACKAGE_DIR/" 2>/dev/null || true

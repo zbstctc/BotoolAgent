@@ -1,6 +1,6 @@
 # BotoolAgent
 
-BotoolAgent 是一个自主 AI 开发代理，基于 [Ralph 模式](https://ghuntley.com/ralph/)，通过 tmux + Agent Teams 循环执行开发任务。Lead Agent 读取 `CLAUDE.team.md` 指令，编排多任务并行执行。每次迭代通过 git 历史、`progress.txt` 和 `prd.json` 保持跨迭代记忆。
+BotoolAgent 是一个自主 AI 开发代理，基于 [Ralph 模式](https://ghuntley.com/ralph/)，通过 tmux + Agent Teams 循环执行开发任务。Lead Agent 读取 `CLAUDE.lead.md` 指令，编排多任务并行执行。每次迭代通过 git 历史、`progress.txt` 和 `prd.json` 保持跨迭代记忆。
 
 提供两种使用方式：
 - **Web Viewer** — 5 阶段可视化工作流，适合非技术用户
@@ -108,7 +108,7 @@ my-project/           <-- 你的项目（git 仓库）
 │   ├── .state/       <-- 运行时状态（agent-status, botoolrc 等）
 │   ├── archive/      <-- 历史运行存档
 │   ├── CLAUDE.md     <-- 项目级指令（auto-loaded）
-│   └── CLAUDE.team.md <-- Lead Agent 运行时指令
+│   └── CLAUDE.lead.md <-- Lead Agent 运行时指令
 ├── src/              <-- 你的代码
 ├── prd.json          <-- 自动生成到项目根目录
 ├── progress.txt      <-- 自动生成到项目根目录
@@ -221,7 +221,7 @@ PRD.md（完整设计文档）              prd.json（自动化索引）
 
 ```
 BotoolAgent.sh (Ralph 外循环, tmux)
-  └─ Lead Agent (读取 CLAUDE.team.md)
+  └─ Lead Agent (读取 CLAUDE.lead.md)
        ├─ 单任务 → Lead 直接执行
        └─ 多任务 → spawn teammates 并行
 ```
@@ -282,7 +282,7 @@ PRD2JSON 会将任务按依赖关系和可并行性分成 sessions：
 | `progress.txt` | 项目根目录 | 迭代学习日志（只追加，含 Codebase Patterns） |
 | `patterns.json` | BotoolAgent/ | 可复用模式库（置信度加权，自动淘汰） |
 | `CLAUDE.md` | BotoolAgent/ | 项目级指令（Claude Code auto-loaded） |
-| `CLAUDE.team.md` | BotoolAgent/ | Lead Agent 运行时指令 |
+| `CLAUDE.lead.md` | BotoolAgent/ | Lead Agent 运行时指令 |
 | `BotoolAgent.sh` | scripts/ | Ralph 外循环 + tmux launcher |
 | `pack.sh` | scripts/ | 打包分发脚本（生成 tar.gz + setup.sh） |
 | `tasks/` | BotoolAgent/ | PRD 文档存放目录 |
@@ -371,7 +371,7 @@ cd BotoolAgent
 - skills/（7 个 SKILL.md）
 - viewer/（源码，不含 node_modules/.next）
 - rules/（编码规范模板）
-- CLAUDE.md, CLAUDE.team.md, README.md
+- CLAUDE.md, CLAUDE.lead.md, README.md
 - setup.sh（自动生成，一键安装）
 
 接收者解压后运行 `cd BotoolAgent && ./setup.sh` 一次即可。

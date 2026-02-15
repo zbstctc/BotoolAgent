@@ -119,6 +119,14 @@ echo "项目目录: $PROJECT_DIR"
 4. 重新运行该层检查命令
 5. **持续循环直到通过**
 
+### 修复后提交
+
+每层 Ralph 修复循环通过后，必须提交修复代码，避免 Finalize 推送时遗漏：
+```bash
+git add <修改的文件>
+git commit -m "fix(testing): auto-fix Layer N errors"
+```
+
 ### Circuit Breaker（断路器）
 不设固定重试上限。持续修复直到通过，但有安全机制：
 
@@ -179,7 +187,7 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 检测项目中是否有 lint 脚本：
 
 ```bash
-cd "$PROJECT_DIR" && cat package.json | python3 -c "import sys,json; scripts=json.load(sys.stdin).get('scripts',{}); print('lint' if 'lint' in scripts else 'none')"
+cd "$PROJECT_DIR" && node -e "const s=JSON.parse(require('fs').readFileSync('package.json','utf8')).scripts||{}; console.log(s.lint?'lint':'none')"
 ```
 
 **如果没有 lint 脚本：** 跳过 Lint，记录 "Lint: 跳过（未配置 lint 脚本）"。
@@ -238,16 +246,7 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 检测项目中是否有测试脚本：
 
 ```bash
-cd "$PROJECT_DIR" && cat package.json | python3 -c "
-import sys, json
-scripts = json.load(sys.stdin).get('scripts', {})
-if 'test:unit' in scripts:
-    print('test:unit')
-elif 'test' in scripts:
-    print('test')
-else:
-    print('none')
-"
+cd "$PROJECT_DIR" && node -e "const s=JSON.parse(require('fs').readFileSync('package.json','utf8')).scripts||{}; console.log(s['test:unit']?'test:unit':s.test?'test':'none')"
 ```
 
 **如果没有测试脚本：**
@@ -333,16 +332,7 @@ ls playwright.config.* 2>/dev/null || ls "$PROJECT_DIR/playwright.config."* 2>/d
 同时检测 package.json 中的 E2E 脚本：
 
 ```bash
-cd "$PROJECT_DIR" && cat package.json | python3 -c "
-import sys, json
-scripts = json.load(sys.stdin).get('scripts', {})
-if 'test:e2e' in scripts:
-    print('test:e2e')
-elif 'e2e' in scripts:
-    print('e2e')
-else:
-    print('none')
-"
+cd "$PROJECT_DIR" && node -e "const s=JSON.parse(require('fs').readFileSync('package.json','utf8')).scripts||{}; console.log(s['test:e2e']?'test:e2e':s.e2e?'e2e':'none')"
 ```
 
 **如果既没有 E2E 脚本也没有 Playwright 配置：**
