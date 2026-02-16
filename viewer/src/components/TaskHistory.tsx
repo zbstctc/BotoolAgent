@@ -374,12 +374,6 @@ function EmptyState() {
       <p className="mt-1 text-xs text-neutral-500 max-w-xs">
         开始一个新的开发任务后，任务历史将显示在这里
       </p>
-      <Link
-        href="/stage1"
-        className="mt-4 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 transition-colors"
-      >
-        创建新任务
-      </Link>
     </div>
   );
 }
