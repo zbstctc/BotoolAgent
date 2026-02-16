@@ -62,7 +62,7 @@ Viewer 使用 **shadcn/ui (new-york 风格)** + **Tailwind v4** + **CSS 变量**
 
 #### 已安装的 shadcn 组件
 
-`button` · `dialog` · `badge` · `input` · `textarea` · `label` · `tabs`
+`button` · `dialog` · `badge` · `input` · `textarea` · `label` · `tabs` · `popover`
 
 需要更多组件时从 [shadcn/ui](https://ui.shadcn.com) 安装，不要手写。
 

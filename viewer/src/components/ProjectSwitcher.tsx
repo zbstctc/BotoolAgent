@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { ChevronDown, Plus } from 'lucide-react';
 
 interface RegistryProject {
   name: string;
@@ -82,71 +85,58 @@ export function ProjectSwitcher() {
   };
 
   return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
-      >
-        <span className="max-w-[200px] truncate">
-          {activeProject?.name || 'Select Project'}
-        </span>
-        {activeProject && (
-          <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${STATUS_LABELS[activeProject.status]?.color || 'bg-neutral-100 text-neutral-600'}`}>
-            {STATUS_LABELS[activeProject.status]?.label || activeProject.status}
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="flex items-center gap-2 font-medium">
+          <span className="max-w-[200px] truncate">
+            {activeProject?.name || 'Select Project'}
           </span>
-        )}
-        <svg className="h-4 w-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-neutral-200 bg-white shadow-lg">
-            <div className="p-2">
-              <div className="px-2 py-1.5 text-xs font-medium uppercase text-neutral-400">
-                Projects
-              </div>
-              {projects.map(([id, project]) => (
-                <button
-                  key={id}
-                  onClick={() => handleSelect(id)}
-                  className={`flex w-full items-center justify-between rounded-md px-2 py-2 text-sm transition-colors ${
-                    id === activeId
-                      ? 'bg-neutral-100 text-neutral-900'
-                      : 'text-neutral-700 hover:bg-neutral-50'
-                  }`}
-                >
-                  <div className="flex flex-col items-start">
-                    <span className="font-medium">{project.name}</span>
-                    <span className="text-xs text-neutral-400">
-                      {new Date(project.updatedAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${STATUS_LABELS[project.status]?.color || 'bg-neutral-100 text-neutral-600'}`}>
-                    {STATUS_LABELS[project.status]?.label || project.status}
-                  </span>
-                </button>
-              ))}
+          {activeProject && (
+            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${STATUS_LABELS[activeProject.status]?.color || 'bg-neutral-100 text-neutral-600'}`}>
+              {STATUS_LABELS[activeProject.status]?.label || activeProject.status}
+            </span>
+          )}
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 p-2">
+        <div className="px-2 py-1.5 text-xs font-medium uppercase text-muted-foreground">
+          Projects
+        </div>
+        {projects.map(([id, project]) => (
+          <button
+            key={id}
+            onClick={() => handleSelect(id)}
+            className={`flex w-full items-center justify-between rounded-md px-2 py-2 text-sm transition-colors ${
+              id === activeId
+                ? 'bg-accent text-accent-foreground'
+                : 'text-foreground hover:bg-accent/50'
+            }`}
+          >
+            <div className="flex flex-col items-start">
+              <span className="font-medium">{project.name}</span>
+              <span className="text-xs text-muted-foreground">
+                {new Date(project.updatedAt).toLocaleDateString()}
+              </span>
             </div>
-            <div className="border-t border-neutral-100 p-2">
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  router.push('/stage1');
-                }}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm text-neutral-600 hover:bg-neutral-50 transition-colors"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                New Project
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${STATUS_LABELS[project.status]?.color || 'bg-neutral-100 text-neutral-600'}`}>
+              {STATUS_LABELS[project.status]?.label || project.status}
+            </span>
+          </button>
+        ))}
+        <div className="border-t mt-1 pt-1">
+          <button
+            onClick={() => {
+              setIsOpen(false);
+              router.push('/stage1');
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent/50 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            New Project
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

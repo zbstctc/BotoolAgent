@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { CategoryTree, type RuleDocument, type RuleCategory, DEFAULT_CATEGORIES } from './CategoryTree';
 import { MarkdownEditor } from './MarkdownEditor';
 import { SkillPreviewModal } from './SkillPreviewModal';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 interface RulesManagerProps {
   className?: string;
@@ -305,39 +307,28 @@ export function RulesManager({ className }: RulesManagerProps) {
       )}
 
       {/* Delete Confirmation Dialog */}
-      {deleteTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={() => setDeleteTarget(null)}
-        >
-          <div
-            className="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold text-neutral-900 mb-2">
-              确认删除
-            </h3>
-            <p className="text-sm text-neutral-600 mb-6">
-              确定要删除规范 <span className="font-medium text-neutral-900">&quot;{deleteTarget.name}&quot;</span> 吗？此操作不可撤销。
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                className="px-4 py-2 text-sm font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                disabled={isDeleting}
-                className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed transition-colors"
-              >
-                {isDeleting ? '删除中...' : '删除'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>确认删除</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            确定要删除规范 <span className="font-medium text-foreground">&quot;{deleteTarget?.name}&quot;</span> 吗？此操作不可撤销。
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? '删除中...' : '删除'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { TaskHistory, NewPrdDialog, ImportPrdDialog, ProjectCard, type TaskHistoryItem, type TaskStatus, type TaskStage } from '@/components';
 import { useProject, type ProjectState } from '@/contexts/ProjectContext';
 import { RulesManager } from '@/components/rules/RulesManager';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface PRDItem {
   id: string;
@@ -624,48 +625,22 @@ function PRDPreviewModal({
   onClose: () => void;
 }) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
-    >
-      <div
-        className="relative max-w-3xl w-full max-h-[80vh] bg-white rounded-lg shadow-xl mx-4 flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-neutral-200">
-          <div>
-            <h2 className="text-lg font-semibold text-neutral-900">{prd.name}</h2>
-            <p className="text-xs text-neutral-500">{prd.filename}</p>
-          </div>
-          <div className="flex items-center gap-2">
+    <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-3xl max-h-[80vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="p-4 border-b">
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle>{prd.name}</DialogTitle>
+              <p className="text-xs text-muted-foreground">{prd.filename}</p>
+            </div>
             <Link
               href={`/stage2?prd=${prd.id}`}
-              className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 transition-colors"
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               Select for Execution
             </Link>
-            <button
-              onClick={onClose}
-              className="rounded-md p-2 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors"
-              aria-label="Close"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
           </div>
-        </div>
+        </DialogHeader>
 
         {/* Content */}
         <div className="flex-1 overflow-auto p-4">
@@ -677,13 +652,13 @@ function PRDPreviewModal({
               <div className="h-4 bg-neutral-100 rounded w-3/4" />
             </div>
           ) : (
-            <pre className="whitespace-pre-wrap font-mono text-sm text-neutral-700 leading-relaxed">
+            <pre className="whitespace-pre-wrap font-mono text-sm text-muted-foreground leading-relaxed">
               {content}
             </pre>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -722,60 +697,30 @@ function SessionDetailsModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
-    >
-      <div
-        className="relative max-w-4xl w-full max-h-[85vh] bg-white rounded-lg shadow-xl mx-4 flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-neutral-200">
-          <div className="flex items-center gap-3">
+    <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-4xl max-h-[85vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="p-4 border-b">
+          <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-neutral-900">
-                {session.name}
-              </h2>
+              <DialogTitle>{session.name}</DialogTitle>
               <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs text-neutral-500">
+                <span className="text-xs text-muted-foreground">
                   {formatDate(session.date)}
                 </span>
                 {details?.branchName && (
-                  <span className="text-xs text-neutral-400 font-mono bg-neutral-100 px-1.5 py-0.5 rounded">
+                  <span className="text-xs text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">
                     {details.branchName}
                   </span>
                 )}
               </div>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
             <span
               className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[session.status]}`}
             >
               {statusLabels[session.status]}
             </span>
-            <button
-              onClick={onClose}
-              className="rounded-md p-2 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors"
-              aria-label="Close"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
           </div>
-        </div>
+        </DialogHeader>
 
         {/* Content */}
         <div className="flex-1 overflow-auto">
@@ -795,12 +740,12 @@ function SessionDetailsModal({
               {/* Description */}
               {details.description && (
                 <div className="p-4 border-b border-neutral-100">
-                  <p className="text-sm text-neutral-600">{details.description}</p>
+                  <p className="text-sm text-muted-foreground">{details.description}</p>
                 </div>
               )}
 
               {/* Progress Summary */}
-              <div className="p-4 border-b border-neutral-100 bg-neutral-50">
+              <div className="p-4 border-b border-neutral-100 bg-muted">
                 <div className="flex items-center gap-4">
                   <div className="flex-1">
                     <div className="h-2 rounded-full bg-neutral-200 overflow-hidden">
@@ -822,7 +767,7 @@ function SessionDetailsModal({
                       />
                     </div>
                   </div>
-                  <span className="text-sm font-medium text-neutral-700">
+                  <span className="text-sm font-medium text-foreground">
                     {details.tasksCompleted}/{details.tasksTotal} tasks completed
                   </span>
                 </div>
@@ -830,7 +775,7 @@ function SessionDetailsModal({
 
               {/* Dev Tasks */}
               <div className="p-4">
-                <h3 className="text-sm font-medium text-neutral-900 mb-3">
+                <h3 className="text-sm font-medium text-foreground mb-3">
                   Development Tasks
                 </h3>
                 <div className="space-y-2">
@@ -840,28 +785,28 @@ function SessionDetailsModal({
                       className={`rounded-lg border p-3 ${
                         task.passes
                           ? 'border-green-200 bg-green-50'
-                          : 'border-neutral-200 bg-white'
+                          : 'border-border bg-background'
                       }`}
                     >
                       <div className="flex items-start gap-3">
                         <span
                           className={`text-sm ${
-                            task.passes ? 'text-green-600' : 'text-neutral-400'
+                            task.passes ? 'text-green-600' : 'text-muted-foreground'
                           }`}
                         >
                           {task.passes ? '✓' : '○'}
                         </span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono text-neutral-400">
+                            <span className="text-xs font-mono text-muted-foreground">
                               {task.id}
                             </span>
-                            <p className="text-sm font-medium text-neutral-900">
+                            <p className="text-sm font-medium text-foreground">
                               {task.title}
                             </p>
                           </div>
                           {task.description && (
-                            <p className="text-xs text-neutral-500 mt-1">
+                            <p className="text-xs text-muted-foreground mt-1">
                               {task.description}
                             </p>
                           )}
@@ -870,7 +815,7 @@ function SessionDetailsModal({
                               {task.acceptanceCriteria.map((criterion, idx) => (
                                 <li
                                   key={idx}
-                                  className="text-xs text-neutral-500 flex items-start gap-1.5"
+                                  className="text-xs text-muted-foreground flex items-start gap-1.5"
                                 >
                                   <span className="text-neutral-300">•</span>
                                   {criterion}
@@ -887,11 +832,11 @@ function SessionDetailsModal({
 
               {/* Progress Log */}
               {details.progressLog && (
-                <div className="p-4 border-t border-neutral-100">
-                  <h3 className="text-sm font-medium text-neutral-900 mb-3">
+                <div className="p-4 border-t">
+                  <h3 className="text-sm font-medium text-foreground mb-3">
                     Progress Log
                   </h3>
-                  <pre className="text-xs text-neutral-600 font-mono whitespace-pre-wrap bg-neutral-50 rounded-lg p-3 max-h-48 overflow-auto">
+                  <pre className="text-xs text-muted-foreground font-mono whitespace-pre-wrap bg-muted rounded-lg p-3 max-h-48 overflow-auto">
                     {details.progressLog}
                   </pre>
                 </div>
@@ -899,14 +844,14 @@ function SessionDetailsModal({
             </div>
           ) : (
             <div className="p-8 text-center">
-              <p className="text-sm text-neutral-500">
+              <p className="text-sm text-muted-foreground">
                 Failed to load session details
               </p>
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { TerminalActivityFeed } from '@/components/TerminalActivityFeed';
 import { useSimulatedProgress } from '@/hooks/useSimulatedProgress';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 export interface RuleDocument {
   id: string;
@@ -728,46 +730,38 @@ function ConfirmationDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50"
-        onClick={onCancel}
-      />
-
-      {/* Dialog */}
-      <div className="relative bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
-        {/* Header */}
-        <div className="p-6 border-b border-neutral-200">
+    <Dialog open={true} onOpenChange={(open) => { if (!open) onCancel(); }}>
+      <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="p-6 border-b">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
               <span className="text-xl">✅</span>
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-neutral-900">规范审核完成</h2>
-              <p className="text-sm text-neutral-500">
+              <DialogTitle>规范审核完成</DialogTitle>
+              <p className="text-sm text-muted-foreground">
                 已审核 {result.appliedRules.length} 项规范
               </p>
             </div>
           </div>
-        </div>
+        </DialogHeader>
 
         {/* Content - Scrollable */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Applied Rules Section */}
           <div>
-            <h3 className="text-sm font-medium text-neutral-700 mb-3">已应用的规范</h3>
+            <h3 className="text-sm font-medium text-foreground mb-3">已应用的规范</h3>
             <div className="space-y-3">
               {Object.entries(rulesByCategory).map(([category, rules]) => (
-                <div key={category} className="bg-neutral-50 rounded-lg p-3">
-                  <div className="text-sm font-medium text-neutral-600 mb-2">
+                <div key={category} className="bg-muted rounded-lg p-3">
+                  <div className="text-sm font-medium text-muted-foreground mb-2">
                     {categoryNames[category] || category}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {rules.map((rule) => (
                       <span
                         key={rule.id}
-                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-200 text-neutral-700"
+                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-200 text-foreground"
                       >
                         {rule.name}
                       </span>
@@ -781,9 +775,9 @@ function ConfirmationDialog({
           {/* Summary Section */}
           {result.summary && (
             <div>
-              <h3 className="text-sm font-medium text-neutral-700 mb-3">审核摘要</h3>
-              <div className="bg-neutral-50 rounded-lg p-4 max-h-48 overflow-y-auto">
-                <pre className="text-sm text-neutral-600 whitespace-pre-wrap font-sans">
+              <h3 className="text-sm font-medium text-foreground mb-3">审核摘要</h3>
+              <div className="bg-muted rounded-lg p-4 max-h-48 overflow-y-auto">
+                <pre className="text-sm text-muted-foreground whitespace-pre-wrap font-sans">
                   {result.summary}
                 </pre>
               </div>
@@ -791,22 +785,15 @@ function ConfirmationDialog({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-6 border-t border-neutral-200 flex justify-end gap-3">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-neutral-600 hover:text-neutral-800 transition-colors"
-          >
+        <DialogFooter className="p-6 border-t">
+          <Button variant="ghost" onClick={onCancel}>
             返回修改
-          </button>
-          <button
-            onClick={onConfirm}
-            className="px-6 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors font-medium"
-          >
+          </Button>
+          <Button onClick={onConfirm}>
             确认并继续
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
