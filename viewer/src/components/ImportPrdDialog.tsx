@@ -20,29 +20,22 @@ interface MdFileInfo {
 }
 
 export function ImportPrdDialog({ isOpen, onClose }: ImportPrdDialogProps) {
+  if (!isOpen) return null;
+  return <ImportPrdDialogContent onClose={onClose} />;
+}
+
+function ImportPrdDialogContent({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const { createProject } = useProject();
   const [files, setFiles] = useState<MdFileInfo[]>([]);
-  const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+  const [isLoadingFiles, setIsLoadingFiles] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFile, setSelectedFile] = useState<MdFileInfo | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
-  // Fetch files when dialog opens
+  // Fetch files on mount
   useEffect(() => {
-    if (!isOpen) {
-      setFiles([]);
-      setSearchQuery('');
-      setSelectedFile(null);
-      setLoadError(null);
-      setIsImporting(false);
-      return;
-    }
-
-    setIsLoadingFiles(true);
-    setLoadError(null);
-
     fetch('/api/files/md')
       .then((res) => {
         if (!res.ok) throw new Error('Failed to fetch files');
@@ -57,7 +50,7 @@ export function ImportPrdDialog({ isOpen, onClose }: ImportPrdDialogProps) {
       .finally(() => {
         setIsLoadingFiles(false);
       });
-  }, [isOpen]);
+  }, []);
 
   // Filter files by search query
   const filteredFiles = useMemo(() => {
@@ -111,8 +104,6 @@ export function ImportPrdDialog({ isOpen, onClose }: ImportPrdDialogProps) {
     },
     [onClose]
   );
-
-  if (!isOpen) return null;
 
   return (
     <div
