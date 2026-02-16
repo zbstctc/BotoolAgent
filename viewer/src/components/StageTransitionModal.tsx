@@ -1,6 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useState, useRef } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 export interface StageTransitionModalProps {
   isOpen: boolean;
@@ -119,39 +125,23 @@ export function StageTransitionModal({
     setCountdown(null);
   }, []);
 
-  const handleBackdropClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (e.target === e.currentTarget) {
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) {
         cancelCountdown();
         onLater();
       }
     },
     [onLater, cancelCountdown]
   );
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        cancelCountdown();
-        onLater();
-      }
-    },
-    [onLater, cancelCountdown]
-  );
-
-  if (!isOpen) return null;
 
   const isCompletion = toStage === 0;
   const fromStageName = STAGE_NAMES[fromStage] || `Stage ${fromStage}`;
   const toStageName = STAGE_NAMES[toStage] || `Stage ${toStage}`;
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      onClick={handleBackdropClick}
-      onKeyDown={handleKeyDown}
-    >
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-md p-0 gap-0" showCloseButton={false}>
         {/* Header with success indicator */}
         <div className="p-6 pb-4">
           <div className="flex items-center gap-3 mb-4">
@@ -200,23 +190,24 @@ export function StageTransitionModal({
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 p-4 pt-2 border-t border-neutral-100">
-          <button
+        <DialogFooter className="flex-row gap-3 p-4 pt-2 border-t border-neutral-100">
+          <Button
+            variant="secondary"
+            className="flex-1"
             onClick={() => { cancelCountdown(); onLater(); }}
-            className="flex-1 px-4 py-2.5 text-sm font-medium text-neutral-700 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors"
           >
             {countdown !== null && countdown > 0 ? '取消' : '稍后继续'}
-          </button>
-          <button
+          </Button>
+          <Button
+            className="flex-1"
             onClick={() => { cancelCountdown(); onConfirm(); }}
-            className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors"
           >
             {countdown !== null && countdown > 0
               ? `${countdown}s 后自动继续`
               : isCompletion ? '返回首页' : '继续'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

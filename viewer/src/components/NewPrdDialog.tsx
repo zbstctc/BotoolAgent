@@ -4,6 +4,16 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSession } from '@/lib/prd-session-storage';
 import { useProject } from '@/contexts/ProjectContext';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 interface NewPrdDialogProps {
   isOpen: boolean;
@@ -138,52 +148,13 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
     [description, generatedTitle, requirementType, customType, router, onClose, createProject]
   );
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    },
-    [onClose]
-  );
-
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
-      onKeyDown={handleKeyDown}
-    >
-      <div
-        className="relative w-full max-w-md bg-white rounded-lg shadow-xl mx-4"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-md p-0 gap-0" showCloseButton={true}>
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-neutral-200">
-          <h2 className="text-lg font-semibold text-neutral-900">
-            新建 PRD
-          </h2>
-          <button
-            onClick={onClose}
-            className="rounded-md p-2 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors"
-            aria-label="关闭"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
+        <DialogHeader className="p-4 border-b border-neutral-200">
+          <DialogTitle>新建 PRD</DialogTitle>
+        </DialogHeader>
 
         {/* Content */}
         <form onSubmit={handleSubmit}>
@@ -211,12 +182,12 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
                 ))}
               </div>
               {requirementType === 'other' && (
-                <input
+                <Input
                   type="text"
                   value={customType}
                   onChange={(e) => setCustomType(e.target.value)}
                   placeholder="请输入需求类型..."
-                  className="mt-2 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 outline-none transition-all"
+                  className="mt-2"
                   disabled={isCreating}
                 />
               )}
@@ -230,17 +201,17 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
               >
                 需求描述
               </label>
-              <textarea
-              ref={textareaRef}
-              id="requirement-description"
-              value={description}
-              onChange={(e) => handleDescriptionChange(e.target.value)}
-              placeholder="请描述你想要构建的功能或解决的问题..."
-              maxLength={500}
-              rows={5}
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 outline-none transition-all resize-none"
-              disabled={isCreating}
-            />
+              <Textarea
+                ref={textareaRef}
+                id="requirement-description"
+                value={description}
+                onChange={(e) => handleDescriptionChange(e.target.value)}
+                placeholder="请描述你想要构建的功能或解决的问题..."
+                maxLength={500}
+                rows={5}
+                className="resize-none"
+                disabled={isCreating}
+              />
               <div className="mt-2 flex items-center justify-between">
                 <p className="text-xs text-neutral-500">
                   描述你想要的功能，系统会引导你完善需求
@@ -264,13 +235,12 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
                   </span>
                 )}
               </label>
-              <input
+              <Input
                 id="project-title"
                 type="text"
                 value={generatedTitle}
                 onChange={(e) => setGeneratedTitle(e.target.value)}
                 placeholder={description.trim().length >= 20 ? '自动生成中...' : '输入描述后自动生成'}
-                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 outline-none transition-all"
                 disabled={isCreating || isGeneratingTitle}
               />
               <p className="mt-1 text-xs text-neutral-500">
@@ -280,25 +250,24 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 p-4 border-t border-neutral-200 bg-neutral-50">
-            <button
+          <DialogFooter className="p-4 border-t border-neutral-200 bg-neutral-50">
+            <Button
               type="button"
+              variant="ghost"
               onClick={onClose}
-              className="rounded-md px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
               disabled={isCreating}
             >
               取消
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={!description.trim() || isCreating}
-              className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:bg-neutral-300 disabled:text-neutral-500 disabled:cursor-not-allowed transition-colors"
             >
               {isCreating ? '创建中...' : '开始创建'}
-            </button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
