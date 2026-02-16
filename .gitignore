@@ -5,6 +5,9 @@ patterns.json
 .project-status
 .state/
 logs/
+tasks/prd-*.json
+tasks/progress-*.txt
+tasks/registry.json
 
 # ===== User PRD documents (external project examples) =====
 v1.6_Botool_Present_*.md

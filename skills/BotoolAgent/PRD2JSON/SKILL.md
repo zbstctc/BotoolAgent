@@ -145,12 +145,21 @@ After confirmation, **read the content of each selected rule file** to embed as 
 
 Take the PRD content + selected rules and generate a **slim prd.json**.
 
-**输出路径（兼容 portable 模式）：**
+**输出路径（双写策略，兼容 portable 模式）：**
 ```bash
-# prd.json 写入项目根目录（Claude Code 的 cwd）
-# prdFile 字段使用相对于项目根目录的路径：
 TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"
-# prdFile: "$TASKS_DIR/prd-[feature-name].md"
+
+# 从 PRD 源文件名派生 JSON 文件名：
+# 例如 tasks/prd-task-status.md → tasks/prd-task-status.json
+PRD_BASENAME=$(basename "$PRD_FILE" .md)   # prd-task-status
+JSON_FILE="$TASKS_DIR/${PRD_BASENAME}.json"
+
+# 双写：
+# 1. 主文件：$TASKS_DIR/prd-{feature-name}.json（与 Viewer 对齐）
+# 2. 兼容副本：./prd.json（项目根目录，BotoolAgent.sh / CLAUDE.lead.md 读取）
+
+# 同时重置对应的 progress 文件：
+# $TASKS_DIR/progress-{feature-name}.txt
 ```
 
 **Conversion process:**
@@ -368,18 +377,62 @@ Tasks execute in priority order. Earlier tasks must not depend on later ones.
 
 ---
 
-## prd.json 输出位置
+## prd.json 输出位置（双写策略）
 
-**prd.json 始终写入项目根目录**（Claude Code 的当前工作目录），而不是 `BotoolAgent/tasks/` 中。
-这是因为 `BotoolAgent.sh` 和 `CLAUDE.lead.md` 从 `$PROJECT_DIR/prd.json` 读取。
+**双写策略：同时写入 tasks/ 目录和项目根目录。**
 
 ```bash
-# 正确：写入项目根目录
-Write prd.json → ./prd.json (项目根目录)
+TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"
 
-# 错误：不要写入 BotoolAgent/ 内
-# Write prd.json → BotoolAgent/tasks/prd.json  ← 不要这样做
+# 1. 主文件：$TASKS_DIR/prd-{feature-name}.json（与 Viewer 对齐）
+Write prd.json → $TASKS_DIR/prd-{feature-name}.json
+
+# 2. 兼容副本：./prd.json（项目根目录）
+#    BotoolAgent.sh 和 CLAUDE.lead.md 从 $PROJECT_DIR/prd.json 读取
+Write prd.json → ./prd.json (项目根目录，内容相同)
+
+# 3. 更新 registry：$TASKS_DIR/registry.json
+#    格式与 Viewer 的 updateRegistry() 一致
 ```
+
+**同时重置 progress 文件：**
+```bash
+# 重置 $TASKS_DIR/progress-{feature-name}.txt（与主文件对应）
+# 重置 ./progress.txt（与兼容副本对应）
+```
+
+---
+
+## Registry 更新
+
+**写完 JSON 后，更新 `$TASKS_DIR/registry.json`。** 格式与 Viewer 的 `updateRegistry()` 一致。
+
+从 PRD 源文件名派生 `projectId`：`prd-{feature-name}.md` → `projectId = feature-name`
+
+```json
+{
+  "version": 1,
+  "projects": {
+    "{feature-name}": {
+      "name": "[project name from prd.json]",
+      "prdMd": "prd-{feature-name}.md",
+      "prdJson": "prd-{feature-name}.json",
+      "progress": "progress-{feature-name}.txt",
+      "branch": "botool/{feature-name}",
+      "status": "coding",
+      "createdAt": "[ISO timestamp, preserve if existing]",
+      "updatedAt": "[current ISO timestamp]"
+    }
+  },
+  "activeProject": "{feature-name}"
+}
+```
+
+**更新逻辑：**
+1. 读取现有 `$TASKS_DIR/registry.json`（如果存在）
+2. 合并/更新当前项目条目（保留 `createdAt`，更新 `updatedAt`）
+3. 设置 `activeProject` 为当前项目
+4. 写回 `$TASKS_DIR/registry.json`
 
 ---
 
@@ -518,7 +571,12 @@ CREATE TABLE task_status (...)
 
 Announce next steps:
 
-"prd.json created (slim index). Ready for autonomous execution:
+"prd.json created (slim index):
+- Main:   $TASKS_DIR/prd-{feature-name}.json
+- Compat: ./prd.json (root copy)
+- Registry: $TASKS_DIR/registry.json updated
+
+Ready for autonomous execution:
 
 **Option 1: Use the Viewer (Recommended)**
 Open http://localhost:3000/stage3 to monitor development visually.
@@ -546,3 +604,6 @@ The coding agent will:
 - [ ] Every task has at least one eval (typecheck)
 - [ ] No task depends on a later task
 - [ ] Sessions have max 8 tasks each
+- [ ] `$TASKS_DIR/prd-{feature-name}.json` written (main file)
+- [ ] `./prd.json` written (root compat copy)
+- [ ] `$TASKS_DIR/registry.json` updated with current project
