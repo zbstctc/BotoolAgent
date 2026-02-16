@@ -78,15 +78,34 @@ export function ProjectProvider({ workspaceId, children }: { workspaceId?: strin
   // Must be set before any storage access (including useState initializers below)
   if (workspaceId) setWorkspaceId(workspaceId);
 
-  const [projects, setProjects] = useState<Record<string, ProjectState>>(() => loadProjects().projects);
-  const [activeProjectId, setActiveProjectIdState] = useState<string | null>(() => loadProjects().activeProjectId);
-  const isLoading = false;
+  const [projects, setProjects] = useState<Record<string, ProjectState>>({});
+  const [activeProjectId, setActiveProjectIdState] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load from localStorage on mount (using project-storage module)
+  useEffect(() => {
+    let cancelled = false;
+
+    // Defer hydration from localStorage to avoid SSR/CSR mismatch on first paint.
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const storage = loadProjects();
+      setProjects(storage.projects);
+      setActiveProjectIdState(storage.activeProjectId);
+      setIsLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Save to localStorage when state changes (using project-storage module)
   useEffect(() => {
+    if (isLoading) return;
     const storage: ProjectStorage = { version: 1, projects, activeProjectId };
     saveProjects(storage);
-  }, [projects, activeProjectId]);
+  }, [projects, activeProjectId, isLoading]);
 
   // Get active project
   const activeProject = useMemo(() => {

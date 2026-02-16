@@ -798,7 +798,8 @@ LOW:    [风险项]
 ```bash
 TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"
 # PRD 写入: $TASKS_DIR/prd-[feature-name].md
-# prd.json 写入: 项目根目录（Claude Code 的 cwd）
+# prd.json 双写: $TASKS_DIR/prd-[feature-name].json + 项目根目录 ./prd.json
+# registry 更新: $TASKS_DIR/registry.json
 ```
 
 #### 复杂度裁剪规则

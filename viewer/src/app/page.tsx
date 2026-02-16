@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { TaskHistory, NewPrdDialog, ProjectCard, type TaskHistoryItem, type TaskStatus, type TaskStage } from '@/components';
+import { TaskHistory, NewPrdDialog, ImportPrdDialog, ProjectCard, type TaskHistoryItem, type TaskStatus, type TaskStage } from '@/components';
 import { useProject, type ProjectState } from '@/contexts/ProjectContext';
 import { RulesManager } from '@/components/rules/RulesManager';
 
@@ -82,6 +82,7 @@ function DashboardContent() {
   const [loadingSessionDetails, setLoadingSessionDetails] = useState(false);
   const [viewMode, setViewMode] = useState<'timeline' | 'list'>('timeline');
   const [showNewPrdDialog, setShowNewPrdDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
   const [activeTab, setActiveTab] = useState<'projects' | 'rules'>(
     searchParams.get('tab') === 'rules' ? 'rules' : 'projects'
   );
@@ -341,12 +342,20 @@ function DashboardContent() {
               <h2 className="text-lg font-semibold text-neutral-900">
                 需求文档(PRD)
               </h2>
-              <button
-                onClick={() => setShowNewPrdDialog(true)}
-                className="text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors"
-              >
-                + 新建
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowImportDialog(true)}
+                  className="text-sm font-medium text-violet-600 hover:text-violet-800 transition-colors"
+                >
+                  导入
+                </button>
+                <button
+                  onClick={() => setShowNewPrdDialog(true)}
+                  className="text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors"
+                >
+                  + 新建
+                </button>
+              </div>
             </div>
 
             {loading ? (
@@ -374,9 +383,7 @@ function DashboardContent() {
             ) : (
               <EmptyState
                 title="暂无需求文档"
-                description="创建你的第一个需求文档(PRD)，开始自主开发流程。"
-                actionLabel="创建需求文档"
-                onAction={() => setShowNewPrdDialog(true)}
+                description="点击右上方「+ 新建」或「导入」开始创建你的第一个需求文档。"
               />
             )}
           </div>
@@ -483,6 +490,12 @@ function DashboardContent() {
       <NewPrdDialog
         isOpen={showNewPrdDialog}
         onClose={() => setShowNewPrdDialog(false)}
+      />
+
+      {/* Import PRD Dialog */}
+      <ImportPrdDialog
+        isOpen={showImportDialog}
+        onClose={() => setShowImportDialog(false)}
       />
     </div>
   );

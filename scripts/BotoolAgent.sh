@@ -235,7 +235,15 @@ start_session() {
   TMUX_ENV="$TMUX_ENV BOTOOL_PROJECT_DIR=$PROJECT_DIR"
 
   tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_DIR" \
-    "env $TMUX_ENV $CLAUDE_CMD --dangerously-skip-permissions --teammate-mode $BOTOOL_TEAMMATE_MODE"
+    "env -u CLAUDECODE $TMUX_ENV $CLAUDE_CMD --dangerously-skip-permissions --teammate-mode $BOTOOL_TEAMMATE_MODE"
+
+  # 验证 session 是否成功启动
+  sleep 2
+  if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+    echo "ERROR: tmux session 启动失败！Claude CLI 可能无法启动。"
+    echo "       请检查是否有 CLAUDECODE 环境变量冲突。"
+    return 1
+  fi
 
   # 等待 Claude CLI 启动并显示确认对话框
   echo ">>> 等待权限确认对话框..."

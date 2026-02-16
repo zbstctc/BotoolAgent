@@ -150,9 +150,24 @@ function Stage1PageContent() {
     return () => clearTimeout(timeoutId);
   }, [storageKey, cliSessionId, currentLevel, completedLevels, answers, prdDraft, isStarted, qaHistory, codebaseScanned, isConfirmationPhase, confirmationSummary, selectedMode]);
 
+  // Read URL mode and file params for import flow
+  const urlMode = searchParams.get('mode');
+  const urlFile = searchParams.get('file');
+
+  // Auto-set transform mode from URL params (import flow)
+  useEffect(() => {
+    if (urlMode === 'transform' && urlFile && !selectedMode && !isStarted) {
+      setSelectedMode('transform');
+      setTransformFilePath(urlFile);
+      setInitialDescription(urlFile);
+    }
+  }, [urlMode, urlFile, selectedMode, isStarted]);
+
   // Load initial description from sessionStorage or fallback to project name
   useEffect(() => {
     if (!sessionId) return;
+    // Skip if already set by URL params (import flow)
+    if (urlMode === 'transform' && urlFile) return;
     // First try sessionStorage (set when creating new project)
     const desc = sessionStorage.getItem(`botool-initial-description-${sessionId}`);
     if (desc) {
@@ -163,7 +178,7 @@ function Stage1PageContent() {
     if (activeProject?.name) {
       setInitialDescription(activeProject.name);
     }
-  }, [sessionId, activeProject?.name]);
+  }, [sessionId, activeProject?.name, urlMode, urlFile]);
 
   // Redirect invalid direct access without session context
   useEffect(() => {
