@@ -56,7 +56,7 @@ function getStatusColor(status: TaskStatus): string {
     case 'completed':
       return 'bg-green-100 text-green-700 border-green-200';
     case 'in-progress':
-      return 'bg-blue-100 text-blue-700 border-blue-200';
+      return 'bg-neutral-200 text-neutral-700 border-neutral-300';
     case 'failed':
       return 'bg-red-100 text-red-700 border-red-200';
     default:
@@ -364,7 +364,7 @@ function Stage3PageContent() {
           ) : (
             <Fragment>
               {showIterationInput ? (
-                <div className="flex items-center gap-2 bg-white border border-blue-200 rounded-lg px-3 py-1.5 shadow-sm">
+                <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-lg px-3 py-1.5 shadow-sm">
                   <span className="text-xs text-neutral-500">最大轮次</span>
                   <input
                     type="number"
@@ -384,7 +384,7 @@ function Stage3PageContent() {
                   <button
                     onClick={handleStartAgent}
                     disabled={agentActionLoading}
-                    className="px-2 py-0.5 text-xs font-medium bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                    className="px-2 py-0.5 text-xs font-medium bg-neutral-900 text-white rounded hover:bg-neutral-800 disabled:opacity-50"
                   >
                     {agentActionLoading ? '启动中...' : '启动'}
                   </button>
@@ -402,7 +402,7 @@ function Stage3PageContent() {
                 )}
                 <button
                   onClick={() => { setShowIterationInput(true); setAgentStartError(null); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-lg hover:bg-neutral-200 transition-colors"
                 >
                   <span>▶</span>
                   启动代理
@@ -449,18 +449,18 @@ function Stage3PageContent() {
                 <span className="text-green-600 text-xs">✓</span>
                 <span className="text-xs font-medium text-green-700">{completedTasks}</span>
               </div>
-              <div className="flex items-center gap-1 px-2 py-1 rounded bg-blue-50 border border-blue-100">
-                <span className="w-2 h-2 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                <span className="text-xs font-medium text-blue-700">{inProgressTasks}</span>
+              <div className="flex items-center gap-1 px-2 py-1 rounded bg-neutral-100 border border-neutral-200">
+                <span className="w-2 h-2 border-2 border-neutral-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs font-medium text-neutral-700">{inProgressTasks}</span>
               </div>
               <div className="flex items-center gap-1 px-2 py-1 rounded bg-neutral-50 border border-neutral-200">
                 <span className="w-2 h-2 border-2 border-neutral-300 rounded-full" />
                 <span className="text-xs font-medium text-neutral-600">{pendingTasks}</span>
               </div>
               {iterationCount > 0 && (
-                <div className="ml-auto flex items-center gap-1 px-2 py-1 rounded bg-purple-50 border border-purple-100">
-                  <span className="text-xs text-purple-500">#</span>
-                  <span className="text-xs font-medium text-purple-700">{iterationCount}</span>
+                <div className="ml-auto flex items-center gap-1 px-2 py-1 rounded bg-neutral-100 border border-neutral-200">
+                  <span className="text-xs text-neutral-500">#</span>
+                  <span className="text-xs font-medium text-neutral-700">{iterationCount}</span>
                 </div>
               )}
             </div>
@@ -506,7 +506,7 @@ function Stage3PageContent() {
                             {status === 'completed' ? (
                               <span className="text-green-500 text-sm">✓</span>
                             ) : status === 'in-progress' ? (
-                              <span className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin inline-block" />
+                              <span className="w-3 h-3 border-2 border-neutral-500 border-t-transparent rounded-full animate-spin inline-block" />
                             ) : status === 'failed' ? (
                               <span className="text-red-500 text-sm">✗</span>
                             ) : (
@@ -576,7 +576,7 @@ function Stage3PageContent() {
                                   const auto = task.testCases.filter(tc => tc.type !== 'manual').length;
                                   const manual = task.testCases.filter(tc => tc.type === 'manual').length;
                                   return (
-                                    <span className="text-xs text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">
+                                    <span className="text-xs text-neutral-600 bg-neutral-100 px-1.5 py-0.5 rounded">
                                       {auto > 0 ? `${auto} 个自动测试` : ''}
                                       {auto > 0 && manual > 0 ? ' + ' : ''}
                                       {manual > 0 ? `${manual} 个手动` : ''}
@@ -766,7 +766,7 @@ function Stage3PageContent() {
                   {/* Header */}
                   <div className="flex items-center gap-4 mb-4 pb-4 border-b border-neutral-200">
                     <div className="text-sm text-neutral-600">
-                      <span className="font-mono text-blue-600">{gitCommits.branch}</span>
+                      <span className="font-mono text-neutral-600">{gitCommits.branch}</span>
                       {' 分支 · '}
                       <span className="font-medium">{gitCommits.count}</span> 个提交
                     </div>
@@ -794,7 +794,7 @@ function Stage3PageContent() {
                             </p>
                             <div className="flex items-center gap-2 mt-1">
                               {commit.taskId && (
-                                <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                                <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-neutral-200 text-neutral-700">
                                   {commit.taskId}
                                 </span>
                               )}

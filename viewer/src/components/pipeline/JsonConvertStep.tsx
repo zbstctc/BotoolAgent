@@ -217,7 +217,7 @@ export function JsonConvertStep({
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <div className="text-center max-w-md">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-neutral-200 flex items-center justify-center">
             <span className="text-2xl">{'{}'}</span>
           </div>
           <h2 className="text-lg font-semibold text-neutral-900 mb-2">转换为 JSON</h2>
@@ -237,7 +237,7 @@ export function JsonConvertStep({
             <button
               type="button"
               onClick={handleStartConversion}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              className="px-6 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 font-medium"
             >
               开始转换
             </button>
@@ -275,8 +275,8 @@ export function JsonConvertStep({
                 <span className="text-2xl">!</span>
               </div>
             ) : (
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
-                <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full" />
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-neutral-200 flex items-center justify-center">
+                <div className="animate-spin w-8 h-8 border-4 border-neutral-500 border-t-transparent rounded-full" />
               </div>
             )}
             <h3 className="text-lg font-semibold text-neutral-900">
@@ -297,7 +297,7 @@ export function JsonConvertStep({
             <div className="w-full h-2 bg-neutral-200 rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all duration-300 ${
-                  convertingState === 'error' ? 'bg-red-500' : 'bg-blue-500'
+                  convertingState === 'error' ? 'bg-red-500' : 'bg-neutral-700'
                 }`}
                 style={{ width: `${convertingProgress}%` }}
               />
@@ -321,7 +321,7 @@ export function JsonConvertStep({
                 <button
                   type="button"
                   onClick={handleStartConversion}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-6 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-800"
                 >
                   重试
                 </button>
@@ -437,7 +437,7 @@ export function JsonConvertStep({
             className={`px-6 py-2 rounded-lg font-medium transition-colors ${
               !prdJson || parseError || isSaving
                 ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-                : 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-neutral-900 text-white hover:bg-neutral-800'
             }`}
           >
             {isSaving ? '保存中...' : '保存 prd.json'}
@@ -449,7 +449,7 @@ export function JsonConvertStep({
             className={`px-6 py-2 rounded-lg font-medium transition-colors ${
               !prdJson || parseError
                 ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-neutral-900 text-white hover:bg-neutral-800'
             }`}
           >
             开始开发 (Stage 3)

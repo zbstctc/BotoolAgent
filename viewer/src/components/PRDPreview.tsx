@@ -12,6 +12,8 @@ export interface PRDPreviewProps {
   isSaving?: boolean;
   saveSuccess?: boolean;
   saveError?: string;
+  /** When true, hide the header bar (collapse toggle, title, save button) */
+  hideHeader?: boolean;
 }
 
 export function PRDPreview({
@@ -23,6 +25,7 @@ export function PRDPreview({
   isSaving = false,
   saveSuccess = false,
   saveError,
+  hideHeader = false,
 }: PRDPreviewProps) {
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
 
@@ -31,6 +34,15 @@ export function PRDPreview({
     setIsCollapsed(newState);
     onCollapsedChange?.(newState);
   };
+
+  // When hideHeader is true, render content only (no chrome, no collapse)
+  if (hideHeader) {
+    return (
+      <div className="prose prose-sm prose-neutral max-w-none prose-headings:text-neutral-900 prose-headings:font-semibold prose-h1:text-xl prose-h1:border-b prose-h1:border-neutral-200 prose-h1:pb-2 prose-h2:text-lg prose-h2:mt-6 prose-h3:text-base prose-p:text-neutral-700 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-li:text-neutral-700 prose-strong:text-neutral-900 prose-code:text-neutral-800 prose-code:bg-neutral-200 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-neutral-200 prose-pre:text-neutral-800 prose-blockquote:border-l-neutral-300 prose-blockquote:text-neutral-600">
+        <ReactMarkdown>{content}</ReactMarkdown>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -73,7 +85,7 @@ export function PRDPreview({
                 ? 'bg-green-100 text-green-700 cursor-default'
                 : isSaving
                 ? 'bg-neutral-100 text-neutral-400 cursor-wait'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-neutral-900 text-white hover:bg-neutral-800'
             }`}
           >
             {saveSuccess ? (

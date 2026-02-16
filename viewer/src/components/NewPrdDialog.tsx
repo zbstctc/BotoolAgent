@@ -201,7 +201,7 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
                     onClick={() => setRequirementType(type.value)}
                     className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                       requirementType === type.value
-                        ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500'
+                        ? 'bg-neutral-200 text-neutral-700 ring-2 ring-neutral-500'
                         : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                     }`}
                     disabled={isCreating}
@@ -216,7 +216,7 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
                   value={customType}
                   onChange={(e) => setCustomType(e.target.value)}
                   placeholder="请输入需求类型..."
-                  className="mt-2 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                  className="mt-2 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 outline-none transition-all"
                   disabled={isCreating}
                 />
               )}
@@ -238,7 +238,7 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
               placeholder="请描述你想要构建的功能或解决的问题..."
               maxLength={500}
               rows={5}
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all resize-none"
+              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 outline-none transition-all resize-none"
               disabled={isCreating}
             />
               <div className="mt-2 flex items-center justify-between">
@@ -259,7 +259,7 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
               >
                 项目标题
                 {isGeneratingTitle && (
-                  <span className="ml-2 text-xs text-blue-500 font-normal">
+                  <span className="ml-2 text-xs text-neutral-500 font-normal">
                     生成中...
                   </span>
                 )}
@@ -270,7 +270,7 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
                 value={generatedTitle}
                 onChange={(e) => setGeneratedTitle(e.target.value)}
                 placeholder={description.trim().length >= 20 ? '自动生成中...' : '输入描述后自动生成'}
-                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 outline-none transition-all"
                 disabled={isCreating || isGeneratingTitle}
               />
               <p className="mt-1 text-xs text-neutral-500">
@@ -292,7 +292,7 @@ export function NewPrdDialog({ isOpen, onClose }: NewPrdDialogProps) {
             <button
               type="submit"
               disabled={!description.trim() || isCreating}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
+              className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:bg-neutral-300 disabled:text-neutral-500 disabled:cursor-not-allowed transition-colors"
             >
               {isCreating ? '创建中...' : '开始创建'}
             </button>

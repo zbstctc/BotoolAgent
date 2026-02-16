@@ -118,7 +118,7 @@ function ImportPrdDialogContent({ onClose }: { onClose: () => void }) {
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-neutral-200">
           <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-violet-500" />
+            <div className="w-2.5 h-2.5 rounded-full bg-neutral-900" />
             <h2 className="text-lg font-semibold text-neutral-900">
               导入现有文档
             </h2>
@@ -150,7 +150,7 @@ function ImportPrdDialogContent({ onClose }: { onClose: () => void }) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="搜索 .md 文件..."
-              className="w-full pl-10 pr-3 py-2 border border-neutral-200 rounded-lg text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-violet-500 focus:ring-2 focus:ring-violet-200 outline-none transition-all bg-white"
+              className="w-full pl-10 pr-3 py-2 border border-neutral-200 rounded-lg text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 outline-none transition-all bg-white"
               autoFocus
             />
           </div>
@@ -160,7 +160,7 @@ function ImportPrdDialogContent({ onClose }: { onClose: () => void }) {
         <div className="flex-1 overflow-y-auto min-h-0 p-4">
           {isLoadingFiles ? (
             <div className="flex items-center justify-center py-8">
-              <div className="animate-spin h-6 w-6 border-3 border-violet-600 border-t-transparent rounded-full" />
+              <div className="animate-spin h-6 w-6 border-3 border-neutral-600 border-t-transparent rounded-full" />
               <span className="ml-2 text-sm text-neutral-500">扫描文件中...</span>
             </div>
           ) : loadError ? (
@@ -189,12 +189,12 @@ function ImportPrdDialogContent({ onClose }: { onClose: () => void }) {
                           onClick={() => setSelectedFile(isSelected ? null : file)}
                           className={`w-full text-left p-3 rounded-lg border transition-colors ${
                             isSelected
-                              ? 'border-violet-500 bg-violet-50'
+                              ? 'border-neutral-900 bg-neutral-100'
                               : 'border-neutral-200 bg-white hover:border-neutral-300'
                           }`}
                         >
                           <div className="flex items-center justify-between">
-                            <span className={`text-sm font-medium ${isSelected ? 'text-violet-900' : 'text-neutral-900'}`}>
+                            <span className={`text-sm font-medium ${isSelected ? 'text-neutral-900' : 'text-neutral-900'}`}>
                               {file.name}
                             </span>
                             <span className="text-xs text-neutral-400">
@@ -238,7 +238,7 @@ function ImportPrdDialogContent({ onClose }: { onClose: () => void }) {
             type="button"
             onClick={handleImport}
             disabled={!selectedFile || isImporting}
-            className="rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:bg-violet-300 disabled:cursor-not-allowed transition-colors"
+            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:bg-neutral-300 disabled:text-neutral-500 disabled:cursor-not-allowed transition-colors"
           >
             {isImporting ? '导入中...' : '导入并分析'}
           </button>

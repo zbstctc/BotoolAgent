@@ -123,7 +123,7 @@ function LevelItem({
       disabled={isLocked}
       className={`w-full text-left p-3 rounded-lg transition-colors ${
         isCurrent
-          ? 'bg-blue-50 border border-blue-200'
+          ? 'bg-neutral-100 border border-neutral-300'
           : isCompleted
           ? 'bg-neutral-50 hover:bg-neutral-100'
           : isLocked
@@ -135,7 +135,7 @@ function LevelItem({
         {/* Status Icon */}
         <span className={`flex-shrink-0 w-5 h-5 flex items-center justify-center text-sm ${
           isCurrent
-            ? 'text-blue-600'
+            ? 'text-neutral-700'
             : isCompleted
             ? 'text-green-600'
             : 'text-neutral-400'
@@ -170,7 +170,7 @@ function LevelItem({
               <div className="h-1.5 bg-neutral-200 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${
-                    isCompleted ? 'bg-green-500' : 'bg-blue-500'
+                    isCompleted ? 'bg-green-500' : 'bg-neutral-700'
                   }`}
                   style={{ width: `${progress}%` }}
                 />

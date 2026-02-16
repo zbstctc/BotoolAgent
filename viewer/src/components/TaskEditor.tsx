@@ -111,7 +111,7 @@ export function TaskEditor({ tasks, onTasksChange, onSave, isSaving }: TaskEdito
           className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
             isSaving
               ? 'bg-neutral-100 text-neutral-400 cursor-wait'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
+              : 'bg-neutral-900 text-white hover:bg-neutral-800'
           }`}
         >
           {isSaving ? 'Saving...' : 'Save Changes'}
@@ -133,8 +133,8 @@ export function TaskEditor({ tasks, onTasksChange, onSave, isSaving }: TaskEdito
               className={`
                 rounded-lg border bg-white transition-all cursor-move
                 ${draggedIndex === index ? 'opacity-50 scale-[0.98]' : ''}
-                ${dragOverIndex === index ? 'border-blue-500 ring-2 ring-blue-200' : 'border-neutral-200'}
-                ${editingTaskId === task.id ? 'ring-2 ring-blue-500' : ''}
+                ${dragOverIndex === index ? 'border-neutral-500 ring-2 ring-neutral-200' : 'border-neutral-200'}
+                ${editingTaskId === task.id ? 'ring-2 ring-neutral-500' : ''}
               `}
             >
               {/* Task Header */}
@@ -201,7 +201,7 @@ export function TaskEditor({ tasks, onTasksChange, onSave, isSaving }: TaskEdito
                       type="text"
                       value={task.title}
                       onChange={(e) => handleTaskUpdate(task.id, { title: e.target.value })}
-                      className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-md focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-transparent"
                     />
                   </div>
 
@@ -214,7 +214,7 @@ export function TaskEditor({ tasks, onTasksChange, onSave, isSaving }: TaskEdito
                       value={task.description || ''}
                       onChange={(e) => handleTaskUpdate(task.id, { description: e.target.value })}
                       rows={2}
-                      className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                      className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-md focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-transparent resize-none"
                     />
                   </div>
 
@@ -232,7 +232,7 @@ export function TaskEditor({ tasks, onTasksChange, onSave, isSaving }: TaskEdito
                             value={criterion}
                             onChange={(e) => handleAcceptanceCriteriaChange(task.id, criteriaIndex, e.target.value)}
                             placeholder="Enter acceptance criterion..."
-                            className="flex-1 px-3 py-1.5 text-sm border border-neutral-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="flex-1 px-3 py-1.5 text-sm border border-neutral-200 rounded-md focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-transparent"
                           />
                           <button
                             onClick={() => handleAcceptanceCriteriaChange(task.id, criteriaIndex, '')}
@@ -247,7 +247,7 @@ export function TaskEditor({ tasks, onTasksChange, onSave, isSaving }: TaskEdito
                       ))}
                       <button
                         onClick={() => handleAddCriteria(task.id)}
-                        className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 transition-colors"
+                        className="flex items-center gap-1 text-sm text-neutral-700 hover:text-neutral-900 transition-colors"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -267,7 +267,7 @@ export function TaskEditor({ tasks, onTasksChange, onSave, isSaving }: TaskEdito
                       onChange={(e) => handleTaskUpdate(task.id, { notes: e.target.value })}
                       rows={2}
                       placeholder="Add notes for this task..."
-                      className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                      className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-md focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-transparent resize-none"
                     />
                   </div>
                 </div>

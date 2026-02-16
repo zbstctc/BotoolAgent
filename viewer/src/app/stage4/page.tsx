@@ -186,7 +186,7 @@ function Stage4PageContent() {
     switch (testingStatus) {
       case 'complete': return 'text-green-600';
       case 'failed': case 'error': return 'text-red-600';
-      case 'running': return 'text-blue-600';
+      case 'running': return 'text-neutral-600';
       default: return 'text-neutral-500';
     }
   };
@@ -217,7 +217,7 @@ function Stage4PageContent() {
           {/* Status Bar */}
           <div className="flex items-center gap-3 mb-4 p-3 rounded-lg border border-neutral-200 bg-neutral-50">
             {testingStatus === 'running' && (
-              <span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <span className="w-4 h-4 border-2 border-neutral-500 border-t-transparent rounded-full animate-spin" />
             )}
             {testingStatus === 'complete' && (
               <span className="text-green-500 text-lg">✓</span>
@@ -243,7 +243,7 @@ function Stage4PageContent() {
                   <p key={i} className={
                     line.includes('Error') || line.includes('FAIL') ? 'text-red-400' :
                     line.includes('PASS') || line.includes('✓') ? 'text-green-400' :
-                    line.includes('Running') || line.includes('Starting') ? 'text-blue-400' :
+                    line.includes('Running') || line.includes('Starting') ? 'text-neutral-400' :
                     'text-neutral-300'
                   }>
                     {line}
@@ -263,7 +263,7 @@ function Stage4PageContent() {
             {testingStatus === 'idle' && (
               <button
                 onClick={handleStartTesting}
-                className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                className="px-5 py-2.5 text-sm font-medium text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors"
               >
                 Start Testing
               </button>
@@ -286,7 +286,7 @@ function Stage4PageContent() {
                 </button>
                 <button
                   onClick={() => { setTestingStatus('idle'); setAgentLog([]); }}
-                  className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 border border-neutral-200 rounded-lg hover:bg-neutral-200 transition-colors"
                 >
                   Retry
                 </button>
@@ -299,7 +299,7 @@ function Stage4PageContent() {
             disabled={testingStatus !== 'complete'}
             className={`px-6 py-2.5 rounded-lg font-medium text-sm transition-colors flex items-center gap-2 ${
               testingStatus === 'complete'
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                ? 'bg-neutral-900 text-white hover:bg-neutral-800'
                 : 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
             }`}
           >

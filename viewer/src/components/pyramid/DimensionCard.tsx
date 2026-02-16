@@ -77,7 +77,7 @@ export function DimensionCard({
             <div className="h-1.5 bg-neutral-200 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${
-                  isComplete ? 'bg-green-500' : 'bg-blue-500'
+                  isComplete ? 'bg-green-500' : 'bg-neutral-700'
                 }`}
                 style={{ width: `${progress}%` }}
               />
@@ -124,7 +124,7 @@ function QuestionItem({
           onChange={(e) => onAnswer(e.target.value)}
           placeholder="请输入..."
           rows={3}
-          className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all resize-none"
+          className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 outline-none transition-all resize-none"
         />
       </div>
     );
@@ -154,7 +154,7 @@ function QuestionItem({
                 }}
                 className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
                   isSelected
-                    ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500'
+                    ? 'bg-neutral-200 text-neutral-700 ring-2 ring-neutral-500'
                     : 'bg-white border border-neutral-300 text-neutral-600 hover:bg-neutral-50'
                 }`}
               >
@@ -185,7 +185,7 @@ function QuestionItem({
               onClick={() => onAnswer(option.value)}
               className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
                 isSelected
-                  ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500'
+                  ? 'bg-neutral-200 text-neutral-700 ring-2 ring-neutral-500'
                   : 'bg-white border border-neutral-300 text-neutral-600 hover:bg-neutral-50'
               }`}
             >

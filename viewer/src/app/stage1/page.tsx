@@ -64,11 +64,16 @@ function Stage1PageContent() {
   const [qaHistory, setQaHistory] = useState<QAHistoryItem[]>([]);
   // Track current tool being used (for progress feedback)
   const [currentTool, setCurrentTool] = useState<string | null>(null);
+  // Track tool call count and recent tools for activity feed
+  const [toolCallCount, setToolCallCount] = useState(0);
+  const [recentTools, setRecentTools] = useState<string[]>([]);
   // Track codebase scan status
   const [codebaseScanned, setCodebaseScanned] = useState(false);
   // Confirmation gate state
   const [isConfirmationPhase, setIsConfirmationPhase] = useState(false);
   const [confirmationSummary, setConfirmationSummary] = useState<ConfirmationSummary | null>(null);
+  // Track PRD file written by Write/Bash tool (for file-based PRD detection)
+  const [writtenPrdFileId, setWrittenPrdFileId] = useState<string | null>(null);
 
   // UI state
   const [isSaving, setIsSaving] = useState(false);
@@ -117,6 +122,7 @@ function Stage1PageContent() {
         if (state.isConfirmationPhase) setIsConfirmationPhase(state.isConfirmationPhase);
         if (state.confirmationSummary) setConfirmationSummary(state.confirmationSummary);
         if (state.selectedMode) setSelectedMode(state.selectedMode);
+        if (state.writtenPrdFileId) setWrittenPrdFileId(state.writtenPrdFileId);
         debugLog('[Stage1] Restored saved state (once)', { qaHistoryCount: state.qaHistory?.length || 0 });
       } catch (e) {
         console.error('[Stage1] Failed to parse saved state:', e);
@@ -142,13 +148,14 @@ function Stage1PageContent() {
         isConfirmationPhase,
         confirmationSummary,
         selectedMode,
+        writtenPrdFileId,
         savedAt: new Date().toISOString(),
       };
       localStorage.setItem(storageKey, JSON.stringify(state));
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [storageKey, cliSessionId, currentLevel, completedLevels, answers, prdDraft, isStarted, qaHistory, codebaseScanned, isConfirmationPhase, confirmationSummary, selectedMode]);
+  }, [storageKey, cliSessionId, currentLevel, completedLevels, answers, prdDraft, isStarted, qaHistory, codebaseScanned, isConfirmationPhase, confirmationSummary, selectedMode, writtenPrdFileId]);
 
   // Read URL mode and file params for import flow
   const urlMode = searchParams.get('mode');
@@ -192,6 +199,29 @@ function Stage1PageContent() {
     debugLog('[Stage1] Tool use received:', toolUse.name);
     // Track current tool for progress feedback
     setCurrentTool(toolUse.name);
+    setToolCallCount(prev => prev + 1);
+    setRecentTools(prev => [...prev.slice(-4), toolUse.name]);
+
+    // Detect Write tool writing a PRD file (Transform mode writes PRD to file)
+    if (toolUse.name === 'Write' && typeof toolUse.input?.file_path === 'string') {
+      const fp = toolUse.input.file_path as string;
+      const match = fp.match(/(?:^|\/)(prd-[^/]+)\.md$/);
+      if (match) {
+        const prdId = match[1].replace(/^prd-/, '');
+        debugLog('[Stage1] Detected Write to PRD file:', prdId);
+        setWrittenPrdFileId(prdId);
+      }
+    }
+
+    // Detect Bash tool that might write a PRD file (e.g. cat > tasks/prd-xxx.md)
+    if (toolUse.name === 'Bash' && typeof toolUse.input?.command === 'string') {
+      const cmd = toolUse.input.command as string;
+      const match = cmd.match(/prd-([a-zA-Z0-9_-]+)\.md/);
+      if (match && (cmd.includes('>') || cmd.includes('tee') || cmd.includes('cat'))) {
+        debugLog('[Stage1] Detected Bash writing PRD file:', match[1]);
+        setWrittenPrdFileId(match[1]);
+      }
+    }
 
     if (toolUse.name === 'AskUserQuestion' && isAskUserQuestionInput(toolUse.input)) {
       const input = toolUse.input as AskUserQuestionToolInput;
@@ -281,6 +311,62 @@ function Stage1PageContent() {
     }
   }, [messages]);
 
+  // File-based PRD detection: when Write/Bash wrote a PRD file, fetch its content
+  useEffect(() => {
+    if (!writtenPrdFileId || prdDraft) return;
+    debugLog('[Stage1] Fetching PRD file content for:', writtenPrdFileId);
+
+    const fetchPrd = async () => {
+      try {
+        const res = await fetch(`/api/prd/${encodeURIComponent(writtenPrdFileId)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.content && data.content.includes('# PRD:')) {
+            debugLog('[Stage1] PRD loaded from file!');
+            setPrdDraft(data.content);
+            setCompletedLevels([1, 2, 3, 4, 5]);
+          }
+        }
+      } catch (err) {
+        debugLog('[Stage1] Failed to fetch PRD file:', err);
+      }
+    };
+
+    // Small delay to ensure the file is fully written
+    const timer = setTimeout(fetchPrd, 1500);
+    return () => clearTimeout(timer);
+  }, [writtenPrdFileId, prdDraft]);
+
+  // Fallback: detect PRD file path from assistant messages (e.g. "PRD 已在 tasks/prd-xxx.md")
+  useEffect(() => {
+    if (prdDraft || writtenPrdFileId) return;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === 'assistant') {
+        const fileMatch = msg.content.match(/(?:tasks\/)?prd-([a-zA-Z0-9_-]+)\.md/);
+        if (fileMatch && (msg.content.includes('PRD 已') || msg.content.includes('已生成') || msg.content.includes('已写入') || msg.content.includes('written'))) {
+          debugLog('[Stage1] Detected PRD file reference in message:', fileMatch[1]);
+          setWrittenPrdFileId(fileMatch[1]);
+          break;
+        }
+      }
+    }
+  }, [messages, prdDraft, writtenPrdFileId]);
+
+  // Last-resort fallback: when L5 completed, no PRD found, and URL has file param (transform mode),
+  // try to load the PRD file from the URL file param
+  useEffect(() => {
+    if (prdDraft || writtenPrdFileId || !completedLevels.includes(5)) return;
+    if (!urlFile) return;
+
+    // Extract PRD ID from URL file param (e.g. "tasks/prd-worktree-concurrent-botool.md")
+    const match = urlFile.match(/prd-([a-zA-Z0-9_-]+)\.md$/);
+    if (match) {
+      debugLog('[Stage1] Last-resort: trying PRD from URL file param:', match[1]);
+      setWrittenPrdFileId(match[1]);
+    }
+  }, [prdDraft, writtenPrdFileId, completedLevels, urlFile]);
+
   // Start pyramid Q&A when description is ready
   const startPyramid = useCallback(() => {
     if (!initialDescription || isStarted || !selectedMode) return;
@@ -311,7 +397,7 @@ function Stage1PageContent() {
 
   // Check if we have saved progress but no current questions (need to resume)
   // L5 (confirmation) completed but no PRD yet - need to request PRD generation
-  const needsPrdGeneration = completedLevels.includes(5) && !prdDraft && !isLoading && !cliError;
+  const needsPrdGeneration = completedLevels.includes(5) && !prdDraft && !writtenPrdFileId && !isLoading && !cliError;
   const needsResume = isStarted && !isLoading && currentQuestions.length === 0 && !prdDraft && !cliError && !needsPrdGeneration;
 
   // Debug logging
@@ -629,7 +715,7 @@ function Stage1PageContent() {
               value={quickFixDescription}
               onChange={(e) => setQuickFixDescription(e.target.value)}
               placeholder="例如：修复登录页面的按钮在移动端溢出问题..."
-              className="w-full p-4 border border-neutral-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-neutral-900"
+              className="w-full p-4 border border-neutral-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-neutral-500 bg-white text-neutral-900"
               rows={5}
               autoFocus
             />
@@ -646,7 +732,7 @@ function Stage1PageContent() {
                 disabled={!quickFixDescription.trim()}
                 className={`flex-1 py-2.5 rounded-lg font-medium transition-colors ${
                   quickFixDescription.trim()
-                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    ? 'bg-neutral-900 text-white hover:bg-neutral-800'
                     : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                 }`}
               >
@@ -672,9 +758,9 @@ function Stage1PageContent() {
         <div className="flex-1 flex items-center justify-center bg-white">
           <div className="max-w-lg w-full px-6">
             <div className="text-center mb-6">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-violet-50 border border-violet-200 mb-4">
-                <span className="w-2.5 h-2.5 rounded-full bg-violet-500" />
-                <span className="text-sm font-medium text-violet-700">PRD 导入模式</span>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-neutral-100 border border-neutral-200 mb-4">
+                <span className="w-2.5 h-2.5 rounded-full bg-neutral-500" />
+                <span className="text-sm font-medium text-neutral-700">PRD 导入模式</span>
               </div>
               <h2 className="text-xl font-semibold text-neutral-900 mb-2">
                 输入现有 PRD 文件路径
@@ -689,7 +775,7 @@ function Stage1PageContent() {
               value={transformFilePath}
               onChange={(e) => setTransformFilePath(e.target.value)}
               placeholder="例如：tasks/my-project-prd.md"
-              className="w-full p-4 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 bg-white text-neutral-900"
+              className="w-full p-4 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-neutral-500 bg-white text-neutral-900"
               autoFocus
             />
 
@@ -709,7 +795,7 @@ function Stage1PageContent() {
                 disabled={!transformFilePath.trim()}
                 className={`flex-1 py-2.5 rounded-lg font-medium transition-colors ${
                   transformFilePath.trim()
-                    ? 'bg-violet-600 text-white hover:bg-violet-700'
+                    ? 'bg-neutral-900 text-white hover:bg-neutral-800'
                     : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                 }`}
               >
@@ -782,12 +868,40 @@ function Stage1PageContent() {
               </div>
             </div>
           ) : isLoading && currentQuestions.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-2"></div>
-                <p className="text-sm text-neutral-600">AI 正在思考...</p>
-              </div>
-            </div>
+            (() => {
+              // Calculate percentage: each completed level = 20%, plus within-level progress from tool calls
+              const levelPercent = completedLevels.length * 20;
+              const withinLevel = Math.min(18, toolCallCount * 2); // cap at 18% within current level
+              const percent = Math.min(99, levelPercent + withinLevel);
+              const toolLabel = currentTool === 'Read' ? '读取文件' : currentTool === 'Glob' ? '扫描目录' : currentTool === 'Grep' ? '搜索代码' : currentTool === 'Bash' ? '执行命令' : currentTool === 'Task' ? '子任务分析' : currentTool === 'Skill' ? '加载技能' : currentTool === 'Write' ? '写入文件' : currentTool === 'TodoWrite' ? '更新进度' : currentTool;
+              return (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center w-64">
+                    {/* Percentage circle */}
+                    <div className="relative w-20 h-20 mx-auto mb-4">
+                      <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
+                        <circle cx="40" cy="40" r="34" fill="none" stroke="#e5e7eb" strokeWidth="6" />
+                        <circle cx="40" cy="40" r="34" fill="none" stroke="#525252" strokeWidth="6"
+                          strokeDasharray={`${2 * Math.PI * 34}`}
+                          strokeDashoffset={`${2 * Math.PI * 34 * (1 - percent / 100)}`}
+                          strokeLinecap="round"
+                          className="transition-all duration-500"
+                        />
+                      </svg>
+                      <span className="absolute inset-0 flex items-center justify-center text-lg font-semibold text-neutral-700">
+                        {percent}%
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium text-neutral-700">
+                      {toolCallCount === 0 ? 'AI 正在启动...' : `L${currentLevel} 分析中...`}
+                    </p>
+                    {toolLabel && (
+                      <p className="text-xs text-neutral-400 mt-1">{toolLabel}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })()
           ) : connectionState === 'reconnecting' ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
@@ -849,7 +963,7 @@ function Stage1PageContent() {
                   return (
                     <div key={questionId} className="bg-neutral-50 rounded-lg p-4">
                       <div className="flex items-start gap-3 mb-3">
-                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 text-sm font-medium flex items-center justify-center">
+                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-neutral-200 text-neutral-600 text-sm font-medium flex items-center justify-center">
                           {index + 1}
                         </span>
                         <div>
@@ -889,13 +1003,13 @@ function Stage1PageContent() {
                                 }}
                                 className={`w-full text-left p-3 rounded-lg border transition-colors ${
                                   isSelected
-                                    ? 'border-blue-500 bg-blue-50 text-blue-900'
+                                    ? 'border-neutral-900 bg-neutral-100 text-neutral-900'
                                     : 'border-neutral-200 bg-white hover:border-neutral-300'
                                 }`}
                               >
                                 <div className="flex items-center gap-2">
                                   <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                                    isSelected ? 'border-blue-500 bg-blue-500' : 'border-neutral-300'
+                                    isSelected ? 'border-neutral-900 bg-neutral-900' : 'border-neutral-300'
                                   }`}>
                                     {isSelected && (
                                       <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -925,13 +1039,13 @@ function Stage1PageContent() {
                                 }}
                                 className={`w-full text-left p-3 rounded-lg border transition-colors ${
                                   otherSelected[questionId]
-                                    ? 'border-blue-500 bg-blue-50 text-blue-900'
+                                    ? 'border-neutral-900 bg-neutral-100 text-neutral-900'
                                     : 'border-neutral-200 bg-white hover:border-neutral-300'
                                 }`}
                               >
                                 <div className="flex items-center gap-2">
                                   <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                                    otherSelected[questionId] ? 'border-blue-500 bg-blue-500' : 'border-neutral-300'
+                                    otherSelected[questionId] ? 'border-neutral-900 bg-neutral-900' : 'border-neutral-300'
                                   }`}>
                                     {otherSelected[questionId] && (
                                       <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -952,7 +1066,7 @@ function Stage1PageContent() {
                                   value={typeof currentAnswer === 'string' ? currentAnswer : ''}
                                   onChange={(e) => handleAnswer(index, e.target.value)}
                                   placeholder="请输入你的答案..."
-                                  className="w-full p-3 border border-blue-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                  className="w-full p-3 border border-neutral-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-neutral-500 bg-white"
                                   rows={2}
                                   autoFocus
                                 />
@@ -967,7 +1081,7 @@ function Stage1PageContent() {
                             value={typeof currentAnswer === 'string' ? currentAnswer : ''}
                             onChange={(e) => handleAnswer(index, e.target.value)}
                             placeholder={question.placeholder || '请输入...'}
-                            className="w-full p-3 border border-neutral-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full p-3 border border-neutral-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-neutral-500"
                             rows={3}
                           />
                         </div>
@@ -984,7 +1098,7 @@ function Stage1PageContent() {
                   disabled={!allAnswered || isLoading}
                   className={`w-full py-3 rounded-lg font-medium transition-colors ${
                     allAnswered && !isLoading
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      ? 'bg-neutral-900 text-white hover:bg-neutral-800'
                       : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                   }`}
                 >
@@ -993,21 +1107,50 @@ function Stage1PageContent() {
               </div>
             </div>
           ) : prdDraft ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
+            <div className="flex flex-col h-full">
+              {/* Header with Save button */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 bg-white sticky top-0 z-10">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h2 className="text-lg font-semibold text-neutral-900">PRD 已生成</h2>
                 </div>
-                <p className="text-lg font-medium text-neutral-900">PRD 已生成</p>
-                <p className="text-sm text-neutral-500 mt-1">请查看右侧预览并保存</p>
+                <button
+                  onClick={handleSavePRD}
+                  disabled={isSaving || saveSuccess}
+                  className={`px-5 py-2 rounded-lg font-medium text-sm transition-colors ${
+                    saveSuccess
+                      ? 'bg-green-100 text-green-700'
+                      : isSaving
+                        ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                        : 'bg-neutral-900 text-white hover:bg-neutral-800'
+                  }`}
+                >
+                  {saveSuccess ? '已保存' : isSaving ? '保存中...' : '保存 PRD 并继续'}
+                </button>
+              </div>
+              {saveError && (
+                <div className="px-6 py-2 bg-red-50 border-b border-red-200 text-sm text-red-600">{saveError}</div>
+              )}
+              {/* PRD Content */}
+              <div className="flex-1 overflow-y-auto px-6 py-6">
+                <PRDPreview
+                  content={prdDraft}
+                  onSave={handleSavePRD}
+                  isSaving={isSaving}
+                  saveSuccess={saveSuccess}
+                  saveError={saveError}
+                  hideHeader
+                />
               </div>
             </div>
           ) : needsResume ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
-                <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-2"></div>
+                <div className="animate-spin h-8 w-8 border-4 border-neutral-600 border-t-transparent rounded-full mx-auto mb-2"></div>
                 <p className="text-sm text-neutral-600">正在恢复进度...</p>
                 <p className="text-xs text-neutral-400 mt-1">
                   L{currentLevel} · 已完成 {completedLevels.length} 层
@@ -1021,16 +1164,7 @@ function Stage1PageContent() {
           )}
         </div>
 
-        {/* Right: PRD Preview */}
-        <div className="w-96 flex-shrink-0">
-          <PRDPreview
-            content={prdDraft || '完成所有层级的问答后，这里将显示生成的 PRD 预览。'}
-            onSave={handleSavePRD}
-            isSaving={isSaving}
-            saveSuccess={saveSuccess}
-            saveError={saveError}
-          />
-        </div>
+        {/* Right PRD panel removed — PRD now shows inline in center */}
       </div>
     </div>
   );

@@ -54,8 +54,8 @@ function FileStatusBadge({ status }: { status: FileDiff['status'] }) {
       label: '新增',
     },
     modified: {
-      bg: 'bg-blue-100',
-      text: 'text-blue-700',
+      bg: 'bg-neutral-200',
+      text: 'text-neutral-700',
       label: '修改',
     },
     deleted: {
@@ -64,8 +64,8 @@ function FileStatusBadge({ status }: { status: FileDiff['status'] }) {
       label: '删除',
     },
     renamed: {
-      bg: 'bg-purple-100',
-      text: 'text-purple-700',
+      bg: 'bg-neutral-200',
+      text: 'text-neutral-700',
       label: '重命名',
     },
   };
@@ -88,7 +88,7 @@ function FileIcon({ path }: { path: string }) {
   // TypeScript/JavaScript
   if (['ts', 'tsx', 'js', 'jsx'].includes(ext)) {
     return (
-      <svg className={`${iconClass} text-blue-500`} viewBox="0 0 24 24" fill="currentColor">
+      <svg className={`${iconClass} text-neutral-500`} viewBox="0 0 24 24" fill="currentColor">
         <path d="M3 3h18v18H3V3zm16.525 13.707c-.131-.821-.666-1.511-2.252-2.155-.552-.259-1.165-.438-1.349-.854-.068-.248-.083-.393-.038-.545.098-.392.488-.506.807-.443.209.049.404.17.527.456.564-.369.564-.369.953-.611-.146-.179-.219-.268-.314-.36-.428-.502-.969-.755-1.866-.73l-.464.056c-.447.1-.865.314-1.108.587-.631.648-.748 1.635-.404 2.459.341.768 1.051 1.145 1.893 1.402.825.255 1.419.376 1.581.755.15.411-.015.854-.418 1.012-.392.154-.908.139-1.2-.104-.27-.243-.405-.581-.407-.96l-1.237.723c.158.319.335.44.572.699.985 1.041 3.405 1.025 3.839-1.022.02-.089.049-.176.049-.265-.005-.75-.017-1.233-.531-1.583zm-5.997-2.614H11.38v4.482c0 1.073.066 1.607-.162 1.881-.341.392-1.205.366-1.591.17-.378-.204-.535-.553-.67-.947-.002-.011-.023-.019-.035-.019l-1.207.732c.252.484.583.864 1.017 1.11.64.359 1.505.471 2.375.29 1.069-.229 1.569-1.166 1.569-2.404V14.092h-.001z" />
       </svg>
     );
@@ -194,7 +194,7 @@ function DiffHunkView({ hunk }: { hunk: DiffHunk }) {
   return (
     <div className="border-b border-neutral-200 last:border-b-0">
       {/* Hunk header */}
-      <div className="bg-blue-50 px-3 py-1 text-xs font-mono text-blue-700 border-b border-neutral-200">
+      <div className="bg-neutral-100 px-3 py-1 text-xs font-mono text-neutral-700 border-b border-neutral-200">
         @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
       </div>
 
@@ -310,8 +310,8 @@ function SummaryHeader({ totals, branch, baseBranch }: {
     <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-            <svg className="w-5 h-5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <div className="w-10 h-10 rounded-full bg-neutral-200 flex items-center justify-center">
+            <svg className="w-5 h-5 text-neutral-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </div>
@@ -412,7 +412,7 @@ export function ChangeSummary({ diffSummary, isLoading, onFileClick }: ChangeSum
       <div className="flex justify-end gap-2">
         <button
           onClick={expandAll}
-          className="text-sm text-blue-600 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50"
+          className="text-sm text-neutral-700 hover:text-neutral-900 px-2 py-1 rounded hover:bg-neutral-100"
         >
           展开全部
         </button>

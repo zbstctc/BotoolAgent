@@ -83,7 +83,7 @@ export function StageIndicator({ currentStage, completedStages = [], showBackBut
                       ${isCompleted
                         ? 'bg-emerald-500 text-white'
                         : isCurrent
-                          ? 'bg-blue-600 text-white ring-4 ring-blue-100'
+                          ? 'bg-neutral-900 text-white ring-4 ring-neutral-200'
                           : isComingSoon
                             ? 'bg-neutral-100 text-neutral-400 border-2 border-dashed border-neutral-300'
                             : 'bg-neutral-200 text-neutral-500'
@@ -115,7 +115,7 @@ export function StageIndicator({ currentStage, completedStages = [], showBackBut
                       className={`
                         text-xs font-medium whitespace-nowrap
                         ${isCurrent
-                          ? 'text-blue-600'
+                          ? 'text-neutral-900'
                           : isCompleted
                             ? 'text-emerald-600'
                             : isComingSoon

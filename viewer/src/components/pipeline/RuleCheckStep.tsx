@@ -368,7 +368,7 @@ ${rulesText}
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4" />
+          <div className="animate-spin w-8 h-8 border-4 border-neutral-500 border-t-transparent rounded-full mx-auto mb-4" />
           <p className="text-neutral-600">正在加载规范...</p>
         </div>
       </div>
@@ -382,7 +382,7 @@ ${rulesText}
           <p className="text-red-600 mb-4">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="px-4 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-800"
           >
             重试
           </button>
@@ -407,8 +407,8 @@ ${rulesText}
                 <span className="text-2xl">✅</span>
               </div>
             ) : (
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
-                <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full" />
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-neutral-200 flex items-center justify-center">
+                <div className="animate-spin w-8 h-8 border-4 border-neutral-500 border-t-transparent rounded-full" />
               </div>
             )}
             <h3 className="text-lg font-semibold text-neutral-900">
@@ -433,7 +433,7 @@ ${rulesText}
                     ? 'bg-red-500'
                     : adaptingState === 'completed'
                     ? 'bg-green-500'
-                    : 'bg-blue-500'
+                    : 'bg-neutral-700'
                 }`}
                 style={{ width: `${adaptingProgress}%` }}
               />
@@ -455,7 +455,7 @@ ${rulesText}
                 </button>
                 <button
                   onClick={handleConfirm}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-6 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-800"
                 >
                   重试
                 </button>
@@ -497,19 +497,19 @@ ${rulesText}
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-neutral-600">
-              已选 <span className="font-semibold text-blue-600">{selectedCount}</span> / {totalRules} 项
+              已选 <span className="font-semibold text-neutral-900">{selectedCount}</span> / {totalRules} 项
             </span>
             <a
               href="/?tab=rules"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3 py-1.5 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+              className="px-3 py-1.5 text-sm text-white bg-neutral-900 hover:bg-neutral-800 rounded transition-colors"
             >
               查看规范
             </a>
             <button
               onClick={toggleAllRules}
-              className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded transition-colors"
+              className="px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-100 rounded transition-colors"
             >
               {allSelected ? '取消全选' : '全选'}
             </button>
@@ -551,7 +551,7 @@ ${rulesText}
         )}
         <button
           onClick={handleConfirm}
-          className="px-6 py-2 rounded-lg font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700 ml-auto"
+          className="px-6 py-2 rounded-lg font-medium transition-colors bg-neutral-900 text-white hover:bg-neutral-800 ml-auto"
         >
           {selectedCount > 0 ? `确认选择 (${selectedCount} 项)` : '跳过规范检查'}
         </button>
@@ -617,7 +617,7 @@ function CategoryCard({
               }
             }}
             onChange={() => onToggleCategory()}
-            className="w-4 h-4 text-blue-600 border-neutral-300 rounded focus:ring-blue-500"
+            className="w-4 h-4 text-neutral-600 border-neutral-300 rounded focus:ring-neutral-500"
           />
         </div>
 
@@ -650,7 +650,7 @@ function CategoryCard({
                 type="checkbox"
                 checked={selectedRules.has(doc.id)}
                 onChange={() => onToggleRule(doc.id)}
-                className="w-4 h-4 text-blue-600 border-neutral-300 rounded focus:ring-blue-500 ml-7"
+                className="w-4 h-4 text-neutral-600 border-neutral-300 rounded focus:ring-neutral-500 ml-7"
               />
               <span className="text-sm text-neutral-700">{doc.name}</span>
             </div>
@@ -733,7 +733,7 @@ function ConfirmationDialog({
                     {rules.map((rule) => (
                       <span
                         key={rule.id}
-                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-200 text-neutral-700"
                       >
                         {rule.name}
                       </span>
@@ -767,7 +767,7 @@ function ConfirmationDialog({
           </button>
           <button
             onClick={onConfirm}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            className="px-6 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors font-medium"
           >
             确认并继续
           </button>

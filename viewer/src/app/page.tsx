@@ -330,6 +330,8 @@ function DashboardContent() {
               <EmptyState
                 title="暂无进行中的项目"
                 description="创建你的第一个需求文档(PRD)，开始自主开发流程。"
+                secondaryActionLabel="导入需求文档"
+                onSecondaryAction={() => setShowImportDialog(true)}
                 actionLabel="新建需求文档"
                 onAction={() => setShowNewPrdDialog(true)}
               />
@@ -342,16 +344,16 @@ function DashboardContent() {
               <h2 className="text-lg font-semibold text-neutral-900">
                 需求文档(PRD)
               </h2>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowImportDialog(true)}
-                  className="text-sm font-medium text-violet-600 hover:text-violet-800 transition-colors"
+                  className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
                 >
                   导入
                 </button>
                 <button
                   onClick={() => setShowNewPrdDialog(true)}
-                  className="text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors"
+                  className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
                 >
                   + 新建
                 </button>
@@ -511,7 +513,7 @@ function PRDCard({
   const statusStyles = {
     draft: 'bg-neutral-100 text-neutral-600',
     ready: 'bg-green-100 text-green-700',
-    'in-progress': 'bg-blue-100 text-blue-700',
+    'in-progress': 'bg-neutral-200 text-neutral-700',
     completed: 'bg-neutral-100 text-neutral-600',
   };
 
@@ -930,34 +932,50 @@ function EmptyState({
   actionLabel,
   actionHref,
   onAction,
+  secondaryActionLabel,
+  onSecondaryAction,
 }: {
   title: string;
   description: string;
   actionLabel?: string;
   actionHref?: string;
   onAction?: () => void;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
 }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-neutral-300 bg-neutral-50/50 p-8 text-center">
       <div className="mb-2 text-3xl text-neutral-300">📄</div>
       <h3 className="text-sm font-medium text-neutral-700">{title}</h3>
       <p className="mt-1 text-xs text-neutral-500 max-w-xs">{description}</p>
-      {actionLabel && (onAction || actionHref) && (
-        onAction ? (
-          <button
-            onClick={onAction}
-            className="mt-4 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 transition-colors"
-          >
-            {actionLabel}
-          </button>
-        ) : actionHref ? (
-          <Link
-            href={actionHref}
-            className="mt-4 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 transition-colors"
-          >
-            {actionLabel}
-          </Link>
-        ) : null
+      {(actionLabel || secondaryActionLabel) && (
+        <div className="mt-4 flex items-center gap-2">
+          {secondaryActionLabel && onSecondaryAction && (
+            <button
+              onClick={onSecondaryAction}
+              className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+            >
+              {secondaryActionLabel}
+            </button>
+          )}
+          {actionLabel && (onAction || actionHref) && (
+            onAction ? (
+              <button
+                onClick={onAction}
+                className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 transition-colors"
+              >
+                {actionLabel}
+              </button>
+            ) : actionHref ? (
+              <Link
+                href={actionHref}
+                className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 transition-colors"
+              >
+                {actionLabel}
+              </Link>
+            ) : null
+          )}
+        </div>
       )}
     </div>
   );

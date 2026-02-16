@@ -276,7 +276,7 @@ function Stage5PageContent() {
                   <p className="text-sm text-neutral-600">No PR exists for this branch yet.</p>
                   <button
                     onClick={handleCreatePR}
-                    className="w-full px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                    className="w-full px-4 py-2.5 text-sm font-medium text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors"
                   >
                     Create Pull Request
                   </button>
@@ -300,7 +300,7 @@ function Stage5PageContent() {
                   </div>
                   <button
                     onClick={handleCreatePR}
-                    className="text-sm text-blue-600 hover:underline"
+                    className="text-sm text-neutral-600 hover:underline"
                   >
                     Retry
                   </button>
@@ -313,7 +313,7 @@ function Stage5PageContent() {
                     <span className="font-medium text-neutral-900">PR #{prInfo.number}</span>
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                       prInfo.state === 'OPEN' ? 'bg-green-100 text-green-700' :
-                      prInfo.state === 'MERGED' ? 'bg-purple-100 text-purple-700' :
+                      prInfo.state === 'MERGED' ? 'bg-neutral-200 text-neutral-700' :
                       'bg-neutral-100 text-neutral-700'
                     }`}>
                       {prInfo.state}
@@ -333,7 +333,7 @@ function Stage5PageContent() {
                     href={prInfo.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                    className="inline-flex items-center gap-1 text-sm text-neutral-600 hover:underline"
                   >
                     View on GitHub →
                   </a>
@@ -342,12 +342,12 @@ function Stage5PageContent() {
 
               {pageState === 'merged' && (
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
-                    <span className="text-purple-600">✓</span>
+                  <div className="w-8 h-8 rounded-full bg-neutral-200 flex items-center justify-center">
+                    <span className="text-neutral-600">✓</span>
                   </div>
                   <div>
-                    <p className="font-medium text-purple-900">PR Merged!</p>
-                    <p className="text-sm text-purple-700">Code merged to main</p>
+                    <p className="font-medium text-neutral-900">PR Merged!</p>
+                    <p className="text-sm text-neutral-700">Code merged to main</p>
                   </div>
                 </div>
               )}
@@ -368,7 +368,7 @@ function Stage5PageContent() {
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             {pageState === 'merged' ? (
-              <div className="flex items-center gap-2 text-purple-700">
+              <div className="flex items-center gap-2 text-neutral-700">
                 <span>✓</span>
                 <span className="font-medium text-sm">Complete!</span>
               </div>
@@ -383,7 +383,7 @@ function Stage5PageContent() {
           {pageState === 'merged' ? (
             <button
               onClick={handleCompletionConfirm}
-              className="px-6 py-2.5 rounded-lg font-medium text-sm bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+              className="px-6 py-2.5 rounded-lg font-medium text-sm bg-neutral-900 text-white hover:bg-neutral-800 transition-colors"
             >
               Return to Dashboard
             </button>
@@ -393,7 +393,7 @@ function Stage5PageContent() {
               disabled={!canMerge}
               className={`px-6 py-2.5 rounded-lg font-medium text-sm transition-colors flex items-center gap-2 ${
                 canMerge
-                  ? 'bg-purple-600 text-white hover:bg-purple-700'
+                  ? 'bg-neutral-900 text-white hover:bg-neutral-800'
                   : 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
               }`}
             >

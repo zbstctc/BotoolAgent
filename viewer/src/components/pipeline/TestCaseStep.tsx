@@ -202,7 +202,7 @@ ${prdContent}
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <div className="text-center max-w-md">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-neutral-200 flex items-center justify-center">
             <span className="text-2xl">🧪</span>
           </div>
           <h2 className="text-lg font-semibold text-neutral-900 mb-2">生成测试用例</h2>
@@ -225,7 +225,7 @@ ${prdContent}
             <button
               type="button"
               onClick={handleStartGeneration}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              className="px-6 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 font-medium"
             >
               开始生成
             </button>
@@ -254,8 +254,8 @@ ${prdContent}
                 <span className="text-2xl">❌</span>
               </div>
             ) : (
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
-                <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full" />
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-neutral-200 flex items-center justify-center">
+                <div className="animate-spin w-8 h-8 border-4 border-neutral-500 border-t-transparent rounded-full" />
               </div>
             )}
             <h3 className="text-lg font-semibold text-neutral-900">
@@ -276,7 +276,7 @@ ${prdContent}
             <div className="w-full h-2 bg-neutral-200 rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all duration-300 ${
-                  generatingState === 'error' ? 'bg-red-500' : 'bg-blue-500'
+                  generatingState === 'error' ? 'bg-red-500' : 'bg-neutral-700'
                 }`}
                 style={{ width: `${generatingProgress}%` }}
               />
@@ -300,7 +300,7 @@ ${prdContent}
                 <button
                   type="button"
                   onClick={handleStartGeneration}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-6 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-800"
                 >
                   重试
                 </button>
@@ -330,7 +330,7 @@ ${prdContent}
           已生成 {testCases.length} 个测试用例，确认后将全部添加到 PRD
         </p>
         <div className="mt-2 flex gap-4 text-sm">
-          <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
+          <span className="px-2 py-1 bg-neutral-200 text-neutral-700 rounded">
             单元测试: {unitTests.length}
           </span>
           <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded">
@@ -367,7 +367,7 @@ ${prdContent}
         <button
           type="button"
           onClick={() => onComplete(testCases)}
-          className="px-6 py-2 rounded-lg font-medium transition-colors ml-auto bg-blue-600 text-white hover:bg-blue-700"
+          className="px-6 py-2 rounded-lg font-medium transition-colors ml-auto bg-neutral-900 text-white hover:bg-neutral-800"
         >
           {testCases.length === 0 ? '继续下一步' : `确认全部 ${testCases.length} 个测试用例`}
         </button>
@@ -429,7 +429,7 @@ function parseGeneratedTestCases(content: string): TestCase[] {
 
 function TestCaseCard({ testCase }: { testCase: TestCase }) {
   const typeBadge = testCase.type === 'unit'
-    ? <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded">单元测试</span>
+    ? <span className="text-xs px-2 py-0.5 bg-neutral-200 text-neutral-700 rounded">单元测试</span>
     : <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded">E2E 测试</span>;
 
   return (

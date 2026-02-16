@@ -299,8 +299,8 @@ export function EnrichmentSummary({
                 </svg>
               </div>
             ) : (
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
-                <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full" />
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-neutral-200 flex items-center justify-center">
+                <div className="animate-spin w-8 h-8 border-4 border-neutral-500 border-t-transparent rounded-full" />
               </div>
             )}
             <h3 className="text-lg font-semibold text-neutral-900">
@@ -321,7 +321,7 @@ export function EnrichmentSummary({
             <div className="w-full h-2 bg-neutral-200 rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all duration-300 ${
-                  convertingState === 'error' ? 'bg-red-500' : 'bg-blue-500'
+                  convertingState === 'error' ? 'bg-red-500' : 'bg-neutral-700'
                 }`}
                 style={{ width: `${convertingProgress}%` }}
               />
@@ -345,7 +345,7 @@ export function EnrichmentSummary({
                 <button
                   type="button"
                   onClick={handleStartConversion}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-6 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-800"
                 >
                   重试
                 </button>
@@ -379,7 +379,7 @@ export function EnrichmentSummary({
           {/* Summary Stats */}
           <div className="mt-4 grid grid-cols-2 md:grid-cols-6 gap-3">
             <div className="bg-white rounded-lg p-3 border border-neutral-200">
-              <div className="text-2xl font-bold text-blue-600">{rulesCount}</div>
+              <div className="text-2xl font-bold text-neutral-900">{rulesCount}</div>
               <div className="text-xs text-neutral-500">规范已应用</div>
             </div>
             <div className="bg-white rounded-lg p-3 border border-neutral-200">
@@ -387,7 +387,7 @@ export function EnrichmentSummary({
               <div className="text-xs text-neutral-500">代码示例</div>
             </div>
             <div className="bg-white rounded-lg p-3 border border-neutral-200">
-              <div className="text-2xl font-bold text-purple-600">{testCasesCount}</div>
+              <div className="text-2xl font-bold text-neutral-900">{testCasesCount}</div>
               <div className="text-xs text-neutral-500">测试用例</div>
             </div>
             <div className="bg-white rounded-lg p-3 border border-neutral-200">
@@ -408,7 +408,7 @@ export function EnrichmentSummary({
           <button
             type="button"
             onClick={() => setShowDetails(!showDetails)}
-            className="mt-3 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+            className="mt-3 text-sm text-neutral-700 hover:text-neutral-900 flex items-center gap-1"
           >
             {showDetails ? '隐藏详情' : '查看详情'}
             <svg
@@ -514,7 +514,7 @@ export function EnrichmentSummary({
                   ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                   : saveError
                     ? 'bg-orange-500 text-white hover:bg-orange-600'
-                    : 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-neutral-900 text-white hover:bg-neutral-800'
               }`}
             >
               {isSaving ? '保存中...' : saveError ? '重试' : '开始开发'}
@@ -529,7 +529,7 @@ export function EnrichmentSummary({
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6">
       <div className="text-center max-w-md">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-neutral-200 flex items-center justify-center">
           <span className="text-2xl font-mono">{'{}'}</span>
         </div>
         <h2 className="text-lg font-semibold text-neutral-900 mb-2">生成 prd.json</h2>
@@ -549,7 +549,7 @@ export function EnrichmentSummary({
           <button
             type="button"
             onClick={handleStartConversion}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+            className="px-6 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 font-medium"
           >
             开始转换
           </button>

@@ -240,7 +240,7 @@ export function RulesManager({ className }: RulesManagerProps) {
                   value={newDocName}
                   onChange={(e) => setNewDocName(e.target.value)}
                   placeholder="输入规范名称..."
-                  className="flex-1 px-3 py-1.5 border border-neutral-300 rounded text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+                  className="flex-1 px-3 py-1.5 border border-neutral-300 rounded text-sm focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 outline-none"
                 />
                 <span className="text-xs text-neutral-500">
                   分类: {categories.find(c => c.id === newDocCategory)?.name}

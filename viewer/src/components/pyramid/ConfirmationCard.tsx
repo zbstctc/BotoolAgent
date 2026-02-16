@@ -41,7 +41,7 @@ export function ConfirmationCard({
           <ul className="space-y-1.5">
             {summary.features.map((feature, index) => (
               <li key={index} className="flex items-start gap-2 text-sm text-neutral-700">
-                <span className="flex-shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full bg-blue-500" />
+                <span className="flex-shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full bg-neutral-500" />
                 {feature}
               </li>
             ))}
@@ -95,7 +95,7 @@ export function ConfirmationCard({
         <button
           onClick={onConfirm}
           disabled={isLoading}
-          className="flex-1 py-3 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 py-3 rounded-lg font-medium bg-neutral-900 text-white hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? '处理中...' : '确认并生成 PRD'}
         </button>
@@ -132,7 +132,7 @@ function RiskGroup({ level, items }: { level: 'HIGH' | 'MEDIUM' | 'LOW'; items: 
   const colors = {
     HIGH: { bg: 'bg-red-50', text: 'text-red-700', badge: 'bg-red-100 text-red-800' },
     MEDIUM: { bg: 'bg-amber-50', text: 'text-amber-700', badge: 'bg-amber-100 text-amber-800' },
-    LOW: { bg: 'bg-blue-50', text: 'text-blue-700', badge: 'bg-blue-100 text-blue-800' },
+    LOW: { bg: 'bg-neutral-100', text: 'text-neutral-700', badge: 'bg-neutral-200 text-neutral-700' },
   };
   const labels = { HIGH: '高', MEDIUM: '中', LOW: '低' };
   const c = colors[level];

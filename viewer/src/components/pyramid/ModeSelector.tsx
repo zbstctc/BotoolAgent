@@ -65,11 +65,11 @@ const MODE_CONFIGS: ModeConfig[] = [
     time: '约 15-20 分钟',
     suitable: '已有需求文档/PRD，需转换为标准格式',
     flow: '导入文档 → 分析覆盖度 → 补充缺口 → 拆解任务 → 生成标准 PRD',
-    colorClass: 'text-violet-700',
-    hoverColorClass: 'hover:border-violet-400',
-    selectedBorderClass: 'border-violet-500',
-    selectedBgClass: 'bg-violet-50',
-    dotClass: 'bg-violet-500',
+    colorClass: 'text-neutral-700',
+    hoverColorClass: 'hover:border-neutral-400',
+    selectedBorderClass: 'border-neutral-900',
+    selectedBgClass: 'bg-neutral-100',
+    dotClass: 'bg-neutral-900',
   },
 ];
 
@@ -127,7 +127,7 @@ export function ModeSelector({ recommendedMode, recommendReason, onSelect }: Mod
               >
                 {/* Recommended Badge */}
                 {isRecommended && (
-                  <span className="absolute -top-2.5 right-3 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                  <span className="absolute -top-2.5 right-3 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-200 text-neutral-700 border border-neutral-300">
                     <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                     </svg>
@@ -177,12 +177,12 @@ export function ModeSelector({ recommendedMode, recommendReason, onSelect }: Mod
 
         {/* Recommend Reason */}
         {recommendReason && (
-          <div className="mb-6 p-3 rounded-lg bg-blue-50 border border-blue-200">
+          <div className="mb-6 p-3 rounded-lg bg-neutral-100 border border-neutral-200">
             <div className="flex items-start gap-2">
-              <svg className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-4 h-4 text-neutral-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
-              <p className="text-sm text-blue-700">{recommendReason}</p>
+              <p className="text-sm text-neutral-700">{recommendReason}</p>
             </div>
           </div>
         )}
@@ -194,7 +194,7 @@ export function ModeSelector({ recommendedMode, recommendReason, onSelect }: Mod
             disabled={!selectedMode}
             className={`px-8 py-3 rounded-lg font-medium transition-colors ${
               selectedMode
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                ? 'bg-neutral-900 text-white hover:bg-neutral-800'
                 : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
             }`}
           >

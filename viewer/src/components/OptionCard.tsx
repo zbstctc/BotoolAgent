@@ -51,7 +51,7 @@ export function OptionCard({
             placeholder={placeholder || '请输入您的答案...'}
             disabled={disabled}
             rows={4}
-            className="w-full rounded-lg border-2 border-neutral-200 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:bg-neutral-50 disabled:cursor-not-allowed resize-none transition-all"
+            className="w-full rounded-lg border-2 border-neutral-200 bg-white px-4 py-3 text-sm focus:border-neutral-500 focus:outline-none focus:ring-2 focus:ring-neutral-200 disabled:bg-neutral-50 disabled:cursor-not-allowed resize-none transition-all"
           />
         ) : (
           <input
@@ -60,7 +60,7 @@ export function OptionCard({
             onChange={(e) => onOtherChange?.(e.target.value)}
             placeholder={placeholder || '请输入您的答案...'}
             disabled={disabled}
-            className="w-full rounded-lg border-2 border-neutral-200 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:bg-neutral-50 disabled:cursor-not-allowed transition-all"
+            className="w-full rounded-lg border-2 border-neutral-200 bg-white px-4 py-3 text-sm focus:border-neutral-500 focus:outline-none focus:ring-2 focus:ring-neutral-200 disabled:bg-neutral-50 disabled:cursor-not-allowed transition-all"
           />
         )}
         <p className="text-xs text-neutral-400">
@@ -108,7 +108,7 @@ export function OptionCard({
             disabled={disabled}
             className={`w-full text-left rounded-lg border-2 p-4 transition-all ${
               isSelected
-                ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
+                ? 'border-neutral-900 bg-neutral-100 ring-2 ring-neutral-200'
                 : 'border-neutral-200 bg-white hover:border-neutral-300 hover:bg-neutral-50'
             } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
           >
@@ -119,7 +119,7 @@ export function OptionCard({
                   mode === 'single' ? 'rounded-full' : 'rounded-md'
                 } ${
                   isSelected
-                    ? 'border-blue-500 bg-blue-500'
+                    ? 'border-neutral-900 bg-neutral-900'
                     : 'border-neutral-300 bg-white'
                 }`}
               >
@@ -144,7 +144,7 @@ export function OptionCard({
               <div className="flex-1 min-w-0">
                 <p
                   className={`text-sm font-medium ${
-                    isSelected ? 'text-blue-900' : 'text-neutral-900'
+                    isSelected ? 'text-neutral-900' : 'text-neutral-900'
                   }`}
                 >
                   {option.label}
@@ -152,7 +152,7 @@ export function OptionCard({
                 {option.description && (
                   <p
                     className={`text-xs mt-0.5 ${
-                      isSelected ? 'text-blue-700' : 'text-neutral-500'
+                      isSelected ? 'text-neutral-700' : 'text-neutral-500'
                     }`}
                   >
                     {option.description}
@@ -169,7 +169,7 @@ export function OptionCard({
         <div
           className={`rounded-lg border-2 p-4 transition-all ${
             isOtherSelected
-              ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
+              ? 'border-neutral-900 bg-neutral-100 ring-2 ring-neutral-200'
               : 'border-neutral-200 bg-white'
           } ${disabled ? 'opacity-50' : ''}`}
         >
@@ -185,7 +185,7 @@ export function OptionCard({
                   mode === 'single' ? 'rounded-full' : 'rounded-md'
                 } ${
                   isOtherSelected
-                    ? 'border-blue-500 bg-blue-500'
+                    ? 'border-neutral-900 bg-neutral-900'
                     : 'border-neutral-300 bg-white'
                 }`}
               >
@@ -209,7 +209,7 @@ export function OptionCard({
               {/* Label */}
               <p
                 className={`text-sm font-medium ${
-                  isOtherSelected ? 'text-blue-900' : 'text-neutral-900'
+                  isOtherSelected ? 'text-neutral-900' : 'text-neutral-900'
                 }`}
               >
                 其他
@@ -226,7 +226,7 @@ export function OptionCard({
                 onChange={(e) => onOtherChange?.(e.target.value)}
                 placeholder="请输入..."
                 disabled={disabled}
-                className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-neutral-50 disabled:cursor-not-allowed"
+                className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-neutral-500 focus:outline-none focus:ring-1 focus:ring-neutral-500 disabled:bg-neutral-50 disabled:cursor-not-allowed"
                 autoFocus
               />
             </div>

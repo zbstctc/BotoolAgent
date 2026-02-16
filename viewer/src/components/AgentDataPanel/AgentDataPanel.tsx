@@ -138,7 +138,7 @@ function getStatusStyle(
   isComplete: boolean,
   hasError: boolean,
 ): string {
-  if (isRunning) return 'bg-blue-100 text-blue-700';
+  if (isRunning) return 'bg-neutral-200 text-neutral-700';
   if (isComplete) return 'bg-green-100 text-green-700';
   if (hasError) return 'bg-red-100 text-red-700';
   return 'bg-neutral-100 text-neutral-600';
@@ -177,7 +177,7 @@ export default function AgentDataPanel({
         </div>
         <div className="h-2 bg-neutral-200 rounded-full overflow-hidden">
           <div
-            className="h-full bg-blue-500 rounded-full transition-all duration-500 ease-out"
+            className="h-full bg-neutral-700 rounded-full transition-all duration-500 ease-out"
             style={{ width: `${iterationPercent}%` }}
           />
         </div>

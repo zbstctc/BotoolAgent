@@ -102,7 +102,7 @@ export function QuestionItem({
           onChange={(e) => onAnswer(e.target.value)}
           placeholder="请输入..."
           rows={3}
-          className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all resize-none"
+          className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 outline-none transition-all resize-none"
         />
       ) : question.type === 'multiple' ? (
         <MultipleSelect
@@ -141,8 +141,8 @@ function SingleSelect({
             onClick={() => onSelect(option.value)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               isSelected
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'bg-white border border-neutral-300 text-neutral-700 hover:border-blue-300 hover:bg-blue-50'
+                ? 'bg-neutral-900 text-white shadow-sm'
+                : 'bg-white border border-neutral-300 text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100'
             }`}
           >
             {option.label}
@@ -181,8 +181,8 @@ function MultipleSelect({
             onClick={() => toggleOption(option.value)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               isSelected
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'bg-white border border-neutral-300 text-neutral-700 hover:border-blue-300 hover:bg-blue-50'
+                ? 'bg-neutral-900 text-white shadow-sm'
+                : 'bg-white border border-neutral-300 text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100'
             }`}
           >
             {isSelected && <span className="mr-1">✓</span>}

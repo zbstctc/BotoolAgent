@@ -84,7 +84,7 @@ export function MarkdownEditor({
             onClick={() => setShowPreview(!showPreview)}
             className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
               showPreview
-                ? 'bg-blue-100 text-blue-700'
+                ? 'bg-neutral-200 text-neutral-700'
                 : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
             }`}
           >
@@ -106,7 +106,7 @@ export function MarkdownEditor({
             <button
               onClick={onGenerateSkill}
               disabled={isGeneratingSkill}
-              className="px-3 py-1.5 text-xs font-medium rounded transition-colors bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:bg-purple-50 disabled:text-purple-400 disabled:cursor-not-allowed"
+              className="px-3 py-1.5 text-xs font-medium rounded transition-colors bg-neutral-200 text-neutral-700 hover:bg-neutral-300 disabled:bg-neutral-100 disabled:text-neutral-400 disabled:cursor-not-allowed"
             >
               {isGeneratingSkill ? '生成中...' : '生成 Skill'}
             </button>
@@ -115,7 +115,7 @@ export function MarkdownEditor({
           {/* Skill Status */}
           {skillStatus !== 'idle' && (
             <span className={`text-xs ${
-              skillStatus === 'generating' ? 'text-purple-600' :
+              skillStatus === 'generating' ? 'text-neutral-600' :
               skillStatus === 'success' ? 'text-green-600' :
               'text-red-600'
             }`}>
@@ -145,7 +145,7 @@ export function MarkdownEditor({
           <button
             onClick={onSave}
             disabled={isSaving}
-            className="px-4 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-1.5 bg-neutral-900 text-white rounded text-sm font-medium hover:bg-neutral-800 disabled:bg-neutral-300 disabled:text-neutral-500 disabled:cursor-not-allowed transition-colors"
           >
             {isSaving ? '保存中...' : '保存'}
           </button>
@@ -225,7 +225,7 @@ function MarkdownPreview({ content }: { content: string }) {
   return (
     <div
       dangerouslySetInnerHTML={{ __html: `<p>${html}</p>` }}
-      className="[&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mb-3 [&_h3]:text-base [&_h3]:font-medium [&_h3]:mb-2 [&_code]:bg-neutral-200 [&_code]:px-1 [&_code]:rounded [&_pre]:bg-neutral-800 [&_pre]:text-white [&_pre]:p-3 [&_pre]:rounded [&_pre]:overflow-x-auto [&_a]:text-blue-600 [&_a]:underline [&_li]:ml-4 [&_li]:list-disc"
+      className="[&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mb-3 [&_h3]:text-base [&_h3]:font-medium [&_h3]:mb-2 [&_code]:bg-neutral-200 [&_code]:px-1 [&_code]:rounded [&_pre]:bg-neutral-800 [&_pre]:text-white [&_pre]:p-3 [&_pre]:rounded [&_pre]:overflow-x-auto [&_a]:text-neutral-700 [&_a]:underline [&_li]:ml-4 [&_li]:list-disc"
     />
   );
 }

@@ -20,7 +20,7 @@ const STAGE_INFO: Record<ProjectStage, { name: string; shortName: string }> = {
 };
 
 const STATUS_STYLES: Record<ProjectStatus, { bg: string; text: string; label: string }> = {
-  active: { bg: 'bg-blue-100', text: 'text-blue-700', label: '进行中' },
+  active: { bg: 'bg-neutral-200', text: 'text-neutral-700', label: '进行中' },
   paused: { bg: 'bg-amber-100', text: 'text-amber-700', label: '已暂停' },
   completed: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: '已完成' },
   archived: { bg: 'bg-neutral-100', text: 'text-neutral-500', label: '已归档' },
@@ -78,7 +78,7 @@ export function ProjectCard({
       className={`
         group flex items-center justify-between rounded-lg border bg-white p-4 transition-all cursor-pointer
         ${isActive
-          ? 'border-blue-300 ring-2 ring-blue-100'
+          ? 'border-neutral-400 ring-2 ring-neutral-200'
           : 'border-neutral-200 hover:border-neutral-300 hover:shadow-sm'
         }
       `}
@@ -90,7 +90,7 @@ export function ProjectCard({
         <div className="flex items-center gap-2">
           <p className="font-medium text-neutral-900 truncate">{project.name}</p>
           {isActive && (
-            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-500 text-white rounded flex-shrink-0">
+            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-neutral-900 text-white rounded flex-shrink-0">
               当前
             </span>
           )}

@@ -93,7 +93,7 @@ export function CategoryTree({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="搜索规范..."
-            className="w-full pl-8 pr-3 py-1.5 text-sm border border-neutral-300 rounded-lg placeholder:text-neutral-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+            className="w-full pl-8 pr-3 py-1.5 text-sm border border-neutral-300 rounded-lg placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 outline-none transition-all"
           />
         </div>
         {searchQuery.trim() && (
@@ -123,7 +123,7 @@ export function CategoryTree({
       <div className="p-4 border-t border-neutral-200">
         <button
           onClick={() => onCreateDocument('other')}
-          className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+          className="w-full py-2 px-4 bg-neutral-900 text-white rounded-lg text-sm font-medium hover:bg-neutral-800 transition-colors"
         >
           + 新建规范
         </button>
@@ -176,7 +176,7 @@ function CategoryItem({
                 key={doc.id}
                 className={`group flex items-center rounded transition-colors ${
                   selectedDocId === doc.id
-                    ? 'bg-blue-100 text-blue-700'
+                    ? 'bg-neutral-200 text-neutral-700'
                     : 'text-neutral-600 hover:bg-neutral-100'
                 }`}
               >
@@ -219,7 +219,7 @@ function CategoryItem({
           )}
           <button
             onClick={onCreateDocument}
-            className="w-full text-left px-3 py-1.5 rounded text-xs text-blue-600 hover:bg-blue-50 transition-colors"
+            className="w-full text-left px-3 py-1.5 rounded text-xs text-neutral-700 hover:bg-neutral-100 transition-colors"
           >
             + 添加规范
           </button>

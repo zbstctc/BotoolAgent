@@ -157,7 +157,7 @@ function LessonIcon() {
 // Pattern icon
 function PatternIcon() {
   return (
-    <svg className="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg className="w-4 h-4 text-neutral-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
     </svg>
   );
@@ -293,23 +293,23 @@ function PatternsSection({ patterns }: { patterns: CodebasePattern[] }) {
   }
 
   return (
-    <div className="border border-blue-200 rounded-lg bg-blue-50 overflow-hidden">
+    <div className="border border-neutral-200 rounded-lg bg-neutral-100 overflow-hidden">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-blue-100"
+        className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-neutral-200"
       >
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full bg-neutral-200 flex items-center justify-center">
             <PatternIcon />
           </div>
           <div>
-            <h3 className="font-semibold text-blue-900">Codebase Patterns</h3>
-            <p className="text-xs text-blue-600">{patterns.length} 个模式</p>
+            <h3 className="font-semibold text-neutral-900">Codebase Patterns</h3>
+            <p className="text-xs text-neutral-600">{patterns.length} 个模式</p>
           </div>
         </div>
 
         <svg
-          className={`w-5 h-5 text-blue-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+          className={`w-5 h-5 text-neutral-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
           viewBox="0 0 20 20"
           fill="currentColor"
         >
@@ -318,11 +318,11 @@ function PatternsSection({ patterns }: { patterns: CodebasePattern[] }) {
       </button>
 
       {isExpanded && (
-        <div className="border-t border-blue-200 px-4 py-3">
+        <div className="border-t border-neutral-200 px-4 py-3">
           <ul className="space-y-2">
             {patterns.map((pattern, i) => (
-              <li key={i} className="text-sm text-blue-800 flex items-start gap-2">
-                <span className="text-blue-500 mt-1">•</span>
+              <li key={i} className="text-sm text-neutral-800 flex items-start gap-2">
+                <span className="text-neutral-500 mt-1">•</span>
                 <span>{pattern.content}</span>
               </li>
             ))}
@@ -445,7 +445,7 @@ export function CompletionSummary({ progressContent, isLoading, projectName }: C
         <div className="flex gap-2">
           <button
             onClick={expandAll}
-            className="text-sm text-blue-600 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50"
+            className="text-sm text-neutral-700 hover:text-neutral-900 px-2 py-1 rounded hover:bg-neutral-100"
           >
             展开全部
           </button>

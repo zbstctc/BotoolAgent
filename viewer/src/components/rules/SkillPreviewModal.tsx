@@ -135,7 +135,7 @@ ${content}
         <div className="flex-1 overflow-hidden flex flex-col">
           {isLoading ? (
             <div className="flex-1 flex items-center justify-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neutral-700" />
             </div>
           ) : skillPreview ? (
             <>
@@ -186,7 +186,7 @@ ${content}
             <button
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 disabled:cursor-not-allowed rounded transition-colors"
+              className="px-4 py-2 text-sm font-medium text-white bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 disabled:text-neutral-500 disabled:cursor-not-allowed rounded transition-colors"
             >
               {isGenerating ? '生成中...' : '确认生成'}
             </button>

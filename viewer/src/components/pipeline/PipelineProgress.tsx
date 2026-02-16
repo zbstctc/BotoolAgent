@@ -44,7 +44,7 @@ export function PipelineProgress({
                   ${isCompleted
                     ? 'bg-green-500 text-white cursor-pointer hover:bg-green-600'
                     : isCurrent
-                      ? 'bg-blue-500 text-white ring-4 ring-blue-200'
+                      ? 'bg-neutral-900 text-white ring-4 ring-neutral-200'
                       : 'bg-neutral-200 text-neutral-500 cursor-not-allowed'
                   }
                 `}
@@ -62,7 +62,7 @@ export function PipelineProgress({
               {/* Step Info */}
               <div className="ml-3 min-w-0">
                 <p className={`text-sm font-medium ${
-                  isCurrent ? 'text-blue-600' : isCompleted ? 'text-green-600' : 'text-neutral-500'
+                  isCurrent ? 'text-neutral-900' : isCompleted ? 'text-green-600' : 'text-neutral-500'
                 }`}>
                   {step.name}
                 </p>

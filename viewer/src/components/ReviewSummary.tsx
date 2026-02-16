@@ -19,9 +19,9 @@ function StatCard({ icon, label, value, subtext, color }: {
 }) {
   const colorMap = {
     green: 'bg-green-50 border-green-200 text-green-700',
-    blue: 'bg-blue-50 border-blue-200 text-blue-700',
+    blue: 'bg-neutral-100 border-neutral-200 text-neutral-700',
     amber: 'bg-amber-50 border-amber-200 text-amber-700',
-    purple: 'bg-purple-50 border-purple-200 text-purple-700',
+    purple: 'bg-neutral-100 border-neutral-200 text-neutral-700',
     red: 'bg-red-50 border-red-200 text-red-700',
     neutral: 'bg-neutral-50 border-neutral-200 text-neutral-700',
   };
@@ -108,7 +108,7 @@ export function ReviewSummary({ projectId, defaultExpanded = false }: ReviewSumm
         className="w-full p-4 flex items-center justify-between text-left hover:bg-neutral-50 transition-colors"
       >
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full bg-neutral-200 flex items-center justify-center">
             <span className="text-sm">📊</span>
           </div>
           <div>
@@ -175,16 +175,16 @@ export function ReviewSummary({ projectId, defaultExpanded = false }: ReviewSumm
 
           {/* Coding Standards */}
           {hasRules && (
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+            <div className="bg-neutral-100 border border-neutral-200 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-sm">📏</span>
-                <span className="text-xs font-semibold text-purple-800">
+                <span className="text-xs font-semibold text-neutral-800">
                   编码规范：应用了 {data.rulesApplied} 条规则
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {data.ruleNames.map((name) => (
-                  <span key={name} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">
+                  <span key={name} className="px-2 py-0.5 bg-neutral-200 text-neutral-700 rounded text-xs">
                     {name}
                   </span>
                 ))}
@@ -233,17 +233,17 @@ export function ReviewSummary({ projectId, defaultExpanded = false }: ReviewSumm
 
           {/* Manual Verification Suggestions */}
           {hasManualVerifications && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="bg-neutral-100 border border-neutral-200 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-sm">🎯</span>
-                <span className="text-xs font-semibold text-blue-800">建议手动验证</span>
+                <span className="text-xs font-semibold text-neutral-800">建议手动验证</span>
               </div>
               <ol className="space-y-1 list-decimal list-inside">
                 {data.manualVerifications.slice(0, 5).map((v, i) => (
-                  <li key={i} className="text-xs text-blue-700">{v}</li>
+                  <li key={i} className="text-xs text-neutral-700">{v}</li>
                 ))}
                 {data.manualVerifications.length > 5 && (
-                  <li className="text-xs text-blue-500 italic list-none mt-1">
+                  <li className="text-xs text-neutral-500 italic list-none mt-1">
                     +{data.manualVerifications.length - 5} 项更多...
                   </li>
                 )}

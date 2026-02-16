@@ -188,7 +188,7 @@ export function StageTransitionModal({
           {/* Next stage preview (if not completion) */}
           {!isCompletion && (
             <div className="flex items-center gap-3 text-sm text-neutral-600">
-              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+              <div className="w-8 h-8 rounded-full bg-neutral-200 flex items-center justify-center text-neutral-600">
                 {STAGE_ICONS[toStage]}
               </div>
               <div>
@@ -209,7 +209,7 @@ export function StageTransitionModal({
           </button>
           <button
             onClick={() => { cancelCountdown(); onConfirm(); }}
-            className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors"
           >
             {countdown !== null && countdown > 0
               ? `${countdown}s 后自动继续`

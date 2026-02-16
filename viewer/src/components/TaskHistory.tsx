@@ -45,11 +45,11 @@ const stageInfo: Record<TaskStage, { name: string; shortName: string }> = {
 
 // Status styles
 const statusStyles: Record<TaskStatus, { bg: string; text: string; border: string }> = {
-  running: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+  running: { bg: 'bg-neutral-100', text: 'text-neutral-700', border: 'border-neutral-200' },
   completed: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
   partial: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
   failed: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
-  waiting_merge: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+  waiting_merge: { bg: 'bg-neutral-100', text: 'text-neutral-700', border: 'border-neutral-200' },
 };
 
 const statusLabels: Record<TaskStatus, string> = {
@@ -123,7 +123,7 @@ function StageProgress({ stage, status }: { stage: TaskStage; status: TaskStatus
               ? 'bg-emerald-500'
               : s === stage
                 ? status === 'running'
-                  ? 'bg-blue-500 animate-pulse'
+                  ? 'bg-neutral-500 animate-pulse'
                   : status === 'completed' || status === 'waiting_merge'
                     ? 'bg-emerald-500'
                     : 'bg-amber-500'
@@ -139,7 +139,7 @@ function StageProgress({ stage, status }: { stage: TaskStage; status: TaskStatus
 // Pending merge badge
 function PendingMergeBadge() {
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 border border-purple-200">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-neutral-200 text-neutral-700 border border-neutral-200">
       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
       </svg>
@@ -221,7 +221,7 @@ function TaskCard({
                   task.status === 'completed' || task.status === 'waiting_merge'
                     ? 'bg-emerald-500'
                     : task.status === 'running'
-                      ? 'bg-blue-500'
+                      ? 'bg-neutral-500'
                       : 'bg-amber-500'
                 }`}
                 style={{ width: `${progress}%` }}
@@ -257,7 +257,7 @@ function TaskCard({
           {(task.status === 'partial' || task.status === 'failed') && onContinue && (
             <button
               onClick={() => onContinue(task)}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-md transition-colors"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -271,7 +271,7 @@ function TaskCard({
           {task.status === 'waiting_merge' && onMerge && (
             <button
               onClick={() => onMerge(task)}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-md transition-colors"
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-md transition-colors"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
@@ -332,7 +332,7 @@ function TimelineMarker({ date, isFirst }: { date: string; isFirst: boolean }) {
   return (
     <div className="flex items-center gap-3 mb-4">
       <div className="flex flex-col items-center">
-        <div className={`w-3 h-3 rounded-full ${isFirst ? 'bg-blue-500' : 'bg-neutral-300'}`} />
+        <div className={`w-3 h-3 rounded-full ${isFirst ? 'bg-neutral-900' : 'bg-neutral-300'}`} />
         {!isFirst && <div className="w-0.5 h-4 bg-neutral-200 -mt-0.5" />}
       </div>
       <div className="flex items-baseline gap-2">

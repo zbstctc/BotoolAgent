@@ -82,7 +82,7 @@ export function LevelPanel({
           </div>
           <div className="h-2 bg-neutral-200 rounded-full overflow-hidden">
             <div
-              className="h-full bg-blue-500 rounded-full transition-all"
+              className="h-full bg-neutral-700 rounded-full transition-all"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -110,7 +110,7 @@ export function LevelPanel({
           disabled={!canComplete}
           className={`w-full py-3 rounded-lg font-medium transition-colors ${
             canComplete
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
+              ? 'bg-neutral-900 text-white hover:bg-neutral-800'
               : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
           }`}
         >
