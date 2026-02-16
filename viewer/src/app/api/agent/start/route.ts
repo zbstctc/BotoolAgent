@@ -214,12 +214,14 @@ export async function POST(request: Request) {
       }
 
       let stderrTail = '';
+      // Remove CLAUDECODE to prevent "nested session" rejection
+      const { CLAUDECODE: _c1, ...cleanEnv1 } = process.env;
       child = spawn(claudeArgs[0], claudeArgs.slice(1), {
         cwd: PROJECT_ROOT,
         detached: false,
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
-          ...process.env,
+          ...cleanEnv1,
           CLAUDE_CODE_NON_INTERACTIVE: '1',
           ...(testingUseTeams ? { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' } : {}),
         },
@@ -276,12 +278,14 @@ export async function POST(request: Request) {
         args.push('--prd-path', PRD_PATH);
       }
 
+      // Remove CLAUDECODE to prevent "nested session" rejection
+      const { CLAUDECODE: _c2, ...cleanEnv2 } = process.env;
       child = spawn('bash', args, {
         cwd: PROJECT_ROOT,
         detached: true,
         stdio: 'ignore',
         env: {
-          ...process.env,
+          ...cleanEnv2,
           ...(maxIterations ? { BOTOOL_MAX_ROUNDS: String(maxIterations) } : {}),
         },
       });

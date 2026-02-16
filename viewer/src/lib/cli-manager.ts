@@ -108,11 +108,15 @@ export class CLIManager extends EventEmitter {
       this.sessionId = options.sessionId;
     }
 
+    // Remove CLAUDECODE from env to prevent "nested session" rejection
+    // when Viewer's Next.js server is started from a Claude Code session
+    const { CLAUDECODE: _, ...cleanEnv } = process.env;
+
     this.process = spawn(this.cliPath, args, {
       cwd: this.workingDir,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: {
-        ...process.env,
+        ...cleanEnv,
         // Disable interactive prompts
         CLAUDE_CODE_NON_INTERACTIVE: '1',
       },
