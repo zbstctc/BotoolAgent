@@ -17,6 +17,7 @@ export type { CompletedTask, CodebasePattern, ProgressSummary, CompletionSummary
 export { TaskHistory } from "./TaskHistory";
 export type { TaskHistoryItem, TaskHistoryProps, TaskStatus, TaskStage } from "./TaskHistory";
 export { NewPrdDialog } from "./NewPrdDialog";
+export { ImportPrdDialog } from "./ImportPrdDialog";
 export { StageTransitionModal } from "./StageTransitionModal";
 export type { StageTransitionModalProps } from "./StageTransitionModal";
 export { ProjectCard } from "./ProjectCard";
