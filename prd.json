@@ -1,201 +1,119 @@
 {
-  "project": "Skill-Pipeline 架构对齐",
-  "branchName": "botool/skill-pipeline-alignment",
-  "description": "将 BotoolAgent 的 5 阶段流水线重构为 Skill 驱动架构：enrichment 逻辑从 React 下沉到 API，CLI 和 Viewer 共享同一底层，5 个 Stage 各有对应 Skill",
+  "project": "Viewer PRD 导入功能",
+  "branchName": "botool/viewer-import-existing-md",
+  "description": "为 Viewer Dashboard 添加导入入口，用户可选择项目中已有 .md 文件进入 Stage 1 Transform 模式进行 PRD 规范化",
+  "prdFile": "tasks/prd-viewer-import-existing-md.md",
+  "constitution": {
+    "rules": [
+      {
+        "id": "rule-001",
+        "name": "API设计规范",
+        "category": "backend",
+        "content": "# API 设计规范\n\n## URL 设计\n- 使用 RESTful 风格\n- 使用复数形式表示资源集合\n\n## 响应格式\n- 统一使用 JSON 格式\n- 包含 success 和 data 字段"
+      },
+      {
+        "id": "rule-002",
+        "name": "命名规范",
+        "category": "frontend",
+        "content": "# 前端命名规范\n\n## 组件命名\n- 使用 PascalCase 命名组件\n- 文件名与组件名保持一致\n\n## 变量命名\n- 使用 camelCase 命名变量和函数\n- 使用 UPPER_CASE 命名常量"
+      },
+      {
+        "id": "rule-003",
+        "name": "样式规范",
+        "category": "frontend",
+        "content": "# 前端样式规范\n\n## CSS 类命名\n- 使用 kebab-case 命名 CSS 类\n- 避免使用内联样式\n\n## Tailwind CSS\n- 优先使用 Tailwind 工具类\n- 避免自定义 CSS"
+      },
+      {
+        "id": "rule-004",
+        "name": "测试用例规范",
+        "category": "testing",
+        "content": "# 测试用例规范\n\n## 测试命名\n- 使用 describe 描述测试套件\n- 使用 it 描述具体测试用例\n\n## 测试覆盖\n- 单元测试覆盖率 > 80%\n- 关键路径必须有 E2E 测试"
+      }
+    ],
+    "ruleAuditSummary": ""
+  },
   "devTasks": [
     {
       "id": "DT-001",
-      "title": "Stage 2 — enrichment 逻辑从 React 下沉到 API",
-      "description": "将 AutoEnrichStep.tsx 和 EnrichmentSummary.tsx 中的业务逻辑（enrichment prompt、deriveTestCases、generateDefaultSessions、enrichPrdJson）迁移到 /api/prd/enrich API 路由。React 组件变为纯展示层，只调用 API 并渲染结果。",
-      "acceptanceCriteria": [
-        "新建 viewer/src/app/api/prd/enrich/route.ts，封装全部 enrichment 逻辑",
-        "API 接受 { prdContent, tasks, rules? } 输入，返回 SSE stream",
-        "SSE 事件包含：progress（进度）、complete（EnrichResult 含 codeExamples/testCases/evals/dependencies/sessions）",
-        "deriveTestCases() 逻辑从 EnrichmentSummary.tsx 移到 API 层",
-        "generateDefaultSessions() 逻辑从 EnrichmentSummary.tsx 移到 API 层",
-        "enrichPrdJson() 合并逻辑从 EnrichmentSummary.tsx 移到 API 层",
-        "AutoEnrichStep.tsx 改为调用 /api/prd/enrich，移除内联 prompt",
-        "EnrichmentSummary.tsx 不再包含 deriveTestCases/generateDefaultSessions/enrichPrdJson",
-        "保留 /api/prd/convert（基础 PRD→JSON 转换）不变",
-        "Viewer Stage 2 端到端功能不变（规则选择 → 自动 enrichment → 确认保存）",
-        "Typecheck passes"
-      ],
+      "title": "新建 GET /api/files/md 端点 — 扫描项目 .md 文件列表",
+      "prdSection": "7.1 (L20-27)",
       "priority": 1,
       "passes": true,
       "dependsOn": [],
-      "contextHint": "重点阅读 AutoEnrichStep.tsx 中的 enrichment prompt 和 normalizeResult，以及 EnrichmentSummary.tsx 中的 deriveTestCases/generateDefaultSessions/enrichPrdJson 三个函数",
-      "notes": "",
-      "spec": {
-        "codeExamples": [],
-        "testCases": [],
-        "filesToModify": [
-          "viewer/src/app/api/prd/enrich/route.ts",
-          "viewer/src/components/pipeline/AutoEnrichStep.tsx",
-          "viewer/src/components/pipeline/EnrichmentSummary.tsx"
-        ],
-        "relatedFiles": [
-          "viewer/src/app/api/prd/convert/route.ts",
-          "viewer/src/lib/tool-types.ts",
-          "viewer/src/lib/cli-manager.ts"
-        ]
-      },
-      "testCases": [
-        { "type": "typecheck", "desc": "TypeScript 编译通过" },
-        { "type": "manual", "desc": "Viewer Stage 2 端到端功能不变：选规则 → enrichment → 确认保存" }
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "cd viewer && npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "API route file exists",
+          "command": "test -f viewer/src/app/api/files/md/route.ts",
+          "expect": "exit-0"
+        }
       ],
-      "evals": []
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" }
+      ]
     },
     {
       "id": "DT-002",
-      "title": "Stage 2 — CLI fallback 走完整 enrichment",
-      "description": "更新 prd2json Skill，使 CLI fallback 路径也能生成完整的 enriched prd.json。CLI 流程：扫描 rules/ 目录 → 默认全选规范 + 用户确认排除 → 内联 enrichment prompt 一步生成完整 prd.json。",
-      "acceptanceCriteria": [
-        "修改 skills/BotoolAgent/PRD2JSON/SKILL.md",
-        "CLI fallback 流程：列出 rules/ 下的规范文件 → 默认全选 → AskUserQuestion 确认是否排除某些",
-        "Skill prompt 内联 enrichment 要求（sessions、dependsOn、evals、testCases、codeExamples）",
-        "Claude 一步生成完整 enriched prd.json（不分两步）",
-        "输出的 prd.json 包含 sessions、dependsOn、evals、testCases 字段",
-        "输出 schema 与 Viewer 路径一致（EnrichedPrdJson 类型）",
-        "无 Viewer 环境下纯终端可正常使用",
-        "Typecheck passes"
-      ],
+      "title": "新建 ImportPrdDialog 组件 — 文件列表+搜索+预览+导入",
+      "prdSection": "7.1 (L29-37)",
       "priority": 2,
       "passes": true,
-      "dependsOn": [],
-      "contextHint": "参考 viewer/src/lib/tool-types.ts 中的 EnrichedPrdJson 类型定义确保 schema 一致",
-      "notes": "",
-      "spec": {
-        "codeExamples": [],
-        "testCases": [],
-        "filesToModify": [
-          "skills/BotoolAgent/PRD2JSON/SKILL.md"
-        ],
-        "relatedFiles": [
-          "viewer/src/lib/tool-types.ts",
-          "viewer/src/components/pipeline/AutoEnrichStep.tsx"
-        ]
-      },
-      "testCases": [
-        { "type": "manual", "desc": "CLI 运行 /botoolagent-prd2json 生成包含 sessions/dependsOn/evals/testCases 的完整 prd.json" }
+      "dependsOn": ["DT-001"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "cd viewer && npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "ImportPrdDialog component exists",
+          "command": "test -f viewer/src/components/ImportPrdDialog.tsx",
+          "expect": "exit-0"
+        }
       ],
-      "evals": []
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" }
+      ]
     },
     {
       "id": "DT-003",
-      "title": "Stage 3 — coding skill 更新为 Teams 模式",
-      "description": "更新 Coding SKILL.md：默认调用 BotoolAgentTeams.sh，添加 tmux 检查，移除 Step 3-5（质量检查和 PR 创建将由独立的 Testing/Finalize Skill 负责）。Viewer 侧已完成，无需修改。",
-      "acceptanceCriteria": [
-        "修改 skills/BotoolAgent/Coding/SKILL.md",
-        "Step 2 默认运行 BotoolAgentTeams.sh",
-        "支持 /botoolagent-coding --single 回退到 BotoolAgent.sh",
-        "前置检查中添加 tmux 可用性检查（Teams 依赖 tmux）",
-        "tmux 不可用时自动降级到单 agent 模式",
-        "移除 Step 3（自动质量检查）— 由 Testing Skill 负责",
-        "移除 Step 4（自动创建 PR）— 由 Finalize Skill 负责",
-        "Step 5 改为：输出完成信息 + 提示运行 /botoolagent-testing",
-        "不修改 Viewer 代码（stage3 + api/agent/start 已完成）"
-      ],
+      "title": "Dashboard 集成导入按钮 + 空状态清理 + Stage1 URL 参数",
+      "prdSection": "7.1 (L39-47)",
       "priority": 3,
       "passes": true,
-      "dependsOn": [],
-      "contextHint": "Viewer 侧已完成（stage3/page.tsx 硬编码 teams，api/agent/start 支持 mode），只需更新 SKILL.md",
-      "notes": "",
-      "spec": {
-        "codeExamples": [],
-        "testCases": [],
-        "filesToModify": [
-          "skills/BotoolAgent/Coding/SKILL.md"
-        ],
-        "relatedFiles": [
-          "BotoolAgentTeams.sh",
-          "BotoolAgent.sh",
-          "viewer/src/app/stage3/page.tsx"
-        ]
-      },
-      "testCases": [
-        { "type": "manual", "desc": "CLI 运行 /botoolagent-coding 默认调用 BotoolAgentTeams.sh" },
-        { "type": "manual", "desc": "CLI 运行 /botoolagent-coding --single 回退到 BotoolAgent.sh" }
+      "dependsOn": ["DT-002"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "cd viewer && npx tsc --noEmit",
+          "expect": "exit-0"
+        }
       ],
-      "evals": []
-    },
-    {
-      "id": "DT-004",
-      "title": "Stage 4 — 新建 botoolagent-testing Skill",
-      "description": "新建 Testing SKILL.md，封装 CLI 端的 5 层分层测试逻辑。Viewer 侧已有完整实现（/api/test/run/route.ts + stage4/page.tsx），无需修改。",
-      "acceptanceCriteria": [
-        "新建 skills/BotoolAgent/Testing/SKILL.md",
-        "Layer 1 — Regression: npx tsc --noEmit + npm run lint",
-        "Layer 2 — Unit Tests: npm test（约定式命令）",
-        "Layer 3 — E2E Tests: npx playwright test（约定式命令）",
-        "Layer 4 — Code Review: git diff main...HEAD 送 Claude 审查",
-        "Layer 5 — Manual Checklist: 列出 prd.json 中 type: manual 的 testCases 给用户确认",
-        "全部 5 层 blocking：任一层失败则停止并报告",
-        "CLI 跑 /botoolagent-testing 执行完整 5 层测试",
-        "不修改 Viewer 代码（stage4 + api/test/run 已完成）"
-      ],
-      "priority": 4,
-      "passes": true,
-      "dependsOn": [],
-      "contextHint": "参考 viewer/src/app/api/test/run/route.ts 中的测试执行逻辑和 stage4/page.tsx 的分层结构",
-      "notes": "",
-      "spec": {
-        "codeExamples": [],
-        "testCases": [],
-        "filesToModify": [
-          "skills/BotoolAgent/Testing/SKILL.md"
-        ],
-        "relatedFiles": [
-          "viewer/src/app/api/test/run/route.ts",
-          "viewer/src/app/stage4/page.tsx",
-          "skills/BotoolAgent/Coding/SKILL.md"
-        ]
-      },
-      "testCases": [
-        { "type": "manual", "desc": "CLI 运行 /botoolagent-testing 执行完整 5 层测试" }
-      ],
-      "evals": []
-    },
-    {
-      "id": "DT-005",
-      "title": "Stage 5 — 新建 botoolagent-finalize Skill",
-      "description": "新建 Finalize SKILL.md，封装 CLI 端的 PR 创建、Code Review 摘要、合并、清理流程。Viewer 侧已有完整实现，仅需修复合并方式（squash → 普通 merge）。",
-      "acceptanceCriteria": [
-        "新建 skills/BotoolAgent/Finalize/SKILL.md",
-        "Step 1: git push origin <branchName> 推送代码",
-        "Step 2: 检查是否已有 PR（gh pr list --head <branchName>），没有则创建",
-        "Step 3: Claude 审查 git diff main...HEAD，生成 review 摘要",
-        "Step 4: 展示 review 摘要 + 确认合并",
-        "Step 5: gh pr merge <pr-number>（普通 merge，不 squash）",
-        "Step 6: 删远程分支 + git checkout main + git pull",
-        "CLI 跑 /botoolagent-finalize 完成完整流程",
-        "修复 stage5/page.tsx 合并方式：{ method: 'squash' } → { method: 'merge' }",
-        "不修改其他 Viewer 代码（stage5 + api/git/* 已完成）",
-        "Typecheck passes"
-      ],
-      "priority": 5,
-      "passes": true,
-      "dependsOn": [],
-      "contextHint": "参考 viewer/src/app/stage5/page.tsx 和 api/git/merge/route.ts 的现有逻辑",
-      "notes": "",
-      "spec": {
-        "codeExamples": [],
-        "testCases": [],
-        "filesToModify": [
-          "skills/BotoolAgent/Finalize/SKILL.md",
-          "viewer/src/app/stage5/page.tsx"
-        ],
-        "relatedFiles": [
-          "viewer/src/app/api/git/pr/route.ts",
-          "viewer/src/app/api/git/merge/route.ts",
-          "viewer/src/app/api/git/diff/route.ts"
-        ]
-      },
       "testCases": [
         { "type": "typecheck", "desc": "TypeScript 编译通过" },
-        { "type": "manual", "desc": "CLI 运行 /botoolagent-finalize 完成完整 PR 流程" },
-        { "type": "manual", "desc": "Viewer Stage 5 合并使用普通 merge 而非 squash" }
-      ],
-      "evals": []
+        { "type": "manual", "desc": "Dashboard 显示导入按钮，空状态无多余 action 按钮，Stage1 支持 URL 参数自动进入 transform 模式" }
+      ]
+    }
+  ],
+  "sessions": [
+    {
+      "id": "S1",
+      "tasks": ["DT-001", "DT-002", "DT-003"],
+      "reason": "单一 Phase，DT-001→DT-002→DT-003 有依赖链"
     }
   ]
 }
