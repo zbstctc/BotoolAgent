@@ -186,15 +186,13 @@ async function parseExtendedSession(dirName: string, dirPath: string): Promise<E
     // Ignore
   }
 
-  // Check merge status
-  const isMerged = baseSession.branchName
-    ? await isBranchMerged(baseSession.branchName)
-    : false;
-
-  // Get PR URL if branch exists
-  const prUrl = baseSession.branchName
-    ? await getPRUrl(baseSession.branchName)
-    : undefined;
+  // Check merge status + PR URL in parallel
+  const [isMerged, prUrl] = baseSession.branchName
+    ? await Promise.all([
+        isBranchMerged(baseSession.branchName),
+        getPRUrl(baseSession.branchName),
+      ])
+    : [false, undefined];
 
   // Determine stage
   const stage = prdJson.stage || determineStage(
@@ -237,16 +235,14 @@ export async function GET(request: Request) {
     const sessionDirs = entries.filter(entry => entry.isDirectory());
 
     if (extended) {
-      // Return extended session info with merge status
-      const extendedSessions: ExtendedSessionItem[] = [];
-
-      for (const dir of sessionDirs) {
-        const dirPath = path.join(ARCHIVE_DIR, dir.name);
-        const session = await parseExtendedSession(dir.name, dirPath);
-        if (session) {
-          extendedSessions.push(session);
-        }
-      }
+      // Return extended session info with merge status — run ALL in parallel
+      const results = await Promise.all(
+        sessionDirs.map(dir => {
+          const dirPath = path.join(ARCHIVE_DIR, dir.name);
+          return parseExtendedSession(dir.name, dirPath);
+        })
+      );
+      const extendedSessions = results.filter((s): s is ExtendedSessionItem => s !== null);
 
       // Sort by date, newest first
       extendedSessions.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
