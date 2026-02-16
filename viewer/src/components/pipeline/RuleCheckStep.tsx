@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { TerminalActivityFeed } from '@/components/TerminalActivityFeed';
+import { useSimulatedProgress } from '@/hooks/useSimulatedProgress';
 
 export interface RuleDocument {
   id: string;
@@ -68,7 +70,20 @@ export function RuleCheckStep({
   const [adaptingMessage, setAdaptingMessage] = useState('');
   const [adaptingResult, setAdaptingResult] = useState<AdaptingResult | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [terminalLines, setTerminalLines] = useState<string[]>([]);
+  const [realAdaptingProgress, setRealAdaptingProgress] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Simulated progress while waiting for SSE
+  useSimulatedProgress({
+    isActive: adaptingState === 'adapting',
+    realProgress: realAdaptingProgress,
+    setProgress: setAdaptingProgress,
+    setMessage: setAdaptingMessage,
+    addTerminalLine: useCallback((line: string) => {
+      setTerminalLines(prev => [...prev.slice(-19), line]);
+    }, []),
+  });
 
   // Load rules from API
   useEffect(() => {
@@ -192,7 +207,9 @@ export function RuleCheckStep({
     // Start the adapting process
     setAdaptingState('loading-rules');
     setAdaptingProgress(0);
+    setRealAdaptingProgress(0);
     setAdaptingMessage('正在加载规范内容...');
+    setTerminalLines([]);
     setError(null);
 
     try {
@@ -203,12 +220,14 @@ export function RuleCheckStep({
         const content = await fetchRuleContent(rule.id);
         rulesWithContent.push({ ...rule, content });
         setAdaptingProgress(Math.round(((i + 1) / rules.length) * 30)); // 0-30% for loading rules
+        setTerminalLines(prev => [...prev.slice(-19), `fetch rules/${rule.category}/${rule.name}`]);
       }
 
       // Step 2: Build prompt for CLI
       setAdaptingState('adapting');
       setAdaptingProgress(30);
       setAdaptingMessage('正在分析 PRD 并适配规范...');
+      setTerminalLines(prev => [...prev.slice(-19), 'analyzing PRD content...']);
 
       const rulesText = rulesWithContent
         .map(r => `### ${r.category}/${r.name}\n\n${r.content}`)
@@ -278,20 +297,28 @@ ${rulesText}
                 // Collect summary content from CLI response
                 summaryContent += parsed.content;
 
-                // Update progress based on received text
+                // Update real progress — the simulated hook will catch up
                 progressValue = Math.min(progressValue + 2, 95);
-                setAdaptingProgress(progressValue);
+                setRealAdaptingProgress(progressValue);
+
+                // Push terminal lines from text chunks
+                const snippet = parsed.content.trim().slice(0, 50);
+                if (snippet) {
+                  setTerminalLines(prev => [...prev.slice(-19), `adapting: ${snippet}`]);
+                }
 
                 // Check if adapting is completed
                 if (parsed.content.includes('审核完成')) {
-                  setAdaptingProgress(100);
+                  setRealAdaptingProgress(100);
+                  setAdaptingProgress(() => 100);
                   setAdaptingMessage('适配完成！');
                 }
               } else if (parsed.type === 'error') {
                 throw new Error(parsed.error);
               } else if (parsed.type === 'done') {
                 // Stream finished
-                setAdaptingProgress(100);
+                setRealAdaptingProgress(100);
+                setAdaptingProgress(() => 100);
                 setAdaptingState('completed');
                 setAdaptingMessage('适配完成！');
                 break;
@@ -439,6 +466,13 @@ ${rulesText}
               />
             </div>
           </div>
+
+          {/* Terminal activity feed */}
+          {(adaptingState === 'loading-rules' || adaptingState === 'adapting') && (
+            <div className="flex justify-center mb-4">
+              <TerminalActivityFeed lines={terminalLines} />
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex justify-center gap-4">

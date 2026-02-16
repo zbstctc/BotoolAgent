@@ -42,7 +42,7 @@ export function PipelineProgress({
                   flex items-center justify-center w-10 h-10 rounded-full text-sm font-medium
                   transition-all duration-200
                   ${isCompleted
-                    ? 'bg-green-500 text-white cursor-pointer hover:bg-green-600'
+                    ? 'bg-emerald-500 text-white cursor-pointer hover:bg-emerald-600'
                     : isCurrent
                       ? 'bg-neutral-900 text-white ring-4 ring-neutral-200'
                       : 'bg-neutral-200 text-neutral-500 cursor-not-allowed'
@@ -62,7 +62,7 @@ export function PipelineProgress({
               {/* Step Info */}
               <div className="ml-3 min-w-0">
                 <p className={`text-sm font-medium ${
-                  isCurrent ? 'text-neutral-900' : isCompleted ? 'text-green-600' : 'text-neutral-500'
+                  isCurrent ? 'text-neutral-900' : isCompleted ? 'text-emerald-600' : 'text-neutral-500'
                 }`}>
                   {step.name}
                 </p>
@@ -73,7 +73,7 @@ export function PipelineProgress({
               {index < steps.length - 1 && (
                 <div className="flex-1 mx-4">
                   <div className={`h-0.5 ${
-                    index < currentStep ? 'bg-green-500' : 'bg-neutral-200'
+                    index < currentStep ? 'bg-emerald-500' : 'bg-neutral-200'
                   }`} />
                 </div>
               )}

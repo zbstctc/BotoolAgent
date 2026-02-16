@@ -50,11 +50,66 @@ Skill: web-design-guidelines
 
 执行后会指导你获取最新的 Web UI 规范并审查代码。**严格按照 skill 的指引操作**。
 
+### shadcn/ui 组件规范 (Viewer 项目)
+
+Viewer 使用 **shadcn/ui (new-york 风格)** + **Tailwind v4** + **CSS 变量** 作为 UI 基础。
+
+#### 组件使用优先级
+
+1. **必须优先使用** `@/components/ui/` 下的 shadcn 组件
+2. **禁止新建** 自定义 modal / dialog / dropdown（使用 shadcn 对应组件）
+3. 如需新增 shadcn 组件，用 `npx shadcn@latest add <component>` 安装
+
+#### 已安装的 shadcn 组件
+
+`button` · `dialog` · `badge` · `input` · `textarea` · `label` · `tabs`
+
+需要更多组件时从 [shadcn/ui](https://ui.shadcn.com) 安装，不要手写。
+
+#### Dialog 正确用法
+
+```tsx
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+
+<Dialog open={isOpen} onOpenChange={setIsOpen}>
+  <DialogContent className="sm:max-w-md">
+    <DialogHeader>
+      <DialogTitle>标题</DialogTitle>
+    </DialogHeader>
+    {/* 内容 */}
+    <DialogFooter>
+      <Button variant="ghost" onClick={() => setIsOpen(false)}>取消</Button>
+      <Button onClick={handleConfirm}>确认</Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+```
+
+**禁止** 使用 `<div className="fixed inset-0 ...">` 手写 modal。
+
+#### 样式规范
+
+- **类名合并**：使用 `cn()` from `@/lib/utils`，不要手动拼接
+- **颜色系统**：Rock 岩石色系（全 neutral，无蓝色 accent），通过 CSS 变量引用
+  - 使用语义化变量：`bg-background`、`text-foreground`、`border-border` 等
+  - 不要硬编码颜色值，使用 `--primary`、`--muted`、`--accent` 等变量
+- **图标**：统一使用 `lucide-react`，不要引入其他图标库
+- **圆角**：使用 `rounded-lg`（映射到 `--radius`），不要硬编码 `rounded-xl` 等
+
+#### Badge 自定义变体
+
+除 shadcn 默认变体外，项目额外定义了：
+- `success` — 绿色（bg-green-100 text-green-700）
+- `warning` — 琥珀色（bg-amber-100 text-amber-700）
+- `error` — 红色（bg-red-100 text-red-700）
+- `neutral` — 中性灰（bg-neutral-100 text-neutral-600）
+
 ### 如何应用
 
 1. **开始写前端代码前**：执行对应的 Skill
-2. **写代码时**：遵循 Skill 输出的 Correct 模式
-3. **提交前**：确保代码符合 CRITICAL 和 HIGH 级别的规则
+2. **写代码时**：优先使用 shadcn 组件，遵循 Skill 输出的 Correct 模式
+3. **提交前**：确保没有新增自定义 modal，代码符合 CRITICAL 和 HIGH 级别的规则
 
 ## BotoolAgent Viewer
 

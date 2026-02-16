@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { TerminalActivityFeed } from '@/components/TerminalActivityFeed';
+import { useSimulatedProgress } from '@/hooks/useSimulatedProgress';
 import type { SpecCodeExample, SpecTestCase, DevTaskEval, PipelineMode } from '@/lib/tool-types';
 
 /** DevTaskEval with taskId for matching to tasks during enrichment */
@@ -38,10 +40,23 @@ export function AutoEnrichStep({
   // CLI generation state
   const [generatingState, setGeneratingState] = useState<GeneratingState>('idle');
   const [generatingProgress, setGeneratingProgress] = useState(0);
+  const [realProgress, setRealProgress] = useState(0);
   const [generatingMessage, setGeneratingMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [terminalLines, setTerminalLines] = useState<string[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const autoCompletedRef = useRef(false);
+
+  // Simulated progress while waiting for SSE
+  useSimulatedProgress({
+    isActive: generatingState === 'generating',
+    realProgress,
+    setProgress: setGeneratingProgress,
+    setMessage: setGeneratingMessage,
+    addTerminalLine: useCallback((line: string) => {
+      setTerminalLines(prev => [...prev.slice(-19), line]);
+    }, []),
+  });
 
   // Auto-complete for feature mode when result is ready
   useEffect(() => {
@@ -60,9 +75,11 @@ export function AutoEnrichStep({
 
     setGeneratingState('generating');
     setGeneratingProgress(0);
+    setRealProgress(0);
     setGeneratingMessage('正在分析 PRD 内容...');
     setError(null);
     setResult(null);
+    setTerminalLines([]);
     autoCompletedRef.current = false;
 
     try {
@@ -108,13 +125,15 @@ export function AutoEnrichStep({
 
               if (parsed.type === 'progress') {
                 progressValue = Math.min(progressValue + 2, 90);
-                setGeneratingProgress(progressValue);
-                setGeneratingMessage(parsed.message || '正在生成代码示例和测试用例...');
+                setRealProgress(progressValue);
+                if (parsed.message) {
+                  setTerminalLines(prev => [...prev.slice(-19), parsed.message.slice(0, 50)]);
+                }
               } else if (parsed.type === 'complete') {
                 // Result already parsed server-side
                 const enrichResult: AutoEnrichResult = parsed.result;
                 setResult(enrichResult);
-                setGeneratingProgress(100);
+                setGeneratingProgress(() => 100);
                 setGeneratingState('completed');
                 setGeneratingMessage('生成完成！');
               } else if (parsed.type === 'error') {
@@ -233,17 +252,24 @@ export function AutoEnrichStep({
           <div className="mb-6">
             <div className="flex justify-between text-sm text-neutral-600 mb-2">
               <span>进度</span>
-              <span>{generatingProgress}%</span>
+              <span>{Math.round(generatingProgress)}%</span>
             </div>
             <div className="w-full h-2 bg-neutral-200 rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all duration-300 ${
                   generatingState === 'error' ? 'bg-red-500' : 'bg-neutral-700'
                 }`}
-                style={{ width: `${generatingProgress}%` }}
+                style={{ width: `${Math.round(generatingProgress)}%` }}
               />
             </div>
           </div>
+
+          {/* Terminal activity feed */}
+          {generatingState === 'generating' && (
+            <div className="flex justify-center mb-4">
+              <TerminalActivityFeed lines={terminalLines} />
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex justify-center gap-4">

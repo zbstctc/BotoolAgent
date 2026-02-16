@@ -16,6 +16,7 @@ import {
   type CollectedSummaryItem,
 } from '@/components';
 import { ErrorRecovery } from '@/components/ErrorRecovery';
+import { TerminalActivityFeed, formatTerminalLine } from '@/components/TerminalActivityFeed';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectValidation, useCliChat } from '@/hooks';
 import {
@@ -28,6 +29,7 @@ import {
 } from '@/lib/tool-types';
 
 type LevelId = 1 | 2 | 3 | 4 | 5;
+
 
 interface QuestionAnswer {
   questionId: string;
@@ -67,6 +69,8 @@ function Stage1PageContent() {
   // Track tool call count and recent tools for activity feed
   const [toolCallCount, setToolCallCount] = useState(0);
   const [recentTools, setRecentTools] = useState<string[]>([]);
+  // Terminal-like activity log lines
+  const [terminalLines, setTerminalLines] = useState<string[]>([]);
   // Track codebase scan status
   const [codebaseScanned, setCodebaseScanned] = useState(false);
   // Confirmation gate state
@@ -201,6 +205,8 @@ function Stage1PageContent() {
     setCurrentTool(toolUse.name);
     setToolCallCount(prev => prev + 1);
     setRecentTools(prev => [...prev.slice(-4), toolUse.name]);
+    // Build terminal-like log line
+    setTerminalLines(prev => [...prev.slice(-19), formatTerminalLine(toolUse.name, toolUse.input)]);
 
     // Detect Write tool writing a PRD file (Transform mode writes PRD to file)
     if (toolUse.name === 'Write' && typeof toolUse.input?.file_path === 'string') {
@@ -857,14 +863,16 @@ function Stage1PageContent() {
           ) : /* PRD generation in progress */
           isLoading && completedLevels.includes(5) && currentQuestions.length === 0 ? (
             <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="animate-spin h-8 w-8 border-4 border-green-600 border-t-transparent rounded-full mx-auto mb-2"></div>
+              <div className="flex flex-col items-center">
+                <div className="animate-spin h-8 w-8 border-4 border-green-600 border-t-transparent rounded-full mb-2"></div>
                 <p className="text-sm text-neutral-600">正在生成 PRD 文档...</p>
                 <p className="text-xs text-neutral-400 mt-1">
                   {currentTool
                     ? `正在执行: ${currentTool}`
                     : '所有层级已完成，请稍候'}
                 </p>
+                {/* Terminal activity feed */}
+                <TerminalActivityFeed lines={terminalLines} />
               </div>
             </div>
           ) : isLoading && currentQuestions.length === 0 ? (
@@ -876,9 +884,9 @@ function Stage1PageContent() {
               const toolLabel = currentTool === 'Read' ? '读取文件' : currentTool === 'Glob' ? '扫描目录' : currentTool === 'Grep' ? '搜索代码' : currentTool === 'Bash' ? '执行命令' : currentTool === 'Task' ? '子任务分析' : currentTool === 'Skill' ? '加载技能' : currentTool === 'Write' ? '写入文件' : currentTool === 'TodoWrite' ? '更新进度' : currentTool;
               return (
                 <div className="flex items-center justify-center h-full">
-                  <div className="text-center w-64">
+                  <div className="flex flex-col items-center w-80">
                     {/* Percentage circle */}
-                    <div className="relative w-20 h-20 mx-auto mb-4">
+                    <div className="relative w-20 h-20 mb-4">
                       <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
                         <circle cx="40" cy="40" r="34" fill="none" stroke="#e5e7eb" strokeWidth="6" />
                         <circle cx="40" cy="40" r="34" fill="none" stroke="#525252" strokeWidth="6"
@@ -898,6 +906,8 @@ function Stage1PageContent() {
                     {toolLabel && (
                       <p className="text-xs text-neutral-400 mt-1">{toolLabel}</p>
                     )}
+                    {/* Terminal activity feed */}
+                    <TerminalActivityFeed lines={terminalLines} />
                   </div>
                 </div>
               );
@@ -966,8 +976,13 @@ function Stage1PageContent() {
                         <span className="flex-shrink-0 w-6 h-6 rounded-full bg-neutral-200 text-neutral-600 text-sm font-medium flex items-center justify-center">
                           {index + 1}
                         </span>
-                        <div>
-                          <p className="font-medium text-neutral-900">{question.question}</p>
+                        <div className="min-w-0 flex-1">
+                          {/* Use pre-wrap + mono for ASCII art (box-drawing chars or multi-line) */}
+                          {/[┌┐└┘├┤─│═╔╗╚╝║▶]/.test(question.question) ? (
+                            <pre className="font-mono text-sm text-neutral-900 whitespace-pre-wrap leading-relaxed overflow-x-auto">{question.question}</pre>
+                          ) : (
+                            <p className="font-medium text-neutral-900 whitespace-pre-wrap">{question.question}</p>
+                          )}
                           {question.header && (
                             <span className="inline-block mt-1 px-2 py-0.5 bg-neutral-200 text-neutral-600 text-xs rounded">
                               {question.header}
@@ -1149,12 +1164,14 @@ function Stage1PageContent() {
             </div>
           ) : needsResume ? (
             <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="animate-spin h-8 w-8 border-4 border-neutral-600 border-t-transparent rounded-full mx-auto mb-2"></div>
+              <div className="flex flex-col items-center">
+                <div className="animate-spin h-8 w-8 border-4 border-neutral-600 border-t-transparent rounded-full mb-2"></div>
                 <p className="text-sm text-neutral-600">正在恢复进度...</p>
                 <p className="text-xs text-neutral-400 mt-1">
                   L{currentLevel} · 已完成 {completedLevels.length} 层
                 </p>
+                {/* Terminal activity feed */}
+                <TerminalActivityFeed lines={terminalLines} />
               </div>
             </div>
           ) : (

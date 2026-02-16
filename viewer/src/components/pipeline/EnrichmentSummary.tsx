@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { TerminalActivityFeed } from '@/components/TerminalActivityFeed';
+import { useSimulatedProgress } from '@/hooks/useSimulatedProgress';
 import type { EnrichedPrdJson, PipelineMode } from '@/lib/tool-types';
 import type { AutoEnrichResult } from './AutoEnrichStep';
 import type { RuleDocument } from './RuleCheckStep';
@@ -39,9 +41,22 @@ export function EnrichmentSummary({
   // CLI generation state
   const [convertingState, setConvertingState] = useState<ConvertingState>('idle');
   const [convertingProgress, setConvertingProgress] = useState(0);
+  const [realConvertingProgress, setRealConvertingProgress] = useState(0);
   const [convertingMessage, setConvertingMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [terminalLines, setTerminalLines] = useState<string[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Simulated progress while waiting for SSE
+  useSimulatedProgress({
+    isActive: convertingState === 'converting',
+    realProgress: realConvertingProgress,
+    setProgress: setConvertingProgress,
+    setMessage: setConvertingMessage,
+    addTerminalLine: useCallback((line: string) => {
+      setTerminalLines(prev => [...prev.slice(-19), line]);
+    }, []),
+  });
 
   // Call /api/prd/merge to combine basePrdJson + enrichResult + rules
   const callEnrichMerge = useCallback(async (basePrdJson: Record<string, unknown>): Promise<EnrichedPrdJson> => {
@@ -85,10 +100,12 @@ export function EnrichmentSummary({
 
     setConvertingState('converting');
     setConvertingProgress(0);
+    setRealConvertingProgress(0);
     setConvertingMessage('正在分析 PRD 内容...');
     setError(null);
     setPrdJson(null);
     setJsonString('');
+    setTerminalLines(['parsing PRD markdown...']);
 
     try {
       abortControllerRef.current = new AbortController();
@@ -138,19 +155,23 @@ export function EnrichmentSummary({
 
               if (parsed.type === 'progress') {
                 progressValue = Math.min(progressValue + 3, 80);
-                setConvertingProgress(progressValue);
-                setConvertingMessage('正在转换为 JSON 格式...');
+                setRealConvertingProgress(progressValue);
+                if (parsed.message) {
+                  setTerminalLines(prev => [...prev.slice(-19), parsed.message.slice(0, 50)]);
+                }
               } else if (parsed.type === 'complete') {
                 // Base conversion complete - call /api/prd/enrich merge mode
-                setConvertingProgress(90);
+                setRealConvertingProgress(90);
                 setConvertingMessage('正在合并规范和生成结果...');
+                setTerminalLines(prev => [...prev.slice(-19), 'merging rules + enrichment...']);
 
                 const basePrdJson = parsed.prdJson;
                 const enriched = await callEnrichMerge(basePrdJson);
 
                 setPrdJson(enriched);
                 setJsonString(JSON.stringify(enriched, null, 2));
-                setConvertingProgress(100);
+                setRealConvertingProgress(100);
+                setConvertingProgress(() => 100);
                 setConvertingState('completed');
                 setConvertingMessage('转换完成！');
               } else if (parsed.type === 'error') {
@@ -161,7 +182,8 @@ export function EnrichmentSummary({
                     const enriched = await callEnrichMerge(extracted);
                     setPrdJson(enriched);
                     setJsonString(JSON.stringify(enriched, null, 2));
-                    setConvertingProgress(100);
+                    setRealConvertingProgress(100);
+                    setConvertingProgress(() => 100);
                     setConvertingState('completed');
                     setConvertingMessage('转换完成（需要手动检查 JSON 格式）');
                     continue;
@@ -327,6 +349,13 @@ export function EnrichmentSummary({
               />
             </div>
           </div>
+
+          {/* Terminal activity feed */}
+          {convertingState === 'converting' && (
+            <div className="flex justify-center mb-4">
+              <TerminalActivityFeed lines={terminalLines} />
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex justify-center gap-4">
