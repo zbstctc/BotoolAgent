@@ -78,7 +78,7 @@ export function useSimulatedProgress({
           increment = 0.15 + Math.random() * 0.25; // ~0.15–0.4
         }
 
-        return Math.min(prev + increment, maxProgress);
+        return Math.round(Math.min(prev + increment, maxProgress));
       });
 
       // Rotate terminal messages every ~3 ticks (3s)
