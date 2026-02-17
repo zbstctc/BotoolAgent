@@ -61,7 +61,7 @@ ls "$TASKS_DIR"/prd-*.md 2>/dev/null
 No PRD files found in tasks/ directory.
 
 Please create a PRD first using /botoolagent-pyramidprd or through the Viewer at:
-http://localhost:3000/stage1
+http://localhost:3100/stage1
 ```
 Then stop here.
 
@@ -69,7 +69,7 @@ Then stop here.
 
 ```bash
 # Check if Viewer server is running
-lsof -i :3000 | grep LISTEN
+lsof -i :3100 | grep LISTEN
 ```
 
 **If server is NOT running:**
@@ -83,14 +83,14 @@ sleep 3
 **Open Stage 2 directly:**
 ```bash
 # macOS
-open http://localhost:3000/stage2
+open http://localhost:3100/stage2
 ```
 
 **Announce to user:**
 ```
 BotoolAgent Viewer is ready!
 
-Opening PRD Converter at: http://localhost:3000/stage2
+Opening PRD Converter at: http://localhost:3100/stage2
 
 If you prefer the CLI experience, let me know and we can continue here.
 ```
@@ -579,7 +579,7 @@ Announce next steps:
 Ready for autonomous execution:
 
 **Option 1: Use the Viewer (Recommended)**
-Open http://localhost:3000/stage3 to monitor development visually.
+Open http://localhost:3100/stage3 to monitor development visually.
 
 **Option 2: Run from terminal**
 ```bash

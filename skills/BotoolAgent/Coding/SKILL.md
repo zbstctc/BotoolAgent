@@ -50,7 +50,7 @@ ls prd.json 2>/dev/null
 
 恢复建议：
 - 运行 /botoolagent-prd2json 从 PRD 文档生成
-- 或通过 Viewer http://localhost:3000/stage2 完成 Stage 2
+- 或通过 Viewer http://localhost:3100/stage2 完成 Stage 2
 ```
 Then stop here.
 

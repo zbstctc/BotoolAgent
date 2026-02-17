@@ -24,7 +24,7 @@ The BotoolAgent Viewer provides a modern web interface for:
 
 ## What This Skill Does
 
-1. **Check if Viewer dev server is running** on http://localhost:3000
+1. **Check if Viewer dev server is running** on http://localhost:3100
 2. **Start the server** if not running (in background)
 3. **Open the Viewer** in the default browser
 4. **Output the access address** for the user
@@ -37,7 +37,7 @@ The BotoolAgent Viewer provides a modern web interface for:
 
 ```bash
 # Check if port 3000 is in use
-lsof -i :3000 | grep LISTEN
+lsof -i :3100 | grep LISTEN
 ```
 
 ### Step 2: Start Server if Not Running
@@ -57,10 +57,10 @@ Wait a few seconds for the server to start.
 
 ```bash
 # macOS
-open http://localhost:3000
+open http://localhost:3100
 
 # Linux
-xdg-open http://localhost:3000
+xdg-open http://localhost:3100
 ```
 
 ### Step 4: Announce Access
@@ -70,7 +70,7 @@ Output to the user:
 ```
 BotoolAgent Viewer is now running!
 
-Access URL: http://localhost:3000
+Access URL: http://localhost:3100
 
 From here you can:
 - Create a new PRD: /stage1
@@ -84,12 +84,12 @@ From here you can:
 
 | URL | Purpose |
 |-----|---------|
-| http://localhost:3000 | Dashboard - view all PRDs and sessions |
-| http://localhost:3000/stage1 | Stage 1 - Create PRD with AI chat |
-| http://localhost:3000/stage2 | Stage 2 - Select PRD and convert to JSON |
-| http://localhost:3000/stage3 | Stage 3 - Monitor autonomous development |
-| http://localhost:3000/stage4 | Stage 4 - Testing & verification |
-| http://localhost:3000/stage5 | Stage 5 - Finalize, PR & merge |
+| http://localhost:3100 | Dashboard - view all PRDs and sessions |
+| http://localhost:3100/stage1 | Stage 1 - Create PRD with AI chat |
+| http://localhost:3100/stage2 | Stage 2 - Select PRD and convert to JSON |
+| http://localhost:3100/stage3 | Stage 3 - Monitor autonomous development |
+| http://localhost:3100/stage4 | Stage 4 - Testing & verification |
+| http://localhost:3100/stage5 | Stage 5 - Finalize, PR & merge |
 
 ---
 
@@ -106,11 +106,11 @@ From here you can:
 ## Troubleshooting
 
 ### Server won't start
-- Check if port 3000 is already in use: `lsof -i :3000`
+- Check if port 3000 is already in use: `lsof -i :3100`
 - Check for errors in viewer directory: `cd BotoolAgent/viewer 2>/dev/null || cd viewer && npm run dev`
 
 ### Browser doesn't open
-- Manually navigate to http://localhost:3000 in your browser
+- Manually navigate to http://localhost:3100 in your browser
 
 ### Page shows error
 - Ensure you're in the BotoolAgent project directory
