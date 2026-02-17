@@ -13,6 +13,9 @@ export function Header() {
           <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600">
             Viewer
           </span>
+          <span className="text-xs text-neutral-400">
+            {process.env.NEXT_PUBLIC_APP_VERSION ?? "dev"}
+          </span>
         </div>
         <nav className="flex items-center gap-4">
           <Suspense fallback={null}>
