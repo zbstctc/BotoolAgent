@@ -10,12 +10,11 @@
 ## 第一步: 初始化
 
 1. 读取 `$BOTOOL_PROJECT_DIR/PROJECT.md`（如果存在）— 了解项目全局
-2. 读取 `$BOTOOL_SCRIPT_DIR/.project-status`（如果存在）— 了解当前状态
-3. 读取 `$BOTOOL_SCRIPT_DIR/patterns.json`（如果存在）— 了解累积经验，按 confidence 降序，只读 `status: "active"`
-4. 读取 `$BOTOOL_PROJECT_DIR/prd.json` — 了解所有开发任务
-5. 读取 `$BOTOOL_PROJECT_DIR/progress.txt` 中的 Codebase Patterns（如果存在）
-6. 确认 git 分支 = `prd.json.branchName`（不是则切换/创建）
-7. 通过 Bash 工具更新 `$BOTOOL_SCRIPT_DIR/.state/agent-status` → `"status": "running"`
+2. 读取 `$BOTOOL_SCRIPT_DIR/patterns.json`（如果存在）— 了解累积经验，按 confidence 降序，只读 `status: "active"`
+3. 读取 `$BOTOOL_PROJECT_DIR/prd.json` — 了解所有开发任务
+4. 读取 `$BOTOOL_PROJECT_DIR/progress.txt` 中的 Codebase Patterns（如果存在）
+5. 确认 git 分支 = `prd.json.branchName`（不是则切换/创建）
+6. 通过 Bash 工具更新 `$BOTOOL_SCRIPT_DIR/.state/agent-status` → `"status": "running"`
 
 ## 第二步: 构建执行计划
 
