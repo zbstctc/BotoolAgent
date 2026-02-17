@@ -78,6 +78,16 @@ jobs:
           echo "new_version=v${NEW_VERSION}" >> "$GITHUB_OUTPUT"
           echo "Bump: $BUMP -> v${NEW_VERSION}"
 
+      - name: Update .botool-version
+        if: steps.bump.outputs.skip != 'true'
+        run: |
+          echo "${{ steps.bump.outputs.new_version }}" > .botool-version
+
+      - name: Build distribution package
+        if: steps.bump.outputs.skip != 'true'
+        run: |
+          bash scripts/pack.sh "BotoolAgent-${{ steps.bump.outputs.new_version }}"
+
       - name: Create tag and release
         if: steps.bump.outputs.skip != 'true'
         env:
@@ -97,8 +107,9 @@ jobs:
           git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
           git push origin "$NEW_TAG"
 
-          # Create GitHub Release
+          # Create GitHub Release with distribution package attached
           gh release create "$NEW_TAG" \
+            "BotoolAgent-${NEW_TAG}.tar.gz#BotoolAgent Distribution Package" \
             --title "$NEW_TAG" \
             --notes "$NOTES" \
             --latest

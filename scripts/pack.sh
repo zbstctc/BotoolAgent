@@ -56,6 +56,10 @@ mkdir -p "$PACKAGE_DIR/archive"
 # Copy .gitignore template for the BotoolAgent directory
 cp "$SCRIPT_DIR/.gitignore" "$PACKAGE_DIR/.gitignore"
 
+# Copy version and manifest for self-update support
+cp "$SCRIPT_DIR/.botool-version" "$PACKAGE_DIR/" 2>/dev/null || true
+cp "$SCRIPT_DIR/.botool-manifest.json" "$PACKAGE_DIR/" 2>/dev/null || true
+
 # Copy plugin config
 mkdir -p "$PACKAGE_DIR/.claude-plugin"
 cp "$SCRIPT_DIR/.claude-plugin/plugin.json" "$PACKAGE_DIR/.claude-plugin/" 2>/dev/null || true

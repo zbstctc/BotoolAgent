@@ -1,0 +1,43 @@
+{
+  "$schema": "BotoolAgent update manifest — defines which files to replace vs preserve",
+  "repo": "zbstctc/BotoolAgent",
+  "core": [
+    "scripts/",
+    "skills/",
+    "viewer/src/",
+    "viewer/public/",
+    "viewer/tests/",
+    "viewer/package.json",
+    "viewer/package-lock.json",
+    "viewer/next.config.ts",
+    "viewer/tsconfig.json",
+    "viewer/postcss.config.mjs",
+    "viewer/eslint.config.mjs",
+    "viewer/components.json",
+    "viewer/playwright.config.ts",
+    "viewer/next-env.d.ts",
+    "CLAUDE.lead.md",
+    ".github/workflows/",
+    ".claude-plugin/",
+    ".botool-manifest.json",
+    ".botool-version",
+    ".gitignore",
+    "setup.sh",
+    "BotoolAgent.sh",
+    "README.md",
+    "LICENSE"
+  ],
+  "preserve": [
+    "tasks/",
+    "logs/",
+    "rules/",
+    "docs/",
+    "archive/",
+    ".state/",
+    "prd.json",
+    "progress.txt",
+    "patterns.json",
+    "CLAUDE.md",
+    "viewer/.env.local"
+  ]
+}

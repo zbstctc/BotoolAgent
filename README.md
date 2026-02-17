@@ -24,10 +24,26 @@ Stage 5: 推送 → PR → 审查 → 合并
 
 ### 前置条件
 
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`npm install -g @anthropic-ai/claude-code`)
-- Node.js 18+
-- Git
-- tmux (`brew install tmux`)
+在目标机器上需要安装以下工具：
+
+| 工具 | 安装方式 | 用途 |
+|------|----------|------|
+| **Claude Code** | `npm install -g @anthropic-ai/claude-code` | AI 代理运行时 |
+| **Node.js 18+** | [nodejs.org](https://nodejs.org/) | Viewer Web 界面 |
+| **Git** | `brew install git` 或系统自带 | 版本管理 |
+| **tmux** | `brew install tmux` | Agent Teams 并行执行 |
+| **GitHub CLI** | `brew install gh` | 自动更新（`/botoolagent-update`） |
+
+**首次使用前必须完成：**
+
+```bash
+# 1. 登录 Claude Code（需要 Anthropic API key 或 Claude Pro/Team 订阅）
+claude auth login
+
+# 2. 登录 GitHub CLI（BotoolAgent 自动更新需要）
+gh auth login
+# 选择 GitHub.com → HTTPS → 用浏览器登录
+```
 
 ### 安装到你的项目
 
@@ -261,7 +277,7 @@ PRD2JSON 会将任务按依赖关系和可并行性分成 sessions：
 
 当所有任务的 `passes` 都为 `true` 时，代理输出 `<promise>COMPLETE</promise>` 并退出。
 
-## 6 个 Skills
+## 7 个 Skills
 
 | Skill | 命令 | 用途 |
 |-------|------|------|
@@ -271,6 +287,7 @@ PRD2JSON 会将任务按依赖关系和可并行性分成 sessions：
 | **Coding** | `/botoolagent-coding` | 启动自动开发（Agent Teams + tmux） |
 | **Testing** | `/botoolagent-testing` | 4 层自动验证 + Ralph 自动修复 |
 | **Finalize** | `/botoolagent-finalize` | 推送 → PR → 审查 → 合并 → 清理 |
+| **Update** | `/botoolagent-update` | 从 GitHub 拉取最新版本并自动更新 |
 
 ## 关键文件
 
@@ -283,6 +300,8 @@ PRD2JSON 会将任务按依赖关系和可并行性分成 sessions：
 | `CLAUDE.lead.md` | BotoolAgent/ | Lead Agent 运行时指令 |
 | `BotoolAgent.sh` | scripts/ | Ralph 外循环 + tmux launcher |
 | `pack.sh` | scripts/ | 打包分发脚本（生成 tar.gz + setup.sh） |
+| `.botool-version` | BotoolAgent/ | 当前版本号标记 |
+| `.botool-manifest.json` | BotoolAgent/ | 更新清单（核心文件 vs 用户数据） |
 | `tasks/` | BotoolAgent/ | PRD 文档存放目录 |
 | `rules/` | BotoolAgent/ | 编码规范文档（backend/frontend/testing） |
 | `.state/` | BotoolAgent/ | 运行时状态（agent-status, botoolrc, 限流/熔断） |
@@ -366,13 +385,57 @@ cd BotoolAgent
 
 分发包内容：
 - scripts/（BotoolAgent.sh）
-- skills/（6 个 SKILL.md）
+- skills/（7 个 SKILL.md）
 - viewer/（源码，不含 node_modules/.next）
 - rules/（编码规范模板）
 - CLAUDE.md, CLAUDE.lead.md, README.md
+- .botool-version, .botool-manifest.json（自动更新支持）
 - setup.sh（自动生成，一键安装）
 
 接收者解压后运行 `cd BotoolAgent && ./setup.sh` 一次即可。
+
+## 版本管理与自动更新
+
+BotoolAgent 使用 [Semantic Versioning](https://semver.org/)（`MAJOR.MINOR.PATCH`）。
+
+### 版本号规则
+
+版本号根据 Git commit 消息自动计算：
+
+| Commit 前缀 | 版本变化 | 示例 |
+|---|---|---|
+| `fix:` | PATCH (1.0.0 -> 1.0.1) | bug 修复 |
+| `feat:` | MINOR (1.0.0 -> 1.1.0) | 新功能 |
+| `feat!:` / `BREAKING CHANGE:` | MAJOR (1.0.0 -> 2.0.0) | 破坏性变更 |
+
+每次代码推送到 main 分支，GitHub Actions 自动：
+1. 扫描 commit 消息，计算版本号
+2. 创建 Git tag + GitHub Release
+3. 打包分发包（`BotoolAgent-vX.Y.Z.tar.gz`）附在 Release 中
+
+### 在目标项目中更新
+
+```bash
+cd my-project && claude
+# 输入:
+/botoolagent-update
+```
+
+更新流程：
+1. 检查当前版本（`.botool-version`）
+2. 查询 GitHub 最新 Release
+3. 下载并替换核心文件（scripts/、skills/、viewer/ 等）
+4. **保留**项目数据（tasks/、rules/、logs/、CLAUDE.md 等）
+5. 重新安装依赖
+
+> **前提**：目标机器上需要已安装并登录 `gh` CLI（`gh auth login`）
+
+### 查看当前版本
+
+```bash
+cat .botool-version      # 文件中的版本号
+# 或查看 Viewer 左上角显示的版本号
+```
 
 ## 参考
 
