@@ -116,7 +116,7 @@ function ImportPrdDialogContent({ onClose }: { onClose: () => void }) {
       <DialogHeader className="p-4 border-b border-neutral-200">
         <div className="flex items-center gap-2">
           <div className="w-2.5 h-2.5 rounded-full bg-neutral-900" />
-          <DialogTitle>导入现有文档</DialogTitle>
+          <DialogTitle>导入开发文档</DialogTitle>
         </div>
       </DialogHeader>
 
@@ -135,7 +135,7 @@ function ImportPrdDialogContent({ onClose }: { onClose: () => void }) {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="搜索 .md 文件..."
+            placeholder="搜索 tasks/ 中的 .md 文件..."
             className="pl-10"
             autoFocus
           />
@@ -157,6 +157,9 @@ function ImportPrdDialogContent({ onClose }: { onClose: () => void }) {
           <div className="text-center py-8">
             <p className="text-sm text-neutral-500">
               {searchQuery ? '没有匹配的文件' : '未找到 .md 文件'}
+            </p>
+            <p className="text-xs text-neutral-400 mt-2">
+              请将 PRD 文档放到项目根目录的 <code className="px-1 py-0.5 bg-neutral-100 rounded text-neutral-600">tasks/</code> 文件夹中
             </p>
           </div>
         ) : (

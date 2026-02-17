@@ -71,16 +71,15 @@ function scanMdFiles(dir: string, rootDir: string, depth: number): MdFileInfo[] 
 export async function GET() {
   try {
     const projectRoot = getProjectRoot();
-    const files = scanMdFiles(projectRoot, projectRoot, 0);
+    const tasksDir = path.join(projectRoot, 'tasks');
+    const files = fs.existsSync(tasksDir)
+      ? scanMdFiles(tasksDir, projectRoot, 0)
+      : [];
 
-    // Sort: tasks/ directory first, then by modifiedAt descending
-    files.sort((a, b) => {
-      const aInTasks = a.directory.startsWith('tasks');
-      const bInTasks = b.directory.startsWith('tasks');
-      if (aInTasks && !bInTasks) return -1;
-      if (!aInTasks && bInTasks) return 1;
-      return new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime();
-    });
+    // Sort by modifiedAt descending
+    files.sort((a, b) =>
+      new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime()
+    );
 
     return NextResponse.json({ files });
   } catch (error) {
