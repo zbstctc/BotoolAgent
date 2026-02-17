@@ -11,6 +11,7 @@ export interface PRDItem {
   filename: string;
   createdAt: string;
   status: 'draft' | 'ready' | 'in-progress' | 'completed' | 'importing';
+  stage?: 1 | 2 | 3 | 4 | 5;
   preview?: string;
 }
 
@@ -72,9 +73,20 @@ function extractPreview(content: string): string {
   return preview.slice(0, 200) + (preview.length > 200 ? '...' : '');
 }
 
-function determinePRDStatus(filename: string): PRDItem['status'] {
+function computeStage(tasks: { passes: boolean }[]): 1 | 2 | 3 | 4 | 5 {
+  if (tasks.length === 0) return 1;
+  const completed = tasks.filter(t => t.passes).length;
+  const total = tasks.length;
+  const ratio = completed / total;
+  if (ratio === 0) return 2;
+  if (ratio < 0.8) return 3;
+  if (ratio < 1) return 4;
+  return 5;
+}
+
+function determinePRDStatus(filename: string): { status: PRDItem['status']; stage?: PRDItem['stage'] } {
   // Detect import marker files
-  if (filename.includes('-导入转换中')) return 'importing';
+  if (filename.includes('-导入转换中')) return { status: 'importing' };
 
   const baseName = filename.replace(/^prd-/, '').replace(/\.md$/, '');
 
@@ -87,14 +99,17 @@ function determinePRDStatus(filename: string): PRDItem['status'] {
         const projectPrdPath = getProjectPrdJsonPath(baseName);
         if (fs.existsSync(projectPrdPath)) {
           const prdJson = JSON.parse(fs.readFileSync(projectPrdPath, 'utf-8'));
-          const tasks = prdJson.devTasks || [];
+          const tasks: { passes: boolean }[] = prdJson.devTasks || [];
           if (tasks.length > 0) {
-            const allComplete = tasks.every((t: { passes: boolean }) => t.passes);
-            const hasInProgress = tasks.some((t: { passes: boolean }) => !t.passes);
-            if (allComplete) return 'completed';
-            if (hasInProgress) return 'in-progress';
+            const allComplete = tasks.every(t => t.passes);
+            const hasInProgress = tasks.some(t => !t.passes);
+            if (allComplete) return { status: 'completed', stage: 5 };
+            if (hasInProgress) return { status: 'in-progress', stage: computeStage(tasks) };
           }
-          return registry.projects[baseName].status === 'coding' ? 'in-progress' : 'ready';
+          if (registry.projects[baseName].status === 'coding') {
+            return { status: 'in-progress', stage: computeStage(tasks) };
+          }
+          return { status: 'ready', stage: 1 };
         }
       }
     }
@@ -110,19 +125,19 @@ function determinePRDStatus(filename: string): PRDItem['status'] {
       const projectName = prdJson.project?.toLowerCase() || '';
 
       if (projectName.includes(baseName.toLowerCase()) || baseName.toLowerCase().includes(projectName.toLowerCase())) {
-        const tasks = prdJson.devTasks || [];
-        const hasInProgress = tasks.some((t: { passes: boolean }) => !t.passes);
-        const allComplete = tasks.every((t: { passes: boolean }) => t.passes);
+        const tasks: { passes: boolean }[] = prdJson.devTasks || [];
+        const allComplete = tasks.length > 0 && tasks.every(t => t.passes);
+        const hasInProgress = tasks.some(t => !t.passes);
 
-        if (allComplete) return 'completed';
-        if (hasInProgress) return 'in-progress';
+        if (allComplete) return { status: 'completed', stage: 5 };
+        if (hasInProgress) return { status: 'in-progress', stage: computeStage(tasks) };
       }
     }
   } catch {
     // Ignore errors reading prd.json
   }
 
-  return 'ready';
+  return { status: 'ready', stage: 1 };
 }
 
 export async function GET() {
@@ -143,13 +158,15 @@ export async function GET() {
 
       // Generate a simple ID from filename
       const id = filename.replace(/^prd-/, '').replace(/\.md$/, '');
+      const { status, stage } = determinePRDStatus(filename);
 
       return {
         id,
         filename,
         name: extractPRDName(content),
         createdAt: stats.birthtime.toISOString(),
-        status: determinePRDStatus(filename),
+        status,
+        stage,
         preview: extractPreview(content),
       };
     });

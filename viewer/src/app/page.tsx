@@ -14,6 +14,7 @@ interface PRDItem {
   filename: string;
   createdAt: string;
   status: 'draft' | 'ready' | 'in-progress' | 'completed' | 'importing';
+  stage?: 1 | 2 | 3 | 4 | 5;
   preview?: string;
 }
 
@@ -504,6 +505,25 @@ function DashboardContent() {
   );
 }
 
+function getStageBadge(prd: PRDItem): { label: string; style: string } {
+  if (prd.status === 'importing') {
+    return { label: '导入中', style: 'bg-amber-100 text-amber-700 animate-pulse' };
+  }
+  if (prd.status === 'draft') {
+    return { label: 'Draft', style: 'bg-neutral-100 text-neutral-600' };
+  }
+  if (prd.status === 'completed' || prd.stage === 5) {
+    return { label: '已完成', style: 'bg-green-100 text-green-700' };
+  }
+  if (prd.status === 'in-progress') {
+    if (prd.stage === 4) return { label: '测试中', style: 'bg-purple-100 text-purple-700' };
+    if (prd.stage === 3) return { label: '开发中', style: 'bg-amber-100 text-amber-700 animate-pulse' };
+    if (prd.stage === 2) return { label: '规划中', style: 'bg-blue-100 text-blue-700' };
+  }
+  // ready or fallback
+  return { label: '待规划', style: 'bg-neutral-100 text-neutral-600' };
+}
+
 function PRDCard({
   prd,
   onClick,
@@ -511,21 +531,7 @@ function PRDCard({
   prd: PRDItem;
   onClick: () => void;
 }) {
-  const statusStyles: Record<PRDItem['status'], string> = {
-    draft: 'bg-neutral-100 text-neutral-600',
-    ready: 'bg-green-100 text-green-700',
-    'in-progress': 'bg-neutral-200 text-neutral-700',
-    completed: 'bg-neutral-100 text-neutral-600',
-    importing: 'bg-amber-100 text-amber-700 animate-pulse',
-  };
-
-  const statusLabels: Record<PRDItem['status'], string> = {
-    draft: 'Draft',
-    ready: 'Ready',
-    'in-progress': 'In Progress',
-    completed: 'Completed',
-    importing: '导入中',
-  };
+  const badge = getStageBadge(prd);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -550,9 +556,9 @@ function PRDCard({
       </div>
       <div className="flex items-center gap-3 ml-4 flex-shrink-0">
         <span
-          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[prd.status]}`}
+          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.style}`}
         >
-          {statusLabels[prd.status]}
+          {badge.label}
         </span>
         {prd.status !== 'importing' && (
           <Link

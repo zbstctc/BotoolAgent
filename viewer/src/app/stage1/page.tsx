@@ -861,7 +861,7 @@ function Stage1PageContent() {
         </div>
 
         {/* Center: Question Panel */}
-        <div className="flex-1 min-w-0 border-x border-neutral-200 bg-white overflow-y-auto">
+        <div className="flex-1 min-w-0 border-x border-neutral-200 bg-white overflow-hidden flex flex-col">
           {/* Confirmation card - highest priority when in confirmation phase */}
           {isConfirmationPhase && confirmationSummary ? (
             <ConfirmationCard
@@ -959,165 +959,168 @@ function Stage1PageContent() {
               />
             </div>
           ) : currentQuestions.length > 0 ? (
-            <div className="p-6 space-y-6">
-              {/* Level Header */}
-              <div className="border-b border-neutral-200 pb-4">
-                <h2 className="text-xl font-semibold text-neutral-900">
-                  L{currentLevel}: {currentLevel === 1 ? '核心识别' : currentLevel === 2 ? '领域分支' : currentLevel === 3 ? '细节深入' : currentLevel === 4 ? '边界确认' : '确认门控'}
-                </h2>
-                <p className="text-sm text-neutral-500 mt-1">
-                  {currentLevel === 1 && '理解需求的本质和范围'}
-                  {currentLevel === 2 && '按领域深入探索具体需求'}
-                  {currentLevel === 3 && '深入实现细节'}
-                  {currentLevel === 4 && '确认范围边界，防止范围蔓延'}
-                  {currentLevel === 5 && '确认需求摘要，准备生成 PRD'}
-                </p>
-              </div>
+            <div className="flex flex-col h-full">
+              {/* Scrollable questions area */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* Level Header */}
+                <div className="border-b border-neutral-200 pb-4">
+                  <h2 className="text-xl font-semibold text-neutral-900">
+                    L{currentLevel}: {currentLevel === 1 ? '核心识别' : currentLevel === 2 ? '领域分支' : currentLevel === 3 ? '细节深入' : currentLevel === 4 ? '边界确认' : '确认门控'}
+                  </h2>
+                  <p className="text-sm text-neutral-500 mt-1">
+                    {currentLevel === 1 && '理解需求的本质和范围'}
+                    {currentLevel === 2 && '按领域深入探索具体需求'}
+                    {currentLevel === 3 && '深入实现细节'}
+                    {currentLevel === 4 && '确认范围边界，防止范围蔓延'}
+                    {currentLevel === 5 && '确认需求摘要，准备生成 PRD'}
+                  </p>
+                </div>
 
-              {/* Questions */}
-              <div className="space-y-6">
-                {currentQuestions.map((question, index) => {
-                  const questionId = `L${currentLevel}-Q${index + 1}`;
-                  const currentAnswer = answers[questionId]?.value;
+                {/* Questions */}
+                <div className="space-y-6">
+                  {currentQuestions.map((question, index) => {
+                    const questionId = `L${currentLevel}-Q${index + 1}`;
+                    const currentAnswer = answers[questionId]?.value;
 
-                  return (
-                    <div key={questionId} className="bg-neutral-50 rounded-lg p-4">
-                      <div className="flex items-start gap-3 mb-3">
-                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-neutral-200 text-neutral-600 text-sm font-medium flex items-center justify-center">
-                          {index + 1}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          {/* Use pre-wrap + mono for ASCII art (box-drawing chars or multi-line) */}
-                          {/[┌┐└┘├┤─│═╔╗╚╝║▶]/.test(question.question) ? (
-                            <pre className="font-mono text-sm text-neutral-900 whitespace-pre-wrap leading-relaxed overflow-x-auto">{question.question}</pre>
-                          ) : (
-                            <p className="font-medium text-neutral-900 whitespace-pre-wrap">{question.question}</p>
-                          )}
-                          {question.header && (
-                            <span className="inline-block mt-1 px-2 py-0.5 bg-neutral-200 text-neutral-600 text-xs rounded">
-                              {question.header}
-                            </span>
-                          )}
+                    return (
+                      <div key={questionId} className="bg-neutral-50 rounded-lg p-4">
+                        <div className="flex items-start gap-3 mb-3">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-neutral-200 text-neutral-600 text-sm font-medium flex items-center justify-center">
+                            {index + 1}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            {/* Use pre-wrap + mono for ASCII art (box-drawing chars or multi-line) */}
+                            {/[┌┐└┘├┤─│═╔╗╚╝║▶]/.test(question.question) ? (
+                              <pre className="font-mono text-sm text-neutral-900 whitespace-pre-wrap leading-relaxed overflow-x-auto">{question.question}</pre>
+                            ) : (
+                              <p className="font-medium text-neutral-900 whitespace-pre-wrap">{question.question}</p>
+                            )}
+                            {question.header && (
+                              <span className="inline-block mt-1 px-2 py-0.5 bg-neutral-200 text-neutral-600 text-xs rounded">
+                                {question.header}
+                              </span>
+                            )}
+                          </div>
                         </div>
+
+                        {/* Options */}
+                        {question.options && question.options.length > 0 ? (
+                          <div className="ml-9 space-y-2">
+                            {question.options.map((option, optIndex) => {
+                              const isOtherMode = otherSelected[questionId];
+                              const isSelected = !isOtherMode && (question.multiSelect
+                                ? Array.isArray(currentAnswer) && currentAnswer.includes(option.label)
+                                : currentAnswer === option.label);
+
+                              return (
+                                <button
+                                  key={optIndex}
+                                  onClick={() => {
+                                    // Clear "Other" mode when selecting a predefined option
+                                    setOtherSelected(prev => ({ ...prev, [questionId]: false }));
+                                    if (question.multiSelect) {
+                                      const current = Array.isArray(currentAnswer) ? currentAnswer : [];
+                                      const newValue = isSelected
+                                        ? current.filter(v => v !== option.label)
+                                        : [...current, option.label];
+                                      handleAnswer(index, newValue);
+                                    } else {
+                                      handleAnswer(index, option.label);
+                                    }
+                                  }}
+                                  className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                                    isSelected
+                                      ? 'border-neutral-900 bg-neutral-100 text-neutral-900'
+                                      : 'border-neutral-200 bg-white hover:border-neutral-300'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                                      isSelected ? 'border-neutral-900 bg-neutral-900' : 'border-neutral-300'
+                                    }`}>
+                                      {isSelected && (
+                                        <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                        </svg>
+                                      )}
+                                    </span>
+                                    <div>
+                                      <span className="font-medium">{option.label}</span>
+                                      {option.description && (
+                                        <p className="text-sm text-neutral-500 mt-0.5">{option.description}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </button>
+                              );
+                            })}
+
+                            {/* "Other" option with text input */}
+                            {!question.multiSelect && (
+                              <div className="space-y-2">
+                                <button
+                                  onClick={() => {
+                                    setOtherSelected(prev => ({ ...prev, [questionId]: true }));
+                                    // Clear the answer so user can type custom value
+                                    handleAnswer(index, '');
+                                  }}
+                                  className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                                    otherSelected[questionId]
+                                      ? 'border-neutral-900 bg-neutral-100 text-neutral-900'
+                                      : 'border-neutral-200 bg-white hover:border-neutral-300'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                                      otherSelected[questionId] ? 'border-neutral-900 bg-neutral-900' : 'border-neutral-300'
+                                    }`}>
+                                      {otherSelected[questionId] && (
+                                        <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                        </svg>
+                                      )}
+                                    </span>
+                                    <div>
+                                      <span className="font-medium">其他</span>
+                                      <p className="text-sm text-neutral-500 mt-0.5">输入自定义答案</p>
+                                    </div>
+                                  </div>
+                                </button>
+
+                                {/* Text input when "Other" is selected */}
+                                {otherSelected[questionId] && (
+                                  <textarea
+                                    value={typeof currentAnswer === 'string' ? currentAnswer : ''}
+                                    onChange={(e) => handleAnswer(index, e.target.value)}
+                                    placeholder="请输入你的答案..."
+                                    className="w-full p-3 border border-neutral-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-neutral-500 bg-white"
+                                    rows={2}
+                                    autoFocus
+                                  />
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          // Text input for questions without options
+                          <div className="ml-9">
+                            <textarea
+                              value={typeof currentAnswer === 'string' ? currentAnswer : ''}
+                              onChange={(e) => handleAnswer(index, e.target.value)}
+                              placeholder={question.placeholder || '请输入...'}
+                              className="w-full p-3 border border-neutral-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-neutral-500"
+                              rows={3}
+                            />
+                          </div>
+                        )}
                       </div>
-
-                      {/* Options */}
-                      {question.options && question.options.length > 0 ? (
-                        <div className="ml-9 space-y-2">
-                          {question.options.map((option, optIndex) => {
-                            const isOtherMode = otherSelected[questionId];
-                            const isSelected = !isOtherMode && (question.multiSelect
-                              ? Array.isArray(currentAnswer) && currentAnswer.includes(option.label)
-                              : currentAnswer === option.label);
-
-                            return (
-                              <button
-                                key={optIndex}
-                                onClick={() => {
-                                  // Clear "Other" mode when selecting a predefined option
-                                  setOtherSelected(prev => ({ ...prev, [questionId]: false }));
-                                  if (question.multiSelect) {
-                                    const current = Array.isArray(currentAnswer) ? currentAnswer : [];
-                                    const newValue = isSelected
-                                      ? current.filter(v => v !== option.label)
-                                      : [...current, option.label];
-                                    handleAnswer(index, newValue);
-                                  } else {
-                                    handleAnswer(index, option.label);
-                                  }
-                                }}
-                                className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                                  isSelected
-                                    ? 'border-neutral-900 bg-neutral-100 text-neutral-900'
-                                    : 'border-neutral-200 bg-white hover:border-neutral-300'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                                    isSelected ? 'border-neutral-900 bg-neutral-900' : 'border-neutral-300'
-                                  }`}>
-                                    {isSelected && (
-                                      <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                      </svg>
-                                    )}
-                                  </span>
-                                  <div>
-                                    <span className="font-medium">{option.label}</span>
-                                    {option.description && (
-                                      <p className="text-sm text-neutral-500 mt-0.5">{option.description}</p>
-                                    )}
-                                  </div>
-                                </div>
-                              </button>
-                            );
-                          })}
-
-                          {/* "Other" option with text input */}
-                          {!question.multiSelect && (
-                            <div className="space-y-2">
-                              <button
-                                onClick={() => {
-                                  setOtherSelected(prev => ({ ...prev, [questionId]: true }));
-                                  // Clear the answer so user can type custom value
-                                  handleAnswer(index, '');
-                                }}
-                                className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                                  otherSelected[questionId]
-                                    ? 'border-neutral-900 bg-neutral-100 text-neutral-900'
-                                    : 'border-neutral-200 bg-white hover:border-neutral-300'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                                    otherSelected[questionId] ? 'border-neutral-900 bg-neutral-900' : 'border-neutral-300'
-                                  }`}>
-                                    {otherSelected[questionId] && (
-                                      <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                      </svg>
-                                    )}
-                                  </span>
-                                  <div>
-                                    <span className="font-medium">其他</span>
-                                    <p className="text-sm text-neutral-500 mt-0.5">输入自定义答案</p>
-                                  </div>
-                                </div>
-                              </button>
-
-                              {/* Text input when "Other" is selected */}
-                              {otherSelected[questionId] && (
-                                <textarea
-                                  value={typeof currentAnswer === 'string' ? currentAnswer : ''}
-                                  onChange={(e) => handleAnswer(index, e.target.value)}
-                                  placeholder="请输入你的答案..."
-                                  className="w-full p-3 border border-neutral-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-neutral-500 bg-white"
-                                  rows={2}
-                                  autoFocus
-                                />
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        // Text input for questions without options
-                        <div className="ml-9">
-                          <textarea
-                            value={typeof currentAnswer === 'string' ? currentAnswer : ''}
-                            onChange={(e) => handleAnswer(index, e.target.value)}
-                            placeholder={question.placeholder || '请输入...'}
-                            className="w-full p-3 border border-neutral-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-neutral-500"
-                            rows={3}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* Submit Button */}
-              <div className="pt-4 border-t border-neutral-200">
+              {/* Submit Button - fixed at bottom */}
+              <div className="flex-shrink-0 px-6 py-4 border-t border-neutral-200 bg-white">
                 <button
                   onClick={handleSubmitAnswers}
                   disabled={!allAnswered || isLoading}
