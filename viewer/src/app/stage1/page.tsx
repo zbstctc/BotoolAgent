@@ -397,7 +397,7 @@ function Stage1PageContent() {
     // The CLI will resume from the saved session if cliSessionId is set
     const resumeMessage = currentLevel === 5 && completedLevels.includes(5)
       ? '请生成 PRD 文档'
-      : `请继续 L${currentLevel} 的问答`;
+      : `请继续 ${selectedMode === 'transform' ? 'T' : 'L'}${currentLevel} 的问答`;
     sendMessage(resumeMessage);
   }, [isStarted, isLoading, currentLevel, completedLevels, sendMessage]);
 
@@ -593,7 +593,7 @@ function Stage1PageContent() {
       }
 
       if (activeProject) {
-        updateProject(activeProject.id, { prdId: data.id });
+        updateProject(activeProject.id, { prdId: data.id, currentStage: 2 });
       }
 
       setSavedPrdId(data.id);
@@ -608,12 +608,9 @@ function Stage1PageContent() {
 
   // Handle transition
   const handleTransitionConfirm = useCallback(() => {
-    if (activeProject) {
-      updateProject(activeProject.id, { currentStage: 2 });
-    }
     const modeParam = selectedMode ? `&mode=${selectedMode}` : '';
     router.push(`/stage2?prd=${savedPrdId}${modeParam}`);
-  }, [activeProject, updateProject, router, savedPrdId, selectedMode]);
+  }, [router, savedPrdId, selectedMode]);
 
   const handleTransitionLater = useCallback(() => {
     setShowTransitionModal(false);
@@ -650,7 +647,7 @@ function Stage1PageContent() {
   // Stage status
   const stageStatus = prdDraft
     ? '已生成 PRD'
-    : `L${currentLevel} 进行中`;
+    : `${selectedMode === 'transform' ? 'T' : 'L'}${currentLevel} 进行中`;
 
   // Handle mode selection
   const handleModeSelect = useCallback((mode: PipelineMode) => {
@@ -853,6 +850,7 @@ function Stage1PageContent() {
             levels={levels}
             collectedSummary={collectedSummary}
             codebaseScanned={codebaseScanned}
+            isTransformMode={selectedMode === 'transform'}
             onLevelClick={() => {
               // In CLI mode, level navigation is controlled by the Skill
               // So we don't allow manual level switching
@@ -911,7 +909,7 @@ function Stage1PageContent() {
                       </span>
                     </div>
                     <p className="text-sm font-medium text-neutral-700">
-                      {toolCallCount === 0 ? 'AI 正在启动...' : `L${currentLevel} 分析中...`}
+                      {toolCallCount === 0 ? 'AI 正在启动...' : `${selectedMode === 'transform' ? 'T' : 'L'}${currentLevel} ${selectedMode === 'transform' ? '处理中...' : '分析中...'}`}
                     </p>
                     {toolLabel && (
                       <p className="text-xs text-neutral-400 mt-1">{toolLabel}</p>
@@ -965,14 +963,29 @@ function Stage1PageContent() {
                 {/* Level Header */}
                 <div className="border-b border-neutral-200 pb-4">
                   <h2 className="text-xl font-semibold text-neutral-900">
-                    L{currentLevel}: {currentLevel === 1 ? '核心识别' : currentLevel === 2 ? '领域分支' : currentLevel === 3 ? '细节深入' : currentLevel === 4 ? '边界确认' : '确认门控'}
+                    {selectedMode === 'transform'
+                      ? `T${currentLevel}: ${currentLevel === 1 ? '文档解析' : currentLevel === 2 ? '覆盖度分析' : currentLevel === 3 ? '补充问答' : currentLevel === 4 ? '需求分解' : '确认生成'}`
+                      : `L${currentLevel}: ${currentLevel === 1 ? '核心识别' : currentLevel === 2 ? '领域分支' : currentLevel === 3 ? '细节深入' : currentLevel === 4 ? '边界确认' : '确认门控'}`
+                    }
                   </h2>
                   <p className="text-sm text-neutral-500 mt-1">
-                    {currentLevel === 1 && '理解需求的本质和范围'}
-                    {currentLevel === 2 && '按领域深入探索具体需求'}
-                    {currentLevel === 3 && '深入实现细节'}
-                    {currentLevel === 4 && '确认范围边界，防止范围蔓延'}
-                    {currentLevel === 5 && '确认需求摘要，准备生成 PRD'}
+                    {selectedMode === 'transform' ? (
+                      <>
+                        {currentLevel === 1 && '读取并解析源文档结构'}
+                        {currentLevel === 2 && '分析覆盖度，识别缺口'}
+                        {currentLevel === 3 && '针对缺口补充问答'}
+                        {currentLevel === 4 && '将需求拆解为开发任务'}
+                        {currentLevel === 5 && '确认摘要并生成 PRD'}
+                      </>
+                    ) : (
+                      <>
+                        {currentLevel === 1 && '理解需求的本质和范围'}
+                        {currentLevel === 2 && '按领域深入探索具体需求'}
+                        {currentLevel === 3 && '深入实现细节'}
+                        {currentLevel === 4 && '确认范围边界，防止范围蔓延'}
+                        {currentLevel === 5 && '确认需求摘要，准备生成 PRD'}
+                      </>
+                    )}
                   </p>
                 </div>
 
@@ -1181,7 +1194,7 @@ function Stage1PageContent() {
                 <div className="animate-spin h-8 w-8 border-4 border-neutral-600 border-t-transparent rounded-full mb-2"></div>
                 <p className="text-sm text-neutral-600">正在恢复进度...</p>
                 <p className="text-xs text-neutral-400 mt-1">
-                  L{currentLevel} · 已完成 {completedLevels.length} 层
+                  {selectedMode === 'transform' ? 'T' : 'L'}{currentLevel} · 已完成 {completedLevels.length} {selectedMode === 'transform' ? '步' : '层'}
                 </p>
                 {/* Terminal activity feed */}
                 <TerminalActivityFeed lines={terminalLines} />

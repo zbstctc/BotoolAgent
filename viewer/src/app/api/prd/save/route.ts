@@ -6,11 +6,14 @@ import { getTasksDir } from '@/lib/project-root';
 const TASKS_DIR = getTasksDir();
 const SESSIONS_FILE = path.join(TASKS_DIR, '.prd-sessions.json');
 
+interface PrdSessionEntry {
+  sessionId?: string;
+  updatedAt: string;
+  transformedFrom?: string;
+}
+
 interface PrdSessions {
-  [prdId: string]: {
-    sessionId: string;
-    updatedAt: string;
-  };
+  [prdId: string]: PrdSessionEntry;
 }
 
 function loadSessions(): PrdSessions {
@@ -100,13 +103,13 @@ export async function POST(request: NextRequest) {
 
       const prdId = uniqueFilename.replace(/^prd-/, '').replace(/\.md$/, '');
 
-      // Save session mapping if sessionId is provided
-      if (sessionId) {
+      // Save session mapping (always when transform, or when sessionId provided)
+      if (sessionId || sourceFilePath) {
         const sessions = loadSessions();
-        sessions[prdId] = {
-          sessionId,
-          updatedAt: new Date().toISOString(),
-        };
+        const entry: PrdSessionEntry = { updatedAt: new Date().toISOString() };
+        if (sessionId) entry.sessionId = sessionId;
+        if (sourceFilePath) entry.transformedFrom = path.basename(sourceFilePath);
+        sessions[prdId] = entry;
         saveSessions(sessions);
       }
 
@@ -133,13 +136,13 @@ export async function POST(request: NextRequest) {
 
     const prdId = filename.replace(/^prd-/, '').replace(/\.md$/, '');
 
-    // Save session mapping if sessionId is provided
-    if (sessionId) {
+    // Save session mapping (always when transform, or when sessionId provided)
+    if (sessionId || sourceFilePath) {
       const sessions = loadSessions();
-      sessions[prdId] = {
-        sessionId,
-        updatedAt: new Date().toISOString(),
-      };
+      const entry: PrdSessionEntry = { updatedAt: new Date().toISOString() };
+      if (sessionId) entry.sessionId = sessionId;
+      if (sourceFilePath) entry.transformedFrom = path.basename(sourceFilePath);
+      sessions[prdId] = entry;
       saveSessions(sessions);
     }
 
