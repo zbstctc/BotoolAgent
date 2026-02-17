@@ -1,4 +1,5 @@
-export { Header } from "./Header";
+// Header and Main are server components — import them directly, not via barrel
+// e.g. import { Header } from "@/components/Header"
 export { Main } from "./Main";
 export { StageIndicator } from "./StageIndicator";
 export { OptionCard } from "./OptionCard";

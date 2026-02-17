@@ -2,6 +2,7 @@ import Link from "next/link";
 import * as path from "path";
 import { Suspense } from "react";
 import { ProjectSwitcher } from "./ProjectSwitcher";
+import { ClaudeStatus } from "./ClaudeStatus";
 import { getProjectRoot } from "@/lib/project-root";
 
 function getRepoName(): string {
@@ -36,6 +37,7 @@ export function Header() {
               {repoName}
             </span>
           )}
+          <ClaudeStatus />
           <Suspense fallback={null}>
             <ProjectSwitcher />
           </Suspense>
