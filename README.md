@@ -42,53 +42,48 @@ claude auth login
 
 > `/botoolagent-update` 自动更新只需 `curl`（macOS/Linux 自带），无需 GitHub 账号。
 
-### 安装到你的项目
+### 安装到你的项目（一键安装）
 
-**方式 1：使用分发包（推荐，适合分发给团队）**
+在你的项目根目录执行以下命令：
 
 ```bash
-# 在 BotoolAgent 源码中生成分发包
-cd BotoolAgent && ./scripts/pack.sh
-
-# 将 BotoolAgent.tar.gz 分享给团队成员
-# 他们在自己的项目中解压并运行 setup.sh：
 cd my-project
-tar -xzf BotoolAgent.tar.gz
+
+# 自动下载最新版并安装
+VERSION=$(curl -s https://api.github.com/repos/zbstctc/BotoolAgent/releases/latest | grep '"tag_name"' | sed 's/.*: "//;s/".*//')
+curl -L -O "https://github.com/zbstctc/BotoolAgent/releases/download/${VERSION}/BotoolAgent-${VERSION}.tar.gz"
+tar -xzf "BotoolAgent-${VERSION}.tar.gz"
 cd BotoolAgent && ./setup.sh
 ```
 
-> `setup.sh` 由 `pack.sh` 自动生成并打包在 tar.gz 中，它会：
-> 1. 安装 Viewer 的 npm 依赖
-> 2. 设置脚本可执行权限
-> 3. 将 Skills 以符号链接安装到 `~/.claude/skills/`
+`setup.sh` 会自动完成：
+1. 安装 Viewer 的 npm 依赖
+2. 设置脚本可执行权限
+3. 将 7 个 Skills 以符号链接安装到 `~/.claude/skills/`
 
-**方式 2：直接复制（适合个人使用）**
-
-```bash
-# 将 BotoolAgent 目录复制到你的项目中
-cp -r /path/to/BotoolAgent your-project/BotoolAgent
-
-# 安装 Viewer 依赖
-cd your-project/BotoolAgent/viewer && npm install
-
-# 手动安装 Skills（符号链接到 ~/.claude/skills/）
-cd your-project/BotoolAgent
-for skill_dir in skills/BotoolAgent/*/; do
-  name=$(grep '^name:' "$skill_dir/SKILL.md" | head -1 | sed 's/name: *//;s/"//g')
-  mkdir -p ~/.claude/skills/$name
-  ln -sf "$(pwd)/$skill_dir/SKILL.md" ~/.claude/skills/$name/SKILL.md
-done
-```
+> **其他安装方式**：也可以手动从 [Releases](https://github.com/zbstctc/BotoolAgent/releases) 页面下载 tar.gz，或使用 `scripts/pack.sh` 生成分发包。
 
 ### 安装后验证
-
-安装完成后，在项目目录启动 Claude Code，输入 `/botoolagent` 即可验证：
 
 ```bash
 cd my-project
 claude
-# 在 Claude Code 中输入: /botoolagent
+# 在 Claude Code 中输入:
+/botoolagent
 ```
+
+浏览器会打开 Viewer 界面（`http://localhost:3100`），即表示安装成功。
+
+### 后续更新
+
+```bash
+cd my-project
+claude
+# 在 Claude Code 中输入:
+/botoolagent-update
+```
+
+自动从 GitHub 下载最新版，替换核心文件，保留你的项目数据（tasks/、rules/、logs/）。
 
 ## 两种运行模式
 
@@ -148,7 +143,7 @@ cd my-project && claude
 /botoolagent
 ```
 
-浏览器打开 `http://localhost:3000`，按 5 阶段引导操作。
+浏览器打开 `http://localhost:3100`，按 5 阶段引导操作。
 
 ### 方式 B：CLI Skills
 
@@ -278,7 +273,7 @@ PRD2JSON 会将任务按依赖关系和可并行性分成 sessions：
 
 | Skill | 命令 | 用途 |
 |-------|------|------|
-| **Main** | `/botoolagent` | 启动 Web Viewer（localhost:3000） |
+| **Main** | `/botoolagent` | 启动 Web Viewer（localhost:3100） |
 | **PyramidPRD** | `/botoolagent-pyramidprd` | 生成 PRD（Quick Fix / 功能开发 / 完整规划 / PRD 导入） |
 | **PRD2JSON** | `/botoolagent-prd2json` | PRD → prd.json 转换 + Enrichment |
 | **Coding** | `/botoolagent-coding` | 启动自动开发（Agent Teams + tmux） |
