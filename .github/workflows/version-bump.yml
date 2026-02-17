@@ -88,6 +88,13 @@ jobs:
         run: |
           echo "${{ steps.bump.outputs.new_version }}" > .botoolagent-version
 
+      - name: Commit version file back to repo
+        if: steps.bump.outputs.skip != 'true'
+        run: |
+          git add .botoolagent-version
+          git commit -m "chore: bump version to ${{ steps.bump.outputs.new_version }} [skip ci]"
+          git push origin main
+
       - name: Build distribution package
         if: steps.bump.outputs.skip != 'true'
         run: |

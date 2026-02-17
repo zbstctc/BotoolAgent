@@ -4,7 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 function getVersion(): string {
-  // 1. Try .botoolagent-version file (works in portable mode without git tags)
+  // 1. .botoolagent-version file is the source of truth for installed version
   try {
     const versionFile = path.resolve(__dirname, '..', '.botoolagent-version');
     const version = fs.readFileSync(versionFile, 'utf-8').trim();
@@ -12,7 +12,7 @@ function getVersion(): string {
   } catch {
     // ignore
   }
-  // 2. Try git tags (works in standalone mode)
+  // 2. Fallback to git tags (dev repo convenience)
   try {
     return execSync("git describe --tags --abbrev=0", { encoding: "utf-8" }).trim();
   } catch {
