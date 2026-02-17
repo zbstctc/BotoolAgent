@@ -16,16 +16,16 @@ Checks for and installs the latest BotoolAgent version from GitHub.
 
 ## Prerequisites
 
-This skill requires `gh` CLI to be installed and authenticated (the repo is private).
+This skill requires `curl` and internet access. No GitHub account or authentication needed (public repo).
 
 Run this check first:
 
 ```bash
-gh auth status 2>&1
+curl -s --head https://api.github.com/repos/zbstctc/BotoolAgent/releases/latest | head -1
 ```
 
-If `gh` is not authenticated, tell the user:
-> "You need to authenticate with GitHub first. Run `gh auth login` and follow the prompts."
+If the response is not `HTTP/2 200`, tell the user:
+> "Could not reach GitHub API. Check your network connection."
 
 Then stop.
 
@@ -46,13 +46,13 @@ If `.botool-version` doesn't exist, warn the user this installation may predate 
 ## Step 2: Check Latest Version on GitHub
 
 ```bash
-gh api repos/zbstctc/BotoolAgent/releases/latest --jq '.tag_name' 2>/dev/null
+curl -s https://api.github.com/repos/zbstctc/BotoolAgent/releases/latest | grep '"tag_name"' | sed 's/.*: "//;s/".*//'
 ```
 
 Save as `LATEST_VERSION`.
 
-If the API call fails, tell the user:
-> "Could not reach GitHub. Check your network and `gh auth status`."
+If the API call fails or returns empty, tell the user:
+> "Could not fetch latest version from GitHub. Check your network connection."
 
 Then stop.
 
@@ -70,7 +70,7 @@ If different, show the user:
 
 And show the release notes:
 ```bash
-gh api repos/zbstctc/BotoolAgent/releases/latest --jq '.body'
+curl -s https://api.github.com/repos/zbstctc/BotoolAgent/releases/latest | python3 -c "import sys,json; print(json.load(sys.stdin).get('body','No release notes.'))"
 ```
 
 Ask the user to confirm before proceeding.
@@ -83,13 +83,28 @@ Ask the user to confirm before proceeding.
 # Create temp directory
 TMPDIR=$(mktemp -d)
 
-# Download the release tarball
-gh release download LATEST_VERSION --repo zbstctc/BotoolAgent --archive tar.gz --dir "$TMPDIR"
+# Get the download URL for the distribution tarball (BotoolAgent-vX.Y.Z.tar.gz)
+DOWNLOAD_URL=$(curl -s https://api.github.com/repos/zbstctc/BotoolAgent/releases/latest | python3 -c "
+import sys, json
+assets = json.load(sys.stdin).get('assets', [])
+for a in assets:
+    if a['name'].startswith('BotoolAgent-') and a['name'].endswith('.tar.gz'):
+        print(a['browser_download_url'])
+        break
+")
+
+# Download
+curl -L -o "$TMPDIR/botool-release.tar.gz" "$DOWNLOAD_URL"
 
 # Extract
 cd "$TMPDIR"
-tar -xzf *.tar.gz
+tar -xzf botool-release.tar.gz
 EXTRACTED_DIR=$(ls -d */ | head -1)
+```
+
+If `DOWNLOAD_URL` is empty, fall back to the source tarball:
+```bash
+DOWNLOAD_URL="https://github.com/zbstctc/BotoolAgent/archive/refs/tags/LATEST_VERSION.tar.gz"
 ```
 
 ---

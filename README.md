@@ -32,18 +32,15 @@ Stage 5: 推送 → PR → 审查 → 合并
 | **Node.js 18+** | [nodejs.org](https://nodejs.org/) | Viewer Web 界面 |
 | **Git** | `brew install git` 或系统自带 | 版本管理 |
 | **tmux** | `brew install tmux` | Agent Teams 并行执行 |
-| **GitHub CLI** | `brew install gh` | 自动更新（`/botoolagent-update`） |
 
 **首次使用前必须完成：**
 
 ```bash
-# 1. 登录 Claude Code（需要 Anthropic API key 或 Claude Pro/Team 订阅）
+# 登录 Claude Code（需要 Anthropic API key 或 Claude Pro/Team 订阅）
 claude auth login
-
-# 2. 登录 GitHub CLI（BotoolAgent 自动更新需要）
-gh auth login
-# 选择 GitHub.com → HTTPS → 用浏览器登录
 ```
+
+> `/botoolagent-update` 自动更新只需 `curl`（macOS/Linux 自带），无需 GitHub 账号。
 
 ### 安装到你的项目
 
@@ -428,7 +425,7 @@ cd my-project && claude
 4. **保留**项目数据（tasks/、rules/、logs/、CLAUDE.md 等）
 5. 重新安装依赖
 
-> **前提**：目标机器上需要已安装并登录 `gh` CLI（`gh auth login`）
+> 只需 `curl` 和网络连接，无需 GitHub 账号（公开仓库）
 
 ### 查看当前版本
 
