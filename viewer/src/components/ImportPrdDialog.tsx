@@ -36,6 +36,12 @@ export function ImportPrdDialog({ isOpen, onClose }: ImportPrdDialogProps) {
   );
 }
 
+interface MarkerInfo {
+  id: string;
+  sessionId: string;
+  createdAt: string;
+}
+
 function ImportPrdDialogContent({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const { createProject } = useProject();
@@ -45,6 +51,9 @@ function ImportPrdDialogContent({ onClose }: { onClose: () => void }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFile, setSelectedFile] = useState<MdFileInfo | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+
+  // Duplicate import warning state
+  const [duplicateMarker, setDuplicateMarker] = useState<MarkerInfo | null>(null);
 
   // Fetch files on mount
   useEffect(() => {
@@ -84,31 +93,86 @@ function ImportPrdDialogContent({ onClose }: { onClose: () => void }) {
     return groups;
   }, [filteredFiles]);
 
-  // Handle import
-  const handleImport = useCallback(() => {
+  // Start import flow: create marker + navigate
+  const startImportFlow = useCallback((file: MdFileInfo) => {
+    const projectName = file.name.replace(/\.md$/, '');
+    const sessionId = createSession(projectName);
+    createProject(projectName, sessionId);
+
+    // Create marker file
+    fetch('/api/prd/marker', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceFilePath: file.path, sessionId }),
+    }).catch(() => { /* non-fatal */ });
+
+    sessionStorage.setItem(
+      `botool-initial-description-${sessionId}`,
+      file.path
+    );
+
+    router.push(
+      `/stage1?session=${sessionId}&mode=transform&file=${encodeURIComponent(file.path)}`
+    );
+    onClose();
+  }, [router, onClose, createProject]);
+
+  // Handle import (async with marker check)
+  const handleImport = useCallback(async () => {
     if (!selectedFile || isImporting) return;
+    setIsImporting(true);
+    setDuplicateMarker(null);
+
+    try {
+      // Check if marker already exists
+      const checkRes = await fetch(`/api/prd/marker?source=${encodeURIComponent(selectedFile.path)}`);
+      const checkData = await checkRes.json();
+
+      if (checkData.exists && checkData.marker) {
+        // Show duplicate warning
+        setDuplicateMarker({
+          id: checkData.marker.id,
+          sessionId: checkData.marker.sessionId,
+          createdAt: checkData.marker.createdAt,
+        });
+        setIsImporting(false);
+        return;
+      }
+
+      // No duplicate — start import
+      startImportFlow(selectedFile);
+    } catch (error) {
+      console.error('Failed to import:', error);
+      // Fallback: proceed without marker check
+      startImportFlow(selectedFile);
+    }
+  }, [selectedFile, isImporting, startImportFlow]);
+
+  // Continue previous import session
+  const handleContinuePrevious = useCallback(() => {
+    if (!duplicateMarker) return;
+    // Navigate to the previous session
+    router.push(`/stage1?session=${duplicateMarker.sessionId}&mode=transform&file=${encodeURIComponent(selectedFile?.path || '')}`);
+    onClose();
+  }, [duplicateMarker, selectedFile, router, onClose]);
+
+  // Restart import: delete old marker, create new
+  const handleRestartImport = useCallback(async () => {
+    if (!selectedFile || !duplicateMarker) return;
     setIsImporting(true);
 
     try {
-      const projectName = selectedFile.name.replace(/\.md$/, '');
-      const sessionId = createSession(projectName);
-      createProject(projectName, sessionId);
+      // Delete old marker
+      await fetch('/api/prd/marker', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markerId: duplicateMarker.id }),
+      });
+    } catch { /* non-fatal */ }
 
-      // Store the file path as initial description for Stage 1
-      sessionStorage.setItem(
-        `botool-initial-description-${sessionId}`,
-        selectedFile.path
-      );
-
-      router.push(
-        `/stage1?session=${sessionId}&mode=transform&file=${encodeURIComponent(selectedFile.path)}`
-      );
-      onClose();
-    } catch (error) {
-      console.error('Failed to import:', error);
-      setIsImporting(false);
-    }
-  }, [selectedFile, isImporting, router, onClose, createProject]);
+    setDuplicateMarker(null);
+    startImportFlow(selectedFile);
+  }, [selectedFile, duplicateMarker, startImportFlow]);
 
   return (
     <DialogContent className="sm:max-w-lg p-0 gap-0 max-h-[80vh] flex flex-col" showCloseButton={true}>
@@ -210,6 +274,52 @@ function ImportPrdDialogContent({ onClose }: { onClose: () => void }) {
           <pre className="text-xs text-neutral-700 whitespace-pre-wrap leading-relaxed bg-white border border-neutral-200 rounded-lg p-3 max-h-32 overflow-y-auto">
             {selectedFile.preview || '(空文件)'}
           </pre>
+        </div>
+      )}
+
+      {/* Duplicate import warning */}
+      {duplicateMarker && (
+        <div className="border-t border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-start gap-2 mb-3">
+            <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-amber-800">上次导入尚未完成</p>
+              <p className="text-xs text-amber-600 mt-1">
+                该文件于 {new Date(duplicateMarker.createdAt).toLocaleString('zh-CN')} 开始导入，但尚未完成。
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleContinuePrevious}
+              className="text-xs"
+            >
+              继续上次
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleRestartImport}
+              className="text-xs"
+            >
+              重新开始
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setDuplicateMarker(null)}
+              className="text-xs"
+            >
+              取消
+            </Button>
+          </div>
         </div>
       )}
 

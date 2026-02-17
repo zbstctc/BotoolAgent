@@ -222,7 +222,7 @@ function Stage1PageContent() {
     // Detect Bash tool that might write a PRD file (e.g. cat > tasks/prd-xxx.md)
     if (toolUse.name === 'Bash' && typeof toolUse.input?.command === 'string') {
       const cmd = toolUse.input.command as string;
-      const match = cmd.match(/prd-([a-zA-Z0-9_-]+)\.md/);
+      const match = cmd.match(/prd-([a-zA-Z0-9_\u4e00-\u9fff-]+)\.md/);
       if (match && (cmd.includes('>') || cmd.includes('tee') || cmd.includes('cat'))) {
         debugLog('[Stage1] Detected Bash writing PRD file:', match[1]);
         setWrittenPrdFileId(match[1]);
@@ -349,7 +349,7 @@ function Stage1PageContent() {
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
       if (msg.role === 'assistant') {
-        const fileMatch = msg.content.match(/(?:tasks\/)?prd-([a-zA-Z0-9_-]+)\.md/);
+        const fileMatch = msg.content.match(/(?:tasks\/)?prd-([a-zA-Z0-9_\u4e00-\u9fff-]+)\.md/);
         if (fileMatch && (msg.content.includes('PRD 已') || msg.content.includes('已生成') || msg.content.includes('已写入') || msg.content.includes('written'))) {
           debugLog('[Stage1] Detected PRD file reference in message:', fileMatch[1]);
           setWrittenPrdFileId(fileMatch[1]);
@@ -366,7 +366,7 @@ function Stage1PageContent() {
     if (!urlFile) return;
 
     // Extract PRD ID from URL file param (e.g. "tasks/prd-worktree-concurrent-botool.md")
-    const match = urlFile.match(/prd-([a-zA-Z0-9_-]+)\.md$/);
+    const match = urlFile.match(/prd-([a-zA-Z0-9_\u4e00-\u9fff-]+)\.md$/);
     if (match) {
       debugLog('[Stage1] Last-resort: trying PRD from URL file param:', match[1]);
       setWrittenPrdFileId(match[1]);
@@ -384,7 +384,7 @@ function Stage1PageContent() {
     } else if (selectedMode === 'feature') {
       sendMessage(`/botoolagent-pyramidprd [模式:功能开发] ${initialDescription}`);
     } else if (selectedMode === 'transform') {
-      sendMessage(`/botoolagent-pyramidprd [模式:导入] ${initialDescription}`);
+      sendMessage(`/botoolagent-pyramidprd [模式:导入] [请勿覆盖源文件] ${initialDescription}`);
     } else {
       sendMessage(`/botoolagent-pyramidprd ${initialDescription}`);
     }
@@ -570,10 +570,20 @@ function Stage1PageContent() {
     setSaveError(undefined);
 
     try {
+      // Build save payload with optional source context for transform mode
+      const savePayload: Record<string, string | undefined> = { content: prdDraft };
+      if (selectedMode === 'transform' && urlFile) {
+        savePayload.sourceFilePath = urlFile;
+        // Derive markerId from urlFile: strip directory, strip prd- prefix, strip .md
+        const base = urlFile.split('/').pop()?.replace(/\.md$/, '') || '';
+        const stripped = base.startsWith('prd-') ? base.slice(4) : base;
+        savePayload.markerId = `${stripped}-导入转换中`;
+      }
+
       const response = await fetch('/api/prd/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: prdDraft }),
+        body: JSON.stringify(savePayload),
       });
 
       const data = await response.json();
@@ -1162,7 +1172,7 @@ function Stage1PageContent() {
                 />
               </div>
             </div>
-          ) : needsResume ? (
+          ) : needsResume && !hasAttemptedResume ? (
             <div className="flex items-center justify-center h-full">
               <div className="flex flex-col items-center">
                 <div className="animate-spin h-8 w-8 border-4 border-neutral-600 border-t-transparent rounded-full mb-2"></div>
@@ -1173,6 +1183,32 @@ function Stage1PageContent() {
                 {/* Terminal activity feed */}
                 <TerminalActivityFeed lines={terminalLines} />
               </div>
+            </div>
+          ) : needsResume && hasAttemptedResume ? (
+            <div className="flex items-center justify-center h-full p-6">
+              <ErrorRecovery
+                error="无法恢复上次进度"
+                diagnosis="上次的 CLI 会话可能已失效（服务器重启或会话超时）。建议清除缓存重新开始。"
+                actions={[
+                  {
+                    label: '重新开始',
+                    onClick: () => {
+                      // Clear saved state and restart
+                      if (storageKey) localStorage.removeItem(storageKey);
+                      resetSession();
+                      window.location.reload();
+                    },
+                    variant: 'primary',
+                  },
+                  {
+                    label: '再试一次',
+                    onClick: () => {
+                      setHasAttemptedResume(false);
+                    },
+                    variant: 'secondary',
+                  },
+                ]}
+              />
             </div>
           ) : (
             <div className="flex items-center justify-center h-full">

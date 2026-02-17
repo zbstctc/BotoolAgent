@@ -10,11 +10,21 @@ export interface PRDItem {
   name: string;
   filename: string;
   createdAt: string;
-  status: 'draft' | 'ready' | 'in-progress' | 'completed';
+  status: 'draft' | 'ready' | 'in-progress' | 'completed' | 'importing';
   preview?: string;
 }
 
 function extractPRDName(content: string): string {
+  // Handle import marker files
+  if (content.includes('type: import-marker')) {
+    const sourceMatch = content.match(/sourcePath:\s*"?([^"\n]+)"?/);
+    if (sourceMatch) {
+      const sourceName = sourceMatch[1].split('/').pop()?.replace(/\.md$/, '') || '';
+      return `导入中: ${sourceName}`;
+    }
+    return '导入中';
+  }
+
   // Try to extract title from markdown # PRD: <name> or ## <name>
   const titleMatch = content.match(/^#\s*PRD:\s*(.+)$/m);
   if (titleMatch) {
@@ -63,6 +73,9 @@ function extractPreview(content: string): string {
 }
 
 function determinePRDStatus(filename: string): PRDItem['status'] {
+  // Detect import marker files
+  if (filename.includes('-导入转换中')) return 'importing';
+
   const baseName = filename.replace(/^prd-/, '').replace(/\.md$/, '');
 
   // First check registry for project-specific prd.json

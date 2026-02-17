@@ -13,7 +13,7 @@ interface PRDItem {
   name: string;
   filename: string;
   createdAt: string;
-  status: 'draft' | 'ready' | 'in-progress' | 'completed';
+  status: 'draft' | 'ready' | 'in-progress' | 'completed' | 'importing';
   preview?: string;
 }
 
@@ -511,18 +511,20 @@ function PRDCard({
   prd: PRDItem;
   onClick: () => void;
 }) {
-  const statusStyles = {
+  const statusStyles: Record<PRDItem['status'], string> = {
     draft: 'bg-neutral-100 text-neutral-600',
     ready: 'bg-green-100 text-green-700',
     'in-progress': 'bg-neutral-200 text-neutral-700',
     completed: 'bg-neutral-100 text-neutral-600',
+    importing: 'bg-amber-100 text-amber-700 animate-pulse',
   };
 
-  const statusLabels = {
+  const statusLabels: Record<PRDItem['status'], string> = {
     draft: 'Draft',
     ready: 'Ready',
     'in-progress': 'In Progress',
     completed: 'Completed',
+    importing: '导入中',
   };
 
   const formatDate = (dateStr: string) => {
@@ -552,13 +554,15 @@ function PRDCard({
         >
           {statusLabels[prd.status]}
         </span>
-        <Link
-          href={`/stage2?prd=${prd.id}`}
-          className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 opacity-0 group-hover:opacity-100 hover:bg-neutral-50 transition-all"
-          onClick={(e) => e.stopPropagation()}
-        >
-          Execute
-        </Link>
+        {prd.status !== 'importing' && (
+          <Link
+            href={`/stage2?prd=${prd.id}`}
+            className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 opacity-0 group-hover:opacity-100 hover:bg-neutral-50 transition-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            Execute
+          </Link>
+        )}
       </div>
     </div>
   );

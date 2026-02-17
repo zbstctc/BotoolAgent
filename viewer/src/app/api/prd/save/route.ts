@@ -57,7 +57,7 @@ function extractPRDName(content: string): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { content, name: providedName, sessionId } = body;
+    const { content, name: providedName, sessionId, sourceFilePath, markerId } = body;
 
     if (!content || typeof content !== 'string') {
       return NextResponse.json(
@@ -74,7 +74,16 @@ export async function POST(request: NextRequest) {
 
     // Create sanitized filename
     const sanitizedName = sanitizeFilename(prdName);
-    const filename = `prd-${sanitizedName}.md`;
+    let filename = `prd-${sanitizedName}.md`;
+
+    // Avoid overwriting the source file in transform/import mode
+    if (sourceFilePath) {
+      const sourceBasename = path.basename(sourceFilePath);
+      if (filename === sourceBasename) {
+        filename = `prd-${sanitizedName}-botool.md`;
+      }
+    }
+
     const filePath = path.join(TASKS_DIR, filename);
 
     // Ensure tasks directory exists
@@ -101,6 +110,14 @@ export async function POST(request: NextRequest) {
         saveSessions(sessions);
       }
 
+      // Clean up marker file if markerId provided
+      if (markerId) {
+        try {
+          const markerPath = path.join(TASKS_DIR, `prd-${markerId}.md`);
+          if (fs.existsSync(markerPath)) fs.unlinkSync(markerPath);
+        } catch { /* non-fatal */ }
+      }
+
       return NextResponse.json({
         success: true,
         filename: uniqueFilename,
@@ -124,6 +141,14 @@ export async function POST(request: NextRequest) {
         updatedAt: new Date().toISOString(),
       };
       saveSessions(sessions);
+    }
+
+    // Clean up marker file if markerId provided
+    if (markerId) {
+      try {
+        const markerPath = path.join(TASKS_DIR, `prd-${markerId}.md`);
+        if (fs.existsSync(markerPath)) fs.unlinkSync(markerPath);
+      } catch { /* non-fatal */ }
     }
 
     return NextResponse.json({
