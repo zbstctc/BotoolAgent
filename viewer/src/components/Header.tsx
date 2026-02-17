@@ -1,8 +1,21 @@
 import Link from "next/link";
+import * as path from "path";
 import { Suspense } from "react";
 import { ProjectSwitcher } from "./ProjectSwitcher";
+import { getProjectRoot } from "@/lib/project-root";
+
+function getRepoName(): string {
+  try {
+    const projectRoot = getProjectRoot();
+    return path.basename(projectRoot);
+  } catch {
+    return "";
+  }
+}
 
 export function Header() {
+  const repoName = getRepoName();
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-neutral-200 bg-white/80 backdrop-blur-sm">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
@@ -18,6 +31,11 @@ export function Header() {
           </span>
         </div>
         <nav className="flex items-center gap-4">
+          {repoName && (
+            <span className="rounded-md bg-neutral-100 px-2.5 py-1 text-xs font-mono text-neutral-600">
+              {repoName}
+            </span>
+          )}
           <Suspense fallback={null}>
             <ProjectSwitcher />
           </Suspense>

@@ -53,7 +53,7 @@ ls prd.json 2>/dev/null
 
 恢复建议：
 - 运行 /botoolagent-prd2json 从 PRD 文档生成
-- 或通过 Viewer http://localhost:3100/stage2 完成 Stage 2
+- 或通过 Viewer the Viewer /stage2 page 完成 Stage 2
 ```
 Then stop here.
 
@@ -305,16 +305,19 @@ E2E 测试依赖 dev server，必须先确保环境干净：
 # 1. 杀掉残留的 Playwright 测试进程（避免端口/锁冲突）
 pkill -f "playwright test" 2>/dev/null || true
 
-# 2. 检查 dev server 是否在运行且健康
-curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:3100
+# 2. Auto-detect port: BotoolAgent repo = 3000, other project = 3100
+VIEWER_PORT="$([ -d BotoolAgent/viewer ] && echo 3101 || echo 3100)"
+
+# 3. 检查 dev server 是否在运行且健康
+curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:$VIEWER_PORT
 ```
 
 **处理逻辑：**
 - HTTP 200 → dev server 健康，继续
 - 超时或非 200 → dev server 假死或未运行，需要重启：
   ```bash
-  # 杀掉假死的 dev server
-  lsof -ti :3100 | xargs kill -9 2>/dev/null || true
+  VIEWER_PORT="$([ -d BotoolAgent/viewer ] && echo 3101 || echo 3100)"
+  lsof -ti :"$VIEWER_PORT" | xargs kill -9 2>/dev/null || true
   sleep 2
   # Playwright config 中的 webServer 会自动启动，无需手动启动
   ```

@@ -24,20 +24,36 @@ The BotoolAgent Viewer provides a modern web interface for:
 
 ## What This Skill Does
 
-1. **Check if Viewer dev server is running** on http://localhost:3100
-2. **Start the server** if not running (in background)
-3. **Open the Viewer** in the default browser
-4. **Output the access address** for the user
+1. **Detect context** and determine the correct port
+2. **Check if Viewer dev server is running**
+3. **Start the server** if not running (in background)
+4. **Open the Viewer** in the default browser
+5. **Output the access address** for the user
+
+---
+
+## Port Convention
+
+- **BotoolAgent repo** (standalone dev): port **3100** — `viewer/` directory exists at project root
+- **Other project** (portable mode): port **3101** — BotoolAgent installed as `BotoolAgent/` subdirectory
+
+Detection logic used throughout this skill:
+
+```bash
+# Auto-detect viewer directory and port
+VIEWER_DIR="$([ -d BotoolAgent/viewer ] && echo BotoolAgent/viewer || echo viewer)"
+VIEWER_PORT="$([ -d BotoolAgent/viewer ] && echo 3101 || echo 3100)"
+```
 
 ---
 
 ## Instructions
 
-### Step 1: Check Server Status
+### Step 1: Detect Context and Check Server Status
 
 ```bash
-# Check if port 3000 is in use
-lsof -i :3100 | grep LISTEN
+VIEWER_PORT="$([ -d BotoolAgent/viewer ] && echo 3101 || echo 3100)"
+lsof -i :"$VIEWER_PORT" | grep LISTEN
 ```
 
 ### Step 2: Start Server if Not Running
@@ -45,10 +61,9 @@ lsof -i :3100 | grep LISTEN
 If the server is not running:
 
 ```bash
-# Navigate to viewer directory and start dev server in background
-# Auto-detect: standalone (viewer/) or portable (BotoolAgent/viewer/)
 VIEWER_DIR="$([ -d BotoolAgent/viewer ] && echo BotoolAgent/viewer || echo viewer)"
-cd "$VIEWER_DIR" && npm run dev &
+VIEWER_PORT="$([ -d BotoolAgent/viewer ] && echo 3101 || echo 3100)"
+cd "$VIEWER_DIR" && npx next dev --port "$VIEWER_PORT" &
 ```
 
 Wait a few seconds for the server to start.
@@ -56,21 +71,22 @@ Wait a few seconds for the server to start.
 ### Step 3: Open in Browser
 
 ```bash
+VIEWER_PORT="$([ -d BotoolAgent/viewer ] && echo 3101 || echo 3100)"
 # macOS
-open http://localhost:3100
+open http://localhost:$VIEWER_PORT
 
 # Linux
-xdg-open http://localhost:3100
+xdg-open http://localhost:$VIEWER_PORT
 ```
 
 ### Step 4: Announce Access
 
-Output to the user:
+Output to the user (use the detected port):
 
 ```
 BotoolAgent Viewer is now running!
 
-Access URL: http://localhost:3100
+Access URL: http://localhost:<VIEWER_PORT>
 
 From here you can:
 - Create a new PRD: /stage1
@@ -82,14 +98,16 @@ From here you can:
 
 ## Quick Navigation URLs
 
-| URL | Purpose |
-|-----|---------|
-| http://localhost:3100 | Dashboard - view all PRDs and sessions |
-| http://localhost:3100/stage1 | Stage 1 - Create PRD with AI chat |
-| http://localhost:3100/stage2 | Stage 2 - Select PRD and convert to JSON |
-| http://localhost:3100/stage3 | Stage 3 - Monitor autonomous development |
-| http://localhost:3100/stage4 | Stage 4 - Testing & verification |
-| http://localhost:3100/stage5 | Stage 5 - Finalize, PR & merge |
+Use the detected `VIEWER_PORT` (3100 or 3101):
+
+| Path | Purpose |
+|------|---------|
+| `/` | Dashboard - view all PRDs and sessions |
+| `/stage1` | Stage 1 - Create PRD with AI chat |
+| `/stage2` | Stage 2 - Select PRD and convert to JSON |
+| `/stage3` | Stage 3 - Monitor autonomous development |
+| `/stage4` | Stage 4 - Testing & verification |
+| `/stage5` | Stage 5 - Finalize, PR & merge |
 
 ---
 
@@ -106,12 +124,12 @@ From here you can:
 ## Troubleshooting
 
 ### Server won't start
-- Check if port 3000 is already in use: `lsof -i :3100`
+- Check if port is already in use: `lsof -i :$VIEWER_PORT`
 - Check for errors in viewer directory: `cd BotoolAgent/viewer 2>/dev/null || cd viewer && npm run dev`
 
 ### Browser doesn't open
-- Manually navigate to http://localhost:3100 in your browser
+- Manually navigate to `http://localhost:<VIEWER_PORT>` in your browser
 
 ### Page shows error
-- Ensure you're in the BotoolAgent project directory
+- Ensure you're in the correct project directory
 - Run `cd BotoolAgent/viewer 2>/dev/null || cd viewer && npm install` if dependencies are missing

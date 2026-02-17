@@ -60,37 +60,38 @@ ls "$TASKS_DIR"/prd-*.md 2>/dev/null
 ```
 No PRD files found in tasks/ directory.
 
-Please create a PRD first using /botoolagent-pyramidprd or through the Viewer at:
-http://localhost:3100/stage1
+Please create a PRD first using /botoolagent-pyramidprd or through the Viewer.
 ```
 Then stop here.
 
 ### Step 2: Try Viewer Mode First
 
 ```bash
-# Check if Viewer server is running
-lsof -i :3100 | grep LISTEN
+# Auto-detect port: BotoolAgent repo = 3000, other project = 3100
+VIEWER_PORT="$([ -d BotoolAgent/viewer ] && echo 3101 || echo 3100)"
+lsof -i :"$VIEWER_PORT" | grep LISTEN
 ```
 
 **If server is NOT running:**
 ```bash
-# Start the Viewer dev server in background
 VIEWER_DIR="$([ -d BotoolAgent/viewer ] && echo BotoolAgent/viewer || echo viewer)"
-cd "$VIEWER_DIR" && npm run dev &
+VIEWER_PORT="$([ -d BotoolAgent/viewer ] && echo 3101 || echo 3100)"
+cd "$VIEWER_DIR" && npx next dev --port "$VIEWER_PORT" &
 sleep 3
 ```
 
 **Open Stage 2 directly:**
 ```bash
+VIEWER_PORT="$([ -d BotoolAgent/viewer ] && echo 3101 || echo 3100)"
 # macOS
-open http://localhost:3100/stage2
+open http://localhost:$VIEWER_PORT/stage2
 ```
 
 **Announce to user:**
 ```
 BotoolAgent Viewer is ready!
 
-Opening PRD Converter at: http://localhost:3100/stage2
+Opening PRD Converter at: http://localhost:<VIEWER_PORT>/stage2
 
 If you prefer the CLI experience, let me know and we can continue here.
 ```
@@ -579,7 +580,7 @@ Announce next steps:
 Ready for autonomous execution:
 
 **Option 1: Use the Viewer (Recommended)**
-Open http://localhost:3100/stage3 to monitor development visually.
+Open the Viewer `/stage3` page to monitor development visually.
 
 **Option 2: Run from terminal**
 ```bash
