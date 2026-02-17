@@ -83,10 +83,10 @@ CLAUDE_SUBAGENT_MODEL=""     # 子代理模型
 RATE_LIMIT_STRATEGY="personal"  # 限额策略 (team: 60s重试 / personal: 5h等待)
 
 # ============================================================================
-# 加载 .botoolrc 配置文件（如果存在）
+# 加载 .botoolagentrc 配置文件（如果存在）
 # ============================================================================
 load_config() {
-  local config_file="$SCRIPT_DIR/.state/botoolrc"
+  local config_file="$SCRIPT_DIR/.state/botoolagentrc"
 
   if [ -f "$config_file" ]; then
     echo ">>> 加载配置文件: $config_file"
@@ -94,7 +94,7 @@ load_config() {
     source "$config_file"
   else
     echo ">>> 配置文件不存在，使用默认值"
-    echo "    提示: 复制 docs/examples/botoolrc.example 为 .state/botoolrc 可自定义配置"
+    echo "    提示: 复制 docs/examples/botoolagentrc.example 为 .state/botoolagentrc 可自定义配置"
   fi
 
   # 环境变量覆盖配置文件（优先级最高）

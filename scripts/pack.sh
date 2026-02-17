@@ -32,7 +32,7 @@ cp "$SCRIPT_DIR/README.md" "$PACKAGE_DIR/"
 cp "$SCRIPT_DIR/LICENSE" "$PACKAGE_DIR/" 2>/dev/null || true
 cp "$SCRIPT_DIR/docs/examples/prd.json.example" "$PACKAGE_DIR/" 2>/dev/null || true
 cp "$SCRIPT_DIR/docs/examples/patterns.json.example" "$PACKAGE_DIR/" 2>/dev/null || true
-cp "$SCRIPT_DIR/docs/examples/botoolrc.example" "$PACKAGE_DIR/.botoolrc.example" 2>/dev/null || true
+cp "$SCRIPT_DIR/docs/examples/botoolagentrc.example" "$PACKAGE_DIR/.botoolagentrc.example" 2>/dev/null || true
 
 # Copy viewer source (without node_modules and .next)
 echo "  Copying viewer source..."
@@ -57,8 +57,8 @@ mkdir -p "$PACKAGE_DIR/archive"
 cp "$SCRIPT_DIR/.gitignore" "$PACKAGE_DIR/.gitignore"
 
 # Copy version and manifest for self-update support
-cp "$SCRIPT_DIR/.botool-version" "$PACKAGE_DIR/" 2>/dev/null || true
-cp "$SCRIPT_DIR/.botool-manifest.json" "$PACKAGE_DIR/" 2>/dev/null || true
+cp "$SCRIPT_DIR/.botoolagent-version" "$PACKAGE_DIR/" 2>/dev/null || true
+cp "$SCRIPT_DIR/.botoolagent-manifest.json" "$PACKAGE_DIR/" 2>/dev/null || true
 
 # Copy plugin config
 mkdir -p "$PACKAGE_DIR/.claude-plugin"

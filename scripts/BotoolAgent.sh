@@ -97,10 +97,10 @@ if [ "$PROJECT_DIR" != "$SCRIPT_DIR" ]; then
 fi
 
 # ============================================================================
-# 加载 .botoolrc 配置文件（如果存在）
+# 加载 .botoolagentrc 配置文件（如果存在）
 # ============================================================================
 load_config() {
-  local config_file="$SCRIPT_DIR/.state/botoolrc"
+  local config_file="$SCRIPT_DIR/.state/botoolagentrc"
   if [ -f "$config_file" ]; then
     echo ">>> 加载配置文件: $config_file"
     # shellcheck source=/dev/null

@@ -113,7 +113,7 @@ my-project/           <-- 你的项目（git 仓库）
 │   ├── viewer/       <-- Next.js Web 界面
 │   ├── tasks/        <-- PRD 文档存放
 │   ├── rules/        <-- 编码规范文档
-│   ├── .state/       <-- 运行时状态（agent-status, botoolrc 等）
+│   ├── .state/       <-- 运行时状态（agent-status, botoolagentrc 等）
 │   ├── archive/      <-- 历史运行存档
 │   ├── CLAUDE.md     <-- 项目级指令（auto-loaded）
 │   └── CLAUDE.lead.md <-- Lead Agent 运行时指令
@@ -292,23 +292,23 @@ PRD2JSON 会将任务按依赖关系和可并行性分成 sessions：
 | `CLAUDE.lead.md` | BotoolAgent/ | Lead Agent 运行时指令 |
 | `BotoolAgent.sh` | scripts/ | Ralph 外循环 + tmux launcher |
 | `pack.sh` | scripts/ | 打包分发脚本（生成 tar.gz + setup.sh） |
-| `.botool-version` | BotoolAgent/ | 当前版本号标记 |
-| `.botool-manifest.json` | BotoolAgent/ | 更新清单（核心文件 vs 用户数据） |
+| `.botoolagent-version` | BotoolAgent/ | 当前版本号标记 |
+| `.botoolagent-manifest.json` | BotoolAgent/ | 更新清单（核心文件 vs 用户数据） |
 | `tasks/` | BotoolAgent/ | PRD 文档存放目录 |
 | `rules/` | BotoolAgent/ | 编码规范文档（backend/frontend/testing） |
-| `.state/` | BotoolAgent/ | 运行时状态（agent-status, botoolrc, 限流/熔断） |
+| `.state/` | BotoolAgent/ | 运行时状态（agent-status, botoolagentrc, 限流/熔断） |
 | `archive/` | BotoolAgent/ | 历史运行存档（按日期 + 分支名） |
 | `viewer/` | BotoolAgent/ | Next.js Web 界面（5 阶段 + 16 组 API） |
 | `skills/` | BotoolAgent/ | 6 个 Claude Code Skill 定义 |
 
 ## 配置
 
-### botoolrc
+### botoolagentrc
 
-在 `.state/botoolrc` 自定义运行配置：
+在 `.state/botoolagentrc` 自定义运行配置：
 
 ```bash
-cp BotoolAgent/docs/examples/botoolrc.example BotoolAgent/.state/botoolrc
+cp BotoolAgent/docs/examples/botoolagentrc.example BotoolAgent/.state/botoolagentrc
 ```
 
 可配置项：
@@ -381,7 +381,7 @@ cd BotoolAgent
 - viewer/（源码，不含 node_modules/.next）
 - rules/（编码规范模板）
 - CLAUDE.md, CLAUDE.lead.md, README.md
-- .botool-version, .botool-manifest.json（自动更新支持）
+- .botoolagent-version, .botoolagent-manifest.json（自动更新支持）
 - setup.sh（自动生成，一键安装）
 
 接收者解压后运行 `cd BotoolAgent && ./setup.sh` 一次即可。
@@ -414,7 +414,7 @@ cd my-project && claude
 ```
 
 更新流程：
-1. 检查当前版本（`.botool-version`）
+1. 检查当前版本（`.botoolagent-version`）
 2. 查询 GitHub 最新 Release
 3. 下载并替换核心文件（scripts/、skills/、viewer/ 等）
 4. **保留**项目数据（tasks/、rules/、logs/、CLAUDE.md 等）
@@ -425,7 +425,7 @@ cd my-project && claude
 ### 查看当前版本
 
 ```bash
-cat .botool-version      # 文件中的版本号
+cat .botoolagent-version      # 文件中的版本号
 # 或查看 Viewer 左上角显示的版本号
 ```
 

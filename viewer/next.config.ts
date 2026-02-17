@@ -4,9 +4,9 @@ import * as fs from "fs";
 import * as path from "path";
 
 function getVersion(): string {
-  // 1. Try .botool-version file (works in portable mode without git tags)
+  // 1. Try .botoolagent-version file (works in portable mode without git tags)
   try {
-    const versionFile = path.resolve(__dirname, '..', '.botool-version');
+    const versionFile = path.resolve(__dirname, '..', '.botoolagent-version');
     const version = fs.readFileSync(versionFile, 'utf-8').trim();
     if (version) return version;
   } catch {

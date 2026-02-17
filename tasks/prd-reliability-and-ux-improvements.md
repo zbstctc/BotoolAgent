@@ -330,7 +330,7 @@ Stage 4 全部通过
 ### DT-010: BotoolAgentTeams.sh 模型 + teammate 配置
 **Description:** 为 BotoolAgentTeams.sh 增加模型选择和 teammate 模式配置。BotoolAgentTeams.sh 已内置 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 和 `--teammate-mode`，需要补充模型和 effort level 的环境变量传递。
 
-**.botoolrc 新增配置项：**
+**.botoolagentrc 新增配置项：**
 ```bash
 CLAUDE_MODEL="opus"              # opus | sonnet | haiku
 CLAUDE_EFFORT="high"             # low | medium | high
@@ -344,11 +344,11 @@ TMUX_ENV="$TMUX_ENV CLAUDE_CODE_EFFORT_LEVEL=${CLAUDE_EFFORT:-high}"
 ```
 
 **Acceptance Criteria:**
-- [ ] BotoolAgentTeams.sh 读取 .botoolrc 中的 CLAUDE_MODEL 配置
+- [ ] BotoolAgentTeams.sh 读取 .botoolagentrc 中的 CLAUDE_MODEL 配置
 - [ ] tmux session 启动时传递 `--model $CLAUDE_MODEL`（如果配置）
 - [ ] 传递 `CLAUDE_CODE_EFFORT_LEVEL` 环境变量
 - [ ] `.agent-status` 中记录当前使用的模型名
-- [ ] .botoolrc.example 包含新配置项及注释
+- [ ] .botoolagentrc.example 包含新配置项及注释
 - [ ] 在终端中验证
 
 ---
@@ -533,7 +533,7 @@ CLI Layer（开发者）          Viewer Layer（非技术同事）
 - WebSocket 替代 SSE
 - 移动端适配
 - 新用户引导/教程系统
-- Viewer 前端模型选择 UI（仅 .botoolrc 配置）
+- Viewer 前端模型选择 UI（仅 .botoolagentrc 配置）
 - 测试覆盖率强制门槛（不要求 80%，只要求 testCases 定义的项通过）
 
 ## Technical Considerations
@@ -549,7 +549,7 @@ CLI Layer（开发者）          Viewer Layer（非技术同事）
 - **`DELETE /api/agent/status` 改为 `tmux kill-session -t botool-teams`**（替代 kill PID）
 - **AgentDataPanel 需优雅处理 Agent Teams 模式缺失的 rateLimit/circuitBreaker 字段**
 - ErrorRecovery 组件放在 `viewer/src/components/ErrorRecovery/`
-- .botoolrc 已存在，DT-010 新增模型和 teammate 配置项
+- .botoolagentrc 已存在，DT-010 新增模型和 teammate 配置项
 - Claude Code 环境变量：`CLAUDE_CODE_EFFORT_LEVEL`、`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`
 - 断线恢复基于 `currentStage` 状态机，`useProjectValidation` 已有重定向逻辑
 - BotoolAgentTeams.sh 和 CLAUDE.team.md 已存在（前置创建完毕）

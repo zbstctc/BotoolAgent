@@ -34,12 +34,12 @@ Then stop.
 ## Step 1: Read Current Version
 
 ```bash
-cat .botool-version 2>/dev/null || echo "unknown"
+cat .botoolagent-version 2>/dev/null || echo "unknown"
 ```
 
 Save as `CURRENT_VERSION`.
 
-If `.botool-version` doesn't exist, warn the user this installation may predate the version system, and set `CURRENT_VERSION="v0.0.0"`.
+If `.botoolagent-version` doesn't exist, warn the user this installation may predate the version system, and set `CURRENT_VERSION="v0.0.0"`.
 
 ---
 
@@ -111,7 +111,7 @@ DOWNLOAD_URL="https://github.com/zbstctc/BotoolAgent/archive/refs/tags/LATEST_VE
 
 ## Step 5: Replace Core Files
 
-Read `.botool-manifest.json` from the **downloaded** version (not the local one) to get the `core` list.
+Read `.botoolagent-manifest.json` from the **downloaded** version (not the local one) to get the `core` list.
 
 For each path in `core`:
 - If it ends with `/`, it's a directory — delete the local one and copy the new one
@@ -136,7 +136,7 @@ cp "$TMPDIR/$EXTRACTED_DIR/viewer/package.json" ./viewer/package.json
 
 1. **Update version file**:
 ```bash
-echo "LATEST_VERSION" > .botool-version
+echo "LATEST_VERSION" > .botoolagent-version
 ```
 
 2. **Reinstall dependencies** (if viewer/package.json changed):
@@ -179,4 +179,4 @@ Tell the user:
 2. **NEVER** delete the entire project directory
 3. **ALWAYS** confirm with user before applying updates
 4. **ALWAYS** show what version is being installed and what changed
-5. If `.botool-manifest.json` is missing locally, treat ALL non-core directories as preserved
+5. If `.botoolagent-manifest.json` is missing locally, treat ALL non-core directories as preserved

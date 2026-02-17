@@ -7,7 +7,24 @@ BotoolAgent 是一个自主 AI 开发代理，通过 tmux + Agent Teams 模式�
 - **`scripts/BotoolAgent.sh`** — Ralph 外循环 (tmux launcher)，驱动 Lead Agent 执行
 - **`CLAUDE.lead.md`** — Lead Agent 运行时指令（被 BotoolAgent.sh 显式读取）
 - **`viewer/`** — Next.js Web 界面（5 阶段工作流）
-- **`skills/`** — 6 个 Claude Code Skill
+- **`skills/`** — 8 个 Claude Code Skill
+- **`scripts/pack.sh`** — 分发打包脚本，生成 tar.gz 包含自动生成的 `setup.sh`
+
+## 分发与安装流程
+
+`scripts/pack.sh` 负责将 BotoolAgent 打包为可分发的 tar.gz。打包时会**自动生成 `setup.sh`** 嵌入包中。
+
+**流程**：`pack.sh` 打包 → 用户解压到目标项目 → 运行 `./setup.sh` → 自动安装依赖 + 创建 `~/.claude/skills/` symlinks
+
+**`setup.sh` 自动完成的事情**：
+- `npm ci` 安装 viewer 依赖
+- 遍历 `skills/BotoolAgent/*/SKILL.md`，在 `~/.claude/skills/` 下创建 symlink
+- 修复 lightningcss 原生绑定（如缺失）
+
+**修改 skill、viewer 端口、文件结构时需同步考虑**：
+- 新增/删除 skill → `pack.sh` 会自动包含 `skills/` 目录，`setup.sh` 会自动遍历注册
+- 修改 viewer 端口 → skills 中使用端口自动检测（`[ -d BotoolAgent/viewer ]` 判断运行环境）
+- 修改核心文件列表 → 同步更新 `.botoolagent-manifest.json` 的 `core` 数组
 
 ## 质量要求
 

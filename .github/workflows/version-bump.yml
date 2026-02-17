@@ -83,10 +83,10 @@ jobs:
           echo "new_version=v${NEW_VERSION}" >> "$GITHUB_OUTPUT"
           echo "Bump: $BUMP -> v${NEW_VERSION}"
 
-      - name: Update .botool-version
+      - name: Update .botoolagent-version
         if: steps.bump.outputs.skip != 'true'
         run: |
-          echo "${{ steps.bump.outputs.new_version }}" > .botool-version
+          echo "${{ steps.bump.outputs.new_version }}" > .botoolagent-version
 
       - name: Build distribution package
         if: steps.bump.outputs.skip != 'true'

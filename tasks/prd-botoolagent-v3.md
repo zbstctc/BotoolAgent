@@ -7,7 +7,7 @@
 2. Stage 4 测试阶段
 3. Stage 5 Review 和合并阶段
 4. Ralph 高级功能（Rate Limiting、Circuit Breaker 等）
-5. 配置文件系统（.botoolrc）
+5. 配置文件系统（.botoolagentrc）
 
 ## Goals
 
@@ -205,7 +205,7 @@
 - 添加调用计数器和时间窗口
 - 默认每小时最多 100 次调用
 - 超过限制时自动等待
-- 从 .botoolrc 读取配置
+- 从 .botoolagentrc 读取配置
 - 显示限制状态
 - Typecheck passes (for any TypeScript parts)
 
@@ -216,7 +216,7 @@
 - 跟踪每次迭代后的任务完成数
 - 连续 3 次迭代无进展（无新任务完成）时停止
 - 停止时更新状态文件
-- 从 .botoolrc 读取阈值配置
+- 从 .botoolagentrc 读取阈值配置
 - 显示警告信息
 
 ### DT-019: BotoolAgent.sh - 双条件退出验证
@@ -248,17 +248,17 @@
 - 避免误判（如"我会做X"但没实际做）
 - 记录分析结果到日志
 
-### DT-022: .botoolrc 配置文件支持
+### DT-022: .botoolagentrc 配置文件支持
 **Description:** 作为用户，我希望通过配置文件自定义 BotoolAgent 行为。
 
 **Acceptance Criteria:**
-- 创建 `.botoolrc.example` 示例文件
-- BotoolAgent.sh 启动时读取 .botoolrc
+- 创建 `.botoolagentrc.example` 示例文件
+- BotoolAgent.sh 启动时读取 .botoolagentrc
 - 支持所有配置项（见设计文档）
 - 配置文件不存在时使用默认值
 - 支持环境变量覆盖
 
-### DT-023: .botoolrc Hooks 支持
+### DT-023: .botoolagentrc Hooks 支持
 **Description:** 作为用户，我希望在关键节点执行自定义脚本。
 
 **Acceptance Criteria:**
@@ -266,7 +266,7 @@
 - 支持 postIteration hook
 - 支持 onComplete hook
 - 支持 onError hook
-- Hook 脚本路径从 .botoolrc 读取
+- Hook 脚本路径从 .botoolagentrc 读取
 - Hook 执行失败不影响主流程
 
 ### DT-024: 完成通知功能
@@ -275,7 +275,7 @@
 **Acceptance Criteria:**
 - 支持 macOS 系统通知
 - 通知内容包含任务名和状态
-- 可在 .botoolrc 中启用/禁用
+- 可在 .botoolagentrc 中启用/禁用
 - 支持完成通知和错误通知
 
 ## Functional Requirements
@@ -285,7 +285,7 @@
 - FR-3: Stage 4 必须能运行所有配置的测试并显示结果
 - FR-4: Stage 5 必须能创建 PR 并执行合并
 - FR-5: Dashboard 必须显示所有任务的当前状态和历史
-- FR-6: BotoolAgent.sh 必须支持从 .botoolrc 读取配置
+- FR-6: BotoolAgent.sh 必须支持从 .botoolagentrc 读取配置
 - FR-7: Rate Limiting 必须防止 API 超限
 - FR-8: Circuit Breaker 必须在无进展时自动停止
 
