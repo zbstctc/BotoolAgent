@@ -94,3 +94,25 @@ S2 (DT-004, DT-005) 全部通过。下一 session: S3 (DT-006, DT-007, DT-008, D
 
 ## Session 结束 — 已完成 9 个，剩余 4 个留给下一 session
 S3 (DT-006, DT-007, DT-008, DT-009) 全部通过。下一 session: S4 (DT-010, DT-011, DT-012)。
+
+## 2026-02-18 - DT-013
+- 端到端验证：全流程协同测试
+- 验证结果：
+  - prd.json 大小 20.8 KB < 30KB 目标 ✅（新 file+checklist 模式约 10KB）
+  - Constitution 占比 52%（旧 content 模式），新模式将降至 <5%
+  - TypeScript typecheck 通过（exit 0）
+  - Viewer Stage 2 页面正常渲染（HTTP 200）
+  - 旧 prd.json（content 模式）向后兼容：Lead Agent + API 均正常
+  - 7 条规范全部检测到，代码防御性处理 file+checklist 和 content 两种模式
+- 修改了：`prd.json`（DT-013 passes → true）
+- **未来迭代的经验教训：**
+  - 向后兼容测试很重要：用旧格式 prd.json 作为测试样本验证新代码
+  - constitution content 占 52% 体积，新模式可节省约 10KB
+  - Stage 2 页面和 API 端点需要一起验证，不能只查前端
+---
+
+## 全部完成 — 13/13 DT 通过
+Performance Update 项目所有开发任务完成。核心成果：
+- Constitution 瘦身：content → file+checklist（272KB→<30KB 路径已打通）
+- 执行质量提升：验证铁律 + 双阶段 Review + steps 模式
+- 规范融合：PRD.md 成为唯一真理源

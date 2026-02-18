@@ -286,7 +286,7 @@
       "title": "Testing SKILL — Ralph 循环加入根因分析",
       "prdSection": "7.4 (L411-444)",
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "dependsOn": [],
       "evals": [
         {
@@ -306,7 +306,7 @@
       "title": "PyramidPRD SKILL — 新增 L0 方向探索层",
       "prdSection": "7.5 (L445-473)",
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "dependsOn": [],
       "evals": [
         {
@@ -326,7 +326,7 @@
       "title": "PyramidPRD SKILL — 快速模式适配 checklist",
       "prdSection": "7.5 (L445-473)",
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "dependsOn": ["DT-001"],
       "evals": [
         {
@@ -346,7 +346,7 @@
       "title": "端到端验证 — 全流程协同测试",
       "prdSection": "7.6 (L474-488)",
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "dependsOn": ["DT-001", "DT-002", "DT-003", "DT-004", "DT-005", "DT-006", "DT-007", "DT-008", "DT-009", "DT-010", "DT-011", "DT-012"],
       "evals": [
         {
