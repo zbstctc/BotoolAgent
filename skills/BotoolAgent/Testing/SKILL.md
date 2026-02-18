@@ -98,26 +98,60 @@ echo "项目目录: $PROJECT_DIR"
 
 ---
 
-## 自动修复规则（Ralph 迭代模式）
+## 自动修复规则（Ralph 迭代模式 + 根因分析）
 
 借鉴 BotoolAgent.sh 的 Ralph 弹性迭代模式，Testing 流水线遇到错误时
-**不立即停止**，而是自动尝试修复：
+**不立即停止**，而是自动尝试修复。**核心改进：按信号清晰度分档，避免试错式修复。**
+
+### 信号清晰度判断（每次修复循环前必须执行）
+
+收到错误信息后，先判断信号清晰度：
+
+```
+信号清晰（同时满足以下全部条件）：
+  ✓ 有 file:line:errorCode（精确定位）
+  ✓ 错误数 < 5 个
+  ✓ 错误类型 < 3 种
+  → 跳过根因分析，直接修复
+
+信号模糊（满足以下任一条件）：
+  ✗ 只有症状描述，无 file:line:errorCode
+  ✗ 错误数 >= 5 个
+  ✗ 错误类型 >= 3 种
+  → 执行三阶段根因分析
+```
+
+### 三阶段根因分析（信号模糊时）
+
+**Phase 1 — 根因诊断**：将错误分类为以下三种之一：
+- **独立错误**：每个错误互不相关，各自有独立原因
+- **级联错误**：一个根因导致多个下游错误（例如一个 interface 定义错误导致 10+ 个 TS 编译错误）
+- **环境问题**：非代码问题（mock 配置、依赖版本、dev server 状态等）
+
+**Phase 2 — 制定修复方案**：
+- 级联错误 → **优先修复根因**（修一个可能消除多个下游错误）
+- 独立错误 → 按严重程度逐个修复
+- 环境问题 → 修复环境配置而非代码
+
+**Phase 3 — 执行修复**：按方案执行，然后重跑检查。
 
 ### 单文件修复（默认）
-1. 分析错误输出，定位问题文件和原因
-2. 直接修改代码修复问题
-3. 重新运行该层检查命令
-4. **持续循环直到通过**
+1. **执行信号清晰度判断**
+2. 信号清晰 → 直接定位修复
+3. 信号模糊 → 三阶段根因分析后修复
+4. 重新运行该层检查命令
+5. **持续循环直到通过**
 
 ### 多文件并行修复（Agent Teams 模式）
 当一层发现 **3 个以上不同文件** 有错误时，启用 Agent Teams 并行修复：
-1. 按文件分组错误
-2. 使用 Task 工具并行启动多个修复 agent，每个 agent 负责一组文件
+1. **执行信号清晰度判断**（信号模糊时先完成根因分析再分派）
+2. 按文件分组错误（级联错误的根因文件优先修复）
+3. 使用 Task 工具并行启动多个修复 agent，每个 agent 负责一组文件
    - subagent_type: `general-purpose`
-   - 每个 agent 的 prompt 包含：错误信息、文件路径、修复指示
-3. 等待所有 agent 完成
-4. 重新运行该层检查命令
-5. **持续循环直到通过**
+   - 每个 agent 的 prompt 包含：错误信息、文件路径、修复指示、**根因分析结论**
+4. 等待所有 agent 完成
+5. 重新运行该层检查命令
+6. **持续循环直到通过**
 
 ### 修复后提交
 
@@ -130,11 +164,12 @@ git commit -m "fix(testing): auto-fix Layer N errors"
 ### Circuit Breaker（断路器）
 不设固定重试上限。持续修复直到通过，但有安全机制：
 
-- **无进展检测**：如果连续 3 次修复尝试后，错误数量和内容**完全没变化** → 触发断路器
+- **无进展检测**：如果连续 **2 次**修复尝试后，错误数量和内容**完全没变化** → 触发断路器
 - **断路器触发后**：不是停止，而是用 AskUserQuestion 问用户：
   1. 提供当前无法解决的错误详情
-  2. 让用户选择：手动修复后继续 / 跳过此层继续下一层 / 终止测试
-  3. 拿到用户指示后继续执行
+  2. 附带根因分析结论（如果执行过）
+  3. 让用户选择：手动修复后继续 / 跳过此层继续下一层 / 终止测试
+  4. 拿到用户指示后继续执行
 - **warnings 不阻塞**：只记录，不触发修复流程
 - **手动验收已移出**：不在 testing 流水线中执行，用户可在 finalize 前自行验证
 
@@ -152,23 +187,33 @@ cd "$PROJECT_DIR" && npx tsc --noEmit
 
 **如果 TypeCheck 通过：** 继续 Layer 1b。
 
-**如果 TypeCheck 失败（Ralph 自动修复）：**
+**如果 TypeCheck 失败（Ralph 自动修复 + 根因分析）：**
 
 Ralph 修复循环（持续直到通过或断路器触发）：
 
 1. 分析 tsc 错误输出，提取错误文件列表和具体错误
-2. 如果错误涉及 **≤ 3 个文件**：直接逐个修复
-3. 如果错误涉及 **> 3 个文件**：使用 Task 工具并行修复
-   - 按文件分组错误
+2. **信号清晰度判断**：
+   - tsc 输出天然有 file:line:errorCode → 检查错误数量和类型种数
+   - **信号清晰**（< 5 个错误，类型 < 3 种）→ 直接修复
+   - **信号模糊**（>= 5 个错误，或 >= 3 种类型）→ 三阶段根因分析：
+     - **Phase 1 根因诊断 — TypeCheck 特化重点：级联 vs 独立错误**
+       - 检查是否有 interface/type 定义错误导致下游级联（一个类型改动引发 N 个使用处报错）
+       - 区分：独立的类型错误 vs 由共享 interface/type 导致的级联错误
+     - **Phase 2 制定方案**：级联错误 → **优先修 interface/type 定义**（根因），可能一次消除多个下游错误
+     - **Phase 3 执行修复**
+3. 如果错误涉及 **≤ 3 个文件**：直接逐个修复
+4. 如果错误涉及 **> 3 个文件**：使用 Task 工具并行修复
+   - 按文件分组错误（级联根因文件优先）
    - 每组启动一个修复 agent（subagent_type: `general-purpose`）
-   - agent prompt: "修复以下 TypeScript 编译错误：\n{错误详情}\n文件路径：{path}\n只修改这个文件，修复所有列出的 TS 错误。"
+   - agent prompt: "修复以下 TypeScript 编译错误：\n{错误详情}\n文件路径：{path}\n根因分析：{分析结论}\n只修改这个文件，修复所有列出的 TS 错误。"
    - 等待全部完成
-4. 重新运行 `cd "$PROJECT_DIR" && npx tsc --noEmit`
-5. 如果通过 → 继续 Layer 1b
-6. 如果错误没变化（连续 3 次无进展）→ Circuit Breaker → AskUserQuestion：
+5. 重新运行 `cd "$PROJECT_DIR" && npx tsc --noEmit`
+6. 如果通过 → 继续 Layer 1b
+7. 如果错误没变化（连续 **2 次**无进展）→ Circuit Breaker → AskUserQuestion：
    ```
-   TypeCheck 自动修复无进展。以下错误无法自动解决：
+   TypeCheck 自动修复无进展（2 轮无进展）。以下错误无法自动解决：
    <错误列表>
+   根因分析结论：<分析结论>
 
    选项：
    1. 我来手动修复，修好后继续
@@ -179,7 +224,7 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 常见修复模式：
 - TS2322 类型不匹配 → 修正类型注解或类型断言
 - TS6133 未使用变量 → 删除或前缀 _
-- TS2339 属性不存在 → 更新接口定义
+- TS2339 属性不存在 → 更新接口定义（**高级联风险：检查是否是共享 interface**）
 - TS2307 找不到模块 → 修正导入路径
 
 ### 1b. Lint
@@ -199,27 +244,36 @@ cd "$PROJECT_DIR" && npm run lint
 
 **如果 Lint 通过（或只有 warnings）：** 记录 warnings，继续 Layer 2。
 
-**如果 Lint 失败（Ralph 自动修复）：**
+**如果 Lint 失败（Ralph 自动修复 + 根因分析）：**
 
 Ralph 修复循环（持续直到通过或断路器触发）：
 
-1. 首先尝试自动修复命令：
+1. **首先尝试 eslint --fix（Lint 特化：先自动修复再分析）**：
    ```bash
    cd "$PROJECT_DIR" && npx eslint --fix .
    ```
 2. 重新运行 `cd "$PROJECT_DIR" && npm run lint`
 3. 如果仍有 errors（忽略 warnings）：
-   - 分析每个 error 的类型和文件
+   - **信号清晰度判断**：
+     - eslint 输出天然有 file:line:rule → 检查错误数量和类型种数
+     - **信号清晰**（< 5 个错误，类型 < 3 种）→ 直接修复
+     - **信号模糊**（>= 5 个错误，或 >= 3 种类型）→ 三阶段根因分析：
+       - **Phase 1 根因诊断 — Lint 特化重点：auto-fixable vs manual-fix**
+         - 分类：哪些规则是 eslint --fix 无法处理的（manual-fix）
+         - 检查是否有共同模式（如全局配置缺失导致批量报错）
+       - **Phase 2 制定方案**：优先处理可能是配置问题的批量错误，再处理 manual-fix
+       - **Phase 3 执行修复**
    - 如果 **≤ 3 文件**：直接修复
    - 如果 **> 3 文件**：Agent Teams 并行修复
      - 每个 agent（subagent_type: `general-purpose`）：
-     - prompt: "修复以下 ESLint 错误：\n{错误详情}\n文件路径：{path}\n只修改这个文件。"
+     - prompt: "修复以下 ESLint 错误：\n{错误详情}\n文件路径：{path}\n根因分析：{分析结论}\n只修改这个文件。"
 4. 重新运行 `cd "$PROJECT_DIR" && npm run lint`
 5. 如果只剩 warnings → 通过（记录 warnings）
-6. 如果错误没变化（连续 3 次无进展）→ Circuit Breaker → AskUserQuestion：
+6. 如果错误没变化（连续 **2 次**无进展）→ Circuit Breaker → AskUserQuestion：
    ```
-   Lint 自动修复无进展。以下错误无法自动解决：
+   Lint 自动修复无进展（2 轮无进展）。以下错误无法自动解决：
    <错误列表>
+   根因分析结论：<分析结论>
 
    选项：
    1. 我来手动修复，修好后继续
@@ -264,24 +318,35 @@ cd "$PROJECT_DIR" && npm run <detected_script>
 
 **如果测试通过：** 继续 Layer 3。
 
-**如果单元测试失败（Ralph 自动修复）：**
+**如果单元测试失败（Ralph 自动修复 + 根因分析）：**
 
 Ralph 修复循环（持续直到通过或断路器触发）：
 
 1. 分析测试输出（期望值 vs 实际值、错误堆栈）
-2. 判断根因并修复：
+2. **信号清晰度判断**：
+   - 检查测试输出是否有明确的 file:line + assertion diff
+   - **信号清晰**（< 5 个失败测试，类型 < 3 种 — 如全是 assertion 失败）→ 直接修复
+   - **信号模糊**（>= 5 个失败测试，或类型混杂）→ 三阶段根因分析：
+     - **Phase 1 根因诊断 — Unit Test 特化重点：assertion 失败 vs 环境问题**
+       - **assertion 失败**：实现逻辑错误 vs 期望值过期（实现改了但测试没更新）
+       - **环境问题**：mock/setup 配置错误、依赖未正确注入、测试间状态泄漏
+       - 检查是否有共享 setup/fixture 变更导致多测试级联失败
+     - **Phase 2 制定方案**：环境问题 → 优先修 setup/mock 配置（可能一次修好多个测试）；assertion → 判断是修实现还是更新期望
+     - **Phase 3 执行修复**
+3. 判断根因并修复：
    - 断言不匹配 → 检查实现逻辑，修复 bug 或更新期望值
    - mock 问题 → 修复 mock 配置
    - 导入错误 → 修复路径
    - 环境问题 → 修复 setup/teardown
-3. 如果涉及多个测试文件 **> 3 个**：Agent Teams 并行修复
+4. 如果涉及多个测试文件 **> 3 个**：Agent Teams 并行修复
    - 每个 agent（subagent_type: `general-purpose`）：
-   - prompt: "修复以下单元测试失败：\n{测试名 + 错误信息}\n文件路径：{path}\n分析根因并修复。"
-4. 重新运行 `cd "$PROJECT_DIR" && npm run <detected_script>`
-5. 如果错误没变化（连续 3 次无进展）→ Circuit Breaker → AskUserQuestion：
+   - prompt: "修复以下单元测试失败：\n{测试名 + 错误信息}\n文件路径：{path}\n根因分析：{分析结论}\n分析根因并修复。"
+5. 重新运行 `cd "$PROJECT_DIR" && npm run <detected_script>`
+6. 如果错误没变化（连续 **2 次**无进展）→ Circuit Breaker → AskUserQuestion：
    ```
-   单元测试自动修复无进展。以下测试持续失败：
+   单元测试自动修复无进展（2 轮无进展）。以下测试持续失败：
    <失败测试列表>
+   根因分析结论：<分析结论>
 
    选项：
    1. 我来手动修复，修好后继续
@@ -356,24 +421,35 @@ cd "$PROJECT_DIR" && npx playwright test
 
 **如果 E2E 测试通过：** 继续 Layer 4。
 
-**如果 E2E 测试失败（Ralph 自动修复）：**
+**如果 E2E 测试失败（Ralph 自动修复 + 根因分析）：**
 
 Ralph 修复循环（持续直到通过或断路器触发）：
 
 1. 分析 Playwright 错误（元素未找到、超时、断言失败）
-2. 修复：
-   - 选择器过期 → 更新选择器
+2. **信号清晰度判断**：
+   - 检查 Playwright 输出是否有明确的 test name + error type + selector/locator
+   - **信号清晰**（< 5 个失败测试，类型 < 3 种）→ 直接修复
+   - **信号模糊**（>= 5 个失败测试，或类型混杂 — selector/timeout/assertion 混合）→ 三阶段根因分析：
+     - **Phase 1 根因诊断 — E2E 特化重点：三种根因分类**
+       - **selector 过期**：页面结构/组件变更导致选择器失效（批量 selector 失败通常是共享组件改动）
+       - **实现 bug**：功能逻辑变更导致测试断言失败（检查最近的代码改动）
+       - **环境问题**：dev server 未就绪、端口冲突、网络超时、测试间状态泄漏
+     - **Phase 2 制定方案**：环境问题 → 先修环境再重跑；selector 过期 → 检查共享组件是否有批量影响；实现 bug → 修源码
+     - **Phase 3 执行修复**
+3. 修复：
+   - 选择器过期 → 更新选择器（检查是否有共享组件批量影响）
    - 超时 → 增加等待时间或添加 waitFor
    - 状态问题 → 修复 setup/teardown
    - 实现 bug → 修复源码
-3. 只重跑失败的测试（不跑全套）：
+4. 只重跑失败的测试（不跑全套）：
    ```bash
    cd "$PROJECT_DIR" && npx playwright test --grep "<failed_test_name>"
    ```
-4. 如果错误没变化（连续 3 次无进展）→ Circuit Breaker → AskUserQuestion：
+5. 如果错误没变化（连续 **2 次**无进展）→ Circuit Breaker → AskUserQuestion：
    ```
-   E2E 测试自动修复无进展。以下测试持续失败：
+   E2E 测试自动修复无进展（2 轮无进展）。以下测试持续失败：
    <失败测试列表>
+   根因分析结论：<分析结论>
 
    选项：
    1. 我来手动修复，修好后继续
@@ -429,19 +505,26 @@ Layer 4: 跳过（没有相对于 main 的代码改动）
 Ralph 修复循环（持续直到通过或断路器触发）：
 
 1. 逐个分析 HIGH 问题
-2. 按类型修复：
+2. **信号清晰度判断**（Code Review 的 HIGH 问题通常信号较清晰，但仍需判断）：
+   - **信号清晰**（< 5 个 HIGH 问题，类型 < 3 种）→ 直接修复
+   - **信号模糊**（>= 5 个 HIGH 问题，或类型混杂）→ 三阶段根因分析：
+     - **Phase 1 根因诊断**：检查 HIGH 问题是否有共同根因（如缺少统一的输入验证层）
+     - **Phase 2 制定方案**：优先修共同根因（如添加全局 sanitize 中间件），再修独立问题
+     - **Phase 3 执行修复**
+3. 按类型修复：
    - 安全漏洞（SQL 注入）→ 加参数化查询
    - 安全漏洞（XSS）→ 加转义/sanitize
    - 数据丢失风险 → 加事务/备份检查
    - 逻辑错误 → 修复逻辑
-3. 如果涉及多文件 **> 3 个**：Agent Teams 并行修复
+4. 如果涉及多文件 **> 3 个**：Agent Teams 并行修复
    - 每个 agent（subagent_type: `general-purpose`）：
-   - prompt: "修复以下 Code Review HIGH 问题：\n{问题描述}\n文件路径：{path}\n只修改这个文件。"
-4. 修复后重新运行 Code Review（重新获取 diff 并审查）
-5. 如果错误没变化（连续 3 次无进展）→ Circuit Breaker → AskUserQuestion：
+   - prompt: "修复以下 Code Review HIGH 问题：\n{问题描述}\n文件路径：{path}\n根因分析：{分析结论}\n只修改这个文件。"
+5. 修复后重新运行 Code Review（重新获取 diff 并审查）
+6. 如果错误没变化（连续 **2 次**无进展）→ Circuit Breaker → AskUserQuestion：
    ```
-   Code Review HIGH 问题自动修复无进展。以下问题无法自动解决：
+   Code Review HIGH 问题自动修复无进展（2 轮无进展）。以下问题无法自动解决：
    <HIGH 问题列表>
+   根因分析结论：<分析结论>
 
    选项：
    1. 我来手动修复，修好后继续
@@ -493,11 +576,11 @@ BotoolAgent 4 层自动化测试 — 全部通过!
 |------|------|----------|
 | 前置 | prd.json 不存在 | 停止，提示运行 `/botoolagent-prd2json` |
 | 前置 | branchName 缺失 | 停止，提示添加字段 |
-| Layer 1 | TypeCheck 失败 | **Ralph 自动修复** → 修不好才问用户 |
-| Layer 1 | Lint 失败 | **eslint --fix → Ralph 自动修复** → 修不好才问用户 |
-| Layer 2 | 单元测试失败 | **Ralph 自动修复** → 修不好才问用户 |
-| Layer 3 | E2E 测试失败 | **Ralph 自动修复** → 修不好才问用户 |
-| Layer 4 | Code Review 有 HIGH | **Ralph 自动修复** → 修不好才问用户 |
+| Layer 1 | TypeCheck 失败 | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
+| Layer 1 | Lint 失败 | **eslint --fix → 信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
+| Layer 2 | 单元测试失败 | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
+| Layer 3 | E2E 测试失败 | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
+| Layer 4 | Code Review 有 HIGH | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
 
 ---
 
