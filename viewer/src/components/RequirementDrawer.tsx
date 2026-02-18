@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { MoreHorizontal, Archive, Trash2, GitBranch, ExternalLink } from 'lucide-react';
+import { MoreHorizontal, Archive, Trash2, GitBranch, ExternalLink, X } from 'lucide-react';
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetHeader,
   SheetTitle,
@@ -178,6 +179,7 @@ export function RequirementDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
+        showCloseButton={false}
         className="flex flex-col bg-white p-0 sm:max-w-[420px]"
       >
         {/* Header */}
@@ -185,11 +187,18 @@ export function RequirementDrawer({
           <SheetTitle className="truncate text-base font-semibold text-neutral-900">
             {requirement.name}
           </SheetTitle>
-          <MoreActionsMenu
-            requirement={requirement}
-            onDelete={onDelete}
-            onArchive={onArchive}
-          />
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <MoreActionsMenu
+              requirement={requirement}
+              onDelete={onDelete}
+              onArchive={onArchive}
+            />
+            <SheetClose asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-neutral-500 hover:text-neutral-900">
+                <X className="h-4 w-4" />
+              </Button>
+            </SheetClose>
+          </div>
         </SheetHeader>
 
         {/* Scrollable body */}
