@@ -13,7 +13,6 @@ BOTOOL_TEAMMATE_MODE="${BOTOOL_TEAMMATE_MODE:-in-process}"
 MAX_ROUNDS=20             # Ralph 外循环最大轮次
 ROUND_COOLDOWN=10         # 轮次间冷却（秒）
 STALL_TIMEOUT=900         # 卡住检测超时（秒，默认 15 分钟）
-MAX_WALL_TIME=7200        # 全局最大运行时间（秒，默认 2 小时）
 
 # ============================================================================
 # Signal handler: cleanup tmux session
@@ -437,20 +436,9 @@ start_session() {
 # Ralph 外循环: 自动重启 session 直到所有任务完成
 # ============================================================================
 CURRENT_ROUND=0
-WALL_START=$(date +%s)
 FINAL_STATUS_SET=false
 
 for CURRENT_ROUND in $(seq 1 $MAX_ROUNDS); do
-  # 0. 全局超时检测（防止无限运行）
-  local_now=$(date +%s)
-  wall_elapsed=$(( local_now - WALL_START ))
-  if [ "$wall_elapsed" -ge "$MAX_WALL_TIME" ]; then
-    echo ">>> 达到全局超时限制（${MAX_WALL_TIME}秒 / $(( MAX_WALL_TIME / 3600 ))小时），停止运行"
-    update_status "wall_timeout" "全局超时（${wall_elapsed}秒），轮次 $CURRENT_ROUND/$MAX_ROUNDS"
-    FINAL_STATUS_SET=true
-    break
-  fi
-
   # 1. 检查是否还有未完成任务
   if check_all_tasks_complete; then
     echo ">>> 所有任务已完成！"
@@ -486,7 +474,7 @@ for CURRENT_ROUND in $(seq 1 $MAX_ROUNDS); do
 done
 
 # ============================================================================
-# 最终状态（跳过如果 wall_timeout 已设置）
+# 最终状态
 # ============================================================================
 if [ "$FINAL_STATUS_SET" = "false" ]; then
   if check_all_tasks_complete; then
