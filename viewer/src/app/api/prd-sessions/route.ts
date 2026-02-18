@@ -1,37 +1,92 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getTasksDir } from '@/lib/project-root';
+import { getTasksDir, getProjectSessionPath } from '@/lib/project-root';
 
 const TASKS_DIR = getTasksDir();
-const SESSIONS_FILE = path.join(TASKS_DIR, '.prd-sessions.json');
 
 interface SessionInfo {
-  sessionId: string;
+  sessionId?: string;
   updatedAt: string;
+  transformedFrom?: string;
 }
 
-interface PrdSessions {
-  [prdId: string]: SessionInfo;
-}
-
-function loadSessions(): PrdSessions {
+/**
+ * Load session for a specific project from tasks/{projectId}/prd-session.json.
+ * Falls back to global .prd-sessions.json for backward compat.
+ */
+function loadSession(prdId: string): SessionInfo | null {
+  // Try new per-project format first
   try {
-    if (fs.existsSync(SESSIONS_FILE)) {
-      return JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf-8'));
+    const sessionPath = getProjectSessionPath(prdId);
+    if (fs.existsSync(sessionPath)) {
+      return JSON.parse(fs.readFileSync(sessionPath, 'utf-8'));
     }
   } catch {
-    console.error('Error loading sessions file');
+    console.error('Error loading project session file');
   }
-  return {};
+
+  // Fall back to legacy global file
+  try {
+    const globalPath = path.join(TASKS_DIR, '.prd-sessions.json');
+    if (fs.existsSync(globalPath)) {
+      const all = JSON.parse(fs.readFileSync(globalPath, 'utf-8'));
+      if (all[prdId]) return all[prdId];
+    }
+  } catch {
+    // Ignore
+  }
+
+  return null;
 }
 
-function saveSessions(sessions: PrdSessions): void {
-  // Ensure tasks directory exists
-  if (!fs.existsSync(TASKS_DIR)) {
-    fs.mkdirSync(TASKS_DIR, { recursive: true });
+/**
+ * Save session for a specific project to tasks/{projectId}/prd-session.json.
+ */
+function saveSession(prdId: string, session: SessionInfo): void {
+  const sessionPath = getProjectSessionPath(prdId);
+  const dir = path.dirname(sessionPath);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(sessionPath, JSON.stringify(session, null, 2), 'utf-8');
+}
+
+/**
+ * Load all sessions by scanning per-project files and merging with legacy global file.
+ */
+function loadAllSessions(): Record<string, SessionInfo> {
+  const result: Record<string, SessionInfo> = {};
+
+  // Load from legacy global file
+  try {
+    const globalPath = path.join(TASKS_DIR, '.prd-sessions.json');
+    if (fs.existsSync(globalPath)) {
+      const legacy = JSON.parse(fs.readFileSync(globalPath, 'utf-8'));
+      Object.assign(result, legacy);
+    }
+  } catch {
+    // Ignore
   }
-  fs.writeFileSync(SESSIONS_FILE, JSON.stringify(sessions, null, 2), 'utf-8');
+
+  // Scan per-project session files (override legacy entries)
+  try {
+    if (fs.existsSync(TASKS_DIR)) {
+      const entries = fs.readdirSync(TASKS_DIR, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const sessionPath = getProjectSessionPath(entry.name);
+        if (fs.existsSync(sessionPath)) {
+          try {
+            const session = JSON.parse(fs.readFileSync(sessionPath, 'utf-8'));
+            result[entry.name] = session;
+          } catch { /* skip malformed files */ }
+        }
+      }
+    }
+  } catch {
+    // Ignore scan errors
+  }
+
+  return result;
 }
 
 // GET /api/prd-sessions - Get all sessions or specific session by prdId query param
@@ -40,11 +95,9 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const prdId = searchParams.get('prdId');
 
-    const sessions = loadSessions();
-
     if (prdId) {
       // Return specific session for a PRD
-      const session = sessions[prdId];
+      const session = loadSession(prdId);
       if (session) {
         return NextResponse.json({
           prdId,
@@ -55,6 +108,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Return all sessions
+    const sessions = loadAllSessions();
     return NextResponse.json({ sessions });
   } catch (error) {
     console.error('Error getting sessions:', error);
@@ -85,12 +139,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const sessions = loadSessions();
-    sessions[prdId] = {
+    const existing = loadSession(prdId);
+    const session: SessionInfo = {
+      ...existing,
       sessionId,
       updatedAt: new Date().toISOString(),
     };
-    saveSessions(sessions);
+    saveSession(prdId, session);
 
     return NextResponse.json({
       success: true,
@@ -119,11 +174,25 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const sessions = loadSessions();
-    if (sessions[prdId]) {
-      delete sessions[prdId];
-      saveSessions(sessions);
-    }
+    // Delete per-project session file if it exists
+    try {
+      const sessionPath = getProjectSessionPath(prdId);
+      if (fs.existsSync(sessionPath)) {
+        fs.unlinkSync(sessionPath);
+      }
+    } catch { /* non-fatal */ }
+
+    // Also remove from legacy global file if present
+    try {
+      const globalPath = path.join(TASKS_DIR, '.prd-sessions.json');
+      if (fs.existsSync(globalPath)) {
+        const all = JSON.parse(fs.readFileSync(globalPath, 'utf-8'));
+        if (all[prdId]) {
+          delete all[prdId];
+          fs.writeFileSync(globalPath, JSON.stringify(all, null, 2), 'utf-8');
+        }
+      }
+    } catch { /* non-fatal */ }
 
     return NextResponse.json({
       success: true,

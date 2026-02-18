@@ -3,14 +3,24 @@
   "projects": {
     "performance-update": {
       "name": "BotoolAgent Performance Update",
-      "prdMd": "prd-performance-update.md",
-      "prdJson": "prd-performance-update.json",
-      "progress": "progress-performance-update.txt",
+      "prdMd": "performance-update/prd.md",
+      "prdJson": "performance-update/prd.json",
+      "progress": "performance-update/progress.txt",
       "branch": "botool/performance-update",
       "status": "coding",
       "createdAt": "2026-02-18T12:00:00.000Z",
       "updatedAt": "2026-02-18T12:00:00.000Z"
+    },
+    "dashboard-worktree-unified": {
+      "name": "BotoolAgent Dashboard \u91cd\u6784 + Worktree \u5e76\u53d1\u6267\u884c",
+      "prdMd": "dashboard-worktree-unified/prd.md",
+      "prdJson": "dashboard-worktree-unified/prd.json",
+      "progress": "dashboard-worktree-unified/progress.txt",
+      "branch": "botool/dashboard-worktree-unified",
+      "status": "coding",
+      "createdAt": "2026-02-18T18:00:00.000Z",
+      "updatedAt": "2026-02-18T18:00:00.000Z"
     }
   },
-  "activeProject": "performance-update"
+  "activeProject": "dashboard-worktree-unified"
 }

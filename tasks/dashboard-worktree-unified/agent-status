@@ -1,0 +1,11 @@
+{
+  "status": "running",
+  "message": "初始化完成，开始 S1 — DT-000a: 项目目录结构重组",
+  "timestamp": "2026-02-18 16:30:00",
+  "iteration": 1,
+  "maxIterations": 20,
+  "completed": 0,
+  "total": 5,
+  "currentTask": "DT-000a",
+  "retryCount": 0
+}

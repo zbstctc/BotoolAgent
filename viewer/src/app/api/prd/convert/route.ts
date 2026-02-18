@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CLIManager, CLIMessage } from '@/lib/cli-manager';
-import { getProjectRoot, getPrdJsonPath, getProgressPath, getProjectPrdJsonPath, getProjectProgressPath, getArchiveDir, getRegistryPath, isPortableMode } from '@/lib/project-root';
+import { getProjectRoot, getPrdJsonPath, getProgressPath, getProjectPrdJsonPath, getProjectPrdMdPath, getProjectProgressPath, getArchiveDir, getRegistryPath, isPortableMode } from '@/lib/project-root';
 
 // System prompt for PRD to JSON conversion (slim index format)
 const SYSTEM_PROMPT = `You are a PRD to JSON converter for BotoolAgent. Convert a PRD markdown document into a **slim prd.json** — an automation index. The PRD.md is the Single Source of Truth; prd.json only contains automation fields.
@@ -138,24 +138,35 @@ export async function POST(request: NextRequest) {
             const prdJson = JSON.parse(jsonMatch[0]);
 
             // Inject prdFile if not present (points to the source PRD)
-            // In portable mode, prefix with BotoolAgent/ since prd.json lives at project root
+            // New format: tasks/{id}/prd.md; portable mode: BotoolAgent/tasks/{id}/prd.md
             if (!prdJson.prdFile && prdId) {
               const tasksPrefix = isPortableMode() ? 'BotoolAgent/tasks' : 'tasks';
-              prdJson.prdFile = `${tasksPrefix}/prd-${prdId}.md`;
+              prdJson.prdFile = `${tasksPrefix}/${prdId}/prd.md`;
             }
 
             // Archive existing prd.json if it has a different branch
             await archiveIfNeeded(prdJson);
 
-            // Write prd.json - to project-specific path if projectId provided
+            // Write prd.json to per-project path
             const prdJsonPath = getProjectPrdJsonPath(projectId);
+            // Ensure project directory exists (in case prd.md was not saved via save route)
+            if (projectId) {
+              const prdMdPath = getProjectPrdMdPath(projectId);
+              if (!fs.existsSync(prdMdPath) && prdId) {
+                // Legacy: check for flat prd-{id}.md and copy to per-project location
+                const { getTasksDir } = await import('@/lib/project-root');
+                const legacyPath = require('path').join(getTasksDir(), `prd-${prdId}.md`);
+                const { default: fs2 } = await import('fs');
+                if (fs2.existsSync(legacyPath)) {
+                  fs2.mkdirSync(require('path').dirname(prdMdPath), { recursive: true });
+                  fs2.copyFileSync(legacyPath, prdMdPath);
+                }
+              }
+            }
             fs.writeFileSync(prdJsonPath, JSON.stringify(prdJson, null, 2));
 
-            // Also write to root prd.json for backward compatibility
             if (projectId) {
-              const rootPrdPath = getPrdJsonPath();
-              fs.writeFileSync(rootPrdPath, JSON.stringify(prdJson, null, 2));
-              // Update registry
+              // Update registry (no root prd.json double-write)
               updateRegistry(projectId, prdJson.project || prdId, prdJson.branchName, 'coding');
             }
 
@@ -325,9 +336,9 @@ function updateRegistry(projectId: string, name: string, branch?: string, status
 
     registry.projects[projectId] = {
       name: name || existing?.name || projectId,
-      prdMd: `prd-${projectId}.md`,
-      prdJson: `prd-${projectId}.json`,
-      progress: `progress-${projectId}.txt`,
+      prdMd: `${projectId}/prd.md`,
+      prdJson: `${projectId}/prd.json`,
+      progress: `${projectId}/progress.txt`,
       branch: branch || existing?.branch || `botool/${projectId}`,
       status: status || existing?.status || 'draft',
       createdAt: existing?.createdAt || now,

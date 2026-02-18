@@ -11,27 +11,40 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const filename = `prd-${id}.md`;
-    const filePath = path.join(TASKS_DIR, filename);
 
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
-      return NextResponse.json(
-        { error: 'PRD not found' },
-        { status: 404 }
-      );
+    // Try new format: tasks/{id}/prd.md
+    const newFormatPath = path.join(TASKS_DIR, id, 'prd.md');
+    if (fs.existsSync(newFormatPath)) {
+      const content = fs.readFileSync(newFormatPath, 'utf-8');
+      const stats = fs.statSync(newFormatPath);
+      return NextResponse.json({
+        id,
+        filename: `${id}/prd.md`,
+        content,
+        createdAt: stats.birthtime.toISOString(),
+        modifiedAt: stats.mtime.toISOString(),
+      });
     }
 
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const stats = fs.statSync(filePath);
+    // Fall back to legacy format: tasks/prd-{id}.md
+    const legacyFilename = `prd-${id}.md`;
+    const legacyPath = path.join(TASKS_DIR, legacyFilename);
+    if (fs.existsSync(legacyPath)) {
+      const content = fs.readFileSync(legacyPath, 'utf-8');
+      const stats = fs.statSync(legacyPath);
+      return NextResponse.json({
+        id,
+        filename: legacyFilename,
+        content,
+        createdAt: stats.birthtime.toISOString(),
+        modifiedAt: stats.mtime.toISOString(),
+      });
+    }
 
-    return NextResponse.json({
-      id,
-      filename,
-      content,
-      createdAt: stats.birthtime.toISOString(),
-      modifiedAt: stats.mtime.toISOString(),
-    });
+    return NextResponse.json(
+      { error: 'PRD not found' },
+      { status: 404 }
+    );
   } catch (error) {
     console.error('Error reading PRD file:', error);
     return NextResponse.json(

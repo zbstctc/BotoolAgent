@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getTasksDir } from '@/lib/project-root';
+import { getTasksDir, getProjectDir, getProjectSessionPath } from '@/lib/project-root';
 
 const TASKS_DIR = getTasksDir();
-const SESSIONS_FILE = path.join(TASKS_DIR, '.prd-sessions.json');
 
 interface PrdSessionEntry {
   sessionId?: string;
@@ -12,23 +11,23 @@ interface PrdSessionEntry {
   transformedFrom?: string;
 }
 
-interface PrdSessions {
-  [prdId: string]: PrdSessionEntry;
-}
-
-function loadSessions(): PrdSessions {
+function loadProjectSession(projectId: string): PrdSessionEntry | null {
   try {
-    if (fs.existsSync(SESSIONS_FILE)) {
-      return JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf-8'));
+    const sessionPath = getProjectSessionPath(projectId);
+    if (fs.existsSync(sessionPath)) {
+      return JSON.parse(fs.readFileSync(sessionPath, 'utf-8'));
     }
   } catch {
-    console.error('Error loading sessions file');
+    console.error('Error loading project session file');
   }
-  return {};
+  return null;
 }
 
-function saveSessions(sessions: PrdSessions): void {
-  fs.writeFileSync(SESSIONS_FILE, JSON.stringify(sessions, null, 2), 'utf-8');
+function saveProjectSession(projectId: string, entry: PrdSessionEntry): void {
+  const sessionPath = getProjectSessionPath(projectId);
+  const dir = path.dirname(sessionPath);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(sessionPath, JSON.stringify(entry, null, 2), 'utf-8');
 }
 
 function sanitizeFilename(name: string): string {
@@ -75,89 +74,73 @@ export async function POST(request: NextRequest) {
       prdName = `prd-${Date.now()}`;
     }
 
-    // Create sanitized filename
-    const sanitizedName = sanitizeFilename(prdName);
-    let filename = `prd-${sanitizedName}.md`;
-
-    // Avoid overwriting the source file in transform/import mode
-    if (sourceFilePath) {
-      const sourceBasename = path.basename(sourceFilePath);
-      if (filename === sourceBasename) {
-        filename = `prd-${sanitizedName}-botool.md`;
-      }
-    }
-
-    const filePath = path.join(TASKS_DIR, filename);
+    // Create sanitized project ID from name
+    let projectId = sanitizeFilename(prdName);
 
     // Ensure tasks directory exists
     if (!fs.existsSync(TASKS_DIR)) {
       fs.mkdirSync(TASKS_DIR, { recursive: true });
     }
 
-    // Check if file already exists
-    if (fs.existsSync(filePath)) {
-      // Generate unique filename by appending timestamp
-      const uniqueFilename = `prd-${sanitizedName}-${Date.now()}.md`;
-      const uniqueFilePath = path.join(TASKS_DIR, uniqueFilename);
-      fs.writeFileSync(uniqueFilePath, content, 'utf-8');
+    // Determine target directory: tasks/{projectId}/
+    let projectDir = getProjectDir(projectId); // creates dir if not exists
+    let prdFilePath = path.join(projectDir, 'prd.md');
 
-      const prdId = uniqueFilename.replace(/^prd-/, '').replace(/\.md$/, '');
-
-      // Save session mapping (always when transform, or when sessionId provided)
-      if (sessionId || sourceFilePath) {
-        const sessions = loadSessions();
-        const entry: PrdSessionEntry = { updatedAt: new Date().toISOString() };
-        if (sessionId) entry.sessionId = sessionId;
-        if (sourceFilePath) entry.transformedFrom = path.basename(sourceFilePath);
-        sessions[prdId] = entry;
-        saveSessions(sessions);
+    // Avoid overwriting the source file in transform/import mode
+    if (sourceFilePath) {
+      const sourceBasename = path.basename(sourceFilePath);
+      // If source is in same project dir, use a different project id
+      if (path.dirname(sourceFilePath) === projectDir && sourceBasename === 'prd.md') {
+        projectId = `${projectId}-botool`;
+        projectDir = getProjectDir(projectId);
+        prdFilePath = path.join(projectDir, 'prd.md');
       }
-
-      // Clean up marker file if markerId provided
-      if (markerId) {
-        try {
-          const markerPath = path.join(TASKS_DIR, `prd-${markerId}.md`);
-          if (fs.existsSync(markerPath)) fs.unlinkSync(markerPath);
-        } catch { /* non-fatal */ }
-      }
-
-      return NextResponse.json({
-        success: true,
-        filename: uniqueFilename,
-        id: prdId,
-        name: prdName,
-        sessionId,
-        message: 'PRD saved successfully (with unique identifier due to existing file)',
-      });
     }
 
-    // Write the file
-    fs.writeFileSync(filePath, content, 'utf-8');
+    // Check if project dir already has prd.md → use unique projectId with timestamp
+    if (fs.existsSync(prdFilePath)) {
+      const uniqueProjectId = `${projectId}-${Date.now()}`;
+      projectDir = getProjectDir(uniqueProjectId);
+      prdFilePath = path.join(projectDir, 'prd.md');
+      projectId = uniqueProjectId;
+    }
 
-    const prdId = filename.replace(/^prd-/, '').replace(/\.md$/, '');
+    // Write prd.md to tasks/{projectId}/prd.md
+    fs.writeFileSync(prdFilePath, content, 'utf-8');
 
-    // Save session mapping (always when transform, or when sessionId provided)
+    // Save session mapping to tasks/{projectId}/prd-session.json
     if (sessionId || sourceFilePath) {
-      const sessions = loadSessions();
       const entry: PrdSessionEntry = { updatedAt: new Date().toISOString() };
       if (sessionId) entry.sessionId = sessionId;
-      if (sourceFilePath) entry.transformedFrom = path.basename(sourceFilePath);
-      sessions[prdId] = entry;
-      saveSessions(sessions);
+      if (sourceFilePath) {
+        // Store the source project id (directory name) or basename for legacy sources
+        const sourceName = path.basename(sourceFilePath);
+        entry.transformedFrom = sourceName.replace(/^prd-/, '').replace(/\.md$/, '');
+      }
+      saveProjectSession(projectId, entry);
     }
 
-    // Clean up marker file if markerId provided
+    // Clean up marker file if markerId provided (legacy flat format)
     if (markerId) {
       try {
-        const markerPath = path.join(TASKS_DIR, `prd-${markerId}.md`);
-        if (fs.existsSync(markerPath)) fs.unlinkSync(markerPath);
+        // Check legacy flat marker first
+        const legacyMarkerPath = path.join(TASKS_DIR, `prd-${markerId}.md`);
+        if (fs.existsSync(legacyMarkerPath)) fs.unlinkSync(legacyMarkerPath);
+        // Also check new format marker: tasks/{markerId}/prd.md (if it's an import marker)
+        const newMarkerPath = path.join(TASKS_DIR, markerId, 'prd.md');
+        if (fs.existsSync(newMarkerPath)) {
+          const markerContent = fs.readFileSync(newMarkerPath, 'utf-8');
+          if (markerContent.includes('type: import-marker')) {
+            fs.unlinkSync(newMarkerPath);
+          }
+        }
       } catch { /* non-fatal */ }
     }
 
     return NextResponse.json({
       success: true,
-      filename,
-      id: prdId,
+      filename: `${projectId}/prd.md`,
+      id: projectId,
       name: prdName,
       sessionId,
       message: 'PRD saved successfully',

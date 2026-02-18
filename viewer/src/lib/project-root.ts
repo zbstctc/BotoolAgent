@@ -22,7 +22,12 @@ import * as fs from 'fs';
 let _botoolRoot: string | null = null;
 let _projectRoot: string | null = null;
 
-function normalizeProjectId(projectId?: string | null): string | null {
+/**
+ * Validate and sanitize a project ID.
+ * Only allows [a-zA-Z0-9_-] to prevent path traversal.
+ * Exported so callers can validate input early.
+ */
+export function normalizeProjectId(projectId?: string | null): string | null {
   if (!projectId) return null;
 
   const trimmed = projectId.trim();
@@ -125,25 +130,59 @@ export function getRegistryPath(): string {
 }
 
 /**
+ * Get the per-project directory path, creating it if it doesn't exist.
+ * Path: tasks/{projectId}/
+ */
+export function getProjectDir(projectId: string): string {
+  const safeId = normalizeProjectId(projectId);
+  if (!safeId) throw new Error(`Invalid projectId: ${projectId}`);
+  const dir = path.join(getTasksDir(), safeId);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
  * Get the path to a project's prd.json.
- * If projectId is provided, reads from tasks/prd-{projectId}.json
- * Otherwise falls back to the root prd.json (backward compatible).
+ * New format: tasks/{projectId}/prd.json
+ * Backward compat (no projectId): root prd.json
  */
 export function getProjectPrdJsonPath(projectId?: string | null): string {
   const safeProjectId = normalizeProjectId(projectId);
   if (!safeProjectId) return getPrdJsonPath();
-  return path.join(getTasksDir(), `prd-${safeProjectId}.json`);
+  return path.join(getTasksDir(), safeProjectId, 'prd.json');
+}
+
+/**
+ * Get the path to a project's prd.md.
+ * New format: tasks/{projectId}/prd.md
+ * Backward compat (no projectId): root tasks/prd.md
+ */
+export function getProjectPrdMdPath(projectId?: string | null): string {
+  const safeProjectId = normalizeProjectId(projectId);
+  if (!safeProjectId) return path.join(getTasksDir(), 'prd.md');
+  return path.join(getTasksDir(), safeProjectId, 'prd.md');
 }
 
 /**
  * Get the path to a project's progress file.
- * If projectId is provided, reads from tasks/progress-{projectId}.txt
- * Otherwise falls back to the root progress.txt (backward compatible).
+ * New format: tasks/{projectId}/progress.txt
+ * Backward compat (no projectId): root progress.txt
  */
 export function getProjectProgressPath(projectId?: string | null): string {
   const safeProjectId = normalizeProjectId(projectId);
   if (!safeProjectId) return getProgressPath();
-  return path.join(getTasksDir(), `progress-${safeProjectId}.txt`);
+  return path.join(getTasksDir(), safeProjectId, 'progress.txt');
+}
+
+/**
+ * Get the path to a project's prd-session.json (Stage 1 pyramid session).
+ * New format: tasks/{projectId}/prd-session.json
+ * Backward compat (no projectId): tasks/.prd-sessions.json (global)
+ */
+export function getProjectSessionPath(projectId?: string | null): string {
+  const safeProjectId = normalizeProjectId(projectId);
+  if (!safeProjectId) return path.join(getTasksDir(), '.prd-sessions.json');
+  return path.join(getTasksDir(), safeProjectId, 'prd-session.json');
 }
 
 export function getPrdJsonPath(): string {
@@ -154,16 +193,30 @@ export function getProgressPath(): string {
   return path.join(getProjectRoot(), 'progress.txt');
 }
 
-export function getAgentStatusPath(): string {
-  return path.join(getBotoolRoot(), '.state', 'agent-status');
+/**
+ * Get the agent status file path.
+ * New format (with projectId): tasks/{projectId}/agent-status
+ * Backward compat (no projectId): .state/agent-status
+ */
+export function getAgentStatusPath(projectId?: string | null): string {
+  const safeProjectId = normalizeProjectId(projectId);
+  if (!safeProjectId) return path.join(getBotoolRoot(), '.state', 'agent-status');
+  return path.join(getTasksDir(), safeProjectId, 'agent-status');
 }
 
 export function getAgentScriptPath(): string {
   return path.join(getBotoolRoot(), 'scripts', 'BotoolAgent.sh');
 }
 
-export function getAgentPidPath(): string {
-  return path.join(getBotoolRoot(), '.state', 'agent-pid');
+/**
+ * Get the agent PID lock file path.
+ * New format (with projectId): tasks/{projectId}/agent-pid
+ * Backward compat (no projectId): .state/agent-pid
+ */
+export function getAgentPidPath(projectId?: string | null): string {
+  const safeProjectId = normalizeProjectId(projectId);
+  if (!safeProjectId) return path.join(getBotoolRoot(), '.state', 'agent-pid');
+  return path.join(getTasksDir(), safeProjectId, 'agent-pid');
 }
 
 /**

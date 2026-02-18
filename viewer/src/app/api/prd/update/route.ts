@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
-import { getPrdJsonPath, getProjectPrdJsonPath } from '@/lib/project-root';
+import { getProjectPrdJsonPath } from '@/lib/project-root';
 
 interface DevTask {
   id: string;
@@ -51,12 +51,6 @@ export async function POST(request: NextRequest) {
     // Write to prd.json (project-specific if projectId provided, otherwise root)
     const prdJsonPath = getProjectPrdJsonPath(body.projectId);
     fs.writeFileSync(prdJsonPath, JSON.stringify(updatedPrd, null, 2));
-
-    // Also update root prd.json for backward compatibility
-    if (body.projectId) {
-      const rootPath = getPrdJsonPath();
-      fs.writeFileSync(rootPath, JSON.stringify(updatedPrd, null, 2));
-    }
 
     return NextResponse.json({
       success: true,

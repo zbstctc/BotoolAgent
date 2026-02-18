@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getTasksDir, getPrdJsonPath, getRegistryPath, getProjectPrdJsonPath } from '@/lib/project-root';
+import { getTasksDir, getProjectPrdJsonPath, getRegistryPath, getProjectSessionPath } from '@/lib/project-root';
 
 const TASKS_DIR = getTasksDir();
 
@@ -84,19 +84,22 @@ function computeStage(tasks: { passes: boolean }[]): 1 | 2 | 3 | 4 | 5 {
   return 5;
 }
 
-function determinePRDStatus(filename: string): { status: PRDItem['status']; stage?: PRDItem['stage'] } {
+/**
+ * Determine status for a project by its ID.
+ * Reads tasks/{projectId}/prd.json for progress info.
+ * Falls back to registry for additional metadata.
+ */
+function determinePRDStatusById(projectId: string, content?: string): { status: PRDItem['status']; stage?: PRDItem['stage'] } {
   // Detect import marker files
-  if (filename.includes('-导入转换中')) return { status: 'importing' };
+  if (content?.includes('type: import-marker')) return { status: 'importing' };
 
-  const baseName = filename.replace(/^prd-/, '').replace(/\.md$/, '');
-
-  // First check registry for project-specific prd.json
+  // Check per-project prd.json
   try {
     const registryPath = getRegistryPath();
     if (fs.existsSync(registryPath)) {
       const registry = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
-      if (registry.projects?.[baseName]) {
-        const projectPrdPath = getProjectPrdJsonPath(baseName);
+      if (registry.projects?.[projectId]) {
+        const projectPrdPath = getProjectPrdJsonPath(projectId);
         if (fs.existsSync(projectPrdPath)) {
           const prdJson = JSON.parse(fs.readFileSync(projectPrdPath, 'utf-8'));
           const tasks: { passes: boolean }[] = prdJson.devTasks || [];
@@ -106,7 +109,7 @@ function determinePRDStatus(filename: string): { status: PRDItem['status']; stag
             if (allComplete) return { status: 'completed', stage: 5 };
             if (hasInProgress) return { status: 'in-progress', stage: computeStage(tasks) };
           }
-          if (registry.projects[baseName].status === 'coding') {
+          if (registry.projects[projectId].status === 'coding') {
             return { status: 'in-progress', stage: computeStage(tasks) };
           }
           return { status: 'ready', stage: 1 };
@@ -114,30 +117,38 @@ function determinePRDStatus(filename: string): { status: PRDItem['status']; stag
       }
     }
   } catch {
-    // Fall through to legacy check
+    // Fall through
   }
 
-  // Fallback: check root prd.json
+  // Check per-project prd.json without registry
   try {
-    const prdJsonPath = getPrdJsonPath();
-    if (fs.existsSync(prdJsonPath)) {
-      const prdJson = JSON.parse(fs.readFileSync(prdJsonPath, 'utf-8'));
-      const projectName = prdJson.project?.toLowerCase() || '';
-
-      if (projectName.includes(baseName.toLowerCase()) || baseName.toLowerCase().includes(projectName.toLowerCase())) {
-        const tasks: { passes: boolean }[] = prdJson.devTasks || [];
-        const allComplete = tasks.length > 0 && tasks.every(t => t.passes);
+    const projectPrdPath = getProjectPrdJsonPath(projectId);
+    if (fs.existsSync(projectPrdPath)) {
+      const prdJson = JSON.parse(fs.readFileSync(projectPrdPath, 'utf-8'));
+      const tasks: { passes: boolean }[] = prdJson.devTasks || [];
+      if (tasks.length > 0) {
+        const allComplete = tasks.every(t => t.passes);
         const hasInProgress = tasks.some(t => !t.passes);
-
         if (allComplete) return { status: 'completed', stage: 5 };
         if (hasInProgress) return { status: 'in-progress', stage: computeStage(tasks) };
       }
+      return { status: 'ready', stage: 1 };
     }
   } catch {
-    // Ignore errors reading prd.json
+    // Ignore
   }
 
   return { status: 'ready', stage: 1 };
+}
+
+/**
+ * Legacy: Determine status from flat prd-{id}.md filename.
+ * Used for backward compat when reading old-format files.
+ */
+function determinePRDStatusLegacy(filename: string): { status: PRDItem['status']; stage?: PRDItem['stage'] } {
+  if (filename.includes('-导入转换中')) return { status: 'importing' };
+  const projectId = filename.replace(/^prd-/, '').replace(/\.md$/, '');
+  return determinePRDStatusById(projectId);
 }
 
 export async function GET() {
@@ -147,45 +158,107 @@ export async function GET() {
       return NextResponse.json({ prds: [] });
     }
 
-    // Read all prd-*.md files
-    const files = fs.readdirSync(TASKS_DIR);
+    const prds: PRDItem[] = [];
 
-    // Build set of source filenames that have been transformed (should be hidden)
-    const transformedSources = new Set<string>();
+    // Build set of project IDs that were transformed from another source (should be hidden)
+    const transformedProjectIds = new Set<string>();
+
+    // --- New format: scan tasks/*/prd.md ---
+    try {
+      const entries = fs.readdirSync(TASKS_DIR, { withFileTypes: true });
+      const projectDirs = entries.filter(e => e.isDirectory());
+
+      // Collect transformedFrom info from per-project sessions
+      for (const dir of projectDirs) {
+        const sessionPath = getProjectSessionPath(dir.name);
+        if (fs.existsSync(sessionPath)) {
+          try {
+            const session = JSON.parse(fs.readFileSync(sessionPath, 'utf-8'));
+            if (session.transformedFrom) {
+              // transformedFrom is the source project id (directory name)
+              transformedProjectIds.add(session.transformedFrom);
+            }
+          } catch { /* non-fatal */ }
+        }
+      }
+
+      for (const dir of projectDirs) {
+        if (transformedProjectIds.has(dir.name)) continue;
+
+        const prdMdPath = path.join(TASKS_DIR, dir.name, 'prd.md');
+        if (!fs.existsSync(prdMdPath)) continue;
+
+        try {
+          const stats = fs.statSync(prdMdPath);
+          const content = fs.readFileSync(prdMdPath, 'utf-8');
+          const { status, stage } = determinePRDStatusById(dir.name, content);
+
+          prds.push({
+            id: dir.name,
+            filename: `${dir.name}/prd.md`,
+            name: extractPRDName(content),
+            createdAt: stats.birthtime.toISOString(),
+            status,
+            stage,
+            preview: extractPreview(content),
+          });
+        } catch {
+          // Skip unreadable files
+        }
+      }
+    } catch {
+      // Directory scan failed
+    }
+
+    // --- Legacy format: scan tasks/prd-*.md flat files ---
+    // Also read old global .prd-sessions.json for backward compat
+    const legacyTransformedSources = new Set<string>();
     try {
       const sessionsPath = path.join(TASKS_DIR, '.prd-sessions.json');
       if (fs.existsSync(sessionsPath)) {
         const sessions = JSON.parse(fs.readFileSync(sessionsPath, 'utf-8'));
         for (const entry of Object.values(sessions)) {
           const src = (entry as Record<string, string>).transformedFrom;
-          if (src) transformedSources.add(src);
+          if (src) legacyTransformedSources.add(src);
         }
       }
     } catch { /* non-fatal */ }
 
-    const prdFiles = files.filter(f =>
-      f.startsWith('prd-') && f.endsWith('.md') && !transformedSources.has(f)
-    );
+    try {
+      const files = fs.readdirSync(TASKS_DIR);
+      const legacyPrdFiles = files.filter(f =>
+        f.startsWith('prd-') && f.endsWith('.md') && !legacyTransformedSources.has(f)
+      );
 
-    const prds: PRDItem[] = prdFiles.map(filename => {
-      const filePath = path.join(TASKS_DIR, filename);
-      const stats = fs.statSync(filePath);
-      const content = fs.readFileSync(filePath, 'utf-8');
+      // Track project IDs already added from new format to avoid duplicates
+      const addedIds = new Set(prds.map(p => p.id));
 
-      // Generate a simple ID from filename
-      const id = filename.replace(/^prd-/, '').replace(/\.md$/, '');
-      const { status, stage } = determinePRDStatus(filename);
+      for (const filename of legacyPrdFiles) {
+        const legacyId = filename.replace(/^prd-/, '').replace(/\.md$/, '');
+        if (addedIds.has(legacyId)) continue; // already added from new format
 
-      return {
-        id,
-        filename,
-        name: extractPRDName(content),
-        createdAt: stats.birthtime.toISOString(),
-        status,
-        stage,
-        preview: extractPreview(content),
-      };
-    });
+        const filePath = path.join(TASKS_DIR, filename);
+        try {
+          const stats = fs.statSync(filePath);
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const { status, stage } = determinePRDStatusLegacy(filename);
+
+          prds.push({
+            id: legacyId,
+            filename,
+            name: extractPRDName(content),
+            createdAt: stats.birthtime.toISOString(),
+            status,
+            stage,
+            preview: extractPreview(content),
+          });
+        } catch {
+          // Skip unreadable files
+        }
+      }
+    } catch {
+      // Legacy scan failed
+    }
 
     // Sort by creation date, newest first
     prds.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
