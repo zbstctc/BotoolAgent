@@ -96,7 +96,7 @@
       "title": "\u6d88\u9664\u6839\u76ee\u5f55 prd.json \u53cc\u5199\uff0c\u7edf\u4e00\u4e3a per-project \u5355\u6e90\u8def\u5f84",
       "prdSection": "7.1 (L482-645)",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "DT-000a"
       ],
@@ -125,7 +125,7 @@
       "title": "BotoolAgent.sh \u6dfb\u52a0 --project-id \u53c2\u6570\uff0c\u52a8\u6001\u751f\u6210 SESSION_NAME",
       "prdSection": "7.1 (L482-645)",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "DT-000"
       ],

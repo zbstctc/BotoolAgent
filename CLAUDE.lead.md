@@ -134,12 +134,17 @@
 
 1. 全量 `npx tsc --noEmit`
 2. `git push origin {branchName}`
-3. `.state/agent-status` → `"status": "complete"`
-4. `progress.txt` 最终记录
+3. agent-status → `"status": "complete"`（写入 `$BOTOOL_STATUS_FILE` 或 `$BOTOOL_SCRIPT_DIR/.state/agent-status`）
+4. `$BOTOOL_PROGRESS_FILE` 最终记录
 
 ## .agent-status 更新
 
-通过 Bash 工具写入 agent-status 文件（路径优先级：`$BOTOOL_STATUS_FILE` > `$BOTOOL_SCRIPT_DIR/.state/agent-status`）：
+通过 Bash 工具写入 agent-status 文件。**路径**：
+```bash
+# 优先使用 BOTOOL_STATUS_FILE（DT-001 后由 BotoolAgent.sh 传入）
+STATUS_PATH="${BOTOOL_STATUS_FILE:-$BOTOOL_SCRIPT_DIR/.state/agent-status}"
+```
+写入 `$STATUS_PATH`：
 
 ```json
 {
@@ -250,8 +255,8 @@
 
 如果本 session 规划的 DT 已全部完成，但仍有其他 `passes: false` 的任务：
 
-1. 写 `.state/agent-status` → `"status": "session_done"`，message 写明剩余任务数
-2. `progress.txt` 追加：`## Session 结束 — 已完成 N 个，剩余 M 个留给下一 session`
+1. 写 agent-status → `"status": "session_done"`，message 写明剩余任务数（路径: `$BOTOOL_STATUS_FILE` > `$BOTOOL_SCRIPT_DIR/.state/agent-status`）
+2. `$BOTOOL_PROGRESS_FILE` 追加：`## Session 结束 — 已完成 N 个，剩余 M 个留给下一 session`
 3. `git push origin {branchName}`
 4. **主动结束会话**（外层 Ralph 循环会启动新 session 继续）
 
@@ -259,6 +264,6 @@
 
 所有任务的 `passes` 都为 `true` 后：
 
-1. 写 `.state/agent-status` → `"status": "complete"`
-2. `progress.txt` 记录最终状态
+1. 写 agent-status → `"status": "complete"`（同路径）
+2. `$BOTOOL_PROGRESS_FILE` 记录最终状态
 3. 结束会话

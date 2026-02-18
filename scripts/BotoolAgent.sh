@@ -36,6 +36,7 @@ trap cleanup SIGINT SIGTERM
 # 解析参数
 # ============================================================================
 PROJECT_DIR=""
+PROJECT_ID=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -45,6 +46,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --prd-path)
       PRD_PATH_OVERRIDE="$2"
+      shift 2
+      ;;
+    --project-id)
+      PROJECT_ID="$2"
       shift 2
       ;;
     *)
@@ -79,7 +84,7 @@ fi
 
 ARCHIVE_DIR="$SCRIPT_DIR/archive"
 LAST_BRANCH_FILE="$SCRIPT_DIR/.state/last-branch"
-STATUS_FILE="$SCRIPT_DIR/.state/agent-status"
+
 # --prd-path 覆盖：支持多 PRD 模式
 if [ -n "$PRD_PATH_OVERRIDE" ]; then
   PRD_FILE="$PRD_PATH_OVERRIDE"
@@ -87,15 +92,36 @@ if [ -n "$PRD_PATH_OVERRIDE" ]; then
   if [ "$PRD_BASENAME" = "prd.json" ]; then
     # New format: tasks/{id}/prd.json → progress at tasks/{id}/progress.txt
     PROGRESS_FILE="$(dirname "$PRD_PATH_OVERRIDE")/progress.txt"
+    # Auto-extract PROJECT_ID from parent directory name if not provided
+    if [ -z "$PROJECT_ID" ]; then
+      PROJECT_ID="$(basename "$(dirname "$PRD_PATH_OVERRIDE")")"
+    fi
   else
     # Legacy format: tasks/prd-{id}.json → progress at tasks/progress-{id}.txt
     PROGRESS_BASENAME="${PRD_BASENAME/prd-/progress-}"
     PROGRESS_BASENAME="${PROGRESS_BASENAME/.json/.txt}"
     PROGRESS_FILE="$(dirname "$PRD_PATH_OVERRIDE")/$PROGRESS_BASENAME"
+    # Auto-extract PROJECT_ID from filename prefix if not provided
+    if [ -z "$PROJECT_ID" ]; then
+      PROJECT_ID="${PRD_BASENAME#prd-}"
+      PROJECT_ID="${PROJECT_ID%.json}"
+    fi
   fi
 else
   PRD_FILE="$PROJECT_DIR/prd.json"
   PROGRESS_FILE="$PROJECT_DIR/progress.txt"
+fi
+
+# Configure session name and per-project status/pid files
+if [ -n "$PROJECT_ID" ]; then
+  SESSION_NAME="botool-teams-${PROJECT_ID}"
+  STATUS_FILE="$SCRIPT_DIR/tasks/${PROJECT_ID}/agent-status"
+  PID_FILE="$SCRIPT_DIR/tasks/${PROJECT_ID}/agent-pid"
+  # Ensure per-project directory exists
+  mkdir -p "$SCRIPT_DIR/tasks/${PROJECT_ID}"
+else
+  STATUS_FILE="$SCRIPT_DIR/.state/agent-status"
+  PID_FILE="$SCRIPT_DIR/.state/agent-pid"
 fi
 
 if [ "$PROJECT_DIR" != "$SCRIPT_DIR" ]; then
@@ -260,6 +286,7 @@ start_session() {
   TMUX_ENV="$TMUX_ENV BOTOOL_MAX_ROUNDS=$MAX_ROUNDS"
   TMUX_ENV="$TMUX_ENV BOTOOL_PRD_FILE=$PRD_FILE"
   TMUX_ENV="$TMUX_ENV BOTOOL_PROGRESS_FILE=$PROGRESS_FILE"
+  TMUX_ENV="$TMUX_ENV BOTOOL_STATUS_FILE=$STATUS_FILE"
 
   # 每次生成新 session-id，防止 Claude CLI 自动恢复旧会话
   # （旧会话上下文会导致 Lead Agent 卡在之前项目的文件中）
