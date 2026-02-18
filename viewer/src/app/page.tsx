@@ -9,7 +9,9 @@ import { RequirementDrawer } from '@/components/RequirementDrawer';
 import { CreateRequirementDialog } from '@/components/CreateRequirementDialog';
 import { Button } from '@/components/ui/button';
 import { useRequirement } from '@/contexts/RequirementContext';
+import { useTab } from '@/contexts/TabContext';
 import type { Requirement, RequirementFilter, RequirementStage } from '@/lib/requirement-types';
+import type { TabItem } from '@/lib/tab-storage';
 
 function getStageUrl(req: Requirement): string {
   const stage = req.stage === 0 ? 1 : req.stage;
@@ -33,6 +35,7 @@ function filterRequirements(
 
 function DashboardContent() {
   const router = useRouter();
+  const { openTab } = useTab();
   const {
     requirements,
     isLoading,
@@ -74,13 +77,24 @@ function DashboardContent() {
   }
 
   function handleAction(req: Requirement) {
-    router.push(getStageUrl(req));
+    const stage = req.stage === 0 ? 1 : req.stage;
+    const tabItem: TabItem = {
+      id: req.id,
+      name: req.name,
+      stage,
+    };
+    openTab(tabItem, getStageUrl(req));
   }
 
   function handleNavigate(stage: RequirementStage) {
     if (!selectedReq) return;
     const stageNum = stage === 0 ? 1 : stage;
-    router.push(`/stage${stageNum}?req=${selectedReq.id}`);
+    const tabItem: TabItem = {
+      id: selectedReq.id,
+      name: selectedReq.name,
+      stage: stageNum,
+    };
+    openTab(tabItem, `/stage${stageNum}?req=${selectedReq.id}`);
     setDrawerOpen(false);
   }
 
