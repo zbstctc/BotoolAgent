@@ -6,6 +6,7 @@
 
 - `BOTOOL_SCRIPT_DIR`: BotoolAgent 文件目录
 - `BOTOOL_PROJECT_DIR`: 用户项目目录
+- `BOTOOL_MAX_ROUNDS`: 最大轮次（由 BotoolAgent.sh 传入，写 agent-status 时必须使用此值）
 
 ## 第一步: 初始化
 
@@ -118,13 +119,15 @@ Teammate prompt 改为直接使用这些字段，无需跳读 PRD：
   "message": "描述当前状态",
   "timestamp": "YYYY-MM-DD HH:MM:SS",
   "iteration": 1,
-  "maxIterations": 3,
+  "maxIterations": "$BOTOOL_MAX_ROUNDS（从环境变量读取，禁止硬编码）",
   "completed": 2,
   "total": 8,
   "currentTask": "DT-003",
   "retryCount": 0
 }
 ```
+
+**重要：** `maxIterations` 必须从 `$BOTOOL_MAX_ROUNDS` 环境变量读取（通过 `echo $BOTOOL_MAX_ROUNDS`），**禁止硬编码数字**。
 
 **更新节点：** 初始化后、批次开始、DT 完成、出错、全部完成。
 
@@ -145,8 +148,27 @@ Teammate prompt 改为直接使用这些字段，无需跳读 PRD：
 5. `npx tsc --noEmit` 确认 typecheck 通过
 6. `git add <modified files> && git commit -m "feat: {id} - {title}"`
 7. `git push origin {branchName}`
-8. 更新 `prd.json`：`passes` → `true`
+8. 更新 `prd.json`：`passes` → `true`（须先通过验证铁律 + DT 双阶段 Review）
 9. 写 `progress.txt`
+
+## 验证铁律
+
+**任何 DT 在标记 passes: true 之前，Lead Agent 必须：**
+
+1. 运行 prd.json 中该任务的所有 evals（不仅仅是 typecheck）
+2. 读取完整输出并确认退出码为 0
+3. 检查文件是否存在（如果 eval 包含 test -f）
+4. 只有全部 evals 通过后才能写 passes: true
+
+如果 Teammate 报告完成但 Lead 的独立验证失败：
+- 不标记 passes: true
+- Lead 自行修复或重新派发 Teammate
+- 在 progress.txt 记录 "验证失败：{原因}"
+
+**禁止的行为：**
+- 信任 Teammate 的口头报告而不独立验证
+- 使用 "should pass" / "looks correct" 代替实际运行
+- 跳过任何 eval
 
 ## 进度报告格式
 
