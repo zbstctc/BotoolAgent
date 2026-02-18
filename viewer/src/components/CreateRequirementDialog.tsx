@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSession } from '@/lib/prd-session-storage';
 import { useProject } from '@/contexts/ProjectContext';
@@ -344,30 +344,32 @@ function ImportTab({ isActive, onSuccess }: ImportTabProps) {
     if (!isActive || hasFetchedRef.current) return;
     hasFetchedRef.current = true;
 
-    setIsLoadingFiles(true);
+    startTransition(() => setIsLoadingFiles(true));
     fetch('/api/files/md')
       .then((res) => {
         if (!res.ok) throw new Error('Failed to fetch files');
         return res.json();
       })
       .then((data) => {
-        setFiles(data.files || []);
+        startTransition(() => setFiles(data.files || []));
       })
       .catch((err) => {
-        setLoadError(err.message);
+        startTransition(() => setLoadError(err.message));
       })
       .finally(() => {
-        setIsLoadingFiles(false);
+        startTransition(() => setIsLoadingFiles(false));
       });
   }, [isActive]);
 
   // Reset selection when tab becomes inactive
   useEffect(() => {
     if (!isActive) {
-      setSelectedFile(null);
-      setSearchQuery('');
-      setDuplicateMarker(null);
-      setIsImporting(false);
+      startTransition(() => {
+        setSelectedFile(null);
+        setSearchQuery('');
+        setDuplicateMarker(null);
+        setIsImporting(false);
+      });
     }
   }, [isActive]);
 
@@ -659,7 +661,7 @@ export function CreateRequirementDialog({
   // Reset tab when dialog closes
   useEffect(() => {
     if (!open) {
-      setActiveTab('new');
+      startTransition(() => setActiveTab('new'));
     }
   }, [open]);
 

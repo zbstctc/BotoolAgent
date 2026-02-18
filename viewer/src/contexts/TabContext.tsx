@@ -1,8 +1,8 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, startTransition } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import type { TabItem, TabStorage } from '@/lib/tab-storage';
+import type { TabItem } from '@/lib/tab-storage';
 import { loadTabs, saveTabs } from '@/lib/tab-storage';
 
 interface TabContextValue {
@@ -28,8 +28,10 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
   // Load from localStorage on mount
   useEffect(() => {
     const stored = loadTabs();
-    setTabs(stored.tabs);
-    setActiveTabId(stored.activeTabId);
+    startTransition(() => {
+      setTabs(stored.tabs);
+      setActiveTabId(stored.activeTabId);
+    });
   }, []);
 
   // Persist to localStorage on changes
@@ -54,7 +56,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
   // Sync activeTabId + tab stage from pathname changes
   useEffect(() => {
     if (pathname === '/') {
-      setActiveTabId('dashboard');
+      startTransition(() => setActiveTabId('dashboard'));
       return;
     }
 
