@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator, StageTransitionModal } from '@/components';
 import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
 import { useProject } from '@/contexts/ProjectContext';
+import { useRequirement } from '@/contexts/RequirementContext';
 
 type TestingStatus = 'idle' | 'running' | 'complete' | 'failed' | 'error';
 
@@ -21,8 +22,16 @@ interface AgentStatus {
 function Stage4PageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const projectId = searchParams.get('projectId') || undefined;
   const { activeProject, updateProject } = useProject();
+
+  // Requirement context - resolve `req` param
+  const { requirements } = useRequirement();
+  const reqId = searchParams.get('req') || undefined;
+  const activeRequirement = reqId ? requirements.find(r => r.id === reqId) : undefined;
+
+  // projectId: explicit param takes priority, then req.id as fallback
+  const rawProjectId = searchParams.get('projectId') || undefined;
+  const projectId = rawProjectId ?? (activeRequirement?.id);
 
   useProjectValidation({ currentStage: 4 });
 
