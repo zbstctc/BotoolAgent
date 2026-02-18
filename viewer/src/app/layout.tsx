@@ -5,6 +5,7 @@ import { Header } from "@/components/Header";
 import { Main } from "@/components/Main";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import { RequirementProvider } from "@/contexts/RequirementContext";
+import { TabProvider } from "@/contexts/TabContext";
 import { computeWorkspaceId } from "@/lib/workspace-id.server";
 
 const geistSans = Geist({
@@ -36,8 +37,10 @@ export default function RootLayout({
       >
         <ProjectProvider workspaceId={workspaceId}>
           <RequirementProvider>
-            <Header />
-            <Main>{children}</Main>
+            <TabProvider>
+              <Header />
+              <Main>{children}</Main>
+            </TabProvider>
           </RequirementProvider>
         </ProjectProvider>
       </body>
