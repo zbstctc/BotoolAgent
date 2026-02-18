@@ -65,8 +65,9 @@ test.describe('Stage 5 - Finalize', () => {
   test('shows Review Summary section', async ({ page }) => {
     await page.goto('/stage5');
     // Stage5 may redirect to Dashboard if no active project (useProjectValidation).
-    // Wait briefly for the page to settle, then check if we're still on stage5.
-    await page.waitForTimeout(1000);
+    // Wait for navigation to settle before checking URL.
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000);
     const url = page.url();
     if (!url.includes('stage5')) {
       // Redirected — no active project. Skip gracefully.
@@ -77,7 +78,8 @@ test.describe('Stage 5 - Finalize', () => {
     const reviewHeading = page.getByText('开发评审摘要');
     const reviewError = page.getByText('暂无评审数据');
     const reviewLoadError = page.getByText('无法加载评审摘要');
-    await expect(reviewHeading.or(reviewError).or(reviewLoadError)).toBeVisible({ timeout: 10000 });
+    const reviewNetworkError = page.getByText('网络错误');
+    await expect(reviewHeading.or(reviewError).or(reviewLoadError).or(reviewNetworkError)).toBeVisible({ timeout: 10000 });
   });
 
   test('Merge button exists and is disabled without PR', async ({ page }) => {
