@@ -124,10 +124,6 @@ export async function POST(request: Request) {
       requestBody?.testingTeammateMode || process.env.BOTOOL_TEAMMATE_MODE
     );
 
-    // Validate projectId: only [a-zA-Z0-9_-] allowed
-    if (rawProjectId && !/^[a-zA-Z0-9_-]+$/.test(rawProjectId)) {
-      return NextResponse.json({ error: 'Invalid projectId' }, { status: 400 });
-    }
     const projectId = normalizeProjectId(rawProjectId);
 
     // Derive per-project file paths
