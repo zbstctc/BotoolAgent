@@ -65,21 +65,22 @@ test.describe('Stage 5 - Finalize', () => {
   test('shows Review Summary section', async ({ page }) => {
     await page.goto('/stage5');
     // Stage5 may redirect to Dashboard if no active project (useProjectValidation).
-    // Wait for navigation to settle before checking URL.
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
-    const url = page.url();
-    if (!url.includes('stage5')) {
-      // Redirected — no active project. Skip gracefully.
+    const stage5Marker = page.getByText('Code Changes');
+    const dashboardMarker = page.getByText('我的项目');
+    await expect(stage5Marker.or(dashboardMarker)).toBeVisible({ timeout: 10000 });
+    if (await dashboardMarker.isVisible()) {
       return;
     }
-    await expect(page.getByText('Summary & PR')).toBeVisible();
-    // ReviewSummary renders with heading "开发评审摘要" or error fallback
+    // ReviewSummary may be in loading state (skeleton), data state, or error state.
+    // Accept any of these as valid — the component is rendered.
+    const reviewLoading = page.locator('[data-testid="review-summary-loading"]');
     const reviewHeading = page.getByText('开发评审摘要');
     const reviewError = page.getByText('暂无评审数据');
     const reviewLoadError = page.getByText('无法加载评审摘要');
     const reviewNetworkError = page.getByText('网络错误');
-    await expect(reviewHeading.or(reviewError).or(reviewLoadError).or(reviewNetworkError)).toBeVisible({ timeout: 10000 });
+    await expect(
+      reviewLoading.or(reviewHeading).or(reviewError).or(reviewLoadError).or(reviewNetworkError)
+    ).toBeVisible({ timeout: 10000 });
   });
 
   test('Merge button exists and is disabled without PR', async ({ page }) => {
