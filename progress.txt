@@ -19,3 +19,34 @@
   - 拓扑排序 BFS 层级遍历模式可被 BatchTimeline 复用
   - useFileWatcher 返回的 teammates 字段需在 stage3/page.tsx 中消费
 ---
+## 2026-02-19 - DT-003
+- 实现了 useTaskTimings Hook（任务耗时推算）
+- 新增文件: viewer/src/hooks/useTaskTimings.ts
+- 修改文件: hooks/index.ts (+2 lines export)
+- 多数据源融合：teammates.json 优先 → progressLog 次选 → 均分 fallback
+- 按批次分组二维数组 batches: TaskTiming[][]
+- 每秒 tick 更新 currentTaskElapsed
+- **未来迭代的经验教训：**
+  - batchMap 只包含当前批次的任务，历史批次任务默认 batchIndex=0
+  - DT-008 集成时需将 useTaskTimings 结果传给 BatchPanel 和 BatchTimeline
+---
+## 2026-02-19 - DT-006
+- 实现了 LiveLog 组件 + AgentDataPanel 统计区增强
+- 新增文件: viewer/src/components/LiveLog.tsx
+- 修改文件: AgentDataPanel/AgentDataPanel.tsx (+GitStats 接口, +统计区段, +formatDuration/formatEta)
+- LiveLog: bg-neutral-900 深色背景、font-mono、120px 固定高度、自动滚动
+- AgentDataPanel 新增 props: elapsedSeconds, gitStats, avgTaskTime, eta
+- **未来迭代的经验教训：**
+  - LiveLog 和 AgentDataPanel 的新 props 需在 DT-008 页面集成时从 hooks 传入
+  - GitStats 接口已从 AgentDataPanel 导出，可被 stage3/page.tsx 导入
+---
+## 2026-02-19 - DT-007
+- 实现了 Tab 重排序 + 流程图降级
+- 修改文件: viewer/src/app/stage3/page.tsx
+- Tab 新顺序：文件变更 | 提交记录 | 流程图ℹ️
+- 默认激活 tab 改为 'changes'
+- 移除进度日志 tab + logEndRef + useRef import
+- **未来迭代的经验教训：**
+  - progressLog state 仍保留（用于 iterationCount 提取）
+  - DT-008 集成时需在中间区域添加 ProgressStrip / BatchPanel / BatchTimeline
+---

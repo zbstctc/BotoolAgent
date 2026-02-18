@@ -126,7 +126,7 @@
       "title": "任务耗时推算 Hook (useTaskTimings)",
       "prdSection": "7.2 (L536-568)",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "DT-002"
       ],
@@ -163,7 +163,7 @@
       "title": "统计区 + 实时活动日志 (LiveLog + AgentDataPanel 增强)",
       "prdSection": "7.2 (L536-568)",
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "dependsOn": [],
       "evals": [
         {
@@ -201,7 +201,7 @@
       "title": "Tab 重排序 + 流程图降级",
       "prdSection": "7.2 (L536-568)",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "dependsOn": [],
       "evals": [
         {
