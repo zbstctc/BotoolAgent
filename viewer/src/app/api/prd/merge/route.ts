@@ -106,6 +106,8 @@ function mergeEnrichedPrdJson(
     id: rule.id,
     name: rule.name,
     category: rule.category,
+    file: '',              // DT-002 will populate with actual path
+    checklist: [],         // DT-002 will populate with actual checklist
     content: rule.content,
   }));
 
