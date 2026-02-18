@@ -253,8 +253,12 @@ start_session() {
   TMUX_ENV="$TMUX_ENV BOTOOL_PROJECT_DIR=$PROJECT_DIR"
   TMUX_ENV="$TMUX_ENV BOTOOL_MAX_ROUNDS=$MAX_ROUNDS"
 
+  # 每次生成新 session-id，防止 Claude CLI 自动恢复旧会话
+  # （旧会话上下文会导致 Lead Agent 卡在之前项目的文件中）
+  CLAUDE_SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+
   tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_DIR" \
-    "env -u CLAUDECODE $TMUX_ENV $CLAUDE_CMD --dangerously-skip-permissions --teammate-mode $BOTOOL_TEAMMATE_MODE"
+    "env -u CLAUDECODE $TMUX_ENV $CLAUDE_CMD --session-id $CLAUDE_SESSION_ID --dangerously-skip-permissions --teammate-mode $BOTOOL_TEAMMATE_MODE"
 
   # 验证 session 是否成功启动
   sleep 2
