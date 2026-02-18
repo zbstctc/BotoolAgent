@@ -279,10 +279,53 @@ start_session() {
     sleep 2
   fi
 
+  # -----------------------------------------------------------------------
+  # Worktree 自动创建/复用逻辑（仅当 PROJECT_ID 非空时启用）
+  # -----------------------------------------------------------------------
+  if [ -n "$PROJECT_ID" ]; then
+    WORKTREE_PATH="$PROJECT_DIR/.worktrees/${PROJECT_ID}"
+    WORKTREE_BRANCH="botool/${PROJECT_ID}"
+
+    if [ -d "$WORKTREE_PATH" ]; then
+      # Worktree 已存在：复用，并确认分支一致
+      echo ">>> Worktree 已存在，复用: $WORKTREE_PATH"
+      EXISTING_BRANCH=$(git -C "$WORKTREE_PATH" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+      if [ "$EXISTING_BRANCH" != "$WORKTREE_BRANCH" ]; then
+        echo ">>> 警告: worktree 分支 ($EXISTING_BRANCH) 与预期分支 ($WORKTREE_BRANCH) 不一致"
+        echo ">>>        继续使用当前分支: $EXISTING_BRANCH"
+      else
+        echo ">>> Worktree 分支确认: $WORKTREE_BRANCH"
+      fi
+    else
+      # Worktree 不存在：创建新 worktree
+      echo ">>> 创建 worktree: $WORKTREE_PATH (分支: $WORKTREE_BRANCH)"
+      mkdir -p "$PROJECT_DIR/.worktrees"
+      if git -C "$PROJECT_DIR" worktree add "$WORKTREE_PATH" -b "$WORKTREE_BRANCH" 2>/dev/null; then
+        echo ">>> Worktree 创建成功"
+      else
+        # 分支可能已存在（上次运行后被 prune 了 worktree 但分支保留）
+        echo ">>> 分支已存在，尝试 checkout..."
+        if git -C "$PROJECT_DIR" worktree add "$WORKTREE_PATH" "$WORKTREE_BRANCH" 2>/dev/null; then
+          echo ">>> Worktree 复用已有分支成功"
+        else
+          echo ">>> 警告: worktree 创建失败，回退到主项目目录"
+          WORKTREE_PATH="$PROJECT_DIR"
+        fi
+      fi
+    fi
+
+    WORK_DIR="$WORKTREE_PATH"
+  else
+    # 无 PROJECT_ID：保持原有行为
+    WORK_DIR="$PROJECT_DIR"
+  fi
+
+  echo ">>> 工作目录: $WORK_DIR"
+
   # 构建环境变量并创建 tmux session
   TMUX_ENV="CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1"
   TMUX_ENV="$TMUX_ENV BOTOOL_SCRIPT_DIR=$SCRIPT_DIR"
-  TMUX_ENV="$TMUX_ENV BOTOOL_PROJECT_DIR=$PROJECT_DIR"
+  TMUX_ENV="$TMUX_ENV BOTOOL_PROJECT_DIR=$WORK_DIR"
   TMUX_ENV="$TMUX_ENV BOTOOL_MAX_ROUNDS=$MAX_ROUNDS"
   TMUX_ENV="$TMUX_ENV BOTOOL_PRD_FILE=$PRD_FILE"
   TMUX_ENV="$TMUX_ENV BOTOOL_PROGRESS_FILE=$PROGRESS_FILE"
@@ -292,7 +335,7 @@ start_session() {
   # （旧会话上下文会导致 Lead Agent 卡在之前项目的文件中）
   CLAUDE_SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
 
-  tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_DIR" \
+  tmux new-session -d -s "$SESSION_NAME" -c "$WORK_DIR" \
     "env -u CLAUDECODE $TMUX_ENV $CLAUDE_CMD --session-id $CLAUDE_SESSION_ID --dangerously-skip-permissions --teammate-mode $BOTOOL_TEAMMATE_MODE"
 
   # 验证 session 是否成功启动
@@ -333,7 +376,7 @@ start_session() {
   echo ""
 
   # 等待 tmux session 结束（含卡住检测）
-  local last_commit_hash=$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null || echo "")
+  local last_commit_hash=$(git -C "$WORK_DIR" rev-parse HEAD 2>/dev/null || echo "")
   local last_progress_time=$(date +%s)
 
   while tmux has-session -t "$SESSION_NAME" 2>/dev/null; do
@@ -349,8 +392,8 @@ start_session() {
       break
     fi
 
-    # 检查是否有新 commit
-    local current_commit_hash=$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null || echo "")
+    # 检查是否有新 commit（监控 worktree 目录）
+    local current_commit_hash=$(git -C "$WORK_DIR" rev-parse HEAD 2>/dev/null || echo "")
     if [ "$current_commit_hash" != "$last_commit_hash" ]; then
       last_commit_hash="$current_commit_hash"
       last_progress_time=$(date +%s)
