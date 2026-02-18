@@ -266,6 +266,12 @@ JSON_FILE="$TASKS_DIR/${PRD_BASENAME}.json"
       "testCases": [
         { "type": "typecheck", "desc": "TypeScript 编译通过" },
         { "type": "unit", "desc": "核心逻辑单元测试", "tdd": true }
+      ],
+      "steps": [
+        { "action": "create", "file": "src/db/schema.ts", "description": "创建 schema 文件" },
+        { "action": "implement", "description": "定义 status 字段和迁移" },
+        { "action": "verify", "command": "npx tsc --noEmit", "expected": "exit 0" },
+        { "action": "commit", "message": "feat: DT-001 - add status field" }
       ]
     }
   ],
@@ -297,6 +303,7 @@ JSON_FILE="$TASKS_DIR/${PRD_BASENAME}.json"
 | `devTasks[].dependsOn` | string[] | No | IDs of tasks this task depends on |
 | `devTasks[].evals` | DevTaskEval[] | No | Verification commands |
 | `devTasks[].testCases` | TestCase[] | No | Test case metadata with type and tdd flag |
+| `devTasks[].steps` | Step[] | No | 分步执行指引（每步可单条命令验证，3-6 步） |
 | `sessions[]` | SessionGroup[] | No | Task grouping for batch execution |
 
 ### Constitution Rule Fields
@@ -395,6 +402,51 @@ Additional testCases based on task content:
 - Tasks with transformation logic → `{ "type": "unit", "desc": "...", "tdd": true }`
 - UI/page rendering tasks → `{ "type": "e2e", "desc": "..." }`
 - Visual/animation tasks → `{ "type": "manual", "desc": "..." }`
+
+---
+
+## Steps 生成规则（可选）
+
+每个 DT 可包含可选的 `steps` 数组，为 Coding Agent 提供分步执行指引。
+
+### 颗粒度规则（Q1 设计决策）
+
+**核心原则：每步结束时必须能用一条命令验证。**
+
+- 典型 3-4 步，最多 6 步
+- 每步必须有明确的可验证产出
+- 如果一步无法用单条命令验证，需要拆分
+
+### Step Action 类型
+
+| action | 说明 | 必含字段 |
+|--------|------|----------|
+| `create` | 创建新文件 | `file` |
+| `modify` | 修改已有文件 | `file` |
+| `implement` | 实现逻辑（可能跨多文件） | `description` |
+| `verify` | 运行验证命令 | `command`, `expected` |
+| `commit` | 提交代码 | `message` |
+
+### Steps 示例
+
+```json
+{
+  "id": "DT-003",
+  "title": "实现自动生成标题功能",
+  "steps": [
+    { "action": "create", "file": "viewer/src/app/api/cli/generate-title/route.ts", "description": "创建 API 路由文件" },
+    { "action": "implement", "description": "实现调用 Claude API 生成标题的逻辑" },
+    { "action": "verify", "command": "npx tsc --noEmit", "expected": "exit 0" },
+    { "action": "commit", "message": "feat: DT-003 - add auto-generate title API" }
+  ]
+}
+```
+
+### 何时生成 Steps
+
+- **生成**: PRD § 7 中明确列出了实现步骤或文件路径的 DT
+- **不生成**: 简单的配置修改、文档更新、单文件编辑等（PRD 上下文已足够）
+- **判断标准**: 如果 DT 涉及 ≥ 2 个文件或有明确的顺序约束，则生成 steps
 
 ---
 
@@ -673,6 +725,7 @@ The coding agent will:
 - [ ] **规范融合完成**: PRD.md § 7 每个 Phase 有适用规范头部，每个 DT 有 [规范] 条目
 - [ ] **Constitution 使用 file+checklist**: 每条 rule 有 file 路径 + 3-8 条 checklist
 - [ ] **Checklist 条数 3-8**: 每条 rule 的 checklist 数量在范围内
+- [ ] **Steps 颗粒度**: 有 steps 的 DT 每步可用单条命令验证，3-6 步
 - [ ] `$TASKS_DIR/prd-{feature-name}.json` written (main file)
 - [ ] `./prd.json` written (root compat copy)
 - [ ] `$TASKS_DIR/registry.json` updated with current project
