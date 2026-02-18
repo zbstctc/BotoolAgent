@@ -170,6 +170,27 @@ Teammate prompt 改为直接使用这些字段，无需跳读 PRD：
 - 使用 "should pass" / "looks correct" 代替实际运行
 - 跳过任何 eval
 
+## DT 双阶段 Review
+
+每个 DT 通过验证铁律后、标记 passes: true 之前：
+
+### Stage A: Spec + Constitution Review
+
+1. 遍历 acceptanceCriteria，每条用 grep/read 确认代码有对应实现 → 缺了 = FAIL
+2. 看 git diff --stat 新增文件，不属于任何 criteria → 多了 = WARNING（不阻塞）
+3. 遍历 prd.json 中的 constitution checklist，逐条对照本次修改的代码：
+   - 合规 → OK
+   - 不合规 → FAIL → 修复
+   - 不确定 → 读 rule.file 获取完整规范后判断
+
+### Stage B: Quick Quality Check
+
+1. 检查明显安全问题（硬编码密钥、SQL 拼接）
+2. 检查 console.log / debugger 遗留
+3. HIGH → 立即修复；MEDIUM/LOW → 记录不阻塞
+
+**完整流程：** 验证铁律（evals 全过） → Stage A（Spec + Constitution） → Stage B（Quality） → passes: true
+
 ## 进度报告格式
 
 追加到 `progress.txt`（**永远不要替换，只能追加**）：
