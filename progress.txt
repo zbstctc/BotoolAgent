@@ -53,3 +53,44 @@ S1 (DT-001, DT-002, DT-003) 全部通过。下一 session: S2 (DT-004, DT-005)�
 
 ## Session 结束 — 已完成 5 个，剩余 8 个留给下一 session
 S2 (DT-004, DT-005) 全部通过。下一 session: S3 (DT-006, DT-007, DT-008, DT-009)。
+
+## 2026-02-18 - DT-006
+- CLAUDE.lead.md 新增「验证铁律」章节：要求 Lead 独立运行所有 evals 后才能标记 passes: true
+- 包含禁止行为列表（信任口头报告、should pass、跳过 eval）
+- 修改了：`CLAUDE.lead.md`
+- **未来迭代的经验教训：**
+  - 验证铁律放在单任务执行协议和进度报告之间
+  - 是所有 DT 验收的前置条件
+---
+
+## 2026-02-18 - DT-007
+- CLAUDE.lead.md 新增「DT 双阶段 Review」章节：Stage A (Spec + Constitution) + Stage B (Quality Check)
+- Stage A 包含 constitution checklist 合规检查（不合规=FAIL，不确定=读 rule.file）
+- 完整流程图：验证铁律 → Stage A → Stage B → passes: true
+- 修改了：`CLAUDE.lead.md`
+- **未来迭代的经验教训：**
+  - Spec Review 的少了=FAIL、多了=WARNING 分级很关键
+  - constitution checklist 的不确定处理路径（读 rule.file）是安全网
+---
+
+## 2026-02-18 - DT-008
+- CLAUDE.lead.md 升级 Teammate prompt 模板：支持 steps 模式 + 旧模式、evals 全量运行、报告含完整输出
+- 模式 A (slim prdFile+prdSection) 和模式 B (fat description/acceptanceCriteria) 分离
+- steps 存在时按步骤顺序执行，不存在时走通用实现流程
+- 修改了：`CLAUDE.lead.md`
+- **未来迭代的经验教训：**
+  - Teammate prompt 需要显式列出 task.evals 中的其他命令，不能只写 typecheck
+  - [规范] 条目不确定时有后备路径（读 Phase 头部规范文件）
+---
+
+## 2026-02-18 - DT-009
+- CLAUDE.lead.md 升级验收流程：多任务和单任务路径都改为 独立验证 → Stage A → Stage B → passes: true
+- 失败时有明确的修复 → 重新验证路径
+- 修改了：`CLAUDE.lead.md`
+- **未来迭代的经验教训：**
+  - 单任务执行协议中去掉了 typecheck 单独步骤（被 evals 全量覆盖）
+  - 验收流程结构化为 4 步（独立验证/Spec Review/Quality Check/标记通过）
+---
+
+## Session 结束 — 已完成 9 个，剩余 4 个留给下一 session
+S3 (DT-006, DT-007, DT-008, DT-009) 全部通过。下一 session: S4 (DT-010, DT-011, DT-012)。

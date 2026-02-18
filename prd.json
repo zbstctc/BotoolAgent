@@ -192,7 +192,7 @@
       "title": "CLAUDE.lead.md — 新增「验证铁律」",
       "prdSection": "7.3 (L310-410)",
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "dependsOn": ["DT-005"],
       "evals": [
         {
@@ -212,7 +212,7 @@
       "title": "CLAUDE.lead.md — 新增「DT 双阶段 Review」",
       "prdSection": "7.3 (L310-410)",
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "dependsOn": ["DT-006"],
       "evals": [
         {
@@ -239,7 +239,7 @@
       "title": "CLAUDE.lead.md — 升级 Teammate prompt 模板",
       "prdSection": "7.3 (L310-410)",
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "dependsOn": ["DT-005", "DT-007"],
       "evals": [
         {
@@ -266,7 +266,7 @@
       "title": "CLAUDE.lead.md — 升级验收流程",
       "prdSection": "7.3 (L310-410)",
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "dependsOn": ["DT-007"],
       "evals": [
         {
