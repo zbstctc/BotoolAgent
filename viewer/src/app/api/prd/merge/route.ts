@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readFile, writeFile } from 'fs/promises';
+import { existsSync } from 'fs';
+import * as path from 'path';
 import type {
   SpecCodeExample,
   SpecTestCase,
@@ -9,6 +12,7 @@ import type {
   SessionGroup,
   TestCase,
 } from '@/lib/tool-types';
+import { getBotoolRoot } from '@/lib/project-root';
 
 // ============================================================================
 // Types
@@ -31,7 +35,9 @@ interface RuleInput {
   id: string;
   name: string;
   category: string;
-  content?: string;
+  file?: string;        // 新模式: 规范文件路径
+  checklist?: string[]; // 新模式: 检查项列表
+  content?: string;     // 旧模式: 完整内容 (向后兼容)
 }
 
 interface BasePrdJson {
@@ -106,8 +112,9 @@ function mergeEnrichedPrdJson(
     id: rule.id,
     name: rule.name,
     category: rule.category,
-    file: '',              // DT-002 will populate with actual path
-    checklist: [],         // DT-002 will populate with actual checklist
+    // 新模式: file + checklist; 旧模式: content (Q4 向后兼容)
+    file: rule.file || '',
+    checklist: rule.checklist || [],
     content: rule.content,
   }));
 
@@ -165,6 +172,231 @@ function mergeEnrichedPrdJson(
 }
 
 // ============================================================================
+// 规范融合 — 将规范 checklist 注入 PRD.md §7 (best-effort)
+// ============================================================================
+
+/**
+ * Inject [规范] acceptance-criteria entries into PRD.md §7 (开发计划).
+ *
+ * For each Phase heading (### 7.x) → add "适用规范" header with matched rules.
+ * For each DT checkbox (- [ ] DT-xxx) → append [规范] checklist items from
+ * matching rules based on category keywords in the DT block.
+ *
+ * This is a best-effort operation: if the file doesn't exist, the format
+ * doesn't match, or any I/O error occurs, we silently skip.
+ */
+async function fuseRulesIntoPrdMd(
+  prdFilePath: string,
+  rules: RuleInput[],
+): Promise<void> {
+  // Only rules with checklist items are useful for fusion
+  const fusableRules = rules.filter((r) => r.checklist && r.checklist.length > 0);
+  if (fusableRules.length === 0) return;
+
+  const absolutePath = path.resolve(getBotoolRoot(), prdFilePath);
+  if (!existsSync(absolutePath)) return;
+
+  const original = await readFile(absolutePath, 'utf-8');
+  const lines = original.split('\n');
+
+  // ---- Locate §7 boundary ----
+  let section7Start = -1;
+  let section7End = lines.length; // default: until end of file
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // Match "## 7." or "## 7 " (section 7 heading)
+    if (/^##\s+7[\.\s]/.test(line)) {
+      section7Start = i;
+      continue;
+    }
+    // If we're past §7 and hit another §N (N>=8), that's the boundary
+    if (section7Start >= 0 && /^##\s+\d/.test(line) && !/^###/.test(line)) {
+      section7End = i;
+      break;
+    }
+  }
+  if (section7Start < 0) return; // No §7 found
+
+  // ---- Build category → rules index ----
+  // Each rule's category (and name) are used as matching keywords
+  const rulesByCategory = new Map<string, RuleInput[]>();
+  for (const rule of fusableRules) {
+    const cats = [rule.category.toLowerCase(), rule.name.toLowerCase()];
+    for (const cat of cats) {
+      if (!rulesByCategory.has(cat)) rulesByCategory.set(cat, []);
+      rulesByCategory.get(cat)!.push(rule);
+    }
+  }
+
+  // ---- Category keyword matching ----
+  const CATEGORY_KEYWORDS: Record<string, string[]> = {
+    backend: ['api', 'route', '接口', '后端', 'server', 'handler', 'endpoint'],
+    frontend: ['ui', '页面', '组件', '前端', 'component', 'view', 'page', '渲染', '布局', '显示'],
+    database: ['db', '数据库', 'sql', 'schema', 'migration', 'table', 'query', 'prisma', 'supabase'],
+    auth: ['认证', '鉴权', 'auth', 'login', 'session', 'token', 'permission', '权限'],
+    testing: ['test', '测试', 'spec', 'e2e', 'unit'],
+    security: ['安全', 'security', 'xss', 'csrf', 'injection', '加密'],
+  };
+
+  function matchRulesForText(text: string): RuleInput[] {
+    const lowerText = text.toLowerCase();
+    const matched = new Set<RuleInput>();
+
+    // Direct category/name match
+    for (const [key, catRules] of rulesByCategory.entries()) {
+      if (lowerText.includes(key)) {
+        catRules.forEach((r) => matched.add(r));
+      }
+    }
+
+    // Keyword-based match
+    for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+      if (keywords.some((kw) => lowerText.includes(kw))) {
+        // Find rules whose category matches
+        for (const rule of fusableRules) {
+          if (rule.category.toLowerCase().includes(category) ||
+              rule.name.toLowerCase().includes(category)) {
+            matched.add(rule);
+          }
+        }
+      }
+    }
+
+    return Array.from(matched);
+  }
+
+  // ---- Process §7 lines ----
+  const output: string[] = [
+    ...lines.slice(0, section7Start), // everything before §7
+  ];
+
+  let i = section7Start;
+  while (i < section7End) {
+    const line = lines[i];
+
+    // Phase heading: ### 7.x ...
+    if (/^###\s+7\.\d/.test(line)) {
+      output.push(line);
+      i++;
+
+      // Collect Phase block text for keyword matching (until next ### or end)
+      let phaseTextEnd = i;
+      while (phaseTextEnd < section7End && !/^###\s/.test(lines[phaseTextEnd])) {
+        phaseTextEnd++;
+      }
+      const phaseText = lines.slice(i, phaseTextEnd).join(' ');
+      const phaseRules = matchRulesForText(phaseText);
+
+      // Skip existing fusion markers (re-run safety: remove old injections)
+      while (i < section7End && /^>\s*\*\*适用规范\*\*|^>\s*\*\*规范要点\*\*|^>\s*-\s/.test(lines[i])) {
+        // Skip old injected blockquote lines
+        if (/^>\s*\*\*适用规范\*\*/.test(lines[i]) || /^>\s*\*\*规范要点\*\*/.test(lines[i])) {
+          i++;
+          // Skip continuation blockquote lines ("> - ...")
+          while (i < section7End && /^>\s*-\s/.test(lines[i])) {
+            i++;
+          }
+        } else {
+          break;
+        }
+      }
+
+      // Inject Phase-level rule summary
+      if (phaseRules.length > 0) {
+        output.push('');
+        output.push(`> **适用规范**: ${phaseRules.map((r) => r.name).join(', ')}`);
+        // Collect top checklist items as 规范要点 (max 5)
+        const keyPoints: string[] = [];
+        for (const rule of phaseRules) {
+          for (const item of rule.checklist || []) {
+            if (keyPoints.length < 5) keyPoints.push(item);
+          }
+        }
+        if (keyPoints.length > 0) {
+          output.push('> **规范要点**:');
+          for (const point of keyPoints) {
+            output.push(`> - ${point}`);
+          }
+        }
+        output.push('');
+      }
+
+      continue;
+    }
+
+    // DT checkbox line: - [ ] DT-xxx: ...
+    if (/^-\s*\[[ x]\]\s*DT-\d+/.test(line)) {
+      output.push(line);
+      i++;
+
+      // Collect the DT's acceptance criteria block (indented lines)
+      const dtLines: string[] = [line];
+      while (i < section7End && /^\s+/.test(lines[i]) && !/^-\s*\[[ x]\]\s*DT-\d+/.test(lines[i]) && !/^###/.test(lines[i])) {
+        const subLine = lines[i];
+        // Skip previously injected [规范] lines (re-run safety)
+        if (/\[规范\]/.test(subLine)) {
+          i++;
+          continue;
+        }
+        dtLines.push(subLine);
+        output.push(subLine);
+        i++;
+      }
+
+      // Match rules for this DT's text
+      const dtText = dtLines.join(' ');
+      const dtRules = matchRulesForText(dtText);
+
+      if (dtRules.length > 0) {
+        // Find the insertion point: before "Typecheck passes" line or at the end
+        // We already pushed the lines, so we inject [规范] lines here
+        const lastOutputIdx = output.length;
+
+        // Check if the last pushed line was "Typecheck passes" — insert before it
+        let insertBeforeTypecheck = -1;
+        for (let j = lastOutputIdx - 1; j >= Math.max(0, lastOutputIdx - 10); j--) {
+          if (/typecheck\s+pass/i.test(output[j])) {
+            insertBeforeTypecheck = j;
+            break;
+          }
+        }
+
+        const ruleLines: string[] = [];
+        for (const rule of dtRules) {
+          for (const item of rule.checklist || []) {
+            ruleLines.push(`    - [ ] [规范] ${item}`);
+          }
+        }
+
+        if (ruleLines.length > 0) {
+          if (insertBeforeTypecheck >= 0) {
+            // Insert before the Typecheck line
+            output.splice(insertBeforeTypecheck, 0, ...ruleLines);
+          } else {
+            // Append at end of DT block
+            output.push(...ruleLines);
+          }
+        }
+      }
+
+      continue;
+    }
+
+    // Regular line — pass through
+    output.push(line);
+    i++;
+  }
+
+  // Append everything after §7
+  output.push(...lines.slice(section7End));
+
+  const result = output.join('\n');
+  if (result !== original) {
+    await writeFile(absolutePath, result, 'utf-8');
+  }
+}
+
+// ============================================================================
 // API Handler
 // ============================================================================
 
@@ -189,6 +421,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const safeRules = rules || [];
+
     const result = mergeEnrichedPrdJson(basePrdJson, enrichResult || {
       codeExamples: [],
       testCases: [],
@@ -196,7 +430,17 @@ export async function POST(request: NextRequest) {
       evals: [],
       dependencies: [],
       sessions: [],
-    }, rules || []);
+    }, safeRules);
+
+    // 规范融合: 将规范 checklist 注入 PRD.md §7 (best-effort, Q5/Q6)
+    if (basePrdJson.prdFile && safeRules.length > 0) {
+      try {
+        await fuseRulesIntoPrdMd(basePrdJson.prdFile, safeRules);
+      } catch {
+        // Best-effort: silently skip if fusion fails
+        console.warn('Rule fusion into PRD.md skipped due to error');
+      }
+    }
 
     return NextResponse.json(result);
   } catch (error) {
