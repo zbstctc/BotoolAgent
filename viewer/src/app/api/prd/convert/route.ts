@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CLIManager, CLIMessage } from '@/lib/cli-manager';
-import { getProjectRoot, getPrdJsonPath, getProgressPath, getProjectPrdJsonPath, getProjectPrdMdPath, getProjectProgressPath, getArchiveDir, getRegistryPath, isPortableMode } from '@/lib/project-root';
+import { getProjectRoot, getPrdJsonPath, getProgressPath, getProjectPrdJsonPath, getProjectPrdMdPath, getProjectProgressPath, getArchiveDir, getRegistryPath, getTasksDir, isPortableMode } from '@/lib/project-root';
 
 // System prompt for PRD to JSON conversion (slim index format)
 const SYSTEM_PROMPT = `You are a PRD to JSON converter for BotoolAgent. Convert a PRD markdown document into a **slim prd.json** — an automation index. The PRD.md is the Single Source of Truth; prd.json only contains automation fields.
@@ -154,12 +154,10 @@ export async function POST(request: NextRequest) {
               const prdMdPath = getProjectPrdMdPath(projectId);
               if (!fs.existsSync(prdMdPath) && prdId) {
                 // Legacy: check for flat prd-{id}.md and copy to per-project location
-                const { getTasksDir } = await import('@/lib/project-root');
-                const legacyPath = require('path').join(getTasksDir(), `prd-${prdId}.md`);
-                const { default: fs2 } = await import('fs');
-                if (fs2.existsSync(legacyPath)) {
-                  fs2.mkdirSync(require('path').dirname(prdMdPath), { recursive: true });
-                  fs2.copyFileSync(legacyPath, prdMdPath);
+                const legacyPath = path.join(getTasksDir(), `prd-${prdId}.md`);
+                if (fs.existsSync(legacyPath)) {
+                  fs.mkdirSync(path.dirname(prdMdPath), { recursive: true });
+                  fs.copyFileSync(legacyPath, prdMdPath);
                 }
               }
             }

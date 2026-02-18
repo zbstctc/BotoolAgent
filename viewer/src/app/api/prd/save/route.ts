@@ -113,9 +113,15 @@ export async function POST(request: NextRequest) {
       const entry: PrdSessionEntry = { updatedAt: new Date().toISOString() };
       if (sessionId) entry.sessionId = sessionId;
       if (sourceFilePath) {
-        // Store the source project id (directory name) or basename for legacy sources
+        // Store the source project id for the hiding logic in GET /api/prd
         const sourceName = path.basename(sourceFilePath);
-        entry.transformedFrom = sourceName.replace(/^prd-/, '').replace(/\.md$/, '');
+        if (sourceName === 'prd.md') {
+          // New format: tasks/{projectId}/prd.md → use parent directory name as project id
+          entry.transformedFrom = path.basename(path.dirname(sourceFilePath));
+        } else {
+          // Legacy format: tasks/prd-xxx.md → strip prefix/extension
+          entry.transformedFrom = sourceName.replace(/^prd-/, '').replace(/\.md$/, '');
+        }
       }
       saveProjectSession(projectId, entry);
     }
