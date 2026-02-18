@@ -2,6 +2,13 @@
 
 import type { AgentStatus } from '@/hooks/useAgentStatus';
 
+export interface GitStats {
+  additions: number;
+  deletions: number;
+  files: number;
+  commits: number;
+}
+
 interface AgentDataPanelProps {
   agentStatus: AgentStatus;
   isRunning: boolean;
@@ -10,6 +17,14 @@ interface AgentDataPanelProps {
   progressPercent: number;
   /** Fallback total tasks from PRD (used when agentStatus.total is 0) */
   totalTasks?: number;
+  /** Elapsed seconds since agent started */
+  elapsedSeconds?: number;
+  /** Git change statistics */
+  gitStats?: GitStats;
+  /** Average time per task in seconds */
+  avgTaskTime?: number;
+  /** Estimated time remaining in seconds */
+  eta?: number;
 }
 
 type IndicatorColor = 'green' | 'yellow' | 'red';
@@ -144,6 +159,22 @@ function getStatusStyle(
   return 'bg-neutral-100 text-neutral-600';
 }
 
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  if (m < 60) return s > 0 ? `${m}m${s}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return rm > 0 ? `${h}h${rm}m` : `${h}h`;
+}
+
+function formatEta(seconds: number): string {
+  if (seconds < 60) return `约 ${Math.round(seconds)} 秒`;
+  const m = Math.ceil(seconds / 60);
+  return `约 ${m} 分钟`;
+}
+
 export default function AgentDataPanel({
   agentStatus,
   isRunning,
@@ -151,6 +182,10 @@ export default function AgentDataPanel({
   hasError,
   progressPercent,
   totalTasks = 0,
+  elapsedSeconds,
+  gitStats,
+  avgTaskTime,
+  eta,
 }: AgentDataPanelProps) {
   const total = agentStatus.total || totalTasks;
   const iterationPercent =
@@ -226,6 +261,49 @@ export default function AgentDataPanel({
         <p className="text-xs text-neutral-500 italic">
           {agentStatus.message}
         </p>
+      )}
+
+      {/* Stats Section */}
+      {agentStatus.status !== 'idle' && (
+        <div className="rounded-lg border border-neutral-200 bg-white p-3">
+          <span className="text-xs text-neutral-400">统计</span>
+          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5">
+            {avgTaskTime != null && avgTaskTime > 0 && (
+              <>
+                <span className="text-xs text-neutral-500">均耗时</span>
+                <span className="text-xs font-mono text-neutral-700 text-right">
+                  {formatDuration(avgTaskTime)}/任务
+                </span>
+              </>
+            )}
+            {gitStats && (
+              <>
+                <span className="text-xs text-neutral-500">代码变更</span>
+                <span className="text-xs font-mono text-neutral-700 text-right">
+                  <span className="text-green-600">+{gitStats.additions}</span>
+                  {' '}
+                  <span className="text-red-500">-{gitStats.deletions}</span>
+                </span>
+                <span className="text-xs text-neutral-500">文件</span>
+                <span className="text-xs font-mono text-neutral-700 text-right">
+                  {gitStats.files} 个
+                </span>
+                <span className="text-xs text-neutral-500">提交</span>
+                <span className="text-xs font-mono text-neutral-700 text-right">
+                  {gitStats.commits} 个
+                </span>
+              </>
+            )}
+            {eta != null && eta > 0 && (
+              <>
+                <span className="text-xs text-neutral-500">ETA</span>
+                <span className="text-xs font-mono text-neutral-700 text-right">
+                  {formatEta(eta)}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Status Indicators */}
