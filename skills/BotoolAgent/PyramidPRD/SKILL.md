@@ -1,12 +1,12 @@
 ---
 name: botoolagent-pyramidprd
-description: "金字塔式 PRD 问答生成器。通过 5 层递进式问答（含 ASCII 可视化确认门控）收集需求，生成多维度高颗粒度 PRD 文档。触发词：pyramid prd, 金字塔问答, 层级问答"
+description: "金字塔式 PRD 问答生成器。通过 6 层递进式问答（L0 方向探索 + L1-L5 含 ASCII 可视化确认门控）收集需求，生成多维度高颗粒度 PRD 文档。触发词：pyramid prd, 金字塔问答, 层级问答"
 user-invocable: true
 ---
 
 # BotoolAgent 金字塔 PRD 生成器
 
-通过 5 层递进式问答（含 ASCII 可视化确认门控），系统性地收集需求并生成**多维度、高颗粒度** PRD 文档。
+通过 6 层递进式问答（L0 方向探索 + L1-L5 含 ASCII 可视化确认门控），系统性地收集需求并生成**多维度、高颗粒度** PRD 文档。
 
 **启动提示:** "Using BotoolAgent:PyramidPRD to collect requirements through structured Q&A."
 
@@ -23,6 +23,8 @@ user-invocable: true
 ```
 评估复杂度 → 确定问题数量 → 选择模式
     ↓
+L0: 方向探索 - 项目上下文扫描 + 需求方向理解 + 方案选择 + 范围确认
+    ↓  （Quick Fix 跳过 / 用户明确说不需要时跳过）
 L1: 核心识别 - 理解需求本质
     ↓
 代码库扫描（增强版：技术栈 + 数据库 + 组件接口 + API 签名）
@@ -96,8 +98,8 @@ L5: 确认门控 - ASCII 多维度可视化确认（架构/数据/UI/规则/计�
     "source": "pyramidprd",
     "level": 1,
     "levelName": "L1: 核心识别",
-    "progress": "1/5",
-    "totalLevels": 5,
+    "progress": "2/6",
+    "totalLevels": 6,
     "codebaseScanned": false
   }
 }
@@ -155,10 +157,113 @@ L5: 确认门控 - ASCII 多维度可视化确认（架构/数据/UI/规则/计�
 
 **步骤 3：根据选择进入不同流程**
 
-- **快速修复** -> 进入 Phase 1-Quick（简化流程）
-- **功能开发** -> 进入 Phase 1（跳过 L2、L3，只走 L1 + L4 + 确认）
-- **完整规划** -> 进入 Phase 1（完整 L1->L5 流程，即当前默认流程）
-- **PRD 导入** -> 进入 Phase T1-Transform（Transform 流程，见下文）
+- **快速修复** -> 跳过 L0，直接进入 Phase 1-Quick（简化流程）
+- **功能开发** -> 进入 Phase 0.5 L0 方向探索 → Phase 1（跳过 L2、L3，只走 L1 + L4 + 确认）
+- **完整规划** -> 进入 Phase 0.5 L0 方向探索 → Phase 1（完整 L1->L5 流程，即当前默认流程）
+- **PRD 导入** -> 跳过 L0，进入 Phase T1-Transform（Transform 流程，见下文）
+
+---
+
+### Phase 0.5: L0 方向探索（功能开发 + 完整规划模式）
+
+**目标：** 在进入 L1 核心问答之前，先建立对项目和需求方向的共识，避免后续问答走偏。通过 2-3 个 AskUserQuestion 完成方向探索。
+
+**跳过条件：**
+- 快速修复模式 → 自动跳过
+- PRD 导入模式 → 自动跳过
+- 用户消息中包含 `[跳过探索]` 或明确说"不需要探索"/"直接开始" → 跳过
+- 需求描述已非常具体且明确（如已包含技术方案、文件路径、组件名称等） → AI 判断可跳过，但需告知用户
+
+**L0 输出：** L0 收集的信息将作为后续所有层级（L1-L5）的上下文基础。具体输出保存在 metadata 的 `l0Context` 中，供后续层级引用。
+
+#### 步骤 1：项目上下文快速扫描
+
+在发起 L0 提问前，先执行轻量项目扫描（不等同于 Phase 2.5 的完整代码库扫描）：
+
+- 使用 Glob 检查 `package.json`、`tsconfig.json` 等项目文件是否存在
+- 如果有 `package.json`，使用 Read 读取 dependencies 部分，识别技术栈
+- 使用 Glob 扫描顶层目录结构（`*`、`src/*`），了解项目结构
+- 将扫描结果内化到 L0 问题的选项中
+
+#### 步骤 2：发起 L0 方向探索提问（2-3 个 AskUserQuestion）
+
+**第 1 次 AskUserQuestion — 需求方向理解 + 实现方案选择：**
+
+根据用户的初始需求描述和项目扫描结果，提出 2-3 种需求理解方式和对应的实现方案。
+
+```json
+{
+  "questions": [
+    {
+      "question": "【L0: 方向探索】\n\n基于你的描述和项目现状，我有以下几种理解方式：\n\n**方向 A**: [理解方式 A 的一句话描述]\n- 实现思路: [简要技术方案]\n- 涉及范围: [预估文件/模块]\n- 优势: [优势]\n- 劣势: [劣势]\n\n**方向 B**: [理解方式 B 的一句话描述]\n- 实现思路: [简要技术方案]\n- 涉及范围: [预估文件/模块]\n- 优势: [优势]\n- 劣势: [劣势]\n\n**方向 C（可选）**: [理解方式 C 的一句话描述]\n- 实现思路: [简要技术方案]\n- 优势: [优势]\n- 劣势: [劣势]\n\n请选择最接近你意图的方向：",
+      "header": "需求方向",
+      "options": [
+        { "label": "方向 A（推荐）", "description": "[一句话总结]" },
+        { "label": "方向 B", "description": "[一句话总结]" },
+        { "label": "方向 C", "description": "[一句话总结（如有）]" },
+        { "label": "都不对，我来说明", "description": "以上理解都有偏差，我会补充说明" }
+      ],
+      "multiSelect": false
+    }
+  ],
+  "metadata": {
+    "source": "pyramidprd",
+    "level": 0,
+    "levelName": "L0: 方向探索",
+    "progress": "1/6",
+    "totalLevels": 6,
+    "l0Step": "direction"
+  }
+}
+```
+
+注意：「推荐」标记应根据 AI 评估结果放在最匹配的选项上。如果方向只有 2 个，去掉方向 C 选项。
+
+**第 2 次 AskUserQuestion — 范围确认（YAGNI）：**
+
+根据用户选择的方向，明确"要做的"和"不做的"：
+
+```json
+{
+  "questions": [
+    {
+      "question": "【L0: 范围确认】\n\n基于你选择的方向，我整理了范围边界：\n\n**✅ 要做的（本次范围）：**\n1. [核心功能 1]\n2. [核心功能 2]\n3. [核心功能 3]\n\n**❌ 不做的（YAGNI）：**\n1. [排除项 1 — 原因]\n2. [排除项 2 — 原因]\n3. [排除项 3 — 原因]\n\n这个范围是否准确？",
+      "header": "范围确认",
+      "options": [
+        { "label": "范围准确", "description": "同意以上范围划分，继续深入" },
+        { "label": "需要调整", "description": "有功能需要增减，我会说明" }
+      ],
+      "multiSelect": false
+    }
+  ],
+  "metadata": {
+    "source": "pyramidprd",
+    "level": 0,
+    "levelName": "L0: 方向探索",
+    "progress": "1/6",
+    "totalLevels": 6,
+    "l0Step": "scope"
+  }
+}
+```
+
+**处理"需要调整"：** 如果用户选择需要调整，根据反馈重新生成范围确认（最多重试 1 次，避免循环）。
+
+#### 步骤 3：生成 L0 上下文摘要
+
+L0 完成后，生成简短上下文摘要，作为后续层级的输入：
+
+```
+L0 上下文摘要:
+- 选定方向: [方向名称 + 一句话描述]
+- 实现思路: [选定的技术方案概要]
+- 范围边界: [要做] vs [不做]
+- 项目现状: [技术栈] + [关键现有模块]
+```
+
+此摘要保存在 metadata 的 `l0Context` 字段中，后续 L1-L5 的 AskUserQuestion 都应在 metadata 中携带此上下文。
+
+**L0 完成后，进入 Phase 1（功能开发/完整规划模式的 L1 核心识别）。**
 
 ---
 
@@ -172,9 +277,32 @@ L5: 确认门控 - ASCII 多维度可视化确认（架构/数据/UI/规则/计�
 4. 使用 AskUserQuestion 确认任务列表
 5. 自动检测 tasks 目录：`TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"`
 6. 生成极简 PRD.md 到 `$TASKS_DIR/prd-[feature-name].md`（只含 § 1 项目概述 + § 7 开发计划，无 § 2-6）
-7. 跳过 Stage 2 的规则选择（constitution 可选）
-8. 生成 prd.json 到项目根目录（含 prdFile 指向 `$TASKS_DIR/prd-xxx.md`、每个 DT 有 prdSection）
-8. 执行安全关键词扫描（仅对高风险关键词：认证/支付）
+7. 快速模式规范处理（跳过 Stage 2 的交互式规则选择，但自动检测规范）：
+   - 使用 Glob 检查项目中是否存在 `rules/*.md` 或 `BotoolAgent/rules/*.md` 目录
+   - **有 rules/ 目录时**：自动扫描所有 `rules/*.md` 文件，为每个规范文件生成 `file + checklist` 格式的 constitution 条目（与功能开发/完整规划模式一致）：
+     ```json
+     {
+       "constitution": [
+         {
+           "id": "rule-001",
+           "name": "[规范名称]",
+           "file": "rules/[filename].md",
+           "checklist": [
+             "[从规范文件提取的关键检查项 1]",
+             "[关键检查项 2]",
+             "[关键检查项 3]"
+           ]
+         }
+       ]
+     }
+     ```
+     - 每个规范文件读取摘要，提取 3-5 条最关键的 checklist 条目
+     - 仅选择与当前 DT 任务相关的规范（通过关键词匹配判断相关性）
+     - 将 checklist 中的 `[规范]` 条目注入到 PRD.md § 7 对应 DT 的验收条件中
+   - **无 rules/ 目录时**：跳过规范处理，constitution 为空数组（向后兼容旧行为）
+   - **旧模式兼容**：如果项目使用旧的 `content` 格式规范，检测逻辑为 `rule.file ? "新模式" : rule.content ? "旧模式" : "无规范"`
+8. 生成 prd.json 到项目根目录（含 prdFile 指向 `$TASKS_DIR/prd-xxx.md`、每个 DT 有 prdSection、constitution 使用 file+checklist 格式）
+9. 执行安全关键词扫描（仅对高风险关键词：认证/支付）
 
 ---
 
@@ -1400,15 +1528,17 @@ $TASKS_DIR/
 
 ## 关键原则
 
-1. **立即开始提问** - 收到需求后直接开始 L1，不做冗长分析
-2. **使用 AskUserQuestion** - 所有问题都通过工具提问
-3. **包含 metadata** - 每次提问必须带 level 信息
-4. **层级递进** - 严格按 L1→L2→L3→L4→L5（确认）顺序
-5. **动态调整** - 根据答案调整后续问题
-6. **简洁反馈** - 每层完成后简短总结，立即进入下一层
-7. **ASCII 可视化** - L5 门控和 PRD 文档中使用 ASCII 图表达架构/UI/数据/流程
-8. **高颗粒度** - DT 必须包含具体的 API 路径、组件名、文件路径
-9. **交叉引用** - Phase 必须标注对应的设计 Section
+1. **方向先行** - 功能开发/完整规划模式先走 L0 方向探索，建立共识后再深入
+2. **立即开始提问** - 收到需求后先评估模式，然后按流程开始 L0 或 L1，不做冗长分析
+3. **使用 AskUserQuestion** - 所有问题都通过工具提问
+4. **包含 metadata** - 每次提问必须带 level 信息
+5. **层级递进** - 严格按 L0→L1→L2→L3→L4→L5（确认）顺序（Quick Fix 跳过 L0）
+6. **动态调整** - 根据答案调整后续问题
+7. **简洁反馈** - 每层完成后简短总结，立即进入下一层
+8. **ASCII 可视化** - L5 门控和 PRD 文档中使用 ASCII 图表达架构/UI/数据/流程
+9. **高颗粒度** - DT 必须包含具体的 API 路径、组件名、文件路径
+10. **交叉引用** - Phase 必须标注对应的设计 Section
+11. **规范一致性** - 快速模式也使用 file + checklist 格式处理规范（有 rules/ 时自动检测）
 
 ---
 
