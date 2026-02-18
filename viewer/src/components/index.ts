@@ -40,3 +40,4 @@ export { ReviewSummary } from "./ReviewSummary";
 export type { ReviewSummaryProps } from "./ReviewSummary";
 export { ErrorRecovery } from "./ErrorRecovery";
 export type { ErrorRecoveryProps, ErrorAction } from "./ErrorRecovery";
+export { TabBar } from "./TabBar";
