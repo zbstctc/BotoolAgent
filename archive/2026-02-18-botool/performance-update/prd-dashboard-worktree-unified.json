@@ -1,0 +1,818 @@
+{
+  "project": "BotoolAgent Dashboard 重构 + Worktree 并发执行",
+  "branchName": "botool/dashboard-worktree-unified",
+  "description": "统一需求卡片（合并 Project + PRD + Session 为 Requirement 实体）+ 6 阶段进度 + Worktree 并发执行 + Header Tab Bar",
+  "prdFile": "tasks/prd-dashboard-worktree-unified.md",
+  "constitution": {
+    "rules": [
+      {
+        "id": "rule-001",
+        "name": "API设计规范",
+        "category": "backend",
+        "content": "# API 设计规范\n\n## 路由结构（Next.js App Router）\n- 路由文件固定为 `route.ts`，放在 `src/app/api/{feature}/` 下\n- 嵌套资源使用子目录：`/api/prd/[id]/route.ts`、`/api/prd/save/route.ts`\n- 动态参数使用 `[param]` 目录名\n\n## HTTP 方法\n- `GET`：查询/列表\n- `POST`：创建/执行操作\n- `DELETE`：删除资源\n- 导出格式：`export async function GET(request: NextRequest) { ... }`\n\n## 请求解析\n- JSON body：`const body = await request.json()`\n- Query params：`const searchParams = request.nextUrl.searchParams; searchParams.get('key')`\n- 路径参数：`{ params }: { params: Promise<{ id: string }> }` 然后 `const { id } = await params`\n\n## 响应格式\n- 成功：`NextResponse.json({ data })` 或 `NextResponse.json({ success: true, ... })`\n- 错误：`NextResponse.json({ error: '描述' }, { status: 4xx/5xx })`\n- 流式：`new Response(stream, { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' } })`\n\n## 状态码\n- `200`：成功\n- `201`：创建成功\n- `400`：参数错误\n- `404`：资源不存在\n- `409`：冲突（如 Agent 已在运行）\n- `500`：服务器错误\n\n## 错误处理\n- 每个 handler 用 try/catch 包裹\n- `catch` 中记录 `console.error()`，返回通用错误消息\n- 禁止在错误响应中暴露内部路径或堆栈信息\n- 输入校验在 handler 顶部完成，不合法立即 return 400\n\n## SSE 流式响应模式\n```typescript\nconst encoder = new TextEncoder();\nlet controller: ReadableStreamDefaultController | null = null;\nconst stream = new ReadableStream({\n  start(c) { controller = c; },\n  cancel() { /* cleanup */ }\n});\ncontroller?.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\\n\\n`));\ncontroller?.close();\nreturn new Response(stream, {\n  headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' },\n});\n```\n\n## 子进程 spawn 规范\n- 必须移除 `CLAUDECODE` 环境变量防止嵌套 session 错误\n- 长时间运行的进程使用 `detached: true` + `child.unref()`\n- PID 写入 `.state/agent-pid` 文件用于进程管理\n\n## 文件系统操作\n- 使用 `@/lib/project-root` 中的路径函数获取绝对路径\n- 检查文件存在用 `fs.existsSync()`，读取用 `fs.readFileSync(path, 'utf-8')`\n- 写入文件前确保目录存在"
+      },
+      {
+        "id": "rule-002",
+        "name": "前端命名规范",
+        "category": "frontend",
+        "content": "# 前端命名规范\n\n## 组件命名\n- 使用 PascalCase 命名组件文件和导出名（`ProjectCard.tsx` → `export function ProjectCard()`）\n- 文件名与组件名保持一致\n- 复合组件放在同名子目录中\n- 使用 barrel exports（`index.ts`）统一导出\n\n## Props 接口命名\n- Props 接口使用 `{ComponentName}Props` 格式\n- 在组件文件内定义，使用 `export interface`\n- 若 Props 简单（2-3 个属性），可用内联解构\n\n## Hooks 命名\n- 统一使用 `use` 前缀 + camelCase\n- 文件名与 hook 名一致\n- 通过 `hooks/index.ts` 统一导出\n\n## Context 命名\n- Context 使用 PascalCase（`ProjectContext`）\n- Provider 使用 `{Name}Provider`\n- 消费 hook 使用 `use{Name}`\n\n## 变量命名\n- 变量和函数使用 camelCase\n- 常量使用 UPPER_CASE\n- 布尔变量使用 `is/has/should` 前缀\n\n## TypeScript 类型\n- 对象形状使用 `interface`（首选）\n- 联合类型使用 `type`\n- 类型守卫使用 `is{TypeName}` 命名"
+      },
+      {
+        "id": "rule-003",
+        "name": "前端测试规范",
+        "category": "frontend",
+        "content": "# 前端测试规范\n\n## 测试框架\n- E2E 测试使用 Playwright\n- 测试文件放在 `tests/` 目录，以 `.spec.ts` 结尾\n\n## 组件测试\n- 每个关键组件应有对应的测试用例\n- 测试文件命名：`{ComponentName}.spec.ts`\n- 覆盖：正常渲染、交互行为、边界状态\n\n## E2E 测试要求\n- 关键用户流程必须有 E2E 测试覆盖\n- 5 阶段工作流各自的核心路径\n- 测试应独立运行，不依赖其他测试的状态\n\n## 断言规范\n- 使用 Playwright 的 `expect()` 断言\n- 页面导航后等待元素出现\n- 网络请求验证使用 `page.waitForResponse()`"
+      },
+      {
+        "id": "rule-004",
+        "name": "前端样式规范",
+        "category": "frontend",
+        "content": "# 前端样式规范\n\n## 设计理念：岩石色系 (Rock Palette)\n- 黑白灰为主的单色系，沉稳、专业、克制\n- 按钮全部黑色：主按钮用黑底白字\n- 彩色仅用于状态指示：成功(绿)、错误(红)、警告(琥珀)、进行中(蓝)\n- 禁用彩色按钮\n\n## Tailwind CSS 优先\n- 所有样式必须使用 Tailwind 工具类\n\n## 主色系：neutral\n- 纯黑 `neutral-900` | 深灰 `neutral-600` | 中灰 `neutral-500` | 浅灰 `neutral-400` | 边框 `neutral-200` | 浅底色 `neutral-100` | 背景 `neutral-50`\n\n## 按钮样式\n- 主按钮：`bg-neutral-900 text-white hover:bg-neutral-800`\n- 次按钮：`border border-neutral-300 text-neutral-700 bg-white`\n- 危险按钮：`bg-red-600 text-white`（唯一允许的彩色按钮）\n- 幽灵按钮：`text-neutral-600 hover:text-neutral-900`\n\n## 弹窗/对话框\n- 所有弹窗和下拉框必须使用白色背景（`bg-white`），严禁透明\n\n## 圆角：`rounded-lg` | 边框：`border border-neutral-200` | 图标：lucide-react"
+      },
+      {
+        "id": "rule-005",
+        "name": "测试用例规范",
+        "category": "testing",
+        "content": "# 测试用例规范\n\n## 测试命名\n- 使用 `describe` 描述测试套件\n- 使用 `it` 或 `test` 描述具体行为\n- 文件命名：`{feature}.spec.ts`\n\n## 测试覆盖要求\n- 单元测试覆盖率 > 80%\n- 每个 API 端点至少一个正常路径 + 一个错误路径测试\n- 关键用户流程必须有 E2E 测试\n\n## E2E 测试（Playwright）\n- 配置文件：`playwright.config.ts`\n- 测试目录：`tests/`\n\n## API 测试模式\n```typescript\ndescribe('POST /api/prd/save', () => {\n  it('should save PRD content and return id', async () => { ... });\n  it('should return 400 for empty content', async () => { ... });\n});\n```\n\n## TypeScript 规范\n- 测试文件使用 TypeScript（`.spec.ts`）\n- Typecheck 必须通过：`npx tsc --noEmit`"
+      },
+      {
+        "id": "rule-006",
+        "name": "应用状态管理规范",
+        "category": "application",
+        "content": "# 应用状态管理规范\n\n## 状态层级\n1. React Context（全局共享状态）\n2. localStorage（持久化）：通过 `lib/project-storage.ts` 和 `lib/prd-session-storage.ts` 管理\n3. 组件 state（局部状态）\n4. URL params（路由状态）\n\n## Context 使用模式\n```typescript\nconst MyContext = createContext<ContextValue | null>(null);\nexport function MyProvider({ children }) { ... }\nexport function useMy(): ContextValue {\n  const context = useContext(MyContext);\n  if (!context) throw new Error('useMy must be used within MyProvider');\n  return context;\n}\n```\n\n## localStorage 存储\n- 所有 key 必须通过 `scopedKey()` 添加 workspace 前缀\n- 读取时检查 `typeof window === 'undefined'` 防止 SSR 错误\n- 写入使用 debounce（500ms）\n- 数据结构包含 `version` 字段\n\n## SSR 安全\n- `localStorage` 访问必须在 `useEffect` 或条件判断中\n- 所有使用浏览器 API 的组件必须标记 `'use client'`"
+      },
+      {
+        "id": "rule-007",
+        "name": "项目结构规范",
+        "category": "application",
+        "content": "# 项目结构规范\n\n## 目录结构\n```\nviewer/src/\n├── app/              # Next.js App Router\n│   ├── api/          # API 路由（服务端）\n│   ├── stage{1-5}/   # 5 阶段页面\n│   ├── page.tsx      # Dashboard 首页\n│   ├── layout.tsx    # 根布局\n│   └── globals.css   # 全局样式\n├── components/       # UI 组件\n├── contexts/         # React Context\n├── hooks/            # 自定义 Hooks\n└── lib/              # 工具库\n```\n\n## 文件职责\n- page.tsx：页面入口，组合组件\n- components/：纯 UI 逻辑\n- hooks/：可复用的状态逻辑\n- lib/：纯工具函数\n- contexts/：全局共享状态\n\n## 新文件规则\n- 新组件先检查 components/ 是否有可复用的\n- 新 API 遵循 RESTful 命名\n- 新 hook 必须以 use 前缀命名\n- 新建文件后必须更新对应的 barrel index.ts\n\n## 技术栈版本\n- Next.js 16+ (App Router) | React 19+ | TypeScript 5+ (strict) | Tailwind CSS 4+ | Playwright"
+      }
+    ],
+    "ruleAuditSummary": ""
+  },
+  "devTasks": [
+    {
+      "id": "DT-000a",
+      "title": "项目目录结构重组 — tasks/{id}/ per-project 文件夹",
+      "prdSection": "7.1 (L482-645)",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "project-root.ts exists",
+          "command": "test -f viewer/src/lib/project-root.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "unit", "desc": "getProjectDir/getProjectPrdJsonPath/getAgentStatusPath 路径函数正确", "tdd": true },
+        { "type": "unit", "desc": "normalizeProjectId 防路径穿越", "tdd": true }
+      ]
+    },
+    {
+      "id": "DT-000",
+      "title": "消除根目录 prd.json 双写，统一为 per-project 单源路径",
+      "prdSection": "7.1 (L482-645)",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": ["DT-000a"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "integration", "desc": "两个不同 projectId 的 Lead Agent 各自只读写自己的 prd.json" }
+      ]
+    },
+    {
+      "id": "DT-001",
+      "title": "BotoolAgent.sh 添加 --project-id 参数，动态生成 SESSION_NAME",
+      "prdSection": "7.1 (L482-645)",
+      "priority": 3,
+      "passes": false,
+      "dependsOn": ["DT-000"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "BotoolAgent.sh syntax check",
+          "command": "bash -n scripts/BotoolAgent.sh",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "unit", "desc": "--project-id 参数解析正确" },
+        { "type": "unit", "desc": "从 --prd-path 自动提取 project-id" },
+        { "type": "integration", "desc": "tmux session 名包含 project-id" }
+      ]
+    },
+    {
+      "id": "DT-002",
+      "title": "BotoolAgent.sh 添加 worktree 自动创建/复用逻辑",
+      "prdSection": "7.1 (L482-645)",
+      "priority": 4,
+      "passes": false,
+      "dependsOn": ["DT-001"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "BotoolAgent.sh syntax check",
+          "command": "bash -n scripts/BotoolAgent.sh",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "unit", "desc": "首次运行自动创建 worktree 和分支" },
+        { "type": "unit", "desc": "二次运行复用已有 worktree" },
+        { "type": "integration", "desc": "stall detection 检测到 worktree 中的新 commit" }
+      ]
+    },
+    {
+      "id": "DT-003",
+      "title": "BotoolAgent.sh cleanup 逻辑更新",
+      "prdSection": "7.1 (L482-645)",
+      "priority": 5,
+      "passes": false,
+      "dependsOn": ["DT-001"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "BotoolAgent.sh syntax check",
+          "command": "bash -n scripts/BotoolAgent.sh",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "unit", "desc": "cleanup 只杀当前 project 的 tmux session" },
+        { "type": "integration", "desc": "启动项目 B 时不杀死项目 A 的进程" }
+      ]
+    },
+    {
+      "id": "DT-004",
+      "title": "API 层适配 per-project 路径",
+      "prdSection": "7.2 (L646-687)",
+      "priority": 6,
+      "passes": false,
+      "dependsOn": ["DT-000a"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "unit", "desc": "start/route.ts 使用 per-project PID/Status 路径" }
+      ]
+    },
+    {
+      "id": "DT-005",
+      "title": "/api/agent/start 传递 projectId",
+      "prdSection": "7.2 (L646-687)",
+      "priority": 7,
+      "passes": false,
+      "dependsOn": ["DT-004", "DT-001"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "integration", "desc": "两个不同 projectId 可同时启动" },
+        { "type": "unit", "desc": "[安全] projectId 合法性校验" }
+      ]
+    },
+    {
+      "id": "DT-006",
+      "title": "/api/agent/status 支持 projectId 查询",
+      "prdSection": "7.2 (L646-687)",
+      "priority": 8,
+      "passes": false,
+      "dependsOn": ["DT-004"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "unit", "desc": "有 projectId 返回单个项目状态" },
+        { "type": "unit", "desc": "无 projectId 返回所有活跃项目状态" }
+      ]
+    },
+    {
+      "id": "DT-007",
+      "title": "/api/agent/stop (DELETE) 支持 projectId",
+      "prdSection": "7.2 (L646-687)",
+      "priority": 9,
+      "passes": false,
+      "dependsOn": ["DT-004"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "unit", "desc": "DELETE 只停止指定 projectId 的进程" }
+      ]
+    },
+    {
+      "id": "DT-008",
+      "title": "安装 shadcn Sheet + 定义 Requirement 类型",
+      "prdSection": "7.3 (L688-788)",
+      "priority": 10,
+      "passes": false,
+      "dependsOn": [],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Sheet component exists",
+          "command": "test -f viewer/src/components/ui/sheet.tsx",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Requirement types exist",
+          "command": "test -f viewer/src/lib/requirement-types.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" }
+      ]
+    },
+    {
+      "id": "DT-009",
+      "title": "统一 /api/requirements 端点",
+      "prdSection": "7.3 (L688-788)",
+      "priority": 11,
+      "passes": false,
+      "dependsOn": ["DT-000a"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Requirements route exists",
+          "command": "test -f viewer/src/app/api/requirements/route.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "unit", "desc": "DRAFT.md 返回为 Stage 0 需求" },
+        { "type": "unit", "desc": "prd.md 返回为 Stage 1+ 需求" },
+        { "type": "unit", "desc": "导入 marker 不出现为独立条目" }
+      ]
+    },
+    {
+      "id": "DT-010",
+      "title": "RequirementContext",
+      "prdSection": "7.3 (L688-788)",
+      "priority": 12,
+      "passes": false,
+      "dependsOn": ["DT-008", "DT-009"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "RequirementContext exists",
+          "command": "test -f viewer/src/contexts/RequirementContext.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "unit", "desc": "Context 提供完整需求列表" },
+        { "type": "unit", "desc": "CRUD 操作正常" }
+      ]
+    },
+    {
+      "id": "DT-011",
+      "title": "StageProgressBar 组件",
+      "prdSection": "7.3 (L688-788)",
+      "priority": 13,
+      "passes": false,
+      "dependsOn": ["DT-008"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "StageProgressBar exists",
+          "command": "test -f viewer/src/components/StageProgressBar.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "e2e", "desc": "正确渲染 6 个阶段节点，当前阶段有脉冲动画" }
+      ]
+    },
+    {
+      "id": "DT-012",
+      "title": "RequirementCard 组件",
+      "prdSection": "7.3 (L688-788)",
+      "priority": 14,
+      "passes": false,
+      "dependsOn": ["DT-011"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "RequirementCard exists",
+          "command": "test -f viewer/src/components/RequirementCard.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "e2e", "desc": "卡片正确显示需求信息和进度条" },
+        { "type": "e2e", "desc": "按钮和卡片点击分别触发不同回调" }
+      ]
+    },
+    {
+      "id": "DT-013",
+      "title": "StageTimeline + RequirementDrawer",
+      "prdSection": "7.3 (L688-788)",
+      "priority": 15,
+      "passes": false,
+      "dependsOn": ["DT-008"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "StageTimeline exists",
+          "command": "test -f viewer/src/components/StageTimeline.tsx",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "RequirementDrawer exists",
+          "command": "test -f viewer/src/components/RequirementDrawer.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "e2e", "desc": "抽屉从右侧滑出，时间线正确显示 6 个阶段" }
+      ]
+    },
+    {
+      "id": "DT-014",
+      "title": "CreateRequirementDialog",
+      "prdSection": "7.3 (L688-788)",
+      "priority": 16,
+      "passes": false,
+      "dependsOn": ["DT-010"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "CreateRequirementDialog exists",
+          "command": "test -f viewer/src/components/CreateRequirementDialog.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "e2e", "desc": "从头创建流程正常" },
+        { "type": "e2e", "desc": "导入文件流程正常" }
+      ]
+    },
+    {
+      "id": "DT-015",
+      "title": "Dashboard 页面重写",
+      "prdSection": "7.3 (L688-788)",
+      "priority": 17,
+      "passes": false,
+      "dependsOn": ["DT-010", "DT-011", "DT-012", "DT-013", "DT-014"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "e2e", "desc": "筛选器工作正常" },
+        { "type": "e2e", "desc": "搜索功能正常" },
+        { "type": "e2e", "desc": "卡片点击开抽屉，按钮开 Tab/跳转" }
+      ]
+    },
+    {
+      "id": "DT-016",
+      "title": "Rules 设置页面",
+      "prdSection": "7.3 (L688-788)",
+      "priority": 18,
+      "passes": false,
+      "dependsOn": [],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Rules page exists",
+          "command": "test -f viewer/src/app/rules/page.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "e2e", "desc": "/rules 页面渲染 RulesManager" }
+      ]
+    },
+    {
+      "id": "DT-017",
+      "title": "Stage 页面路由兼容",
+      "prdSection": "7.3 (L688-788)",
+      "priority": 19,
+      "passes": false,
+      "dependsOn": ["DT-010"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "e2e", "desc": "/stage1?req={id} 正确解析" },
+        { "type": "e2e", "desc": "/stage1?session=xxx 旧 URL 仍然工作" }
+      ]
+    },
+    {
+      "id": "DT-018",
+      "title": "Stage 3 页面传递 projectId 到 agent API",
+      "prdSection": "7.4 (L789-858)",
+      "priority": 20,
+      "passes": false,
+      "dependsOn": ["DT-005"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "e2e", "desc": "Stage 3 启动 Agent 时发送 projectId" }
+      ]
+    },
+    {
+      "id": "DT-019",
+      "title": "TabContext + tab-storage",
+      "prdSection": "7.4 (L789-858)",
+      "priority": 21,
+      "passes": false,
+      "dependsOn": ["DT-008"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "TabContext exists",
+          "command": "test -f viewer/src/contexts/TabContext.tsx",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "tab-storage exists",
+          "command": "test -f viewer/src/lib/tab-storage.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "unit", "desc": "openTab 创建新 tab 并导航", "tdd": true },
+        { "type": "unit", "desc": "重复 openTab 只切换不创建", "tdd": true },
+        { "type": "unit", "desc": "closeTab Dashboard 无效", "tdd": true },
+        { "type": "unit", "desc": "loadTabs/saveTabs localStorage 读写", "tdd": true }
+      ]
+    },
+    {
+      "id": "DT-020",
+      "title": "TabBar 组件",
+      "prdSection": "7.4 (L789-858)",
+      "priority": 22,
+      "passes": false,
+      "dependsOn": ["DT-019"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "TabBar exists",
+          "command": "test -f viewer/src/components/TabBar.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "e2e", "desc": "Dashboard tab 始终第一位且不可关闭" },
+        { "type": "e2e", "desc": "关闭运行中项目弹确认对话框" }
+      ]
+    },
+    {
+      "id": "DT-021",
+      "title": "重写 Header 为 Tab Bar 布局",
+      "prdSection": "7.4 (L789-858)",
+      "priority": 23,
+      "passes": false,
+      "dependsOn": ["DT-020"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "e2e", "desc": "Header 显示 tab bar，Brand 在左，repoName/Usage 在右" }
+      ]
+    },
+    {
+      "id": "DT-022",
+      "title": "TabProvider 接入 layout",
+      "prdSection": "7.4 (L789-858)",
+      "priority": 24,
+      "passes": false,
+      "dependsOn": ["DT-019", "DT-010"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "unit", "desc": "TabProvider 正确包裹应用" }
+      ]
+    },
+    {
+      "id": "DT-023",
+      "title": "Dashboard 集成 — 卡片/抽屉打开 Tab",
+      "prdSection": "7.4 (L789-858)",
+      "priority": 25,
+      "passes": false,
+      "dependsOn": ["DT-015", "DT-019"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "e2e", "desc": "点击按钮 → 新 Tab + 页面切换" },
+        { "type": "e2e", "desc": "Dashboard tab → 返回 Dashboard" }
+      ]
+    },
+    {
+      "id": "DT-024",
+      "title": "Tab 状态与路由同步",
+      "prdSection": "7.4 (L789-858)",
+      "priority": 26,
+      "passes": false,
+      "dependsOn": ["DT-019"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "e2e", "desc": "手动导航到 / 时 Dashboard tab 高亮" },
+        { "type": "e2e", "desc": "Stage 切换后 tab 标签数字更新" }
+      ]
+    },
+    {
+      "id": "DT-025",
+      "title": "Stage 5 合并后清理 worktree",
+      "prdSection": "7.5 (L859-884)",
+      "priority": 27,
+      "passes": false,
+      "dependsOn": ["DT-002"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "integration", "desc": "合并后 .worktrees/{id}/ 被删除" }
+      ]
+    },
+    {
+      "id": "DT-026",
+      "title": ".gitignore 添加 worktree 目录",
+      "prdSection": "7.5 (L859-884)",
+      "priority": 28,
+      "passes": false,
+      "dependsOn": ["DT-002"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": ".worktrees/ not tracked",
+          "command": "grep -q '.worktrees/' .gitignore",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "unit", "desc": ".worktrees/ 不被 git track" }
+      ]
+    },
+    {
+      "id": "DT-027",
+      "title": "删除废弃组件",
+      "prdSection": "7.5 (L859-884)",
+      "priority": 29,
+      "passes": false,
+      "dependsOn": ["DT-015", "DT-021"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Next.js build passes",
+          "command": "cd viewer && npx next build",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "unit", "desc": "无编译错误，build 成功" }
+      ]
+    }
+  ],
+  "sessions": [
+    {
+      "id": "S1",
+      "tasks": ["DT-000a", "DT-000", "DT-001", "DT-002", "DT-003"],
+      "reason": "Phase 1 BotoolAgent.sh 并发化 — 顺序依赖链 (目录重组→双写消除→动态 session→worktree→cleanup)"
+    },
+    {
+      "id": "S2",
+      "tasks": ["DT-004", "DT-005", "DT-006", "DT-007"],
+      "reason": "Phase 2 API 层 per-project 状态 — DT-004 是基础，DT-005/006/007 可并行"
+    },
+    {
+      "id": "S3",
+      "tasks": ["DT-008", "DT-009", "DT-010", "DT-011", "DT-012", "DT-013"],
+      "reason": "Phase 3 前半段 — 核心类型定义和基础组件（Sheet、Requirement 类型、API、Context、进度条、卡片、抽屉）"
+    },
+    {
+      "id": "S4",
+      "tasks": ["DT-014", "DT-015", "DT-016", "DT-017"],
+      "reason": "Phase 3 后半段 — 页面级重写（新建对话框、Dashboard、Rules、Stage 路由兼容）"
+    },
+    {
+      "id": "S5",
+      "tasks": ["DT-018", "DT-019", "DT-020", "DT-021", "DT-022", "DT-023", "DT-024"],
+      "reason": "Phase 4 Header Tab Bar — Tab 系统完整实现（TabContext→TabBar→Header→接入→同步）"
+    },
+    {
+      "id": "S6",
+      "tasks": ["DT-025", "DT-026", "DT-027"],
+      "reason": "Phase 5 清理收尾 — Worktree 清理 + gitignore + 废弃组件删除"
+    }
+  ]
+}
