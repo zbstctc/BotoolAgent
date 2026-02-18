@@ -58,6 +58,7 @@ viewer/.turbo/
 
 # ===== Runtime State =====
 # (all runtime state now in .state/ directory)
+.worktrees/
 
 # ===== Screenshots / Images (test artifacts) =====
 *.png
