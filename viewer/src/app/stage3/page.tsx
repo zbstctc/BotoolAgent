@@ -1,15 +1,19 @@
 'use client';
 
-import { Suspense, useState, useEffect, useCallback, Fragment } from 'react';
+import { Suspense, useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator, StageTransitionModal } from '@/components';
-import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
+import { useFileWatcher, parsePrdJson, useProjectValidation, useTeammates, useTaskTimings } from '@/hooks';
 import type { DevTask, PrdData } from '@/hooks';
 import { FlowChart, type AgentPhase } from '@/components/FlowChart';
 import { useProject } from '@/contexts/ProjectContext';
 import { useRequirement } from '@/contexts/RequirementContext';
 import { useAgentStatus } from '@/hooks/useAgentStatus';
 import AgentDataPanel from '@/components/AgentDataPanel/AgentDataPanel';
+import type { GitStats } from '@/components/AgentDataPanel/AgentDataPanel';
+import { ProgressStrip } from '@/components/ProgressStrip';
+import BatchPanel from '@/components/BatchPanel';
+import BatchTimeline from '@/components/BatchTimeline';
 
 type TaskStatus = 'pending' | 'in-progress' | 'completed' | 'failed';
 type RightPanelTab = 'changes' | 'commits' | 'flowchart';
@@ -155,8 +159,19 @@ function Stage3PageContent() {
     }
   }, [agentStatus]);
 
+  // Track agent start time for ProgressStrip and useTaskTimings
+  const agentStartTimeRef = useRef<number>(0);
+  useEffect(() => {
+    if (agentStatus.isRunning && agentStartTimeRef.current === 0) {
+      agentStartTimeRef.current = Date.now();
+    }
+    if (!agentStatus.isRunning && !agentStatus.isComplete) {
+      agentStartTimeRef.current = 0;
+    }
+  }, [agentStatus.isRunning, agentStatus.isComplete]);
+
   // Use file watcher to get real-time updates
-  const { prd, progress, isConnected, lastUpdated } = useFileWatcher({
+  const { prd, progress, teammates: teammatesFile, isConnected, lastUpdated } = useFileWatcher({
     projectId,
     enabled: true,
     onPrdUpdate: (content) => {
@@ -194,6 +209,20 @@ function Stage3PageContent() {
     }
   }, [progress]);
 
+  // Teammate state from file or inferred from PRD
+  const teammatesData = useTeammates(teammatesFile, prdData, agentStatus.status);
+
+  // Task timings for BatchPanel + BatchTimeline
+  const agentStartIso = agentStartTimeRef.current > 0
+    ? new Date(agentStartTimeRef.current).toISOString()
+    : undefined;
+  const taskTimings = useTaskTimings(
+    progressLog,
+    teammatesData,
+    currentTaskId,
+    agentStartIso,
+  );
+
   // Auto-expand current task when currentTaskId changes
   useEffect(() => {
     if (currentTaskId) {
@@ -217,20 +246,18 @@ function Stage3PageContent() {
     }
   }, []);
 
-  // Fetch git changes on mount and when tab is switched to changes
+  // Fetch git changes on mount
   useEffect(() => {
-    if (activeTab === 'changes' && !gitChanges) {
+    if (!gitChanges) {
       fetchGitChanges();
     }
-  }, [activeTab, gitChanges, fetchGitChanges]);
+  }, [gitChanges, fetchGitChanges]);
 
-  // Refresh git changes periodically when on changes tab
+  // Refresh git changes periodically (always active for stats panel)
   useEffect(() => {
-    if (activeTab === 'changes') {
-      const interval = setInterval(fetchGitChanges, 10000); // Refresh every 10 seconds
-      return () => clearInterval(interval);
-    }
-  }, [activeTab, fetchGitChanges]);
+    const interval = setInterval(fetchGitChanges, 10000);
+    return () => clearInterval(interval);
+  }, [fetchGitChanges]);
 
   // Fetch git commits
   const fetchGitCommits = useCallback(async () => {
@@ -248,20 +275,18 @@ function Stage3PageContent() {
     }
   }, []);
 
-  // Fetch commits when tab is switched to commits
+  // Fetch commits on mount
   useEffect(() => {
-    if (activeTab === 'commits' && !gitCommits) {
+    if (!gitCommits) {
       fetchGitCommits();
     }
-  }, [activeTab, gitCommits, fetchGitCommits]);
+  }, [gitCommits, fetchGitCommits]);
 
-  // Refresh commits periodically when on commits tab
+  // Refresh commits periodically (always active for stats panel)
   useEffect(() => {
-    if (activeTab === 'commits') {
-      const interval = setInterval(fetchGitCommits, 10000);
-      return () => clearInterval(interval);
-    }
-  }, [activeTab, fetchGitCommits]);
+    const interval = setInterval(fetchGitCommits, 10000);
+    return () => clearInterval(interval);
+  }, [fetchGitCommits]);
 
   // Task statistics
   const completedTasks = prdData?.devTasks.filter((t) => t.passes).length || 0;
@@ -287,6 +312,22 @@ function Stage3PageContent() {
     : completedTasks === totalTasks && totalTasks > 0
     ? 'done'
     : 'idle';
+
+  // Compute git stats for AgentDataPanel
+  const gitStatsData: GitStats | undefined = gitChanges || gitCommits
+    ? {
+        additions: gitChanges?.totals.additions ?? 0,
+        deletions: gitChanges?.totals.deletions ?? 0,
+        files: gitChanges?.totals.files ?? 0,
+        commits: gitCommits?.count ?? 0,
+      }
+    : undefined;
+
+  // ETA: avg time * remaining tasks
+  const remainingTasks = totalTasks - completedTasks;
+  const etaSeconds = taskTimings.avgTime > 0 && remainingTasks > 0
+    ? taskTimings.avgTime * remainingTasks
+    : 0;
 
   // All tasks completed check
   const allTasksCompleted = totalTasks > 0 && completedTasks === totalTasks;
@@ -607,10 +648,40 @@ function Stage3PageContent() {
           </div>
         </div>
 
-        {/* Right: Flowchart and Logs */}
+        {/* Center: ProgressStrip + BatchPanel + BatchTimeline + Tabs */}
         <div className="flex-1 flex flex-col overflow-hidden">
+          {/* ProgressStrip - fixed height at top */}
+          <ProgressStrip
+            completed={completedTasks}
+            total={totalTasks}
+            isRunning={agentStatus.isRunning}
+            agentStartTimestamp={agentStartTimeRef.current || undefined}
+          />
+
+          {/* BatchPanel - auto height */}
+          <div className="shrink-0 px-3 pt-2">
+            <BatchPanel
+              teammates={teammatesData}
+              timings={taskTimings}
+              tasks={prdData?.devTasks ?? []}
+              currentTaskId={currentTaskId}
+              isRunning={agentStatus.isRunning}
+              isComplete={allTasksCompleted}
+            />
+          </div>
+
+          {/* BatchTimeline - scrollable, constrained height */}
+          <div className="shrink-0 px-3 py-2 overflow-y-auto" style={{ maxHeight: '200px' }}>
+            <BatchTimeline
+              batches={taskTimings.batches}
+              tasks={prdData?.devTasks ?? []}
+              maxDuration={taskTimings.maxDuration}
+              currentBatchIndex={teammatesData.batchIndex}
+            />
+          </div>
+
           {/* Tabs */}
-          <div className="flex items-center gap-1 p-2 border-b border-neutral-200 bg-white">
+          <div className="flex items-center gap-1 p-2 border-t border-neutral-200 bg-white">
             <button
               onClick={() => setActiveTab('changes')}
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
@@ -810,6 +881,10 @@ function Stage3PageContent() {
             hasError={agentStatus.hasError}
             progressPercent={agentStatus.progressPercent}
             totalTasks={totalTasks}
+            elapsedSeconds={taskTimings.totalElapsed}
+            gitStats={gitStatsData}
+            avgTaskTime={taskTimings.avgTime}
+            eta={etaSeconds}
           />
         </div>
       </div>
