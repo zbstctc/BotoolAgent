@@ -1,0 +1,5 @@
+# Botool 开发代理进度日志
+开始时间: 2026-02-18
+项目: BotoolAgent Dashboard 重构 + Worktree 并发执行
+分支: botool/dashboard-worktree-unified
+---

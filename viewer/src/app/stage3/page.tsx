@@ -7,6 +7,7 @@ import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
 import type { DevTask, PrdData } from '@/hooks';
 import { FlowChart, type AgentPhase } from '@/components/FlowChart';
 import { useProject } from '@/contexts/ProjectContext';
+import { useRequirement } from '@/contexts/RequirementContext';
 import { useAgentStatus } from '@/hooks/useAgentStatus';
 import AgentDataPanel from '@/components/AgentDataPanel/AgentDataPanel';
 
@@ -80,7 +81,15 @@ function getStatusLabel(status: TaskStatus): string {
 function Stage3PageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const projectId = searchParams.get('projectId') || undefined;
+
+  // Requirement context - resolve `req` param
+  const { requirements } = useRequirement();
+  const reqId = searchParams.get('req') || undefined;
+  const activeRequirement = reqId ? requirements.find(r => r.id === reqId) : undefined;
+
+  // projectId: explicit param takes priority, then req.id as fallback
+  const rawProjectId = searchParams.get('projectId') || undefined;
+  const projectId = rawProjectId ?? (activeRequirement?.id);
 
   // Project context
   const { activeProject, updateProject } = useProject();

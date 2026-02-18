@@ -1,8 +1,7 @@
-import Link from "next/link";
 import * as path from "path";
 import { Suspense } from "react";
-import { ProjectSwitcher } from "./ProjectSwitcher";
 import { ClaudeStatus } from "./ClaudeStatus";
+import { TabBar } from "./TabBar";
 import { getProjectRoot } from "@/lib/project-root";
 
 function getRepoName(): string {
@@ -18,36 +17,40 @@ export function Header() {
   const repoName = getRepoName();
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-neutral-200 bg-white/80 backdrop-blur-sm">
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
-        <div className="flex items-center gap-2">
-          <span className="text-xl font-semibold text-neutral-900">
+    <header className="sticky top-0 z-50 w-full border-b border-neutral-200 bg-white">
+      <div className="flex h-11 items-end px-4 gap-4">
+        {/* Brand */}
+        <div className="flex items-center gap-1.5 flex-shrink-0 pb-2">
+          <span className="text-sm font-semibold text-neutral-900">
             Botool Agent
           </span>
-          <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600">
+          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-medium text-neutral-600">
             Viewer
           </span>
           <span className="text-xs text-neutral-400">
             {process.env.NEXT_PUBLIC_APP_VERSION ?? "dev"}
           </span>
         </div>
-        <nav className="flex items-center gap-4">
+
+        {/* Divider */}
+        <div className="w-px bg-neutral-200 h-5 flex-shrink-0 mb-2" />
+
+        {/* Tab Bar (flex-1) */}
+        <div className="flex-1 flex items-end overflow-x-auto min-w-0">
+          <Suspense fallback={null}>
+            <TabBar />
+          </Suspense>
+        </div>
+
+        {/* Right: repoName + ClaudeStatus */}
+        <div className="flex items-center gap-3 flex-shrink-0 pb-2">
           {repoName && (
-            <span className="rounded-md bg-neutral-100 px-2.5 py-1 text-xs font-mono text-neutral-600">
+            <span className="rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-mono text-neutral-600">
               {repoName}
             </span>
           )}
           <ClaudeStatus />
-          <Suspense fallback={null}>
-            <ProjectSwitcher />
-          </Suspense>
-          <Link
-            href="/"
-            className="text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors"
-          >
-            Dashboard
-          </Link>
-        </nav>
+        </div>
       </div>
     </header>
   );

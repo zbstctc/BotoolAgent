@@ -4,6 +4,7 @@ import { Suspense, useState, useCallback, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator } from '@/components';
 import { useProject } from '@/contexts/ProjectContext';
+import { useRequirement } from '@/contexts/RequirementContext';
 import { PipelineProgress, DEFAULT_STEPS } from '@/components/pipeline/PipelineProgress';
 import { RuleCheckStep, type RuleDocument } from '@/components/pipeline/RuleCheckStep';
 import { AutoEnrichStep, type AutoEnrichResult } from '@/components/pipeline/AutoEnrichStep';
@@ -14,7 +15,15 @@ function Stage2PageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { activeProject, updateProject } = useProject();
-  const sourcePrdId = searchParams.get('prd') || undefined;
+
+  // Requirement context - resolve `req` param
+  const { requirements } = useRequirement();
+  const reqId = searchParams.get('req') || undefined;
+  const activeRequirement = reqId ? requirements.find(r => r.id === reqId) : undefined;
+
+  // sourcePrdId: explicit `prd` param takes priority, then req.prdId
+  const rawPrdId = searchParams.get('prd') || undefined;
+  const sourcePrdId = rawPrdId ?? activeRequirement?.prdId;
 
   // Pipeline mode from query param
   const mode = (searchParams.get('mode') as PipelineMode) || 'feature';

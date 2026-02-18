@@ -18,6 +18,7 @@ import {
 import { ErrorRecovery } from '@/components/ErrorRecovery';
 import { TerminalActivityFeed, formatTerminalLine } from '@/components/TerminalActivityFeed';
 import { useProject } from '@/contexts/ProjectContext';
+import { useRequirement } from '@/contexts/RequirementContext';
 import { useProjectValidation, useCliChat } from '@/hooks';
 import {
   type AskUserQuestionToolInput,
@@ -46,7 +47,21 @@ interface QAHistoryItem {
 function Stage1PageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const sessionId = searchParams.get('session');
+
+  // Requirement context - resolve `req` param first
+  const { requirements } = useRequirement();
+  const reqId = searchParams.get('req') || undefined;
+  const activeRequirement = reqId ? requirements.find(r => r.id === reqId) : undefined;
+
+  // Resolve sessionId: explicit `session` param takes priority, then req.prdSessionId
+  const rawSessionId = searchParams.get('session');
+  const sessionId = rawSessionId ?? (activeRequirement?.prdSessionId ?? null);
+
+  // Resolve mode and file: explicit URL params take priority, then req fields
+  const rawUrlMode = searchParams.get('mode');
+  const rawUrlFile = searchParams.get('file');
+  const urlMode = rawUrlMode ?? (activeRequirement?.sourceFile ? 'transform' : null);
+  const urlFile = rawUrlFile ?? activeRequirement?.sourceFile ?? null;
 
   // Project context
   const { activeProject, updateProject, isLoading: projectsLoading } = useProject();
@@ -163,10 +178,6 @@ function Stage1PageContent() {
 
     return () => clearTimeout(timeoutId);
   }, [storageKey, cliSessionId, currentLevel, completedLevels, answers, prdDraft, isStarted, qaHistory, codebaseScanned, isConfirmationPhase, confirmationSummary, selectedMode, writtenPrdFileId]);
-
-  // Read URL mode and file params for import flow
-  const urlMode = searchParams.get('mode');
-  const urlFile = searchParams.get('file');
 
   // Auto-set transform mode from URL params (import flow)
   useEffect(() => {

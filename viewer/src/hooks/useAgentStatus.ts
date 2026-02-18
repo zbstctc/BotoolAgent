@@ -278,7 +278,10 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
   // Stop agent
   const stopAgent = useCallback(async () => {
     try {
-      const response = await fetch('/api/agent/status', {
+      const url = projectId
+        ? `/api/agent/status?projectId=${encodeURIComponent(projectId)}`
+        : '/api/agent/status';
+      const response = await fetch(url, {
         method: 'DELETE',
       });
 

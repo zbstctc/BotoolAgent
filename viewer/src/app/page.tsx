@@ -1,867 +1,288 @@
 'use client';
 
 import Link from 'next/link';
-import { Suspense, useState, useEffect, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { TaskHistory, NewPrdDialog, ImportPrdDialog, ProjectCard, type TaskHistoryItem, type TaskStatus, type TaskStage } from '@/components';
-import { useProject, type ProjectState } from '@/contexts/ProjectContext';
-import { RulesManager } from '@/components/rules/RulesManager';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Suspense, useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { Settings, Plus, Search } from 'lucide-react';
+import { RequirementCard } from '@/components/RequirementCard';
+import { RequirementDrawer } from '@/components/RequirementDrawer';
+import { CreateRequirementDialog } from '@/components/CreateRequirementDialog';
+import { Button } from '@/components/ui/button';
+import { useRequirement } from '@/contexts/RequirementContext';
+import { useTab } from '@/contexts/TabContext';
+import type { Requirement, RequirementFilter, RequirementStage } from '@/lib/requirement-types';
+import type { TabItem } from '@/lib/tab-storage';
 
-interface PRDItem {
-  id: string;
-  name: string;
-  filename: string;
-  createdAt: string;
-  status: 'draft' | 'ready' | 'in-progress' | 'completed' | 'importing';
-  stage?: 1 | 2 | 3 | 4 | 5;
-  preview?: string;
+function getStageUrl(req: Requirement): string {
+  const stage = req.stage === 0 ? 1 : req.stage;
+  return `/stage${stage}?req=${req.id}`;
 }
 
-interface SessionItem {
-  id: string;
-  name: string;
-  date: string;
-  status: 'completed' | 'failed' | 'partial';
-  tasksCompleted: number;
-  tasksTotal: number;
-  branchName?: string;
-  description?: string;
-}
-
-// Extended session item from API
-interface ExtendedSessionItem extends SessionItem {
-  taskStatus: TaskStatus;
-  stage: TaskStage;
-  startTime: string;
-  endTime?: string;
-  isMerged: boolean;
-  prUrl?: string;
-}
-
-interface SessionDetails {
-  id: string;
-  name: string;
-  description?: string;
-  branchName?: string;
-  date: string;
-  status: 'completed' | 'failed' | 'partial';
-  tasksCompleted: number;
-  tasksTotal: number;
-  devTasks: {
-    id: string;
-    title: string;
-    description?: string;
-    passes: boolean;
-    acceptanceCriteria?: string[];
-  }[];
-  progressLog?: string;
+function filterRequirements(
+  requirements: Requirement[],
+  filter: RequirementFilter,
+  search: string
+): Requirement[] {
+  let result = requirements.filter((r) => r.status !== 'archived');
+  if (filter === 'active') result = result.filter((r) => r.status === 'active');
+  if (filter === 'completed') result = result.filter((r) => r.status === 'completed');
+  if (search.trim()) {
+    const q = search.toLowerCase();
+    result = result.filter((r) => r.name.toLowerCase().includes(q));
+  }
+  return result;
 }
 
 function DashboardContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const { openTab } = useTab();
   const {
-    activeProjectId,
-    getAllProjects,
-    deleteProject,
-    archiveProject,
-    setActiveProject,
-    isLoading: projectsLoading,
-  } = useProject();
+    requirements,
+    isLoading,
+    selectedId,
+    setSelectedId,
+    deleteRequirement,
+    archiveRequirement,
+  } = useRequirement();
 
-  const [prds, setPrds] = useState<PRDItem[]>([]);
-  const [sessions, setSessions] = useState<SessionItem[]>([]);
-  const [taskHistory, setTaskHistory] = useState<TaskHistoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [taskHistoryLoading, setTaskHistoryLoading] = useState(true);
-  const [selectedPRD, setSelectedPRD] = useState<PRDItem | null>(null);
-  const [prdContent, setPrdContent] = useState<string>('');
-  const [loadingContent, setLoadingContent] = useState(false);
-  const [selectedSession, setSelectedSession] = useState<SessionItem | null>(null);
-  const [sessionDetails, setSessionDetails] = useState<SessionDetails | null>(null);
-  const [loadingSessionDetails, setLoadingSessionDetails] = useState(false);
-  const [viewMode, setViewMode] = useState<'timeline' | 'list'>('timeline');
-  const [showNewPrdDialog, setShowNewPrdDialog] = useState(false);
-  const [showImportDialog, setShowImportDialog] = useState(false);
-  const [activeTab, setActiveTab] = useState<'projects' | 'rules'>(
-    searchParams.get('tab') === 'rules' ? 'rules' : 'projects'
+  const [filter, setFilter] = useState<RequirementFilter>('all');
+  const [search, setSearch] = useState('');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const filtered = useMemo(
+    () => filterRequirements(requirements, filter, search),
+    [requirements, filter, search]
   );
 
-  // Get all projects from context
-  const allProjects = getAllProjects();
-  // Filter out archived projects for the active list
-  const visibleProjects = allProjects.filter((p) => p.status !== 'archived');
-
-  // Note: Auto-redirect removed - user can freely navigate Dashboard
-  // and choose which project to continue via the "继续工作" button or project cards
-
-  const fetchTaskHistory = useCallback(async () => {
-    setTaskHistoryLoading(true);
-    try {
-      const response = await fetch('/api/sessions?extended=true');
-      const data = await response.json();
-      if (data.extended && data.sessions) {
-        // Convert ExtendedSessionItem to TaskHistoryItem
-        const historyItems: TaskHistoryItem[] = data.sessions.map((s: ExtendedSessionItem) => ({
-          id: s.id,
-          name: s.name,
-          description: s.description,
-          branchName: s.branchName,
-          status: s.taskStatus,
-          stage: s.stage,
-          tasksCompleted: s.tasksCompleted,
-          tasksTotal: s.tasksTotal,
-          startTime: s.startTime,
-          endTime: s.endTime,
-          isMerged: s.isMerged,
-          prUrl: s.prUrl,
-        }));
-        setTaskHistory(historyItems);
-      }
-    } catch (error) {
-      console.error('Failed to fetch task history:', error);
-    } finally {
-      setTaskHistoryLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchPRDs();
-    fetchSessions();
-    fetchTaskHistory();
-  }, [fetchTaskHistory]);
-
-  async function fetchPRDs() {
-    try {
-      const response = await fetch('/api/prd');
-      const data = await response.json();
-      setPrds(data.prds || []);
-    } catch (error) {
-      console.error('Failed to fetch PRDs:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function fetchSessions() {
-    try {
-      const response = await fetch('/api/sessions');
-      const data = await response.json();
-      setSessions(data.sessions || []);
-    } catch (error) {
-      console.error('Failed to fetch sessions:', error);
-    } finally {
-      setSessionsLoading(false);
-    }
-  }
-
-  // Handle continue task
-  function handleContinueTask(task: TaskHistoryItem) {
-    // Navigate to the appropriate stage
-    window.location.href = `/stage${task.stage}?session=${task.id}`;
-  }
-
-  // Handle merge task
-  async function handleMergeTask(task: TaskHistoryItem) {
-    if (!task.branchName) return;
-    // Navigate to stage 5 for merge
-    window.location.href = `/stage5?session=${task.id}`;
-  }
-
-  // Handle view project - navigate to corresponding stage
-  function handleViewProject(project: ProjectState) {
-    setActiveProject(project.id);
-    // Stage 1 needs session parameter to load the correct localStorage session
-    const stage = project.currentStage;
-    let url = `/stage${stage}`;
-    if (stage === 1 && project.prdId) {
-      url += `?session=${project.prdId}`;
-    }
-    router.push(url);
-  }
-
-  // Handle delete project
-  function handleDeleteProject(projectId: string) {
-    deleteProject(projectId);
-  }
-
-  // Handle archive project
-  function handleArchiveProject(projectId: string) {
-    archiveProject(projectId);
-  }
-
-  // Handle delete task
-  async function handleDeleteTask(task: TaskHistoryItem) {
-    if (!confirm(`确定要删除任务 "${task.name}" 吗？此操作不可撤销。`)) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/sessions/${task.id}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        // Refresh the task history
-        fetchTaskHistory();
-        fetchSessions();
-      } else {
-        const error = await response.json();
-        alert(`删除失败: ${error.error || '未知错误'}`);
-      }
-    } catch (error) {
-      console.error('Failed to delete task:', error);
-      alert('删除失败，请稍后重试');
-    }
-  }
-
-  async function handlePRDClick(prd: PRDItem) {
-    setSelectedPRD(prd);
-    setLoadingContent(true);
-    try {
-      const response = await fetch(`/api/prd/${prd.id}`);
-      const data = await response.json();
-      setPrdContent(data.content || '');
-    } catch (error) {
-      console.error('Failed to fetch PRD content:', error);
-      setPrdContent('Failed to load PRD content');
-    } finally {
-      setLoadingContent(false);
-    }
-  }
-
-  function closePreview() {
-    setSelectedPRD(null);
-    setPrdContent('');
-  }
-
-  async function handleSessionClick(session: SessionItem) {
-    setSelectedSession(session);
-    setLoadingSessionDetails(true);
-    try {
-      const response = await fetch(`/api/sessions/${session.id}`);
-      const data = await response.json();
-      setSessionDetails(data);
-    } catch (error) {
-      console.error('Failed to fetch session details:', error);
-      setSessionDetails(null);
-    } finally {
-      setLoadingSessionDetails(false);
-    }
-  }
-
-  function closeSessionDetails() {
-    setSelectedSession(null);
-    setSessionDetails(null);
-  }
-
-  return (
-    <div className="flex flex-col gap-6 py-6 px-4 mx-auto max-w-7xl h-full overflow-y-auto bg-neutral-50">
-      {/* Tab Navigation */}
-      <div className="flex items-center gap-1 bg-neutral-100 p-1 rounded-lg w-fit">
-        <button
-          onClick={() => setActiveTab('projects')}
-          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-            activeTab === 'projects'
-              ? 'bg-white text-neutral-900 shadow-sm'
-              : 'text-neutral-600 hover:text-neutral-900'
-          }`}
-        >
-          项目列表
-        </button>
-        <button
-          onClick={() => setActiveTab('rules')}
-          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-            activeTab === 'rules'
-              ? 'bg-white text-neutral-900 shadow-sm'
-              : 'text-neutral-600 hover:text-neutral-900'
-          }`}
-        >
-          规范管理
-        </button>
-      </div>
-
-      {/* Tab Content */}
-      {activeTab === 'rules' ? (
-        <div className="flex-1 min-h-0 -mx-4 -mb-6">
-          <RulesManager className="h-full" />
-        </div>
-      ) : (
-      /* Main Content Grid */
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Left: Active Projects + PRD Documents */}
-        <section className="flex flex-col gap-6">
-          {/* Active Projects */}
-          <div className="flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-neutral-900">
-                我的项目
-              </h2>
-              <span className="text-xs text-neutral-400">
-                {visibleProjects.length} 个项目
-              </span>
-            </div>
-            {projectsLoading ? (
-              <div className="space-y-2">
-                {[1, 2].map((i) => (
-                  <div
-                    key={i}
-                    className="animate-pulse rounded-lg border border-neutral-200 bg-white p-4"
-                  >
-                    <div className="h-4 bg-neutral-200 rounded w-3/4 mb-2" />
-                    <div className="h-3 bg-neutral-100 rounded w-1/3" />
-                  </div>
-                ))}
-              </div>
-            ) : visibleProjects.length > 0 ? (
-              <div className="space-y-2">
-                {visibleProjects.map((project) => (
-                  <ProjectCard
-                    key={project.id}
-                    project={project}
-                    isActive={project.id === activeProjectId}
-                    onView={handleViewProject}
-                    onDelete={handleDeleteProject}
-                    onArchive={handleArchiveProject}
-                  />
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                title="暂无进行中的项目"
-                description="创建你的第一个需求文档(PRD)，开始自主开发流程。"
-                secondaryActionLabel="导入需求文档"
-                onSecondaryAction={() => setShowImportDialog(true)}
-                actionLabel="新建需求文档"
-                onAction={() => setShowNewPrdDialog(true)}
-              />
-            )}
-          </div>
-
-          {/* PRD Documents */}
-          <div className="flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-neutral-900">
-                需求文档(PRD)
-              </h2>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowImportDialog(true)}
-                  className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
-                >
-                  导入
-                </button>
-                <button
-                  onClick={() => setShowNewPrdDialog(true)}
-                  className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
-                >
-                  + 新建
-                </button>
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="flex flex-col gap-2">
-                {[1, 2].map((i) => (
-                  <div
-                    key={i}
-                    className="animate-pulse rounded-lg border border-neutral-200 bg-white p-4"
-                  >
-                    <div className="h-4 bg-neutral-200 rounded w-3/4 mb-2" />
-                    <div className="h-3 bg-neutral-100 rounded w-1/3" />
-                  </div>
-                ))}
-              </div>
-            ) : prds.length > 0 ? (
-              <div className="flex flex-col gap-2">
-                {prds.map((prd) => (
-                  <PRDCard
-                    key={prd.id}
-                    prd={prd}
-                    onClick={() => handlePRDClick(prd)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                title="暂无需求文档"
-                description="点击右上方「+ 新建」或「导入」开始创建你的第一个需求文档。"
-              />
-            )}
-          </div>
-        </section>
-
-        {/* Right: Task History */}
-        <section className="flex flex-col">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-neutral-900">
-              任务历史
-            </h2>
-            <div className="flex items-center gap-2">
-              {/* View mode toggle */}
-              <div className="flex items-center bg-neutral-100 rounded-md p-0.5">
-                <button
-                  onClick={() => setViewMode('timeline')}
-                  className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                    viewMode === 'timeline'
-                      ? 'bg-white text-neutral-900 shadow-sm'
-                      : 'text-neutral-500 hover:text-neutral-700'
-                  }`}
-                >
-                  时间线
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                    viewMode === 'list'
-                      ? 'bg-white text-neutral-900 shadow-sm'
-                      : 'text-neutral-500 hover:text-neutral-700'
-                  }`}
-                >
-                  列表
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {viewMode === 'timeline' ? (
-            <TaskHistory
-              tasks={taskHistory}
-              loading={taskHistoryLoading}
-              onContinue={handleContinueTask}
-              onMerge={handleMergeTask}
-              onDelete={handleDeleteTask}
-              onRefresh={fetchTaskHistory}
-            />
-          ) : (
-            // Legacy list view
-            sessionsLoading ? (
-              <div className="flex flex-col gap-2">
-                {[1, 2].map((i) => (
-                  <div
-                    key={i}
-                    className="animate-pulse rounded-lg border border-neutral-200 bg-white p-4"
-                  >
-                    <div className="h-4 bg-neutral-200 rounded w-3/4 mb-2" />
-                    <div className="h-3 bg-neutral-100 rounded w-1/3" />
-                  </div>
-                ))}
-              </div>
-            ) : sessions.length > 0 ? (
-              <div className="flex flex-col gap-2">
-                {sessions.map((session) => (
-                  <SessionCard
-                    key={session.id}
-                    session={session}
-                    onClick={() => handleSessionClick(session)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                title="No sessions yet"
-                description="Completed development sessions will appear here."
-              />
-            )
-          )}
-        </section>
-      </div>
-      )}
-
-      {/* PRD Preview Modal */}
-      {selectedPRD && (
-        <PRDPreviewModal
-          prd={selectedPRD}
-          content={prdContent}
-          loading={loadingContent}
-          onClose={closePreview}
-        />
-      )}
-
-      {/* Session Details Modal */}
-      {selectedSession && (
-        <SessionDetailsModal
-          session={selectedSession}
-          details={sessionDetails}
-          loading={loadingSessionDetails}
-          onClose={closeSessionDetails}
-        />
-      )}
-
-      {/* New PRD Dialog */}
-      <NewPrdDialog
-        isOpen={showNewPrdDialog}
-        onClose={() => setShowNewPrdDialog(false)}
-      />
-
-      {/* Import PRD Dialog */}
-      <ImportPrdDialog
-        isOpen={showImportDialog}
-        onClose={() => setShowImportDialog(false)}
-      />
-    </div>
+  const selectedReq = useMemo(
+    () => requirements.find((r) => r.id === selectedId) ?? null,
+    [requirements, selectedId]
   );
-}
 
-function getStageBadge(prd: PRDItem): { label: string; style: string } {
-  if (prd.status === 'importing') {
-    return { label: '导入中', style: 'bg-amber-100 text-amber-700 animate-pulse' };
-  }
-  if (prd.status === 'draft') {
-    return { label: 'Draft', style: 'bg-neutral-100 text-neutral-600' };
-  }
-  if (prd.status === 'completed' || prd.stage === 5) {
-    return { label: '已完成', style: 'bg-green-100 text-green-700' };
-  }
-  if (prd.status === 'in-progress') {
-    if (prd.stage === 4) return { label: '测试中', style: 'bg-purple-100 text-purple-700' };
-    if (prd.stage === 3) return { label: '开发中', style: 'bg-amber-100 text-amber-700 animate-pulse' };
-    if (prd.stage === 2) return { label: '规划中', style: 'bg-blue-100 text-blue-700' };
-  }
-  // ready or fallback
-  return { label: '待规划', style: 'bg-neutral-100 text-neutral-600' };
-}
+  // Counts for filter badges
+  const activeCount = useMemo(
+    () => requirements.filter((r) => r.status === 'active').length,
+    [requirements]
+  );
+  const completedCount = useMemo(
+    () => requirements.filter((r) => r.status === 'completed').length,
+    [requirements]
+  );
+  const totalCount = activeCount + completedCount;
 
-function PRDCard({
-  prd,
-  onClick,
-}: {
-  prd: PRDItem;
-  onClick: () => void;
-}) {
-  const badge = getStageBadge(prd);
+  function handleCardClick(id: string) {
+    setSelectedId(id);
+    setDrawerOpen(true);
+  }
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
+  function handleAction(req: Requirement) {
+    const stage = req.stage === 0 ? 1 : req.stage;
+    const tabItem: TabItem = {
+      id: req.id,
+      name: req.name,
+      stage,
+    };
+    openTab(tabItem, getStageUrl(req));
+  }
+
+  function handleNavigate(stage: RequirementStage) {
+    if (!selectedReq) return;
+    const stageNum = stage === 0 ? 1 : stage;
+    const tabItem: TabItem = {
+      id: selectedReq.id,
+      name: selectedReq.name,
+      stage: stageNum,
+    };
+    openTab(tabItem, `/stage${stageNum}?req=${selectedReq.id}`);
+    setDrawerOpen(false);
+  }
+
+  function handleDelete(id: string) {
+    deleteRequirement(id);
+    if (selectedId === id) {
+      setSelectedId(null);
+      setDrawerOpen(false);
+    }
+  }
+
+  function handleArchive(id: string) {
+    archiveRequirement(id);
+    if (selectedId === id) {
+      setSelectedId(null);
+      setDrawerOpen(false);
+    }
+  }
+
+  const filterOptions: { key: RequirementFilter; label: string; count: number }[] = [
+    { key: 'all', label: '全部', count: totalCount },
+    { key: 'active', label: '进行中', count: activeCount },
+    { key: 'completed', label: '已完成', count: completedCount },
+  ];
 
   return (
-    <div
-      className="group flex items-center justify-between rounded-lg border border-neutral-200 bg-white p-4 hover:border-neutral-300 hover:shadow-sm transition-all cursor-pointer"
-      onClick={onClick}
-    >
-      <div className="flex flex-col gap-1 min-w-0 flex-1">
-        <p className="font-medium text-neutral-900 truncate">{prd.name}</p>
-        <p className="text-xs text-neutral-500">{formatDate(prd.createdAt)}</p>
-        {prd.preview && (
-          <p className="text-xs text-neutral-400 truncate mt-1">{prd.preview}</p>
-        )}
-      </div>
-      <div className="flex items-center gap-3 ml-4 flex-shrink-0">
-        <span
-          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.style}`}
-        >
-          {badge.label}
-        </span>
-        {prd.status !== 'importing' && (
-          <Link
-            href={`/stage2?prd=${prd.id}`}
-            className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 opacity-0 group-hover:opacity-100 hover:bg-neutral-50 transition-all"
-            onClick={(e) => e.stopPropagation()}
-          >
-            Execute
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Page header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 bg-white flex-shrink-0">
+        <h1 className="text-lg font-semibold text-neutral-900">我的需求</h1>
+        <div className="flex items-center gap-2">
+          <Link href="/rules">
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Settings className="h-3.5 w-3.5" />
+              规范
+            </Button>
           </Link>
-        )}
+          <Button
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setDialogOpen(true)}
+          >
+            <Plus className="h-4 w-4" />
+            新需求
+          </Button>
+        </div>
       </div>
+
+      {/* Filter + search bar */}
+      <div className="flex items-center gap-4 px-6 py-3 border-b border-neutral-100 bg-white flex-shrink-0">
+        {/* Filter tabs */}
+        <div className="flex items-center gap-1">
+          {filterOptions.map(({ key, label, count }) => (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                filter === key
+                  ? 'bg-neutral-900 text-white'
+                  : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+              }`}
+            >
+              {label}
+              <span
+                className={`ml-1.5 text-xs ${
+                  filter === key ? 'text-neutral-300' : 'text-neutral-400'
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Search */}
+        <div className="relative flex-1 max-w-xs ml-auto">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="搜索需求..."
+            className="w-full pl-8 pr-3 py-1.5 text-sm border border-neutral-200 rounded-md bg-white placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+          />
+        </div>
+      </div>
+
+      {/* Card list */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-6 py-4">
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="animate-pulse rounded-lg border border-neutral-200 bg-white p-4 h-24"
+                />
+              ))}
+            </div>
+          ) : filtered.length > 0 ? (
+            <div className="space-y-3">
+              {filtered.map((req) => (
+                <RequirementCard
+                  key={req.id}
+                  requirement={req}
+                  isSelected={selectedId === req.id}
+                  onClick={() => handleCardClick(req.id)}
+                  onAction={() => handleAction(req)}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              hasRequirements={requirements.filter((r) => r.status !== 'archived').length > 0}
+              filter={filter}
+              search={search}
+              onCreateNew={() => setDialogOpen(true)}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Requirement Drawer */}
+      <RequirementDrawer
+        requirement={selectedReq}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        onNavigate={handleNavigate}
+        onDelete={handleDelete}
+        onArchive={handleArchive}
+      />
+
+      {/* Create Requirement Dialog */}
+      <CreateRequirementDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      />
     </div>
   );
 }
 
-function SessionCard({
-  session,
-  onClick,
+function EmptyState({
+  hasRequirements,
+  filter,
+  search,
+  onCreateNew,
 }: {
-  session: SessionItem;
-  onClick: () => void;
+  hasRequirements: boolean;
+  filter: RequirementFilter;
+  search: string;
+  onCreateNew: () => void;
 }) {
-  const statusStyles = {
-    completed: 'text-green-600',
-    failed: 'text-red-600',
-    partial: 'text-amber-600',
-  };
+  if (search.trim()) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <p className="text-sm font-medium text-neutral-700">没有匹配的需求</p>
+        <p className="mt-1 text-xs text-neutral-500">
+          尝试使用不同的关键词搜索
+        </p>
+      </div>
+    );
+  }
 
-  const statusIcons = {
-    completed: '✓',
-    failed: '✗',
-    partial: '◐',
-  };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
+  if (hasRequirements && filter !== 'all') {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <p className="text-sm font-medium text-neutral-700">
+          暂无{filter === 'active' ? '进行中' : '已完成'}的需求
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div
-      className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white p-4 hover:border-neutral-300 hover:shadow-sm transition-all cursor-pointer"
-      onClick={onClick}
-    >
-      <div className="flex items-center gap-3">
-        <span className={`text-lg ${statusStyles[session.status]}`}>
-          {statusIcons[session.status]}
-        </span>
-        <div className="flex flex-col gap-0.5">
-          <p className="font-medium text-neutral-900">{session.name}</p>
-          <p className="text-xs text-neutral-500">{formatDate(session.date)}</p>
-        </div>
-      </div>
-      <div className="text-sm text-neutral-500">
-        {session.tasksCompleted}/{session.tasksTotal} tasks
-      </div>
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="mb-3 text-4xl text-neutral-200">📋</div>
+      <p className="text-sm font-medium text-neutral-700">暂无需求</p>
+      <p className="mt-1 text-xs text-neutral-500 max-w-xs">
+        创建你的第一个需求，开始自主开发流程
+      </p>
+      <Button
+        className="mt-4 gap-1.5"
+        onClick={onCreateNew}
+      >
+        <Plus className="h-4 w-4" />
+        新需求
+      </Button>
     </div>
-  );
-}
-
-function PRDPreviewModal({
-  prd,
-  content,
-  loading,
-  onClose,
-}: {
-  prd: PRDItem;
-  content: string;
-  loading: boolean;
-  onClose: () => void;
-}) {
-  return (
-    <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-3xl max-h-[80vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="p-4 border-b">
-          <div className="flex items-center justify-between">
-            <div>
-              <DialogTitle>{prd.name}</DialogTitle>
-              <p className="text-xs text-muted-foreground">{prd.filename}</p>
-            </div>
-            <Link
-              href={`/stage2?prd=${prd.id}`}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              Select for Execution
-            </Link>
-          </div>
-        </DialogHeader>
-
-        {/* Content */}
-        <div className="flex-1 overflow-auto p-4">
-          {loading ? (
-            <div className="animate-pulse space-y-3">
-              <div className="h-6 bg-neutral-200 rounded w-1/2" />
-              <div className="h-4 bg-neutral-100 rounded w-full" />
-              <div className="h-4 bg-neutral-100 rounded w-4/5" />
-              <div className="h-4 bg-neutral-100 rounded w-3/4" />
-            </div>
-          ) : (
-            <pre className="whitespace-pre-wrap font-mono text-sm text-muted-foreground leading-relaxed">
-              {content}
-            </pre>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function SessionDetailsModal({
-  session,
-  details,
-  loading,
-  onClose,
-}: {
-  session: SessionItem;
-  details: SessionDetails | null;
-  loading: boolean;
-  onClose: () => void;
-}) {
-  const statusStyles = {
-    completed: 'bg-green-100 text-green-700',
-    failed: 'bg-red-100 text-red-700',
-    partial: 'bg-amber-100 text-amber-700',
-  };
-
-  const statusLabels = {
-    completed: 'Completed',
-    failed: 'Failed',
-    partial: 'Partial',
-  };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  return (
-    <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-4xl max-h-[85vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="p-4 border-b">
-          <div className="flex items-center justify-between">
-            <div>
-              <DialogTitle>{session.name}</DialogTitle>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs text-muted-foreground">
-                  {formatDate(session.date)}
-                </span>
-                {details?.branchName && (
-                  <span className="text-xs text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">
-                    {details.branchName}
-                  </span>
-                )}
-              </div>
-            </div>
-            <span
-              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[session.status]}`}
-            >
-              {statusLabels[session.status]}
-            </span>
-          </div>
-        </DialogHeader>
-
-        {/* Content */}
-        <div className="flex-1 overflow-auto">
-          {loading ? (
-            <div className="p-4">
-              <div className="animate-pulse space-y-4">
-                <div className="h-4 bg-neutral-200 rounded w-1/4" />
-                <div className="space-y-2">
-                  <div className="h-12 bg-neutral-100 rounded" />
-                  <div className="h-12 bg-neutral-100 rounded" />
-                  <div className="h-12 bg-neutral-100 rounded" />
-                </div>
-              </div>
-            </div>
-          ) : details ? (
-            <div className="flex flex-col">
-              {/* Description */}
-              {details.description && (
-                <div className="p-4 border-b border-neutral-100">
-                  <p className="text-sm text-muted-foreground">{details.description}</p>
-                </div>
-              )}
-
-              {/* Progress Summary */}
-              <div className="p-4 border-b border-neutral-100 bg-muted">
-                <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <div className="h-2 rounded-full bg-neutral-200 overflow-hidden">
-                      <div
-                        className={`h-full transition-all ${
-                          details.status === 'completed'
-                            ? 'bg-green-500'
-                            : details.status === 'failed'
-                            ? 'bg-red-500'
-                            : 'bg-amber-500'
-                        }`}
-                        style={{
-                          width: `${
-                            details.tasksTotal > 0
-                              ? (details.tasksCompleted / details.tasksTotal) * 100
-                              : 0
-                          }%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <span className="text-sm font-medium text-foreground">
-                    {details.tasksCompleted}/{details.tasksTotal} tasks completed
-                  </span>
-                </div>
-              </div>
-
-              {/* Dev Tasks */}
-              <div className="p-4">
-                <h3 className="text-sm font-medium text-foreground mb-3">
-                  Development Tasks
-                </h3>
-                <div className="space-y-2">
-                  {details.devTasks.map((task) => (
-                    <div
-                      key={task.id}
-                      className={`rounded-lg border p-3 ${
-                        task.passes
-                          ? 'border-green-200 bg-green-50'
-                          : 'border-border bg-background'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <span
-                          className={`text-sm ${
-                            task.passes ? 'text-green-600' : 'text-muted-foreground'
-                          }`}
-                        >
-                          {task.passes ? '✓' : '○'}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono text-muted-foreground">
-                              {task.id}
-                            </span>
-                            <p className="text-sm font-medium text-foreground">
-                              {task.title}
-                            </p>
-                          </div>
-                          {task.description && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {task.description}
-                            </p>
-                          )}
-                          {task.acceptanceCriteria && task.acceptanceCriteria.length > 0 && (
-                            <ul className="mt-2 space-y-1">
-                              {task.acceptanceCriteria.map((criterion, idx) => (
-                                <li
-                                  key={idx}
-                                  className="text-xs text-muted-foreground flex items-start gap-1.5"
-                                >
-                                  <span className="text-neutral-300">•</span>
-                                  {criterion}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Progress Log */}
-              {details.progressLog && (
-                <div className="p-4 border-t">
-                  <h3 className="text-sm font-medium text-foreground mb-3">
-                    Progress Log
-                  </h3>
-                  <pre className="text-xs text-muted-foreground font-mono whitespace-pre-wrap bg-muted rounded-lg p-3 max-h-48 overflow-auto">
-                    {details.progressLog}
-                  </pre>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="p-8 text-center">
-              <p className="text-sm text-muted-foreground">
-                Failed to load session details
-              </p>
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -878,60 +299,5 @@ export default function Dashboard() {
     <Suspense fallback={<DashboardFallback />}>
       <DashboardContent />
     </Suspense>
-  );
-}
-
-function EmptyState({
-  title,
-  description,
-  actionLabel,
-  actionHref,
-  onAction,
-  secondaryActionLabel,
-  onSecondaryAction,
-}: {
-  title: string;
-  description: string;
-  actionLabel?: string;
-  actionHref?: string;
-  onAction?: () => void;
-  secondaryActionLabel?: string;
-  onSecondaryAction?: () => void;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-neutral-300 bg-neutral-50/50 p-8 text-center">
-      <div className="mb-2 text-3xl text-neutral-300">📄</div>
-      <h3 className="text-sm font-medium text-neutral-700">{title}</h3>
-      <p className="mt-1 text-xs text-neutral-500 max-w-xs">{description}</p>
-      {(actionLabel || secondaryActionLabel) && (
-        <div className="mt-4 flex items-center gap-2">
-          {secondaryActionLabel && onSecondaryAction && (
-            <button
-              onClick={onSecondaryAction}
-              className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
-            >
-              {secondaryActionLabel}
-            </button>
-          )}
-          {actionLabel && (onAction || actionHref) && (
-            onAction ? (
-              <button
-                onClick={onAction}
-                className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 transition-colors"
-              >
-                {actionLabel}
-              </button>
-            ) : actionHref ? (
-              <Link
-                href={actionHref}
-                className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 transition-colors"
-              >
-                {actionLabel}
-              </Link>
-            ) : null
-          )}
-        </div>
-      )}
-    </div>
   );
 }

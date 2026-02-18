@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator, ChangeSummary, CompletionSummary, StageTransitionModal, ReviewSummary } from '@/components';
 import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
 import { useProject } from '@/contexts/ProjectContext';
+import { useRequirement } from '@/contexts/RequirementContext';
 import type { DiffSummary } from '@/components/ChangeSummary';
 
 interface PRInfo {
@@ -32,8 +33,16 @@ type PageState = 'loading' | 'no_pr' | 'creating_pr' | 'ready' | 'merging' | 'me
 function Stage5PageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const projectId = searchParams.get('projectId') || undefined;
   const { activeProject, updateProject, setActiveProject } = useProject();
+
+  // Requirement context - resolve `req` param
+  const { requirements } = useRequirement();
+  const reqId = searchParams.get('req') || undefined;
+  const activeRequirement = reqId ? requirements.find(r => r.id === reqId) : undefined;
+
+  // projectId: explicit param takes priority, then req.id as fallback
+  const rawProjectId = searchParams.get('projectId') || undefined;
+  const projectId = rawProjectId ?? (activeRequirement?.id);
 
   useProjectValidation({ currentStage: 5 });
 

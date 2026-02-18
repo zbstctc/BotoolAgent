@@ -4,6 +4,8 @@ import "./globals.css";
 import { Header } from "@/components/Header";
 import { Main } from "@/components/Main";
 import { ProjectProvider } from "@/contexts/ProjectContext";
+import { RequirementProvider } from "@/contexts/RequirementContext";
+import { TabProvider } from "@/contexts/TabContext";
 import { computeWorkspaceId } from "@/lib/workspace-id.server";
 
 const geistSans = Geist({
@@ -34,8 +36,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased flex h-screen flex-col overflow-hidden bg-neutral-50`}
       >
         <ProjectProvider workspaceId={workspaceId}>
-          <Header />
-          <Main>{children}</Main>
+          <RequirementProvider>
+            <TabProvider>
+              <Header />
+              <Main>{children}</Main>
+            </TabProvider>
+          </RequirementProvider>
         </ProjectProvider>
       </body>
     </html>
