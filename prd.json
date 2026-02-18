@@ -232,7 +232,7 @@
       "title": "批次面板 (BatchPanel — Agent Teams 可视化)",
       "prdSection": "7.3 (L569-600)",
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "DT-003"
       ],
@@ -272,7 +272,7 @@
       "title": "批次时间线 (BatchTimeline)",
       "prdSection": "7.3 (L569-600)",
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "DT-003"
       ],
@@ -312,7 +312,7 @@
       "title": "页面集成 + 布局调整",
       "prdSection": "7.4 (L601-618)",
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "DT-004",
         "DT-005",

@@ -50,3 +50,22 @@
   - progressLog state 仍保留（用于 iterationCount 提取）
   - DT-008 集成时需在中间区域添加 ProgressStrip / BatchPanel / BatchTimeline
 ---
+## 2026-02-19 - DT-004
+- 实现了 BatchPanel 组件（Agent Teams 可视化批次面板）
+- 新增文件: viewer/src/components/BatchPanel.tsx
+- 并行模式（卡片网格 grid-cols-2/3/4）+ 串行模式（详情卡片含验收标准）
+- 计时器颜色阈值：正常/黄(>2x均值)/红(>3x均值)
+- 空状态 + 完成状态 + 运行中呼吸动画
+- **未来迭代的经验教训：**
+  - BatchPanel 需在 DT-008 集成时从 page.tsx 传入 teammates + timings props
+  - formatTime 辅助函数与 ProgressStrip 重复，可考虑未来提取到公共 utils
+  - Unicode escapes 用于中文字符串（编码无差别，但影响可读性）
+---
+## 2026-02-19 - DT-005
+- 验收确认 BatchTimeline 组件（已在前一 session 提交 f698d0a）
+- 文件: viewer/src/components/BatchTimeline.tsx
+- 拓扑排序批次分组、B{n} 标签、条形宽度比例、颜色编码、自动滚动
+- **未来迭代的经验教训：**
+  - BatchTimeline 需在 DT-008 中接收 batches/maxDuration/currentBatchIndex props
+  - getTaskStatus 逻辑：passes=false + endTime → failed（可能需要更精确的失败判断）
+---
