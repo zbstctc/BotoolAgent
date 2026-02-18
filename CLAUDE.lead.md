@@ -6,6 +6,7 @@
 
 - `BOTOOL_SCRIPT_DIR`: BotoolAgent 文件目录
 - `BOTOOL_PROJECT_DIR`: 用户项目目录
+- `BOTOOL_MAX_ROUNDS`: 最大轮次（由 BotoolAgent.sh 传入，写 agent-status 时必须使用此值）
 
 ## 第一步: 初始化
 
@@ -51,27 +52,40 @@
 ### 多任务批次 → 用 Agent Teams
 
 1. 为每个任务 spawn 一个 teammate（使用 Task 工具）
-2. Teammate prompt 模板：
+2. Teammate prompt 模板（根据任务字段选择模式）：
+
+**模式 A — 有 prdFile + prdSection（slim 模式）：**
 
 ```
 你正在实现 {id}: {title}
 
 上下文获取:
 1. 读取 {prdFile}，跳读 prdSection {prdSection} 对应的章节
-2. 从 Phase 章节提取任务描述、验收条件、文件路径
-3. 如有"对应设计"引用（如 Section 3.X, 4.X），跳读对应设计章节
+2. 从 Phase 章节提取：适用规范、规范要点、任务描述、验收条件（含 [规范] 条目）
+3. 如有"对应设计"引用，跳读对应设计章节
 4. 读取 progress.txt 了解 Codebase Patterns
 
+{如果有 steps 字段}
+按以下步骤顺序执行，不要跳步：
+{steps 逐条列出}
+每完成一步后确认结果再继续。如果某步失败，停下来报告。
+
+{如果没有 steps 字段}
 实现步骤:
 1. 实现功能
-2. npx tsc --noEmit 确认 typecheck 通过
-3. git add <modified files> && git commit -m "feat: {id} - {title}"
-4. git push origin {branchName}
-5. 报告结果（修改了哪些文件、是否通过）
+2. 运行所有验证命令：
+   a. npx tsc --noEmit
+   b. {task.evals 中的其他命令}
+3. 逐条对照验收条件（特别注意 [规范] 前缀的条目）
+   - 如果某条 [规范] 不确定如何实现 → 读取 Phase 头部的规范文件获取详细说明
+   - 修复不符合项
+4. git add <modified files> && git commit -m "feat: {id} - {title}"
+5. git push origin {branchName}
+6. 在报告中包含每个验证命令的完整输出
 ```
 
-**向后兼容**：如果 prd.json 任务中存在 `description`、`acceptanceCriteria`、`spec` 等旧字段，
-Teammate prompt 改为直接使用这些字段，无需跳读 PRD：
+**模式 B — 有 description/acceptanceCriteria（旧 fat 模式，向后兼容）：**
+
 ```
 你正在实现 {id}: {title}
 
@@ -79,21 +93,33 @@ Teammate prompt 改为直接使用这些字段，无需跳读 PRD：
 验收条件: {acceptanceCriteria}
 相关信息: {notes}
 
+{如果有 steps 字段}
+按以下步骤顺序执行，不要跳步：
+{steps 逐条列出}
+每完成一步后确认结果再继续。如果某步失败，停下来报告。
+
+{如果没有 steps 字段}
 步骤:
 1. 读取 progress.txt 了解 Codebase Patterns
 2. 实现功能
-3. npx tsc --noEmit 确认 typecheck 通过
-4. git add <modified files> && git commit -m "feat: {id} - {title}"
-5. git push origin {branchName}
-6. 报告结果（修改了哪些文件、是否通过）
+3. 运行所有验证命令：
+   a. npx tsc --noEmit
+   b. {task.evals 中的其他命令}
+4. 逐条对照验收条件自检
+5. git add <modified files> && git commit -m "feat: {id} - {title}"
+6. git push origin {branchName}
+7. 在报告中包含每个验证命令的完整输出
 ```
 
 3. 等所有 teammate 完成
-4. 验证：typecheck 通过、commit 存在
-5. 更新 `prd.json`（`passes` → `true`）
-6. 更新 `.state/agent-status`
-7. 写 `progress.txt`
-8. 执行 `/compact` 释放上下文
+4. **对每个 DT 执行验收流程：**
+   a. **独立验证**：运行该 DT 的所有 evals（验证铁律）→ 任一失败 → 修复/重派 → 重新运行
+   b. **Stage A: Spec + Constitution Review**：对照 acceptanceCriteria + constitution checklist → FAIL 则修复后重新验证
+   c. **Stage B: Quick Quality Check**：安全/调试遗留 → HIGH 立即修复
+   d. 全部 PASS → 更新该 DT 的 `passes: true`
+5. 更新 `.state/agent-status`
+6. 写 `progress.txt`
+7. 执行 `/compact` 释放上下文
 
 ### 批次间
 
@@ -118,13 +144,15 @@ Teammate prompt 改为直接使用这些字段，无需跳读 PRD：
   "message": "描述当前状态",
   "timestamp": "YYYY-MM-DD HH:MM:SS",
   "iteration": 1,
-  "maxIterations": 3,
+  "maxIterations": "$BOTOOL_MAX_ROUNDS（从环境变量读取，禁止硬编码）",
   "completed": 2,
   "total": 8,
   "currentTask": "DT-003",
   "retryCount": 0
 }
 ```
+
+**重要：** `maxIterations` 必须从 `$BOTOOL_MAX_ROUNDS` 环境变量读取（通过 `echo $BOTOOL_MAX_ROUNDS`），**禁止硬编码数字**。
 
 **更新节点：** 初始化后、批次开始、DT 完成、出错、全部完成。
 
@@ -142,11 +170,54 @@ Teammate prompt 改为直接使用这些字段，无需跳读 PRD：
 
 3. 执行上下文检索（读取相关文件，最多 5 个深度阅读）
 4. 实现代码
-5. `npx tsc --noEmit` 确认 typecheck 通过
-6. `git add <modified files> && git commit -m "feat: {id} - {title}"`
-7. `git push origin {branchName}`
-8. 更新 `prd.json`：`passes` → `true`
-9. 写 `progress.txt`
+5. `git add <modified files> && git commit -m "feat: {id} - {title}"`
+6. `git push origin {branchName}`
+7. **验收流程：**
+   a. **独立验证**：运行该 DT 的所有 evals（验证铁律）→ 任一失败 → 修复 → 重新运行
+   b. **Stage A: Spec + Constitution Review** → FAIL 则修复后重新验证
+   c. **Stage B: Quick Quality Check** → HIGH 立即修复
+   d. 全部 PASS → 更新 `prd.json`：`passes` → `true`
+8. 写 `progress.txt`
+
+## 验证铁律
+
+**任何 DT 在标记 passes: true 之前，Lead Agent 必须：**
+
+1. 运行 prd.json 中该任务的所有 evals（不仅仅是 typecheck）
+2. 读取完整输出并确认退出码为 0
+3. 检查文件是否存在（如果 eval 包含 test -f）
+4. 只有全部 evals 通过后才能写 passes: true
+
+如果 Teammate 报告完成但 Lead 的独立验证失败：
+- 不标记 passes: true
+- Lead 自行修复或重新派发 Teammate
+- 在 progress.txt 记录 "验证失败：{原因}"
+
+**禁止的行为：**
+- 信任 Teammate 的口头报告而不独立验证
+- 使用 "should pass" / "looks correct" 代替实际运行
+- 跳过任何 eval
+
+## DT 双阶段 Review
+
+每个 DT 通过验证铁律后、标记 passes: true 之前：
+
+### Stage A: Spec + Constitution Review
+
+1. 遍历 acceptanceCriteria，每条用 grep/read 确认代码有对应实现 → 缺了 = FAIL
+2. 看 git diff --stat 新增文件，不属于任何 criteria → 多了 = WARNING（不阻塞）
+3. 遍历 prd.json 中的 constitution checklist，逐条对照本次修改的代码：
+   - 合规 → OK
+   - 不合规 → FAIL → 修复
+   - 不确定 → 读 rule.file 获取完整规范后判断
+
+### Stage B: Quick Quality Check
+
+1. 检查明显安全问题（硬编码密钥、SQL 拼接）
+2. 检查 console.log / debugger 遗留
+3. HIGH → 立即修复；MEDIUM/LOW → 记录不阻塞
+
+**完整流程：** 验证铁律（evals 全过） → Stage A（Spec + Constitution） → Stage B（Quality） → passes: true
 
 ## 进度报告格式
 

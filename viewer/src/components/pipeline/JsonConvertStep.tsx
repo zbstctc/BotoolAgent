@@ -292,7 +292,7 @@ export function JsonConvertStep({
           <div className="mb-6">
             <div className="flex justify-between text-sm text-neutral-600 mb-2">
               <span>进度</span>
-              <span>{convertingProgress}%</span>
+              <span>{Math.round(convertingProgress)}%</span>
             </div>
             <div className="w-full h-2 bg-neutral-200 rounded-full overflow-hidden">
               <div

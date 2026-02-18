@@ -141,7 +141,13 @@ export function StageTransitionModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md p-0 gap-0" showCloseButton={false}>
+      <DialogContent
+        className="sm:max-w-md p-0 gap-0"
+        showCloseButton={false}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         {/* Header with success indicator */}
         <div className="p-6 pb-4">
           <div className="flex items-center gap-3 mb-4">

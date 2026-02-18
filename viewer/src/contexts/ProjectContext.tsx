@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import {
   loadProjects,
   saveProjects,
+  saveProject as saveProjectToStorage,
   generateProjectId,
   type ProjectStorage,
 } from '../lib/project-storage';
@@ -145,13 +146,18 @@ export function ProjectProvider({ workspaceId, children }: { workspaceId?: strin
           return prev;
         }
 
+        const updated = {
+          ...project,
+          ...data,
+          updatedAt: Date.now(),
+        };
+
+        // Sync write to localStorage so navigations read fresh state
+        saveProjectToStorage(updated);
+
         return {
           ...prev,
-          [id]: {
-            ...project,
-            ...data,
-            updatedAt: Date.now(),
-          },
+          [id]: updated,
         };
       });
     },

@@ -142,7 +142,40 @@ Options:
 
 After confirmation, **read the content of each selected rule file** to embed as `constitution.rules`.
 
-### Step 3: Slim Conversion
+### Step 3: 规范融合 (Constitution Fusion)
+
+**将规范要求注入 PRD.md § 7，使 PRD 成为唯一真理源。**
+
+此步骤在规范选择后、JSON 生成前执行：
+
+```
+对每个选中的 rule file:
+  1. 读取 rules/{rule}.md 的全部内容
+  2. 提取 3-8 条核心 checklist 要点（每条 ≤ 30 字）
+
+对 PRD.md § 7 的每个 Phase:
+  1. 根据 Phase 涉及的关键词匹配适用规范
+     (API/route → API_Rules, 数据库/SQL → DB_Rules, 认证/auth → Auth_Rules,
+      前端/组件/UI → Frontend_Rules, 测试/test → Testing_Rules)
+  2. 在 Phase 头部添加: > **适用规范**: matched_rule_names
+  3. 在 Phase 头部添加: > **规范要点**: 3-5 条最关键的规范要点
+
+对每个 DT:
+  1. 根据 DT title/描述匹配适用规范条目
+  2. 在 acceptanceCriteria 末尾（Typecheck passes 之前）追加:
+     - [ ] [规范] 具体规范条目1
+     - [ ] [规范] 具体规范条目2
+  3. 只追加与该 DT 直接相关的条目（不是所有规范）
+```
+
+**融合结果写回 PRD.md § 7**（幂等：重复执行先清除旧 `[规范]` 行再重新注入）。
+
+**Checklist 生成规则：**
+- 每条 rule 生成 3-8 条 checklist（少于 3 条说明规范太简单可合并，多于 8 条说明需拆分）
+- checklist 用于 Lead Agent 快速校验，不替代完整规范文件
+- 格式：简短动宾结构（如 "请求带 apikey header"、"查询附带 is_deleted 过滤"）
+
+### Step 4: Slim Conversion
 
 Take the PRD content + selected rules and generate a **slim prd.json**.
 
@@ -203,7 +236,12 @@ JSON_FILE="$TASKS_DIR/${PRD_BASENAME}.json"
         "id": "rule-001",
         "name": "API设计规范",
         "category": "backend",
-        "content": "[Full content of the rule file]"
+        "file": "rules/backend/API设计规范.md",
+        "checklist": [
+          "所有请求带 apikey + Authorization header",
+          "查询必须附带 is_deleted=eq.false 过滤",
+          "软删除用 PATCH 不用 DELETE"
+        ]
       }
     ],
     "ruleAuditSummary": ""
@@ -228,6 +266,12 @@ JSON_FILE="$TASKS_DIR/${PRD_BASENAME}.json"
       "testCases": [
         { "type": "typecheck", "desc": "TypeScript 编译通过" },
         { "type": "unit", "desc": "核心逻辑单元测试", "tdd": true }
+      ],
+      "steps": [
+        { "action": "create", "file": "src/db/schema.ts", "description": "创建 schema 文件" },
+        { "action": "implement", "description": "定义 status 字段和迁移" },
+        { "action": "verify", "command": "npx tsc --noEmit", "expected": "exit 0" },
+        { "action": "commit", "message": "feat: DT-001 - add status field" }
       ]
     }
   ],
@@ -249,7 +293,7 @@ JSON_FILE="$TASKS_DIR/${PRD_BASENAME}.json"
 | `branchName` | string | Yes | Git branch, prefixed with `botool/` |
 | `description` | string | Yes | Feature description (from PRD § 1) |
 | `prdFile` | string | Yes | **NEW** Path to the PRD markdown file |
-| `constitution` | object | No | Coding standards from `rules/` |
+| `constitution` | object | No | Coding standards from `rules/` (file+checklist 模式) |
 | `devTasks[]` | SlimDevTask[] | Yes | Development tasks (slim version) |
 | `devTasks[].id` | string | Yes | Task ID (DT-001, DT-002, ...) |
 | `devTasks[].title` | string | Yes | Task title |
@@ -259,7 +303,30 @@ JSON_FILE="$TASKS_DIR/${PRD_BASENAME}.json"
 | `devTasks[].dependsOn` | string[] | No | IDs of tasks this task depends on |
 | `devTasks[].evals` | DevTaskEval[] | No | Verification commands |
 | `devTasks[].testCases` | TestCase[] | No | Test case metadata with type and tdd flag |
+| `devTasks[].steps` | Step[] | No | 分步执行指引（每步可单条命令验证，3-6 步） |
 | `sessions[]` | SessionGroup[] | No | Task grouping for batch execution |
+
+### Constitution Rule Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `rules[].id` | string | Yes | Rule ID (rule-001, rule-002, ...) |
+| `rules[].name` | string | Yes | Rule display name |
+| `rules[].category` | string | Yes | Category (backend, frontend, testing, etc.) |
+| `rules[].file` | string | Yes* | Path to rule markdown file (新模式) |
+| `rules[].checklist` | string[] | Yes* | 3-8 条核心校验要点 |
+| `rules[].content` | string | No | Full rule content (旧模式，向后兼容) |
+
+**向后兼容检测逻辑（Q4）：**
+```
+rule.file     → "新模式": 使用 file + checklist
+rule.content  → "旧模式": 使用 content（兼容已有 prd.json）
+两者都无       → "无规范": 跳过该 rule
+```
+
+**Checklist 条数校验：** 每条 rule 的 checklist 必须 3-8 条。不满足时警告用户调整。
+
+---
 
 ### Removed Fields (compared to old schema)
 
@@ -335,6 +402,51 @@ Additional testCases based on task content:
 - Tasks with transformation logic → `{ "type": "unit", "desc": "...", "tdd": true }`
 - UI/page rendering tasks → `{ "type": "e2e", "desc": "..." }`
 - Visual/animation tasks → `{ "type": "manual", "desc": "..." }`
+
+---
+
+## Steps 生成规则（可选）
+
+每个 DT 可包含可选的 `steps` 数组，为 Coding Agent 提供分步执行指引。
+
+### 颗粒度规则（Q1 设计决策）
+
+**核心原则：每步结束时必须能用一条命令验证。**
+
+- 典型 3-4 步，最多 6 步
+- 每步必须有明确的可验证产出
+- 如果一步无法用单条命令验证，需要拆分
+
+### Step Action 类型
+
+| action | 说明 | 必含字段 |
+|--------|------|----------|
+| `create` | 创建新文件 | `file` |
+| `modify` | 修改已有文件 | `file` |
+| `implement` | 实现逻辑（可能跨多文件） | `description` |
+| `verify` | 运行验证命令 | `command`, `expected` |
+| `commit` | 提交代码 | `message` |
+
+### Steps 示例
+
+```json
+{
+  "id": "DT-003",
+  "title": "实现自动生成标题功能",
+  "steps": [
+    { "action": "create", "file": "viewer/src/app/api/cli/generate-title/route.ts", "description": "创建 API 路由文件" },
+    { "action": "implement", "description": "实现调用 Claude API 生成标题的逻辑" },
+    { "action": "verify", "command": "npx tsc --noEmit", "expected": "exit 0" },
+    { "action": "commit", "message": "feat: DT-003 - add auto-generate title API" }
+  ]
+}
+```
+
+### 何时生成 Steps
+
+- **生成**: PRD § 7 中明确列出了实现步骤或文件路径的 DT
+- **不生成**: 简单的配置修改、文档更新、单文件编辑等（PRD 上下文已足够）
+- **判断标准**: 如果 DT 涉及 ≥ 2 个文件或有明确的顺序约束，则生成 steps
 
 ---
 
@@ -500,7 +612,12 @@ CREATE TABLE task_status (...)
         "id": "rule-001",
         "name": "API设计规范",
         "category": "backend",
-        "content": "# API 设计规范\n..."
+        "file": "rules/backend/API设计规范.md",
+        "checklist": [
+          "所有请求带 apikey + Authorization header",
+          "查询必须附带 is_deleted=eq.false 过滤",
+          "软删除用 PATCH 不用 DELETE"
+        ]
       }
     ],
     "ruleAuditSummary": ""
@@ -605,6 +722,10 @@ The coding agent will:
 - [ ] Every task has at least one eval (typecheck)
 - [ ] No task depends on a later task
 - [ ] Sessions have max 8 tasks each
+- [ ] **规范融合完成**: PRD.md § 7 每个 Phase 有适用规范头部，每个 DT 有 [规范] 条目
+- [ ] **Constitution 使用 file+checklist**: 每条 rule 有 file 路径 + 3-8 条 checklist
+- [ ] **Checklist 条数 3-8**: 每条 rule 的 checklist 数量在范围内
+- [ ] **Steps 颗粒度**: 有 steps 的 DT 每步可用单条命令验证，3-6 步
 - [ ] `$TASKS_DIR/prd-{feature-name}.json` written (main file)
 - [ ] `./prd.json` written (root compat copy)
 - [ ] `$TASKS_DIR/registry.json` updated with current project

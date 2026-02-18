@@ -10,9 +10,10 @@
 # ============================================================================
 SESSION_NAME="botool-teams"
 BOTOOL_TEAMMATE_MODE="${BOTOOL_TEAMMATE_MODE:-in-process}"
-MAX_ROUNDS=5              # Ralph 外循环最大轮次
+MAX_ROUNDS=20             # Ralph 外循环最大轮次
 ROUND_COOLDOWN=10         # 轮次间冷却（秒）
 STALL_TIMEOUT=900         # 卡住检测超时（秒，默认 15 分钟）
+MAX_WALL_TIME=7200        # 全局最大运行时间（秒，默认 2 小时）
 
 # ============================================================================
 # Signal handler: cleanup tmux session
@@ -175,6 +176,23 @@ echo "    prd.json: $PRD_FILE"
 echo ""
 
 # ============================================================================
+# 清理残留进程（防止僵尸 BotoolAgent.sh 进程累积）
+# ============================================================================
+MY_PID=$$
+STALE_PIDS=$(pgrep -f "bash.*BotoolAgent\.sh" 2>/dev/null | grep -v "^${MY_PID}$" || true)
+if [ -n "$STALE_PIDS" ]; then
+  echo ">>> 检测到残留 BotoolAgent 进程，正在清理..."
+  for pid in $STALE_PIDS; do
+    # 跳过自身的父进程链
+    if [ "$pid" != "$MY_PID" ] && [ "$pid" != "$PPID" ]; then
+      echo "    终止 PID $pid"
+      kill "$pid" 2>/dev/null || true
+    fi
+  done
+  sleep 1
+fi
+
+# ============================================================================
 # 归档检查（分支变更时归档旧运行）
 # ============================================================================
 if [ -f "$PRD_FILE" ] && [ -f "$LAST_BRANCH_FILE" ]; then
@@ -233,6 +251,7 @@ start_session() {
   TMUX_ENV="CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1"
   TMUX_ENV="$TMUX_ENV BOTOOL_SCRIPT_DIR=$SCRIPT_DIR"
   TMUX_ENV="$TMUX_ENV BOTOOL_PROJECT_DIR=$PROJECT_DIR"
+  TMUX_ENV="$TMUX_ENV BOTOOL_MAX_ROUNDS=$MAX_ROUNDS"
 
   tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_DIR" \
     "env -u CLAUDECODE $TMUX_ENV $CLAUDE_CMD --dangerously-skip-permissions --teammate-mode $BOTOOL_TEAMMATE_MODE"
@@ -281,6 +300,16 @@ start_session() {
   while tmux has-session -t "$SESSION_NAME" 2>/dev/null; do
     sleep 30
 
+    # 检查 agent-status 是否已标记 session 结束
+    local agent_status=$(grep -o '"status": "[^"]*"' "$STATUS_FILE" 2>/dev/null | head -1 | sed 's/"status": "//;s/"$//')
+    if [ "$agent_status" = "session_done" ] || [ "$agent_status" = "complete" ]; then
+      echo ">>> Lead Agent 已完成本 session（status: $agent_status）"
+      echo ">>> 终止 Claude CLI session..."
+      tmux kill-session -t "$SESSION_NAME" 2>/dev/null
+      sleep 2
+      break
+    fi
+
     # 检查是否有新 commit
     local current_commit_hash=$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null || echo "")
     if [ "$current_commit_hash" != "$last_commit_hash" ]; then
@@ -305,8 +334,18 @@ start_session() {
 # Ralph 外循环: 自动重启 session 直到所有任务完成
 # ============================================================================
 CURRENT_ROUND=0
+WALL_START=$(date +%s)
 
 for CURRENT_ROUND in $(seq 1 $MAX_ROUNDS); do
+  # 0. 全局超时检测（防止无限运行）
+  local_now=$(date +%s)
+  wall_elapsed=$(( local_now - WALL_START ))
+  if [ "$wall_elapsed" -ge "$MAX_WALL_TIME" ]; then
+    echo ">>> 达到全局超时限制（${MAX_WALL_TIME}秒 / $(( MAX_WALL_TIME / 3600 ))小时），停止运行"
+    update_status "wall_timeout" "全局超时（${wall_elapsed}秒），轮次 $CURRENT_ROUND/$MAX_ROUNDS"
+    break
+  fi
+
   # 1. 检查是否还有未完成任务
   if check_all_tasks_complete; then
     echo ">>> 所有任务已完成！"

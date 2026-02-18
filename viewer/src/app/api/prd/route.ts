@@ -149,7 +149,23 @@ export async function GET() {
 
     // Read all prd-*.md files
     const files = fs.readdirSync(TASKS_DIR);
-    const prdFiles = files.filter(f => f.startsWith('prd-') && f.endsWith('.md'));
+
+    // Build set of source filenames that have been transformed (should be hidden)
+    const transformedSources = new Set<string>();
+    try {
+      const sessionsPath = path.join(TASKS_DIR, '.prd-sessions.json');
+      if (fs.existsSync(sessionsPath)) {
+        const sessions = JSON.parse(fs.readFileSync(sessionsPath, 'utf-8'));
+        for (const entry of Object.values(sessions)) {
+          const src = (entry as Record<string, string>).transformedFrom;
+          if (src) transformedSources.add(src);
+        }
+      }
+    } catch { /* non-fatal */ }
+
+    const prdFiles = files.filter(f =>
+      f.startsWith('prd-') && f.endsWith('.md') && !transformedSources.has(f)
+    );
 
     const prds: PRDItem[] = prdFiles.map(filename => {
       const filePath = path.join(TASKS_DIR, filename);

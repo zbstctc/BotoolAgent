@@ -69,7 +69,7 @@ export function ReviewSummary({ projectId, defaultExpanded = false }: ReviewSumm
 
   if (isLoading) {
     return (
-      <div className="bg-white border border-neutral-200 rounded-lg p-4 animate-pulse">
+      <div className="bg-white border border-neutral-200 rounded-lg p-4 animate-pulse" data-testid="review-summary-loading">
         <div className="h-5 bg-neutral-100 rounded w-32 mb-3" />
         <div className="grid grid-cols-2 gap-2">
           <div className="h-16 bg-neutral-100 rounded" />

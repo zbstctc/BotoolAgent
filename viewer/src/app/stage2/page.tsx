@@ -75,10 +75,10 @@ function Stage2PageContent() {
   }, []);
 
   const handleEnrichmentSummaryComplete = useCallback((prdJson: EnrichedPrdJson) => {
-    // Update project with branch name
-    if (activeProject && prdJson.branchName) {
+    // Update project stage (always advance to 3, branchName is optional metadata)
+    if (activeProject) {
       updateProject(activeProject.id, {
-        branchName: prdJson.branchName,
+        ...(prdJson.branchName ? { branchName: prdJson.branchName } : {}),
         currentStage: 3,
       });
     }

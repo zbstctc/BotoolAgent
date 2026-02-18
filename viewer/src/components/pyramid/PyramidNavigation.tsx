@@ -21,6 +21,8 @@ interface PyramidNavigationProps {
   onLevelClick: (level: number) => void;
   /** Whether codebase scan was performed */
   codebaseScanned?: boolean;
+  /** Whether in transform (import) mode — switches labels from L1-L5 to T1-T5 */
+  isTransformMode?: boolean;
 }
 
 const LEVEL_NAMES: Record<number, string> = {
@@ -39,20 +41,40 @@ const LEVEL_DESCRIPTIONS: Record<number, string> = {
   5: '确认需求摘要并生成 PRD',
 };
 
+const TRANSFORM_LEVEL_NAMES: Record<number, string> = {
+  1: 'T1 文档解析',
+  2: 'T2 覆盖度分析',
+  3: 'T3 补充问答',
+  4: 'T4 需求分解',
+  5: 'T5 确认生成',
+};
+
+const TRANSFORM_LEVEL_DESCRIPTIONS: Record<number, string> = {
+  1: '读取并解析源文档结构',
+  2: '分析覆盖度，识别缺口',
+  3: '针对缺口补充问答',
+  4: '将需求拆解为开发任务',
+  5: '确认摘要并生成 PRD',
+};
+
 export function PyramidNavigation({
   currentLevel,
   levels,
   collectedSummary,
   onLevelClick,
   codebaseScanned,
+  isTransformMode,
 }: PyramidNavigationProps) {
+  const levelNames = isTransformMode ? TRANSFORM_LEVEL_NAMES : LEVEL_NAMES;
+  const levelDescriptions = isTransformMode ? TRANSFORM_LEVEL_DESCRIPTIONS : LEVEL_DESCRIPTIONS;
+
   return (
     <div className="flex flex-col h-full bg-white border-r border-neutral-200">
       {/* Header */}
       <div className="p-4 border-b border-neutral-200">
         <h2 className="text-sm font-semibold text-neutral-900">问答进度</h2>
         <p className="text-xs text-neutral-500 mt-1">
-          当前：第 {currentLevel} 层
+          当前：{isTransformMode ? `阶段 ${currentLevel}` : `第 ${currentLevel} 层`}
         </p>
         {codebaseScanned && (
           <div className="mt-2 flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
@@ -70,6 +92,8 @@ export function PyramidNavigation({
               key={level.id}
               level={level}
               isCurrent={level.id === currentLevel}
+              levelName={levelNames[level.id]}
+              levelDescription={levelDescriptions[level.id]}
               onClick={() => {
                 if (level.status !== 'locked') {
                   onLevelClick(level.id);
@@ -105,10 +129,14 @@ export function PyramidNavigation({
 function LevelItem({
   level,
   isCurrent,
+  levelName,
+  levelDescription,
   onClick,
 }: {
   level: LevelInfo;
   isCurrent: boolean;
+  levelName?: string;
+  levelDescription?: string;
   onClick: () => void;
 }) {
   const isLocked = level.status === 'locked';
@@ -148,12 +176,12 @@ function LevelItem({
           <div className={`text-sm font-medium ${
             isLocked ? 'text-neutral-400' : 'text-neutral-900'
           }`}>
-            {LEVEL_NAMES[level.id] || `Level ${level.id}`}
+            {levelName || LEVEL_NAMES[level.id] || `Level ${level.id}`}
           </div>
           <div className={`text-xs mt-0.5 ${
             isLocked ? 'text-neutral-300' : 'text-neutral-500'
           }`}>
-            {LEVEL_DESCRIPTIONS[level.id]}
+            {levelDescription || LEVEL_DESCRIPTIONS[level.id]}
           </div>
 
           {/* Progress Bar */}

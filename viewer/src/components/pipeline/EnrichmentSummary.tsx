@@ -271,24 +271,18 @@ export function EnrichmentSummary({
     setIsSaving(true);
     setSaveError(null);
     try {
-      const response = await fetch('/api/prd/save', {
+      // Save prd.json for BotoolAgent to consume
+      // Use sourcePrdId (PRD slug) so json filename matches md: tasks/prd-{slug}.json
+      const prdSlug = sourcePrdId || projectId;
+      const response = await fetch('/api/prd/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: JSON.stringify(prdJson, null, 2), name: prdJson.project }),
+        body: JSON.stringify({ ...prdJson, projectId: prdSlug }),
       });
 
       if (!response.ok) {
         throw new Error('保存失败，请重试');
       }
-
-      // Also persist enriched JSON to prd.json so BotoolAgent can use it
-      await fetch('/api/prd/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...prdJson, projectId }),
-      }).catch(() => {
-        // Non-critical: enriched data saved to file, prd.json update is best-effort
-      });
 
       onComplete(prdJson);
     } catch (err) {
@@ -338,7 +332,7 @@ export function EnrichmentSummary({
           <div className="mb-6">
             <div className="flex justify-between text-sm text-neutral-600 mb-2">
               <span>进度</span>
-              <span>{convertingProgress}%</span>
+              <span>{Math.round(convertingProgress)}%</span>
             </div>
             <div className="w-full h-2 bg-neutral-200 rounded-full overflow-hidden">
               <div

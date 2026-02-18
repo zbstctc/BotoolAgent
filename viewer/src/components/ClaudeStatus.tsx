@@ -55,6 +55,8 @@ export function ClaudeStatus() {
 
   useEffect(() => {
     fetchStatus();
+    const interval = setInterval(fetchStatus, 30_000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {

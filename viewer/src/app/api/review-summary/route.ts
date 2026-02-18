@@ -25,6 +25,7 @@ export interface ReviewSummaryData {
   // Constitution rules
   rulesApplied: number;
   ruleNames: string[];
+  totalChecklistItems: number; // checklist 总条数（规范覆盖度指标）
 
   // Security checks ([安全] prefixed items)
   totalSecurityItems: number;
@@ -54,6 +55,7 @@ function parsePrdData(content: string): {
   totalCriteria: number;
   rulesApplied: number;
   ruleNames: string[];
+  totalChecklistItems: number;
   totalSecurityItems: number;
   securityDetails: Array<{ taskId: string; item: string }>;
   totalEvals: number;
@@ -119,12 +121,22 @@ function parsePrdData(content: string): {
     const rulesApplied = rules.length;
     const ruleNames = rules.map((r: { name?: string; id?: string }) => r.name || r.id || '');
 
+    // Checklist coverage: sum all checklist items across all constitution rules
+    let totalChecklistItems = 0;
+    for (const rule of rules) {
+      const checklist = rule.checklist;
+      if (Array.isArray(checklist)) {
+        totalChecklistItems += checklist.length;
+      }
+    }
+
     return {
       totalTasks,
       completedTasks,
       totalCriteria,
       rulesApplied,
       ruleNames: ruleNames.filter(Boolean),
+      totalChecklistItems,
       totalSecurityItems,
       securityDetails,
       totalEvals,
@@ -141,6 +153,7 @@ function parsePrdData(content: string): {
       totalCriteria: 0,
       rulesApplied: 0,
       ruleNames: [],
+      totalChecklistItems: 0,
       totalSecurityItems: 0,
       securityDetails: [],
       totalEvals: 0,
@@ -284,6 +297,7 @@ export async function GET(request: NextRequest) {
       deletions: codeChanges.deletions,
       rulesApplied: prdData?.rulesApplied || 0,
       ruleNames: prdData?.ruleNames || [],
+      totalChecklistItems: prdData?.totalChecklistItems || 0,
       totalSecurityItems: prdData?.totalSecurityItems || 0,
       passedSecurityItems: 0,
       totalEvals: prdData?.totalEvals || 0,

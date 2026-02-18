@@ -60,6 +60,10 @@ export interface PyramidMetadata {
   };
   /** Transform mode: source PRD file path */
   sourcePrdPath?: string;
+  /** L5 confirmation round (e.g. "1/2", "2/2") */
+  round?: string;
+  /** L5 confirmation round name */
+  roundName?: string;
 }
 
 export interface AskUserQuestionToolInput {
@@ -101,7 +105,9 @@ export interface ConstitutionRule {
   id: string;
   name: string;
   category: string;
-  content?: string;
+  file?: string;          // 路径引用 (e.g., "rules/API_Rules.md") — optional for backward compat
+  checklist?: string[];   // 3-8 条核心检查项 — optional for backward compat
+  content?: string;       // 完整内容（旧模式）
 }
 
 export interface Constitution {
