@@ -1,26 +1,9 @@
 import { NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import { getTasksDir, getBotoolRoot, getProjectPrdJsonPath, getProjectSessionPath } from '@/lib/project-root';
-
-// Inline type definitions (will be replaced by imports from requirement-types.ts once DT-008 is complete)
-type RequirementStage = 0 | 1 | 2 | 3 | 4 | 5;
-type RequirementStatus = 'active' | 'completed' | 'archived';
-
-interface Requirement {
-  id: string;                     // directory name used as id
-  name: string;                   // requirement title
-  stage: RequirementStage;        // current stage
-  status: RequirementStatus;
-  sourceFile?: string;            // DRAFT.md path
-  prdId?: string;                 // prd.md ID
-  prdJsonPath?: string;           // prd.json path
-  taskCount?: number;             // total task count (from prd.json)
-  branchName?: string;            // Git branch name (from prd.json)
-  tasksCompleted?: number;        // completed task count (from prd.json)
-  createdAt: number;
-  updatedAt: number;
-}
+import type { RequirementStage, RequirementStatus, Requirement } from '@/lib/requirement-types';
 
 interface PrdJson {
   project?: string;
@@ -45,7 +28,6 @@ function extractTitle(content: string, dirName: string): string {
  */
 function isBranchMergedIntoMain(branchName: string): boolean {
   try {
-    const { execSync } = require('child_process') as typeof import('child_process');
     const botoolRoot = getBotoolRoot();
     const mergedBranches = execSync('git branch --merged main', {
       cwd: botoolRoot,
