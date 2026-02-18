@@ -1,33 +1,51 @@
 {
-  "project": "Viewer PRD 导入功能",
-  "branchName": "botool/viewer-import-existing-md",
-  "description": "为 Viewer Dashboard 添加导入入口，用户可选择项目中已有 .md 文件进入 Stage 1 Transform 模式进行 PRD 规范化",
-  "prdFile": "tasks/prd-viewer-import-existing-md.md",
+  "project": "BotoolAgent Performance Update",
+  "branchName": "botool/performance-update",
+  "description": "Constitution 瘦身（272KB→<30KB）+ 执行质量提升（验证铁律+双阶段 Review）+ 规范融合（PRD.md 成为唯一真理源）",
+  "prdFile": "tasks/prd-performance-update.md",
   "constitution": {
     "rules": [
       {
         "id": "rule-001",
-        "name": "API设计规范",
-        "category": "backend",
-        "content": "# API 设计规范\n\n## URL 设计\n- 使用 RESTful 风格\n- 使用复数形式表示资源集合\n\n## 响应格式\n- 统一使用 JSON 格式\n- 包含 success 和 data 字段"
+        "name": "状态管理规范",
+        "category": "application",
+        "content": "# 应用状态管理规范\n\n## 状态层级\n1. **React Context**（全局共享状态）：项目列表、活跃项目、workspace\n2. **localStorage**（持久化）：通过 `lib/project-storage.ts` 和 `lib/prd-session-storage.ts` 管理\n3. **组件 state**（局部状态）：表单输入、UI 开关、临时数据\n4. **URL params**（路由状态）：sessionId、projectId、mode\n\n## Context 使用模式\n```typescript\nconst MyContext = createContext<ContextValue | null>(null);\nexport function MyProvider({ children }: { children: React.ReactNode }) {\n  const [state, setState] = useState(initialValue);\n  return <MyContext.Provider value={{ state, setState }}>{children}</MyContext.Provider>;\n}\nexport function useMy(): ContextValue {\n  const context = useContext(MyContext);\n  if (!context) throw new Error('useMy must be used within MyProvider');\n  return context;\n}\n```\n\n## localStorage 存储\n- 所有 key 必须通过 `scopedKey()` 添加 workspace 前缀\n- 读取时检查 `typeof window === 'undefined'` 防止 SSR 错误\n- 写入使用 debounce（500ms）\n- 数据结构包含 `version` 字段\n\n## 数据获取模式\n- 短请求：`fetch()` + `useState` + `useEffect`\n- 长轮询：自定义 hook 内 `setInterval`\n- 流式数据：SSE + `ReadableStream` reader\n- CLI 交互：`useCliChat` hook\n\n## SSR 安全\n- `localStorage` 访问必须在 `useEffect` 或条件判断中\n- 使用浏览器 API 的组件必须标记 `'use client'`"
       },
       {
         "id": "rule-002",
-        "name": "命名规范",
-        "category": "frontend",
-        "content": "# 前端命名规范\n\n## 组件命名\n- 使用 PascalCase 命名组件\n- 文件名与组件名保持一致\n\n## 变量命名\n- 使用 camelCase 命名变量和函数\n- 使用 UPPER_CASE 命名常量"
+        "name": "项目结构规范",
+        "category": "application",
+        "content": "# 项目结构规范\n\n## 目录结构\n```\nviewer/src/\n├── app/                   # Next.js App Router\n│   ├── api/               # API 路由（服务端）\n│   ├── stage{1-5}/page.tsx  # 5 阶段页面\n│   ├── page.tsx           # Dashboard 首页\n│   ├── layout.tsx         # 根布局（含 Provider）\n│   └── globals.css        # 全局样式\n├── components/            # UI 组件\n│   ├── {Component}.tsx\n│   ├── {domain}/          # 领域组件子目录\n│   └── index.ts           # barrel export\n├── contexts/              # React Context\n├── hooks/                 # 自定义 Hooks\n└── lib/                   # 工具库\n```\n\n## 文件职责\n- page.tsx：页面入口，组合组件\n- components/：纯 UI 逻辑，通过 props 接收数据\n- hooks/：可复用的状态逻辑\n- lib/：纯工具函数\n- contexts/：全局共享状态\n\n## 新文件规则\n- 新组件先检查 components/ 是否有可复用的\n- 新 API 遵循 RESTful 命名\n- 新 hook 必须以 use 前缀命名\n- 新建文件后必须更新 barrel index.ts\n\n## 技术栈版本\n- Next.js 16+ (App Router), React 19+, TypeScript 5+ (strict), Tailwind CSS 4+, Playwright"
       },
       {
         "id": "rule-003",
-        "name": "样式规范",
-        "category": "frontend",
-        "content": "# 前端样式规范\n\n## CSS 类命名\n- 使用 kebab-case 命名 CSS 类\n- 避免使用内联样式\n\n## Tailwind CSS\n- 优先使用 Tailwind 工具类\n- 避免自定义 CSS"
+        "name": "API设计规范",
+        "category": "backend",
+        "content": "# API 设计规范\n\n## 路由结构（Next.js App Router）\n- 路由文件固定为 route.ts，放在 src/app/api/{feature}/ 下\n- 嵌套资源使用子目录\n- 动态参数使用 [param] 目录名\n\n## HTTP 方法\n- GET：查询/列表\n- POST：创建/执行操作\n- DELETE：删除资源\n- 导出格式：export async function GET(request: NextRequest) { ... }\n\n## 请求解析\n- JSON body：const body = await request.json()\n- Query params：request.nextUrl.searchParams.get('key')\n- 路径参数：{ params }: { params: Promise<{ id: string }> } 然后 const { id } = await params\n\n## 响应格式\n- 成功：NextResponse.json({ data })\n- 错误：NextResponse.json({ error: '描述' }, { status: 4xx/5xx })\n- 流式：new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } })\n\n## 错误处理\n- 每个 handler 用 try/catch 包裹\n- catch 中记录 console.error()，返回通用错误消息\n- 禁止在错误响应中暴露内部路径或堆栈信息\n- 输入校验在 handler 顶部完成\n\n## 子进程 spawn 规范\n- 必须移除 CLAUDECODE 环境变量\n- 长时间运行的进程使用 detached: true + child.unref()\n- PID 写入 .state/agent-pid\n\n## 文件系统操作\n- 使用 @/lib/project-root 中的路径函数\n- 检查文件存在用 fs.existsSync()\n- 写入文件前确保目录存在"
       },
       {
         "id": "rule-004",
+        "name": "前端测试规范",
+        "category": "frontend",
+        "content": "# 前端测试规范\n\n## 测试框架\n- E2E 测试使用 Playwright\n- 测试文件放在 tests/ 目录，以 .spec.ts 结尾\n\n## 组件测试\n- 每个关键组件应有对应的测试用例\n- 测试文件命名：{ComponentName}.spec.ts\n- 覆盖：正常渲染、交互行为、边界状态\n\n## E2E 测试要求\n- 关键用户流程必须有 E2E 测试覆盖\n- 5 阶段工作流各自的核心路径\n- 测试应独立运行\n\n## 断言规范\n- 使用 Playwright 的 expect() 断言\n- 页面导航后等待元素出现\n- 网络请求验证使用 page.waitForResponse()"
+      },
+      {
+        "id": "rule-005",
+        "name": "命名规范",
+        "category": "frontend",
+        "content": "# 前端命名规范\n\n## 组件命名\n- 使用 PascalCase（ProjectCard.tsx → export function ProjectCard()）\n- 文件名与组件名保持一致\n- 复合组件放在同名子目录中\n- 使用 barrel exports（index.ts）\n\n## Props 接口命名\n- 使用 {ComponentName}Props 格式\n- 在组件文件内定义，使用 export interface\n\n## Hooks 命名\n- 统一使用 use 前缀 + camelCase\n- 通过 hooks/index.ts 统一导出\n\n## Context 命名\n- Context 使用 PascalCase\n- Provider 使用 {Name}Provider\n- 消费 hook 使用 use{Name}\n\n## 变量命名\n- 变量和函数使用 camelCase\n- 常量使用 UPPER_CASE\n- 布尔变量使用 is/has/should 前缀\n\n## TypeScript 类型\n- 对象形状使用 interface（首选）\n- 联合类型使用 type\n- 类型守卫使用 is{TypeName} 命名"
+      },
+      {
+        "id": "rule-006",
+        "name": "样式规范",
+        "category": "frontend",
+        "content": "# 前端样式规范\n\n## 设计理念：岩石色系 (Rock Palette)\n- 黑白灰为主的单色系\n- 按钮全部黑色（bg-neutral-900 text-white）\n- 彩色仅用于状态指示（成功绿/错误红/警告琥珀）\n- 禁用彩色按钮（bg-blue-600 等）\n\n## Tailwind CSS 优先\n- 所有样式必须使用 Tailwind 工具类\n- 不使用 CSS Modules 或 styled-components\n\n## 主色系：neutral\n- 纯黑 neutral-900、深灰 neutral-600、中灰 neutral-500\n- 浅灰 neutral-400、边框 neutral-200、浅底色 neutral-100、背景 neutral-50\n\n## 按钮样式\n- 主按钮：bg-neutral-900 text-white hover:bg-neutral-800\n- 次按钮：border border-neutral-300 text-neutral-700 bg-white\n- 危险按钮：bg-red-600 text-white（唯一允许的彩色按钮）\n- 幽灵按钮：text-neutral-600 hover:text-neutral-900\n\n## 弹窗/对话框\n- 所有弹窗和下拉框必须使用白色背景（bg-white）\n- 遮罩层：bg-black/50\n\n## 图标\n- 使用内联 SVG，不使用图标库\n- 标准尺寸：w-4 h-4（小）、w-5 h-5（中）、w-6 h-6（大）"
+      },
+      {
+        "id": "rule-007",
         "name": "测试用例规范",
         "category": "testing",
-        "content": "# 测试用例规范\n\n## 测试命名\n- 使用 describe 描述测试套件\n- 使用 it 描述具体测试用例\n\n## 测试覆盖\n- 单元测试覆盖率 > 80%\n- 关键路径必须有 E2E 测试"
+        "content": "# 测试用例规范\n\n## 测试命名\n- 使用 describe 描述测试套件\n- 使用 it 或 test 描述具体行为\n- 文件命名：{feature}.spec.ts\n\n## 测试覆盖要求\n- 单元测试覆盖率 > 80%\n- 每个 API 端点至少一个正常路径 + 一个错误路径测试\n- 关键用户流程必须有 E2E 测试\n\n## E2E 测试（Playwright）\n- 每个 Stage 的核心流程需覆盖\n- Stage 1：模式选择 → 问答 → PRD 生成 → 保存\n- Stage 2：规范选择 → PRD 转 JSON\n- Stage 3：Agent 启动 → 状态监控 → Agent 停止\n- Stage 5：代码审查 → 合并\n\n## API 测试模式\n- 成功路径 + 错误路径\n- 使用固定的测试数据\n\n## 断言规范\n- 优先使用 Playwright 内置断言\n- 避免 sleep/固定等待，使用条件等待\n- Typecheck 必须通过：npx tsc --noEmit"
       }
     ],
     "ruleAuditSummary": ""
@@ -35,8 +53,8 @@
   "devTasks": [
     {
       "id": "DT-001",
-      "title": "新建 GET /api/files/md 端点 — 扫描项目 .md 文件列表",
-      "prdSection": "7.1 (L20-27)",
+      "title": "更新 ConstitutionRule TypeScript 类型",
+      "prdSection": "7.1 (L172-221)",
       "priority": 1,
       "passes": true,
       "dependsOn": [],
@@ -45,14 +63,21 @@
           "type": "code-based",
           "blocking": true,
           "description": "Typecheck passes",
-          "command": "cd viewer && npx tsc --noEmit",
+          "command": "npx tsc --noEmit",
           "expect": "exit-0"
         },
         {
           "type": "code-based",
           "blocking": true,
-          "description": "API route file exists",
-          "command": "test -f viewer/src/app/api/files/md/route.ts",
+          "description": "ConstitutionRule has file field",
+          "command": "grep -q 'file: string' viewer/src/lib/tool-types.ts",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "ConstitutionRule has checklist field",
+          "command": "grep -q 'checklist: string' viewer/src/lib/tool-types.ts",
           "expect": "exit-0"
         }
       ],
@@ -62,8 +87,8 @@
     },
     {
       "id": "DT-002",
-      "title": "新建 ImportPrdDialog 组件 — 文件列表+搜索+预览+导入",
-      "prdSection": "7.1 (L29-37)",
+      "title": "更新 Viewer merge route — file+checklist + 规范融合写回",
+      "prdSection": "7.1 (L172-221)",
       "priority": 2,
       "passes": true,
       "dependsOn": ["DT-001"],
@@ -72,14 +97,42 @@
           "type": "code-based",
           "blocking": true,
           "description": "Typecheck passes",
-          "command": "cd viewer && npx tsc --noEmit",
+          "command": "npx tsc --noEmit",
           "expect": "exit-0"
         },
         {
           "type": "code-based",
           "blocking": true,
-          "description": "ImportPrdDialog component exists",
-          "command": "test -f viewer/src/components/ImportPrdDialog.tsx",
+          "description": "merge route exists",
+          "command": "test -f viewer/src/app/api/prd/merge/route.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "unit", "desc": "merge route 写入 file+checklist 而非 content", "tdd": true }
+      ]
+    },
+    {
+      "id": "DT-003",
+      "title": "更新 review-summary route 适配新 schema",
+      "prdSection": "7.1 (L172-221)",
+      "priority": 3,
+      "passes": true,
+      "dependsOn": ["DT-001"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "review-summary route exists",
+          "command": "test -f viewer/src/app/api/review-summary/route.ts",
           "expect": "exit-0"
         }
       ],
@@ -88,24 +141,226 @@
       ]
     },
     {
-      "id": "DT-003",
-      "title": "Dashboard 集成导入按钮 + 空状态清理 + Stage1 URL 参数",
-      "prdSection": "7.1 (L39-47)",
-      "priority": 3,
-      "passes": true,
-      "dependsOn": ["DT-002"],
+      "id": "DT-004",
+      "title": "PRD2JSON SKILL — 规范融合 + checklist 模式",
+      "prdSection": "7.2 (L222-309)",
+      "priority": 4,
+      "passes": false,
+      "dependsOn": ["DT-001"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "PRD2JSON SKILL contains fusion section",
+          "command": "grep -q '规范融合' skills/BotoolAgent/PRD2JSON/SKILL.md",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "PRD2JSON SKILL contains checklist",
+          "command": "grep -q 'checklist' skills/BotoolAgent/PRD2JSON/SKILL.md",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "manual", "desc": "审查 SKILL.md 规范融合规则和 checklist 生成逻辑" }
+      ]
+    },
+    {
+      "id": "DT-005",
+      "title": "PRD2JSON SKILL — 新增 steps 字段生成",
+      "prdSection": "7.2 (L222-309)",
+      "priority": 5,
+      "passes": false,
+      "dependsOn": ["DT-004"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "PRD2JSON SKILL contains steps field",
+          "command": "grep -q 'steps' skills/BotoolAgent/PRD2JSON/SKILL.md",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "manual", "desc": "审查 steps 字段生成规则和颗粒度标准" }
+      ]
+    },
+    {
+      "id": "DT-006",
+      "title": "CLAUDE.lead.md — 新增「验证铁律」",
+      "prdSection": "7.3 (L310-410)",
+      "priority": 6,
+      "passes": false,
+      "dependsOn": ["DT-005"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "CLAUDE.lead.md contains verification iron law",
+          "command": "grep -q '验证铁律' CLAUDE.lead.md",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "manual", "desc": "审查验证铁律章节位置和禁止行为列表" }
+      ]
+    },
+    {
+      "id": "DT-007",
+      "title": "CLAUDE.lead.md — 新增「DT 双阶段 Review」",
+      "prdSection": "7.3 (L310-410)",
+      "priority": 7,
+      "passes": false,
+      "dependsOn": ["DT-006"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "CLAUDE.lead.md contains dual-stage review",
+          "command": "grep -q 'Stage A' CLAUDE.lead.md && grep -q 'Stage B' CLAUDE.lead.md",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Constitution checklist check included",
+          "command": "grep -q 'constitution checklist' CLAUDE.lead.md || grep -q 'checklist' CLAUDE.lead.md",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "manual", "desc": "审查 Spec Review + Quality Check 流程" }
+      ]
+    },
+    {
+      "id": "DT-008",
+      "title": "CLAUDE.lead.md — 升级 Teammate prompt 模板",
+      "prdSection": "7.3 (L310-410)",
+      "priority": 8,
+      "passes": false,
+      "dependsOn": ["DT-005", "DT-007"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Teammate prompt references prdSection",
+          "command": "grep -q 'prdSection' CLAUDE.lead.md",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Teammate prompt references steps",
+          "command": "grep -q 'steps' CLAUDE.lead.md",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "manual", "desc": "审查 Teammate prompt 的 steps 模式和旧模式分支" }
+      ]
+    },
+    {
+      "id": "DT-009",
+      "title": "CLAUDE.lead.md — 升级验收流程",
+      "prdSection": "7.3 (L310-410)",
+      "priority": 9,
+      "passes": false,
+      "dependsOn": ["DT-007"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Acceptance flow includes independent verification",
+          "command": "grep -q 'passes: true' CLAUDE.lead.md",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "manual", "desc": "审查验收流程包含独立验证 + Review + passes:true 路径" }
+      ]
+    },
+    {
+      "id": "DT-010",
+      "title": "Testing SKILL — Ralph 循环加入根因分析",
+      "prdSection": "7.4 (L411-444)",
+      "priority": 10,
+      "passes": false,
+      "dependsOn": [],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Testing SKILL contains root cause analysis",
+          "command": "grep -q '根因分析' skills/BotoolAgent/Testing/SKILL.md || grep -q '信号清晰' skills/BotoolAgent/Testing/SKILL.md",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "manual", "desc": "审查信号清晰度分档和三阶段根因分析流程" }
+      ]
+    },
+    {
+      "id": "DT-011",
+      "title": "PyramidPRD SKILL — 新增 L0 方向探索层",
+      "prdSection": "7.5 (L445-473)",
+      "priority": 11,
+      "passes": false,
+      "dependsOn": [],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "PyramidPRD SKILL contains L0 section",
+          "command": "grep -q 'L0' skills/BotoolAgent/PyramidPRD/SKILL.md || grep -q '方向探索' skills/BotoolAgent/PyramidPRD/SKILL.md",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "manual", "desc": "审查 L0 章节位置和 2-3 个 AskUserQuestion 设计" }
+      ]
+    },
+    {
+      "id": "DT-012",
+      "title": "PyramidPRD SKILL — 快速模式适配 checklist",
+      "prdSection": "7.5 (L445-473)",
+      "priority": 12,
+      "passes": false,
+      "dependsOn": ["DT-001"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "PyramidPRD SKILL handles checklist in quick mode",
+          "command": "grep -q 'checklist' skills/BotoolAgent/PyramidPRD/SKILL.md",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "manual", "desc": "审查快速模式的 file+checklist 处理逻辑" }
+      ]
+    },
+    {
+      "id": "DT-013",
+      "title": "端到端验证 — 全流程协同测试",
+      "prdSection": "7.6 (L474-488)",
+      "priority": 13,
+      "passes": false,
+      "dependsOn": ["DT-001", "DT-002", "DT-003", "DT-004", "DT-005", "DT-006", "DT-007", "DT-008", "DT-009", "DT-010", "DT-011", "DT-012"],
       "evals": [
         {
           "type": "code-based",
           "blocking": true,
           "description": "Typecheck passes",
-          "command": "cd viewer && npx tsc --noEmit",
+          "command": "npx tsc --noEmit",
           "expect": "exit-0"
         }
       ],
       "testCases": [
-        { "type": "typecheck", "desc": "TypeScript 编译通过" },
-        { "type": "manual", "desc": "Dashboard 显示导入按钮，空状态无多余 action 按钮，Stage1 支持 URL 参数自动进入 transform 模式" }
+        { "type": "e2e", "desc": "用现有 PRD 重新生成 prd.json 确认 <30KB" },
+        { "type": "manual", "desc": "确认 Viewer Stage 2 页面正常显示" },
+        { "type": "manual", "desc": "确认旧 prd.json 仍可被处理" }
       ]
     }
   ],
@@ -113,7 +368,27 @@
     {
       "id": "S1",
       "tasks": ["DT-001", "DT-002", "DT-003"],
-      "reason": "单一 Phase，DT-001→DT-002→DT-003 有依赖链"
+      "reason": "Phase 1: 基础设施 — TypeScript 类型 + Viewer API 适配，有依赖关系"
+    },
+    {
+      "id": "S2",
+      "tasks": ["DT-004", "DT-005"],
+      "reason": "Phase 2: PRD2JSON SKILL 升级 — 规范融合 + steps 字段，同一文件"
+    },
+    {
+      "id": "S3",
+      "tasks": ["DT-006", "DT-007", "DT-008", "DT-009"],
+      "reason": "Phase 3: Lead Agent 升级 — 验证铁律 + Review + Teammate prompt，同一文件"
+    },
+    {
+      "id": "S4",
+      "tasks": ["DT-010", "DT-011", "DT-012"],
+      "reason": "Phase 4+5: Testing + PyramidPRD SKILL 升级，可与 S3 并行执行"
+    },
+    {
+      "id": "S5",
+      "tasks": ["DT-013"],
+      "reason": "Phase 6: 端到端验证，需全部前置任务完成"
     }
   ]
 }
