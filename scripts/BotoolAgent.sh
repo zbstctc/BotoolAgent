@@ -211,17 +211,38 @@ echo ""
 # 清理残留进程（防止僵尸 BotoolAgent.sh 进程累积）
 # ============================================================================
 MY_PID=$$
-STALE_PIDS=$(pgrep -f "bash.*BotoolAgent\.sh" 2>/dev/null | grep -v "^${MY_PID}$" || true)
-if [ -n "$STALE_PIDS" ]; then
-  echo ">>> 检测到残留 BotoolAgent 进程，正在清理..."
-  for pid in $STALE_PIDS; do
-    # 跳过自身的父进程链
-    if [ "$pid" != "$MY_PID" ] && [ "$pid" != "$PPID" ]; then
-      echo "    终止 PID $pid"
-      kill "$pid" 2>/dev/null || true
-    fi
-  done
-  sleep 1
+if [ -n "$PROJECT_ID" ]; then
+  # Project-aware 模式：只清理匹配当前 PROJECT_ID 的 BotoolAgent.sh 进程
+  # 避免在并发运行多个项目时误杀其他项目的进程
+  STALE_PIDS=$(pgrep -f "BotoolAgent\.sh.*--project-id[[:space:]]+${PROJECT_ID}\b" 2>/dev/null | grep -v "^${MY_PID}$" || true)
+  if [ -z "$STALE_PIDS" ]; then
+    # 备选匹配：通过 prd-path 中的 project-id 目录名匹配
+    STALE_PIDS=$(pgrep -f "BotoolAgent\.sh.*/${PROJECT_ID}/" 2>/dev/null | grep -v "^${MY_PID}$" || true)
+  fi
+  if [ -n "$STALE_PIDS" ]; then
+    echo ">>> 检测到项目 ${PROJECT_ID} 的残留 BotoolAgent 进程，正在清理..."
+    for pid in $STALE_PIDS; do
+      if [ "$pid" != "$MY_PID" ] && [ "$pid" != "$PPID" ]; then
+        echo "    终止 PID $pid"
+        kill "$pid" 2>/dev/null || true
+      fi
+    done
+    sleep 1
+  fi
+else
+  # 无 PROJECT_ID 时保持原有行为（单项目向后兼容：清理所有残留进程）
+  STALE_PIDS=$(pgrep -f "bash.*BotoolAgent\.sh" 2>/dev/null | grep -v "^${MY_PID}$" || true)
+  if [ -n "$STALE_PIDS" ]; then
+    echo ">>> 检测到残留 BotoolAgent 进程，正在清理..."
+    for pid in $STALE_PIDS; do
+      # 跳过自身的父进程链
+      if [ "$pid" != "$MY_PID" ] && [ "$pid" != "$PPID" ]; then
+        echo "    终止 PID $pid"
+        kill "$pid" 2>/dev/null || true
+      fi
+    done
+    sleep 1
+  fi
 fi
 
 # ============================================================================
