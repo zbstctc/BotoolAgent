@@ -268,10 +268,8 @@ export async function GET(request: NextRequest) {
   const stream = url.searchParams.get('stream') === 'true';
   const rawProjectId = url.searchParams.get('projectId');
 
-  // Validate projectId
-  if (rawProjectId && !/^[a-zA-Z0-9_-]+$/.test(rawProjectId)) {
-    return NextResponse.json({ error: 'Invalid projectId' }, { status: 400 });
-  }
+  // normalizeProjectId guards against path traversal; no ASCII-only restriction
+  // so that Chinese / Unicode project names work correctly.
   const projectId = normalizeProjectId(rawProjectId);
 
   if (!stream) {
@@ -372,10 +370,6 @@ export async function DELETE(request: NextRequest) {
     const url = new URL(request.url);
     const rawProjectId = url.searchParams.get('projectId');
 
-    // Validate projectId
-    if (rawProjectId && !/^[a-zA-Z0-9_-]+$/.test(rawProjectId)) {
-      return NextResponse.json({ error: 'Invalid projectId' }, { status: 400 });
-    }
     const projectId = normalizeProjectId(rawProjectId);
 
     const pidFile = getAgentPidPath(projectId);

@@ -157,7 +157,8 @@ function Stage4PageContent() {
   // Stop testing
   const handleStopTesting = useCallback(async () => {
     try {
-      await fetch('/api/agent/status', { method: 'DELETE' });
+      const params = projectId ? `?projectId=${projectId}` : '';
+      await fetch(`/api/agent/status${params}`, { method: 'DELETE' });
       setTestingStatus('idle');
       setStatusMessage('Testing stopped');
       if (eventSourceRef.current) {
@@ -166,7 +167,7 @@ function Stage4PageContent() {
     } catch {
       // Ignore
     }
-  }, []);
+  }, [projectId]);
 
   // Navigation
   const handleProceedToStage5 = useCallback(() => {
