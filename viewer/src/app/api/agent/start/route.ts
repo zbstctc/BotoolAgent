@@ -3,12 +3,9 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
-import { getProjectRoot, getProjectPrdJsonPath, getAgentScriptPath, getAgentPidPath, getAgentStatusPath, isPortableMode } from '@/lib/project-root';
+import { getProjectRoot, getProjectPrdJsonPath, getAgentScriptPath, getAgentPidPath, getAgentStatusPath, isPortableMode, normalizeProjectId } from '@/lib/project-root';
 
 const PROJECT_ROOT = getProjectRoot();
-const PID_FILE = getAgentPidPath();
-const STATUS_FILE = getAgentStatusPath();
-const TESTING_LOG_FILE = path.join(path.dirname(STATUS_FILE), 'agent-testing.log');
 
 interface AgentPidInfo {
   pid: number;
@@ -24,10 +21,10 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-function readPidFile(): AgentPidInfo | null {
+function readPidFile(pidFile: string): AgentPidInfo | null {
   try {
-    if (fs.existsSync(PID_FILE)) {
-      return JSON.parse(fs.readFileSync(PID_FILE, 'utf-8'));
+    if (fs.existsSync(pidFile)) {
+      return JSON.parse(fs.readFileSync(pidFile, 'utf-8'));
     }
   } catch {
     // Ignore
@@ -35,25 +32,26 @@ function readPidFile(): AgentPidInfo | null {
   return null;
 }
 
-function writePidFile(pid: number): void {
+function writePidFile(pid: number, pidFile: string): void {
   const info: AgentPidInfo = {
     pid,
     startedAt: new Date().toISOString(),
   };
-  fs.writeFileSync(PID_FILE, JSON.stringify(info, null, 2));
+  fs.mkdirSync(path.dirname(pidFile), { recursive: true });
+  fs.writeFileSync(pidFile, JSON.stringify(info, null, 2));
 }
 
-function cleanPidFile(): void {
+function cleanPidFile(pidFile: string): void {
   try {
-    if (fs.existsSync(PID_FILE)) {
-      fs.unlinkSync(PID_FILE);
+    if (fs.existsSync(pidFile)) {
+      fs.unlinkSync(pidFile);
     }
   } catch {
     // Ignore
   }
 }
 
-function writeAgentStatus(fields: Record<string, unknown>): void {
+function writeAgentStatus(fields: Record<string, unknown>, statusFile: string): void {
   const status = {
     status: 'idle',
     message: '',
@@ -67,7 +65,8 @@ function writeAgentStatus(fields: Record<string, unknown>): void {
     ...fields,
   };
   try {
-    fs.writeFileSync(STATUS_FILE, JSON.stringify(status, null, 2));
+    fs.mkdirSync(path.dirname(statusFile), { recursive: true });
+    fs.writeFileSync(statusFile, JSON.stringify(status, null, 2));
   } catch {
     // Ignore
   }
@@ -87,7 +86,7 @@ function normalizeTeammateMode(value: unknown): TeammateMode {
   return 'in-process';
 }
 
-function readPRD(projectId?: string): PRDJson | null {
+function readPRD(projectId?: string | null): PRDJson | null {
   try {
     const prdPath = getProjectPrdJsonPath(projectId);
     if (fs.existsSync(prdPath)) {
@@ -102,7 +101,7 @@ function readPRD(projectId?: string): PRDJson | null {
 export async function POST(request: Request) {
   try {
     const requestBody = await request.json().catch(() => ({}));
-    const { mode = 'teams', projectId } = requestBody as {
+    const { mode = 'teams', projectId: rawProjectId } = requestBody as {
       mode?: 'teams' | 'testing';
       projectId?: string;
       maxIterations?: number;
@@ -125,6 +124,17 @@ export async function POST(request: Request) {
       requestBody?.testingTeammateMode || process.env.BOTOOL_TEAMMATE_MODE
     );
 
+    // Validate projectId: only [a-zA-Z0-9_-] allowed
+    if (rawProjectId && !/^[a-zA-Z0-9_-]+$/.test(rawProjectId)) {
+      return NextResponse.json({ error: 'Invalid projectId' }, { status: 400 });
+    }
+    const projectId = normalizeProjectId(rawProjectId);
+
+    // Derive per-project file paths
+    const pidFile = getAgentPidPath(projectId);
+    const statusFile = getAgentStatusPath(projectId);
+    const testingLogFile = path.join(path.dirname(statusFile), 'agent-testing.log');
+
     const PRD_PATH = getProjectPrdJsonPath(projectId);
 
     // Check if prd.json exists (needed for all modes)
@@ -135,8 +145,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if agent is already running (PID lock)
-    const existingPid = readPidFile();
+    // Check if agent is already running (per-project PID lock)
+    const existingPid = readPidFile(pidFile);
     if (existingPid && isProcessAlive(existingPid.pid)) {
       return NextResponse.json(
         {
@@ -149,7 +159,7 @@ export async function POST(request: Request) {
     }
     // Clean stale PID file if process is dead
     if (existingPid) {
-      cleanPidFile();
+      cleanPidFile(pidFile);
     }
 
     // Read PRD to get task info
@@ -197,18 +207,19 @@ export async function POST(request: Request) {
       }
       claudeArgs.push('-p', prompt);
 
-      // Write initial .agent-status so Stage 4 UI can track progress
+      // Write initial status so Stage 4 UI can track progress
       writeAgentStatus({
         status: 'running',
         message: testingUseTeams
           ? `Testing pipeline started (Agent Teams: ${testingTeammateMode})`
           : 'Testing pipeline started (single agent mode)',
         currentTask: 'testing',
-      });
+      }, statusFile);
 
       // Reset testing log for this run
       try {
-        fs.writeFileSync(TESTING_LOG_FILE, '');
+        fs.mkdirSync(path.dirname(testingLogFile), { recursive: true });
+        fs.writeFileSync(testingLogFile, '');
       } catch {
         // Ignore log initialization failures
       }
@@ -229,7 +240,7 @@ export async function POST(request: Request) {
 
       const appendLog = (chunk: string) => {
         try {
-          fs.appendFileSync(TESTING_LOG_FILE, chunk);
+          fs.appendFileSync(testingLogFile, chunk);
         } catch {
           // Ignore log write failures
         }
@@ -256,8 +267,8 @@ export async function POST(request: Request) {
             : tailMessage
               ? `Testing failed (exit code ${code}): ${tailMessage}`
               : `Testing failed (exit code ${code})`,
-        });
-        cleanPidFile();
+        }, statusFile);
+        cleanPidFile(pidFile);
       });
     } else {
       // Coding mode: run BotoolAgent.sh (tmux + Agent Teams)
@@ -265,7 +276,7 @@ export async function POST(request: Request) {
 
       if (!fs.existsSync(SCRIPT_PATH)) {
         return NextResponse.json(
-          { error: 'BotoolAgent.sh not found', path: SCRIPT_PATH },
+          { error: 'BotoolAgent.sh not found' },
           { status: 404 }
         );
       }
@@ -275,6 +286,7 @@ export async function POST(request: Request) {
         args.push('--project-dir', PROJECT_ROOT);
       }
       if (projectId) {
+        args.push('--project-id', projectId);
         args.push('--prd-path', PRD_PATH);
       }
 
@@ -296,9 +308,9 @@ export async function POST(request: Request) {
       child.unref();
     }
 
-    // Write PID lock file
+    // Write per-project PID lock file
     if (child.pid) {
-      writePidFile(child.pid);
+      writePidFile(child.pid, pidFile);
     }
 
     return NextResponse.json({

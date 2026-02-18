@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
+import * as path from 'path';
 import {
   updateTaskHistoryEntry,
   determineStage,
@@ -7,21 +8,17 @@ import {
   type TaskStatus as HistoryTaskStatus,
   type TaskStage,
 } from '@/lib/task-history';
-import { getAgentStatusPath, getProjectPrdJsonPath, getAgentPidPath } from '@/lib/project-root';
-
-// File paths
-const STATUS_FILE = getAgentStatusPath();
-const PID_FILE = getAgentPidPath();
+import { getAgentStatusPath, getProjectPrdJsonPath, getAgentPidPath, getTasksDir, normalizeProjectId } from '@/lib/project-root';
 
 interface AgentPidInfo {
   pid: number;
   startedAt: string;
 }
 
-function readPidFile(): AgentPidInfo | null {
+function readPidFile(pidFile: string): AgentPidInfo | null {
   try {
-    if (fs.existsSync(PID_FILE)) {
-      return JSON.parse(fs.readFileSync(PID_FILE, 'utf-8'));
+    if (fs.existsSync(pidFile)) {
+      return JSON.parse(fs.readFileSync(pidFile, 'utf-8'));
     }
   } catch {
     // Ignore
@@ -38,10 +35,10 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-function cleanPidFile(): void {
+function cleanPidFile(pidFile: string): void {
   try {
-    if (fs.existsSync(PID_FILE)) {
-      fs.unlinkSync(PID_FILE);
+    if (fs.existsSync(pidFile)) {
+      fs.unlinkSync(pidFile);
     }
   } catch {
     // Ignore
@@ -52,16 +49,16 @@ function cleanPidFile(): void {
  * Check if agent process is alive. If status says "running" but process is dead,
  * update status to crashed and clean PID file.
  */
-function checkAndHandleOrphan(status: AgentStatus): AgentStatus {
+function checkAndHandleOrphan(status: AgentStatus, statusFile: string, pidFile: string): AgentStatus {
   const runningStatuses: AgentStatus['status'][] = ['running', 'starting', 'waiting_network', 'iteration_complete'];
   if (!runningStatuses.includes(status.status)) return status;
 
-  const pidInfo = readPidFile();
+  const pidInfo = readPidFile(pidFile);
   if (!pidInfo) return status; // No PID file, can't verify
 
   if (!isProcessAlive(pidInfo.pid)) {
     // Process is dead but status says running → orphan detected
-    cleanPidFile();
+    cleanPidFile(pidFile);
     const crashedStatus: AgentStatus = {
       ...status,
       status: 'error',
@@ -70,7 +67,7 @@ function checkAndHandleOrphan(status: AgentStatus): AgentStatus {
     };
     // Update the status file
     try {
-      fs.writeFileSync(STATUS_FILE, JSON.stringify(crashedStatus, null, 2));
+      fs.writeFileSync(statusFile, JSON.stringify(crashedStatus, null, 2));
     } catch {
       // Ignore write errors
     }
@@ -116,10 +113,10 @@ interface PRDJson {
   devTasks?: Array<{ id: string; passes: boolean }>;
 }
 
-function readStatusFile(): AgentStatus | null {
+function readStatusFile(statusFile: string): AgentStatus | null {
   try {
-    if (fs.existsSync(STATUS_FILE)) {
-      const content = fs.readFileSync(STATUS_FILE, 'utf-8');
+    if (fs.existsSync(statusFile)) {
+      const content = fs.readFileSync(statusFile, 'utf-8');
       return JSON.parse(content);
     }
   } catch {
@@ -238,26 +235,67 @@ function getDefaultStatus(projectId?: string | null): AgentStatus {
   };
 }
 
-// GET: Return current status (non-streaming)
+/**
+ * Scan all project status files under tasks/
+ */
+function scanAllProjectStatuses(): Record<string, AgentStatus> {
+  const results: Record<string, AgentStatus> = {};
+  try {
+    const tasksDir = getTasksDir();
+    const entries = fs.readdirSync(tasksDir, { withFileTypes: true })
+      .filter(d => d.isDirectory());
+    for (const entry of entries) {
+      const projId = entry.name;
+      const statusPath = getAgentStatusPath(projId);
+      if (fs.existsSync(statusPath)) {
+        try {
+          const s = JSON.parse(fs.readFileSync(statusPath, 'utf-8')) as AgentStatus;
+          results[projId] = s;
+        } catch {
+          // Skip invalid status files
+        }
+      }
+    }
+  } catch {
+    // Ignore filesystem errors
+  }
+  return results;
+}
+
+// GET: Return current status (non-streaming or SSE)
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const stream = url.searchParams.get('stream') === 'true';
-  const projectId = url.searchParams.get('projectId') || undefined;
+  const rawProjectId = url.searchParams.get('projectId');
+
+  // Validate projectId
+  if (rawProjectId && !/^[a-zA-Z0-9_-]+$/.test(rawProjectId)) {
+    return NextResponse.json({ error: 'Invalid projectId' }, { status: 400 });
+  }
+  const projectId = normalizeProjectId(rawProjectId);
 
   if (!stream) {
-    // Return current status as JSON, with orphan detection
-    let status = readStatusFile() || getDefaultStatus(projectId);
-    status = checkAndHandleOrphan(status);
+    // No projectId: return all project statuses
+    if (!projectId) {
+      return NextResponse.json(scanAllProjectStatuses());
+    }
+    // With projectId: return single project status with orphan detection
+    const statusFile = getAgentStatusPath(projectId);
+    const pidFile = getAgentPidPath(projectId);
+    let status = readStatusFile(statusFile) || getDefaultStatus(projectId);
+    status = checkAndHandleOrphan(status, statusFile, pidFile);
     return NextResponse.json(status);
   }
 
-  // Stream mode: SSE
+  // Stream mode: SSE (uses per-project paths when projectId provided)
+  const statusFile = getAgentStatusPath(projectId);
+  const pidFile = getAgentPidPath(projectId);
   const encoder = new TextEncoder();
   const { signal } = request;
 
   const responseStream = new ReadableStream({
     start(controller) {
-      let lastStatus = readStatusFile();
+      let lastStatus = readStatusFile(statusFile);
 
       // Send initial status
       const initialStatus = lastStatus || getDefaultStatus(projectId);
@@ -271,11 +309,11 @@ export async function GET(request: NextRequest) {
       // Poll for status changes
       const pollInterval = setInterval(() => {
         try {
-          let currentStatus = readStatusFile();
+          let currentStatus = readStatusFile(statusFile);
 
           // Orphan detection: check if process is still alive
           if (currentStatus) {
-            currentStatus = checkAndHandleOrphan(currentStatus);
+            currentStatus = checkAndHandleOrphan(currentStatus, statusFile, pidFile);
           }
 
           // Check if status file changed
@@ -329,12 +367,23 @@ export async function GET(request: NextRequest) {
 }
 
 // DELETE: Stop the agent (kill the process)
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   try {
+    const url = new URL(request.url);
+    const rawProjectId = url.searchParams.get('projectId');
+
+    // Validate projectId
+    if (rawProjectId && !/^[a-zA-Z0-9_-]+$/.test(rawProjectId)) {
+      return NextResponse.json({ error: 'Invalid projectId' }, { status: 400 });
+    }
+    const projectId = normalizeProjectId(rawProjectId);
+
+    const pidFile = getAgentPidPath(projectId);
+    const statusFile = getAgentStatusPath(projectId);
     const killedPids: number[] = [];
 
     // Prefer PID lock file to avoid killing unrelated Claude processes.
-    const pidInfo = readPidFile();
+    const pidInfo = readPidFile(pidFile);
     if (pidInfo?.pid && isProcessAlive(pidInfo.pid)) {
       try {
         process.kill(pidInfo.pid, 'SIGTERM');
@@ -355,11 +404,11 @@ export async function DELETE() {
       }
     } else if (pidInfo) {
       // Stale PID lock.
-      cleanPidFile();
+      cleanPidFile(pidFile);
     }
 
-    // Fallback if PID lock is missing: only target BotoolAgent script process.
-    if (killedPids.length === 0) {
+    // Fallback if PID lock is missing and no projectId (legacy mode only).
+    if (killedPids.length === 0 && !projectId) {
       try {
         const { exec } = await import('child_process');
         const { promisify } = await import('util');
@@ -385,24 +434,30 @@ export async function DELETE() {
       }
     }
 
-    // Best-effort tmux session cleanup.
+    // Tmux session cleanup (per-project or legacy).
     try {
       const { exec } = await import('child_process');
       const { promisify } = await import('util');
       const execAsync = promisify(exec);
-      await execAsync("tmux kill-session -t botool-teams 2>/dev/null || true");
+      const sessionName = projectId ? `botool-teams-${projectId}` : 'botool-teams';
+      await execAsync(`tmux kill-session -t ${sessionName} 2>/dev/null || true`);
     } catch {
       // Ignore tmux cleanup errors
     }
 
-    cleanPidFile();
+    cleanPidFile(pidFile);
 
     const stoppedStatus: AgentStatus = {
-      ...getDefaultStatus(),
+      ...getDefaultStatus(projectId),
       status: 'idle',
       message: 'Agent stopped by user',
     };
-    fs.writeFileSync(STATUS_FILE, JSON.stringify(stoppedStatus, null, 2));
+    try {
+      fs.mkdirSync(path.dirname(statusFile), { recursive: true });
+      fs.writeFileSync(statusFile, JSON.stringify(stoppedStatus, null, 2));
+    } catch {
+      // Ignore write errors
+    }
 
     return NextResponse.json({
       success: true,
