@@ -339,6 +339,7 @@ start_session() {
 # ============================================================================
 CURRENT_ROUND=0
 WALL_START=$(date +%s)
+FINAL_STATUS_SET=false
 
 for CURRENT_ROUND in $(seq 1 $MAX_ROUNDS); do
   # 0. 全局超时检测（防止无限运行）
@@ -347,6 +348,7 @@ for CURRENT_ROUND in $(seq 1 $MAX_ROUNDS); do
   if [ "$wall_elapsed" -ge "$MAX_WALL_TIME" ]; then
     echo ">>> 达到全局超时限制（${MAX_WALL_TIME}秒 / $(( MAX_WALL_TIME / 3600 ))小时），停止运行"
     update_status "wall_timeout" "全局超时（${wall_elapsed}秒），轮次 $CURRENT_ROUND/$MAX_ROUNDS"
+    FINAL_STATUS_SET=true
     break
   fi
 
@@ -385,12 +387,14 @@ for CURRENT_ROUND in $(seq 1 $MAX_ROUNDS); do
 done
 
 # ============================================================================
-# 最终状态
+# 最终状态（跳过如果 wall_timeout 已设置）
 # ============================================================================
-if check_all_tasks_complete; then
-  update_status "complete" "所有任务已完成（轮次 $CURRENT_ROUND/$MAX_ROUNDS）"
-  echo ">>> BotoolAgent 已完成所有任务"
-else
-  update_status "max_rounds" "达到最大轮次 $MAX_ROUNDS，仍有未完成任务"
-  echo ">>> 达到最大轮次限制。请查看 progress.txt 了解状态。"
+if [ "$FINAL_STATUS_SET" = "false" ]; then
+  if check_all_tasks_complete; then
+    update_status "complete" "所有任务已完成（轮次 $CURRENT_ROUND/$MAX_ROUNDS）"
+    echo ">>> BotoolAgent 已完成所有任务"
+  else
+    update_status "max_rounds" "达到最大轮次 $MAX_ROUNDS，仍有未完成任务"
+    echo ">>> 达到最大轮次限制。请查看 progress.txt 了解状态。"
+  fi
 fi

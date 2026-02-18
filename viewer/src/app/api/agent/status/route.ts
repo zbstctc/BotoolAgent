@@ -53,7 +53,7 @@ function cleanPidFile(): void {
  * update status to crashed and clean PID file.
  */
 function checkAndHandleOrphan(status: AgentStatus): AgentStatus {
-  const runningStatuses: AgentStatus['status'][] = ['running', 'waiting_network', 'iteration_complete'];
+  const runningStatuses: AgentStatus['status'][] = ['running', 'starting', 'waiting_network', 'iteration_complete'];
   if (!runningStatuses.includes(status.status)) return status;
 
   const pidInfo = readPidFile();
@@ -81,7 +81,7 @@ function checkAndHandleOrphan(status: AgentStatus): AgentStatus {
 }
 
 interface AgentStatus {
-  status: 'idle' | 'running' | 'waiting_network' | 'timeout' | 'error' | 'failed' | 'complete' | 'iteration_complete' | 'max_iterations';
+  status: 'idle' | 'running' | 'starting' | 'waiting_network' | 'timeout' | 'error' | 'failed' | 'stopped' | 'complete' | 'iteration_complete' | 'session_done' | 'max_iterations' | 'max_rounds' | 'wall_timeout';
   message: string;
   timestamp: string;
   iteration: number;
@@ -179,15 +179,20 @@ function syncTaskHistory(agentStatus: AgentStatus, projectId?: string | null): v
 
     switch (agentStatus.status) {
       case 'complete':
+      case 'session_done':
         historyStatus = determineTaskStatus(baseStatus, false, tasksCompleted, tasksTotal);
         endTime = new Date().toISOString();
         break;
       case 'failed':
       case 'error':
+      case 'stopped':
         historyStatus = 'failed';
         endTime = new Date().toISOString();
         break;
       case 'max_iterations':
+      case 'max_rounds':
+      case 'wall_timeout':
+      case 'timeout':
         historyStatus = tasksCompleted === tasksTotal ? 'waiting_merge' : 'partial';
         endTime = new Date().toISOString();
         break;
@@ -195,6 +200,7 @@ function syncTaskHistory(agentStatus: AgentStatus, projectId?: string | null): v
         // Don't update on idle
         return;
       default:
+        // running, starting, waiting_network, iteration_complete
         historyStatus = 'running';
     }
 

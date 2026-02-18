@@ -102,6 +102,9 @@ function Stage1PageContent() {
   const [cliSessionId, setCliSessionId] = useState<string | undefined>(undefined);
   // Track if we've restored state (use ref to avoid re-renders)
   const hasRestoredStateRef = useRef(false);
+  // Ref for selectedMode to avoid stale closure in handleToolUse callback
+  const selectedModeRef = useRef(selectedMode);
+  selectedModeRef.current = selectedMode;
 
   // Storage key for this project's pyramid state
   const storageKey = sessionId ? `botool-pyramid-state-${sessionId}` : null;
@@ -247,7 +250,7 @@ function Stage1PageContent() {
 
         // Transform mode: infer correct level from metadata.transformPhase or question content
         // The AI sometimes sends incorrect level metadata in transform mode
-        if (selectedMode === 'transform') {
+        if (selectedModeRef.current === 'transform') {
           const questionText = input.questions.map(q => q.question).join(' ');
 
           if (metadata.transformPhase === 'gap-analysis' || questionText.includes('覆盖度') || questionText.includes('覆盖') || questionText.includes('coverage')) {
@@ -290,8 +293,7 @@ function Stage1PageContent() {
         setCompletedLevels(completed);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedMode]);
+  }, []);
 
   // CLI Chat hook
   const {
@@ -427,7 +429,7 @@ function Stage1PageContent() {
     // The CLI will resume from the saved session if cliSessionId is set
     const resumeMessage = currentLevel === 5 && completedLevels.includes(5)
       ? '请生成 PRD 文档'
-      : `请继续 ${selectedMode === 'transform' ? 'T' : 'L'}${currentLevel} 的问答`;
+      : `请继续 ${selectedModeRef.current === 'transform' ? 'T' : 'L'}${currentLevel} 的问答`;
     sendMessage(resumeMessage);
   }, [isStarted, isLoading, currentLevel, completedLevels, sendMessage]);
 
@@ -602,7 +604,7 @@ function Stage1PageContent() {
     try {
       // Build save payload with optional source context for transform mode
       const savePayload: Record<string, string | undefined> = { content: prdDraft };
-      if (selectedMode === 'transform' && urlFile) {
+      if (selectedModeRef.current === 'transform' && urlFile) {
         savePayload.sourceFilePath = urlFile;
         // Derive markerId from urlFile: strip directory, strip prd- prefix, strip .md
         const base = urlFile.split('/').pop()?.replace(/\.md$/, '') || '';
@@ -634,13 +636,13 @@ function Stage1PageContent() {
     } finally {
       setIsSaving(false);
     }
-  }, [prdDraft, isSaving, activeProject, updateProject]);
+  }, [prdDraft, isSaving, activeProject, updateProject, urlFile]);
 
   // Handle transition
   const handleTransitionConfirm = useCallback(() => {
-    const modeParam = selectedMode ? `&mode=${selectedMode}` : '';
+    const modeParam = selectedModeRef.current ? `&mode=${selectedModeRef.current}` : '';
     router.push(`/stage2?prd=${savedPrdId}${modeParam}`);
-  }, [router, savedPrdId, selectedMode]);
+  }, [router, savedPrdId]);
 
   const handleTransitionLater = useCallback(() => {
     setShowTransitionModal(false);

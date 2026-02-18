@@ -172,6 +172,71 @@ function mergeEnrichedPrdJson(
 }
 
 // ============================================================================
+// 从 content 自动提取 checklist（兼容旧模式：前端只传 content 时自动补全）
+// ============================================================================
+
+const CHECKLIST_HEADING_PATTERNS = /核心规则|检查项|规范|checklist|要点|must|required|必须/i;
+
+function deriveChecklistFromContent(content: string): string[] {
+  const lines = content.split('\n');
+  const items: string[] = [];
+  let inRelevantSection = false;
+
+  for (const line of lines) {
+    // Detect relevant headings
+    if (/^#{1,4}\s/.test(line) && CHECKLIST_HEADING_PATTERNS.test(line)) {
+      inRelevantSection = true;
+      continue;
+    }
+    // Exit section at next heading
+    if (/^#{1,4}\s/.test(line)) {
+      inRelevantSection = false;
+      continue;
+    }
+    // Collect list items (- xxx or * xxx or 1. xxx)
+    const listMatch = line.match(/^\s*[-*]\s+(.+)/) || line.match(/^\s*\d+\.\s+(.+)/);
+    if (listMatch && listMatch[1].length > 4 && listMatch[1].length < 120) {
+      // Prefer items from relevant sections, but also collect top-level items
+      if (inRelevantSection || /^[-*]\s/.test(line)) {
+        items.push(listMatch[1].trim());
+      }
+    }
+  }
+
+  // Return up to 8 items, prioritizing shorter actionable items
+  return items
+    .sort((a, b) => a.length - b.length)
+    .slice(0, 8);
+}
+
+function deriveFileFromRule(rule: RuleInput): string {
+  if (rule.file) return rule.file;
+  // Derive from category/name: rules/{category}/{name}.md
+  const cat = rule.category.toLowerCase().replace(/\s+/g, '-');
+  const name = rule.name.replace(/\s+/g, '-');
+  return `rules/${cat}/${name}.md`;
+}
+
+/**
+ * Ensure each rule has file + checklist populated.
+ * If frontend only sent content (old mode), auto-derive these fields.
+ */
+function ensureRuleFields(rules: RuleInput[]): RuleInput[] {
+  return rules.map((rule) => {
+    const hasChecklist = rule.checklist && rule.checklist.length > 0;
+    return {
+      ...rule,
+      file: rule.file || deriveFileFromRule(rule),
+      checklist: hasChecklist
+        ? rule.checklist
+        : rule.content
+          ? deriveChecklistFromContent(rule.content)
+          : [],
+    };
+  });
+}
+
+// ============================================================================
 // 规范融合 — 将规范 checklist 注入 PRD.md §7 (best-effort)
 // ============================================================================
 
@@ -293,23 +358,42 @@ async function fuseRulesIntoPrdMd(
       const phaseText = lines.slice(i, phaseTextEnd).join(' ');
       const phaseRules = matchRulesForText(phaseText);
 
-      // Skip existing fusion markers (re-run safety: remove old injections)
-      while (i < section7End && /^>\s*\*\*适用规范\*\*|^>\s*\*\*规范要点\*\*|^>\s*-\s/.test(lines[i])) {
-        // Skip old injected blockquote lines
-        if (/^>\s*\*\*适用规范\*\*/.test(lines[i]) || /^>\s*\*\*规范要点\*\*/.test(lines[i])) {
-          i++;
-          // Skip continuation blockquote lines ("> - ...")
-          while (i < section7End && /^>\s*-\s/.test(lines[i])) {
+      // Skip existing fusion blocks (re-run safety: remove old injections)
+      // Uses marker comments for robust detection: <!-- botool-rules-begin/end -->
+      while (i < section7End) {
+        if (lines[i].trim() === '' || lines[i].trim() === '<!-- botool-rules-begin -->') {
+          // If we hit a marker, skip until end marker
+          if (lines[i].trim() === '<!-- botool-rules-begin -->') {
+            i++;
+            while (i < section7End && lines[i].trim() !== '<!-- botool-rules-end -->') {
+              i++;
+            }
+            if (i < section7End) i++; // skip end marker
+            continue;
+          }
+          // Also clean up old-style injections (no markers): empty line followed by blockquote
+          if (i + 1 < section7End && /^>\s*\*\*适用规范\*\*/.test(lines[i + 1])) {
+            i++; // skip empty line
+            while (i < section7End && (/^>\s/.test(lines[i]) || lines[i].trim() === '')) {
+              i++;
+            }
+            continue;
+          }
+          break;
+        } else if (/^>\s*\*\*适用规范\*\*/.test(lines[i]) || /^>\s*\*\*规范要点\*\*/.test(lines[i])) {
+          // Old-style injection without preceding empty line
+          while (i < section7End && (/^>\s/.test(lines[i]) || lines[i].trim() === '')) {
             i++;
           }
+          continue;
         } else {
           break;
         }
       }
 
-      // Inject Phase-level rule summary
+      // Inject Phase-level rule summary with markers
       if (phaseRules.length > 0) {
-        output.push('');
+        output.push('<!-- botool-rules-begin -->');
         output.push(`> **适用规范**: ${phaseRules.map((r) => r.name).join(', ')}`);
         // Collect top checklist items as 规范要点 (max 5)
         const keyPoints: string[] = [];
@@ -324,6 +408,7 @@ async function fuseRulesIntoPrdMd(
             output.push(`> - ${point}`);
           }
         }
+        output.push('<!-- botool-rules-end -->');
         output.push('');
       }
 
@@ -430,7 +515,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const safeRules = rules || [];
+    const safeRules = ensureRuleFields(rules || []);
 
     const result = mergeEnrichedPrdJson(basePrdJson, enrichResult || {
       codeExamples: [],
