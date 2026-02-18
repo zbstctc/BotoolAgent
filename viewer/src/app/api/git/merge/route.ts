@@ -3,7 +3,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
-import { getProjectRoot, getProjectPrdJsonPath } from '@/lib/project-root';
+import { getProjectRoot, getProjectPrdJsonPath, getBotoolRoot, normalizeProjectId, getAgentPidPath } from '@/lib/project-root';
 
 const execAsync = promisify(exec);
 
@@ -227,6 +227,34 @@ export async function POST(request: NextRequest) {
         commitSha,
         message: `Successfully merged PR #${prInfo.number} via ${method}${deleteBranch ? ' and deleted branch' : ''}`,
       };
+
+      // Clean up worktree and per-project PID file after successful merge
+      try {
+        const safeId = normalizeProjectId(projectId);
+        if (safeId) {
+          const botoolRoot = getBotoolRoot();
+          // Remove the worktree
+          try {
+            await execAsync(
+              `git worktree remove ${shellQuote(`.worktrees/${safeId}`)} --force`,
+              { cwd: botoolRoot }
+            );
+          } catch (worktreeErr) {
+            console.warn(`[merge] Failed to remove worktree .worktrees/${safeId}:`, worktreeErr);
+          }
+          // Remove the agent-pid file
+          const pidPath = getAgentPidPath(safeId);
+          if (fs.existsSync(pidPath)) {
+            try {
+              fs.unlinkSync(pidPath);
+            } catch (pidErr) {
+              console.warn(`[merge] Failed to delete agent-pid at ${pidPath}:`, pidErr);
+            }
+          }
+        }
+      } catch (cleanupErr) {
+        console.warn('[merge] Worktree cleanup error (non-fatal):', cleanupErr);
+      }
 
       // Update task history to mark as completed (merged)
       const prd = readPRD(projectId);
