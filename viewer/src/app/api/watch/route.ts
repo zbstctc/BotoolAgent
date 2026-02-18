@@ -1,10 +1,11 @@
 import { NextRequest } from 'next/server';
 import * as fs from 'fs';
-import { getProjectPrdJsonPath, getProjectProgressPath } from '@/lib/project-root';
+import { getProjectPrdJsonPath, getProjectProgressPath, getProjectTeammatesPath } from '@/lib/project-root';
 
 interface FileContent {
   prd: string | null;
   progress: string | null;
+  teammates: string | null;
 }
 
 function readFileContent(filePath: string): string | null {
@@ -22,6 +23,7 @@ function getWatchedFiles(projectId?: string | null) {
   return {
     prd: getProjectPrdJsonPath(projectId),
     progress: getProjectProgressPath(projectId),
+    teammates: getProjectTeammatesPath(projectId),
   };
 }
 
@@ -30,6 +32,7 @@ function getFileContents(projectId?: string | null): FileContent {
   return {
     prd: readFileContent(files.prd),
     progress: readFileContent(files.progress),
+    teammates: readFileContent(files.teammates),
   };
 }
 
@@ -73,6 +76,16 @@ export async function GET(request: NextRequest) {
             const event = {
               type: 'progress-update',
               data: currentContents.progress,
+              timestamp: Date.now(),
+            };
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          }
+
+          // Check for changes in teammates.json
+          if (currentContents.teammates !== lastContents.teammates) {
+            const event = {
+              type: 'teammates-update',
+              data: currentContents.teammates,
               timestamp: Date.now(),
             };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));

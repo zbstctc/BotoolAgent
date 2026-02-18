@@ -5,3 +5,5 @@ export type { CliChatMessage, CliChatMode, ToolUse, ConnectionState } from './us
 export { useAgentStatus } from './useAgentStatus';
 export type { AgentStatus, AgentStatusType } from './useAgentStatus';
 export { useProjectValidation } from './useProjectValidation';
+export { useTeammates } from './useTeammates';
+export type { TeammateInfo, UseTeammatesReturn } from './useTeammates';
