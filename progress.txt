@@ -69,3 +69,16 @@
   - BatchTimeline 需在 DT-008 中接收 batches/maxDuration/currentBatchIndex props
   - getTaskStatus 逻辑：passes=false + endTime → failed（可能需要更精确的失败判断）
 ---
+## 2026-02-19 - DT-008
+- 实现了页面集成 + 布局调整
+- 修改文件: viewer/src/app/stage3/page.tsx
+- 中间区域垂直分割: ProgressStrip → BatchPanel → BatchTimeline → Tabs
+- 新增 hooks: useTeammates + useTaskTimings 数据流接入
+- AgentDataPanel 增强: elapsedSeconds, gitStats, avgTaskTime, eta
+- Git 数据轮询改为始终活跃（不依赖 tab 激活）
+- **未来迭代的经验教训：**
+  - agentStartTimeRef 在页面刷新后会重置，未来可考虑从 agent-status 文件读取首次 running 的 timestamp
+  - Next.js 16 移除了 `next lint` 命令，需直接使用 `npx eslint`
+  - formatTime 辅助函数在 ProgressStrip/BatchPanel/BatchTimeline 三处重复，可提取到 lib/utils
+---
+## Session 结束 — 全部 8 个 DT 已完成，Stage 3 Cockpit 重设计全部实现
