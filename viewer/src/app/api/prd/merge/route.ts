@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readFile, writeFile } from 'fs/promises';
+import { readFile, writeFile, rename } from 'fs/promises';
 import { existsSync } from 'fs';
 import * as path from 'path';
 import type {
@@ -398,7 +398,10 @@ async function fuseRulesIntoPrdMd(
 
   const result = output.join('\n');
   if (result !== original) {
-    await writeFile(absolutePath, result, 'utf-8');
+    // Atomic write: tmp file + rename to prevent corruption on crash
+    const tmpPath = absolutePath + '.tmp';
+    await writeFile(tmpPath, result, 'utf-8');
+    await rename(tmpPath, absolutePath);
   }
 }
 

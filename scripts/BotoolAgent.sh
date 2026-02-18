@@ -13,6 +13,7 @@ BOTOOL_TEAMMATE_MODE="${BOTOOL_TEAMMATE_MODE:-in-process}"
 MAX_ROUNDS=20             # Ralph 外循环最大轮次
 ROUND_COOLDOWN=10         # 轮次间冷却（秒）
 STALL_TIMEOUT=900         # 卡住检测超时（秒，默认 15 分钟）
+MAX_WALL_TIME=7200        # 全局最大运行时间（秒，默认 2 小时）
 
 # ============================================================================
 # Signal handler: cleanup tmux session
@@ -178,7 +179,7 @@ echo ""
 # 清理残留进程（防止僵尸 BotoolAgent.sh 进程累积）
 # ============================================================================
 MY_PID=$$
-STALE_PIDS=$(pgrep -f "BotoolAgent.sh" 2>/dev/null | grep -v "^${MY_PID}$" || true)
+STALE_PIDS=$(pgrep -f "bash.*BotoolAgent\.sh" 2>/dev/null | grep -v "^${MY_PID}$" || true)
 if [ -n "$STALE_PIDS" ]; then
   echo ">>> 检测到残留 BotoolAgent 进程，正在清理..."
   for pid in $STALE_PIDS; do
@@ -333,8 +334,18 @@ start_session() {
 # Ralph 外循环: 自动重启 session 直到所有任务完成
 # ============================================================================
 CURRENT_ROUND=0
+WALL_START=$(date +%s)
 
 for CURRENT_ROUND in $(seq 1 $MAX_ROUNDS); do
+  # 0. 全局超时检测（防止无限运行）
+  local_now=$(date +%s)
+  wall_elapsed=$(( local_now - WALL_START ))
+  if [ "$wall_elapsed" -ge "$MAX_WALL_TIME" ]; then
+    echo ">>> 达到全局超时限制（${MAX_WALL_TIME}秒 / $(( MAX_WALL_TIME / 3600 ))小时），停止运行"
+    update_status "wall_timeout" "全局超时（${wall_elapsed}秒），轮次 $CURRENT_ROUND/$MAX_ROUNDS"
+    break
+  fi
+
   # 1. 检查是否还有未完成任务
   if check_all_tasks_complete; then
     echo ">>> 所有任务已完成！"
