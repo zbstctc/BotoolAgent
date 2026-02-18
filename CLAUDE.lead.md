@@ -52,27 +52,40 @@
 ### 多任务批次 → 用 Agent Teams
 
 1. 为每个任务 spawn 一个 teammate（使用 Task 工具）
-2. Teammate prompt 模板：
+2. Teammate prompt 模板（根据任务字段选择模式）：
+
+**模式 A — 有 prdFile + prdSection（slim 模式）：**
 
 ```
 你正在实现 {id}: {title}
 
 上下文获取:
 1. 读取 {prdFile}，跳读 prdSection {prdSection} 对应的章节
-2. 从 Phase 章节提取任务描述、验收条件、文件路径
-3. 如有"对应设计"引用（如 Section 3.X, 4.X），跳读对应设计章节
+2. 从 Phase 章节提取：适用规范、规范要点、任务描述、验收条件（含 [规范] 条目）
+3. 如有"对应设计"引用，跳读对应设计章节
 4. 读取 progress.txt 了解 Codebase Patterns
 
+{如果有 steps 字段}
+按以下步骤顺序执行，不要跳步：
+{steps 逐条列出}
+每完成一步后确认结果再继续。如果某步失败，停下来报告。
+
+{如果没有 steps 字段}
 实现步骤:
 1. 实现功能
-2. npx tsc --noEmit 确认 typecheck 通过
-3. git add <modified files> && git commit -m "feat: {id} - {title}"
-4. git push origin {branchName}
-5. 报告结果（修改了哪些文件、是否通过）
+2. 运行所有验证命令：
+   a. npx tsc --noEmit
+   b. {task.evals 中的其他命令}
+3. 逐条对照验收条件（特别注意 [规范] 前缀的条目）
+   - 如果某条 [规范] 不确定如何实现 → 读取 Phase 头部的规范文件获取详细说明
+   - 修复不符合项
+4. git add <modified files> && git commit -m "feat: {id} - {title}"
+5. git push origin {branchName}
+6. 在报告中包含每个验证命令的完整输出
 ```
 
-**向后兼容**：如果 prd.json 任务中存在 `description`、`acceptanceCriteria`、`spec` 等旧字段，
-Teammate prompt 改为直接使用这些字段，无需跳读 PRD：
+**模式 B — 有 description/acceptanceCriteria（旧 fat 模式，向后兼容）：**
+
 ```
 你正在实现 {id}: {title}
 
@@ -80,17 +93,26 @@ Teammate prompt 改为直接使用这些字段，无需跳读 PRD：
 验收条件: {acceptanceCriteria}
 相关信息: {notes}
 
+{如果有 steps 字段}
+按以下步骤顺序执行，不要跳步：
+{steps 逐条列出}
+每完成一步后确认结果再继续。如果某步失败，停下来报告。
+
+{如果没有 steps 字段}
 步骤:
 1. 读取 progress.txt 了解 Codebase Patterns
 2. 实现功能
-3. npx tsc --noEmit 确认 typecheck 通过
-4. git add <modified files> && git commit -m "feat: {id} - {title}"
-5. git push origin {branchName}
-6. 报告结果（修改了哪些文件、是否通过）
+3. 运行所有验证命令：
+   a. npx tsc --noEmit
+   b. {task.evals 中的其他命令}
+4. 逐条对照验收条件自检
+5. git add <modified files> && git commit -m "feat: {id} - {title}"
+6. git push origin {branchName}
+7. 在报告中包含每个验证命令的完整输出
 ```
 
 3. 等所有 teammate 完成
-4. 验证：typecheck 通过、commit 存在
+4. Lead 独立验证（按「验证铁律」+ 「DT 双阶段 Review」执行）
 5. 更新 `prd.json`（`passes` → `true`）
 6. 更新 `.state/agent-status`
 7. 写 `progress.txt`
