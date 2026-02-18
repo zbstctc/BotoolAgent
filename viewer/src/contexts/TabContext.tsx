@@ -44,10 +44,30 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     };
   }, [tabs, activeTabId]);
 
-  // Sync activeTabId when navigating to Dashboard
+  // Keep a ref of activeTabId so the pathname effect can read it without
+  // adding it as a dependency (avoids potential update cycles).
+  const activeTabIdRef = useRef(activeTabId);
+  useEffect(() => {
+    activeTabIdRef.current = activeTabId;
+  }, [activeTabId]);
+
+  // Sync activeTabId + tab stage from pathname changes
   useEffect(() => {
     if (pathname === '/') {
       setActiveTabId('dashboard');
+      return;
+    }
+
+    // Match /stage{n} pattern (e.g. /stage1, /stage2, ...)
+    const stageMatch = pathname.match(/^\/stage(\d+)/);
+    if (stageMatch) {
+      const stageNum = parseInt(stageMatch[1], 10);
+      const currentActiveId = activeTabIdRef.current;
+      if (currentActiveId && currentActiveId !== 'dashboard') {
+        setTabs((prev) =>
+          prev.map((t) => t.id === currentActiveId ? { ...t, stage: stageNum } : t)
+        );
+      }
     }
   }, [pathname]);
 
