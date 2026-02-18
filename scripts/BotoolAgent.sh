@@ -68,12 +68,16 @@ if [ "$(basename "$SCRIPT_DIR")" = "scripts" ]; then
 fi
 
 # 自动检测项目目录
-# 优先级: --project-dir 参数 > 环境变量 > 自动检测
+# 优先级: --project-dir 参数 > 环境变量 > 调用者 CWD（有 .git）> SCRIPT_DIR
+CALLER_CWD="$(pwd)"
 if [ -z "$PROJECT_DIR" ]; then
   PROJECT_DIR="${BOTOOL_PROJECT_ROOT:-}"
 fi
 if [ -z "$PROJECT_DIR" ]; then
-  if [ -d "$SCRIPT_DIR/.git" ]; then
+  # 优先使用调用者的 CWD（如果它是一个 git 仓库且不是 BotoolAgent 自身）
+  if [ -d "$CALLER_CWD/.git" ] && [ "$CALLER_CWD" != "$SCRIPT_DIR" ]; then
+    PROJECT_DIR="$CALLER_CWD"
+  elif [ -d "$SCRIPT_DIR/.git" ]; then
     PROJECT_DIR="$SCRIPT_DIR"
   elif [ -d "$(dirname "$SCRIPT_DIR")/.git" ]; then
     PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -120,6 +124,9 @@ if [ -n "$PROJECT_ID" ]; then
   # Ensure per-project directory exists
   mkdir -p "$SCRIPT_DIR/tasks/${PROJECT_ID}"
 else
+  # 用项目目录的短 hash 隔离 session name，防止不同项目 session 互相冲突
+  PROJECT_HASH=$(echo "$PROJECT_DIR" | md5 2>/dev/null | cut -c1-6 || echo "$PROJECT_DIR" | md5sum 2>/dev/null | cut -c1-6 || echo "default")
+  SESSION_NAME="botool-teams-${PROJECT_HASH}"
   STATUS_FILE="$SCRIPT_DIR/.state/agent-status"
   PID_FILE="$SCRIPT_DIR/.state/agent-pid"
 fi
@@ -204,7 +211,9 @@ CLAUDE_CMD=$(which claude 2>/dev/null || echo "$HOME/.claude/local/claude")
 echo ">>> 前置检查通过"
 echo "    tmux: $(tmux -V)"
 echo "    claude: $CLAUDE_CMD"
+echo "    项目目录: $PROJECT_DIR"
 echo "    prd.json: $PRD_FILE"
+echo "    session: $SESSION_NAME"
 echo ""
 
 # ============================================================================
@@ -384,10 +393,18 @@ start_session() {
   echo ">>> 等待 Claude CLI 就绪..."
   sleep 8
 
-  # 发送初始 prompt
+  # 验证 tmux pane 的工作目录是否正确
+  PANE_CWD=$(tmux display-message -t "$SESSION_NAME" -p '#{pane_current_path}' 2>/dev/null || echo "")
+  if [ -n "$PANE_CWD" ] && [ "$PANE_CWD" != "$WORK_DIR" ]; then
+    echo ">>> 警告: tmux pane CWD ($PANE_CWD) != 预期目录 ($WORK_DIR)"
+    echo ">>> 这可能导致 Agent 在错误的项目中工作！"
+    echo ">>> 尝试修正..."
+  fi
+
+  # 发送初始 prompt（包含工作目录断言，防止 Agent 跑偏到其他项目）
   tmux send-keys -t "$SESSION_NAME" C-u
   sleep 0.5
-  INITIAL_PROMPT="读取 $SCRIPT_DIR/CLAUDE.lead.md 的全部内容，按照其中的指令执行。"
+  INITIAL_PROMPT="重要：你的工作目录必须是 $WORK_DIR — 先运行 cd $WORK_DIR 并用 pwd 确认，如果不匹配则停止并报错。确认后，读取 $SCRIPT_DIR/CLAUDE.lead.md 的全部内容，按照其中的指令执行。"
   tmux send-keys -t "$SESSION_NAME" "$INITIAL_PROMPT"
   sleep 1
   tmux send-keys -t "$SESSION_NAME" Enter
