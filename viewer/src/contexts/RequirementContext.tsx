@@ -9,8 +9,7 @@ import React, {
   useMemo,
 } from 'react';
 import type { Requirement } from '@/lib/requirement-types';
-
-const LOCAL_STORAGE_KEY = 'botool-requirements-v1';
+import { scopedKey } from '@/lib/workspace-id';
 
 /**
  * Context value interface for RequirementContext
@@ -44,7 +43,7 @@ const RequirementContext = createContext<RequirementContextValue | null>(null);
  */
 function readLocalStorage(): Record<string, Requirement> {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const raw = localStorage.getItem(scopedKey('requirements-v1'));
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, Requirement>;
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
@@ -59,7 +58,7 @@ function readLocalStorage(): Record<string, Requirement> {
  */
 function writeLocalStorage(data: Record<string, Requirement>): void {
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(scopedKey('requirements-v1'), JSON.stringify(data));
   } catch {
     // Silently fail (e.g. private browsing storage quota exceeded)
   }
