@@ -84,9 +84,15 @@ STATUS_FILE="$SCRIPT_DIR/.state/agent-status"
 if [ -n "$PRD_PATH_OVERRIDE" ]; then
   PRD_FILE="$PRD_PATH_OVERRIDE"
   PRD_BASENAME="$(basename "$PRD_PATH_OVERRIDE")"
-  PROGRESS_BASENAME="${PRD_BASENAME/prd-/progress-}"
-  PROGRESS_BASENAME="${PROGRESS_BASENAME/.json/.txt}"
-  PROGRESS_FILE="$(dirname "$PRD_PATH_OVERRIDE")/$PROGRESS_BASENAME"
+  if [ "$PRD_BASENAME" = "prd.json" ]; then
+    # New format: tasks/{id}/prd.json → progress at tasks/{id}/progress.txt
+    PROGRESS_FILE="$(dirname "$PRD_PATH_OVERRIDE")/progress.txt"
+  else
+    # Legacy format: tasks/prd-{id}.json → progress at tasks/progress-{id}.txt
+    PROGRESS_BASENAME="${PRD_BASENAME/prd-/progress-}"
+    PROGRESS_BASENAME="${PROGRESS_BASENAME/.json/.txt}"
+    PROGRESS_FILE="$(dirname "$PRD_PATH_OVERRIDE")/$PROGRESS_BASENAME"
+  fi
 else
   PRD_FILE="$PROJECT_DIR/prd.json"
   PROGRESS_FILE="$PROJECT_DIR/progress.txt"
@@ -252,6 +258,8 @@ start_session() {
   TMUX_ENV="$TMUX_ENV BOTOOL_SCRIPT_DIR=$SCRIPT_DIR"
   TMUX_ENV="$TMUX_ENV BOTOOL_PROJECT_DIR=$PROJECT_DIR"
   TMUX_ENV="$TMUX_ENV BOTOOL_MAX_ROUNDS=$MAX_ROUNDS"
+  TMUX_ENV="$TMUX_ENV BOTOOL_PRD_FILE=$PRD_FILE"
+  TMUX_ENV="$TMUX_ENV BOTOOL_PROGRESS_FILE=$PROGRESS_FILE"
 
   # 每次生成新 session-id，防止 Claude CLI 自动恢复旧会话
   # （旧会话上下文会导致 Lead Agent 卡在之前项目的文件中）

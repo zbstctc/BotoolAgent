@@ -7,15 +7,18 @@
 - `BOTOOL_SCRIPT_DIR`: BotoolAgent 文件目录
 - `BOTOOL_PROJECT_DIR`: 用户项目目录
 - `BOTOOL_MAX_ROUNDS`: 最大轮次（由 BotoolAgent.sh 传入，写 agent-status 时必须使用此值）
+- `BOTOOL_PRD_FILE`: 当前项目的 prd.json 绝对路径（per-project 路径）
+- `BOTOOL_PROGRESS_FILE`: 当前项目的 progress.txt 绝对路径（per-project 路径）
+- `BOTOOL_STATUS_FILE`: 当前项目的 agent-status 文件路径（DT-001 后生效；在此之前用 `$BOTOOL_SCRIPT_DIR/.state/agent-status`）
 
 ## 第一步: 初始化
 
 1. 读取 `$BOTOOL_PROJECT_DIR/PROJECT.md`（如果存在）— 了解项目全局
 2. 读取 `$BOTOOL_SCRIPT_DIR/patterns.json`（如果存在）— 了解累积经验，按 confidence 降序，只读 `status: "active"`
-3. 读取 `$BOTOOL_PROJECT_DIR/prd.json` — 了解所有开发任务
-4. 读取 `$BOTOOL_PROJECT_DIR/progress.txt` 中的 Codebase Patterns（如果存在）
+3. 读取 `$BOTOOL_PRD_FILE`（如不存在则回退到 `$BOTOOL_PROJECT_DIR/prd.json`）— 了解所有开发任务
+4. 读取 `$BOTOOL_PROGRESS_FILE`（如不存在则回退到 `$BOTOOL_PROJECT_DIR/progress.txt`）中的 Codebase Patterns（如果存在）
 5. 确认 git 分支 = `prd.json.branchName`（不是则切换/创建）
-6. 通过 Bash 工具更新 `$BOTOOL_SCRIPT_DIR/.state/agent-status` → `"status": "running"`
+6. 通过 Bash 工具更新 agent-status → `"status": "running"`（路径: `$BOTOOL_STATUS_FILE` > `$BOTOOL_SCRIPT_DIR/.state/agent-status`）
 
 ## 第二步: 构建执行计划
 
@@ -136,7 +139,7 @@
 
 ## .agent-status 更新
 
-通过 Bash 工具写入 `$BOTOOL_SCRIPT_DIR/.state/agent-status`：
+通过 Bash 工具写入 agent-status 文件（路径优先级：`$BOTOOL_STATUS_FILE` > `$BOTOOL_SCRIPT_DIR/.state/agent-status`）：
 
 ```json
 {
@@ -221,7 +224,7 @@
 
 ## 进度报告格式
 
-追加到 `progress.txt`（**永远不要替换，只能追加**）：
+追加到 `$BOTOOL_PROGRESS_FILE`（如不存在则回退到 `$BOTOOL_PROJECT_DIR/progress.txt`）（**永远不要替换，只能追加**）：
 
 ```
 ## [日期] - [任务ID]
