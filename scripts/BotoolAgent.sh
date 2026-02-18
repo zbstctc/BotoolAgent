@@ -24,6 +24,7 @@ cleanup() {
     echo ">>> 终止 tmux session: $SESSION_NAME"
     tmux kill-session -t "$SESSION_NAME" 2>/dev/null
   fi
+  rm -f "$PID_FILE"
   update_status "stopped" "用户停止或脚本退出"
   echo ">>> 清理完成"
   exit 0
@@ -288,6 +289,9 @@ fi
 # ============================================================================
 update_status "starting" "BotoolAgent 启动中"
 
+# 写入 PID 文件（BotoolAgent.sh 自身的 PID）
+echo $$ > "$PID_FILE"
+
 # ============================================================================
 # start_session(): 创建 tmux session，发送 prompt，等待结束
 # ============================================================================
@@ -401,6 +405,15 @@ start_session() {
 
   while tmux has-session -t "$SESSION_NAME" 2>/dev/null; do
     sleep 30
+
+    # Context limit 主动检测（秒级响应，替代 15 分钟超时等待）
+    pane_content=$(tmux capture-pane -t "$SESSION_NAME" -p -l 30 2>/dev/null || echo "")
+    if echo "$pane_content" | grep -qE "Context limit reached|context is full|0% remaining"; then
+      echo ">>> [RALPH] 检测到 context limit，终止当前 session，准备下一轮..."
+      tmux kill-session -t "$SESSION_NAME" 2>/dev/null
+      sleep 2
+      break
+    fi
 
     # 检查 agent-status 是否已标记 session 结束
     local agent_status=$(grep -o '"status": "[^"]*"' "$STATUS_FILE" 2>/dev/null | head -1 | sed 's/"status": "//;s/"$//')
