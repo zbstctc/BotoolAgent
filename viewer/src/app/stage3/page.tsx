@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect, useRef, useCallback, Fragment } from 'react';
+import { Suspense, useState, useEffect, useCallback, Fragment } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator, StageTransitionModal } from '@/components';
 import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
@@ -12,7 +12,7 @@ import { useAgentStatus } from '@/hooks/useAgentStatus';
 import AgentDataPanel from '@/components/AgentDataPanel/AgentDataPanel';
 
 type TaskStatus = 'pending' | 'in-progress' | 'completed' | 'failed';
-type RightPanelTab = 'flowchart' | 'log' | 'changes' | 'commits';
+type RightPanelTab = 'changes' | 'commits' | 'flowchart';
 
 interface FileChange {
   path: string;
@@ -104,13 +104,11 @@ function Stage3PageContent() {
   const [progressLog, setProgressLog] = useState<string>('');
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<RightPanelTab>('flowchart');
+  const [activeTab, setActiveTab] = useState<RightPanelTab>('changes');
   const [gitChanges, setGitChanges] = useState<GitChangesData | null>(null);
   const [gitChangesLoading, setGitChangesLoading] = useState(false);
   const [gitCommits, setGitCommits] = useState<GitCommitsData | null>(null);
   const [gitCommitsLoading, setGitCommitsLoading] = useState(false);
-  const logEndRef = useRef<HTMLDivElement>(null);
-
   // Stage transition modal state
   const [showTransitionModal, setShowTransitionModal] = useState(false);
   // Track if we've already shown the modal for this completion
@@ -202,13 +200,6 @@ function Stage3PageContent() {
       setExpandedTaskId(currentTaskId);
     }
   }, [currentTaskId]);
-
-  // Auto-scroll log to bottom
-  useEffect(() => {
-    if (logEndRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [progressLog]);
 
   // Fetch git changes
   const fetchGitChanges = useCallback(async () => {
@@ -621,26 +612,6 @@ function Stage3PageContent() {
           {/* Tabs */}
           <div className="flex items-center gap-1 p-2 border-b border-neutral-200 bg-white">
             <button
-              onClick={() => setActiveTab('flowchart')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'flowchart'
-                  ? 'bg-neutral-900 text-white'
-                  : 'text-neutral-600 hover:bg-neutral-100'
-              }`}
-            >
-              流程图
-            </button>
-            <button
-              onClick={() => setActiveTab('log')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'log'
-                  ? 'bg-neutral-900 text-white'
-                  : 'text-neutral-600 hover:bg-neutral-100'
-              }`}
-            >
-              进度日志
-            </button>
-            <button
               onClick={() => setActiveTab('changes')}
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                 activeTab === 'changes'
@@ -670,6 +641,16 @@ function Stage3PageContent() {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setActiveTab('flowchart')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'flowchart'
+                  ? 'bg-neutral-900 text-white'
+                  : 'text-neutral-600 hover:bg-neutral-100'
+              }`}
+            >
+              流程图ℹ️
+            </button>
             {lastUpdated && (
               <span className="ml-auto text-xs text-neutral-400">
                 最近更新: {new Date(lastUpdated).toLocaleTimeString()}
@@ -681,20 +662,6 @@ function Stage3PageContent() {
           {activeTab === 'flowchart' && (
             <div className="flex-1 overflow-hidden">
               <FlowChart agentPhase={agentPhase as AgentPhase} agentStatus={agentStatus.status} currentIteration={iterationCount} />
-            </div>
-          )}
-          {activeTab === 'log' && (
-            <div className="flex-1 overflow-auto p-4 bg-neutral-900">
-              {progressLog ? (
-                <pre className="font-mono text-sm text-neutral-200 whitespace-pre-wrap">
-                  {progressLog}
-                  <div ref={logEndRef} />
-                </pre>
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-neutral-500 text-sm">暂无进度日志...</p>
-                </div>
-              )}
             </div>
           )}
           {activeTab === 'changes' && (
