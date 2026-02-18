@@ -112,11 +112,14 @@
 ```
 
 3. 等所有 teammate 完成
-4. Lead 独立验证（按「验证铁律」+ 「DT 双阶段 Review」执行）
-5. 更新 `prd.json`（`passes` → `true`）
-6. 更新 `.state/agent-status`
-7. 写 `progress.txt`
-8. 执行 `/compact` 释放上下文
+4. **对每个 DT 执行验收流程：**
+   a. **独立验证**：运行该 DT 的所有 evals（验证铁律）→ 任一失败 → 修复/重派 → 重新运行
+   b. **Stage A: Spec + Constitution Review**：对照 acceptanceCriteria + constitution checklist → FAIL 则修复后重新验证
+   c. **Stage B: Quick Quality Check**：安全/调试遗留 → HIGH 立即修复
+   d. 全部 PASS → 更新该 DT 的 `passes: true`
+5. 更新 `.state/agent-status`
+6. 写 `progress.txt`
+7. 执行 `/compact` 释放上下文
 
 ### 批次间
 
@@ -167,11 +170,14 @@
 
 3. 执行上下文检索（读取相关文件，最多 5 个深度阅读）
 4. 实现代码
-5. `npx tsc --noEmit` 确认 typecheck 通过
-6. `git add <modified files> && git commit -m "feat: {id} - {title}"`
-7. `git push origin {branchName}`
-8. 更新 `prd.json`：`passes` → `true`（须先通过验证铁律 + DT 双阶段 Review）
-9. 写 `progress.txt`
+5. `git add <modified files> && git commit -m "feat: {id} - {title}"`
+6. `git push origin {branchName}`
+7. **验收流程：**
+   a. **独立验证**：运行该 DT 的所有 evals（验证铁律）→ 任一失败 → 修复 → 重新运行
+   b. **Stage A: Spec + Constitution Review** → FAIL 则修复后重新验证
+   c. **Stage B: Quick Quality Check** → HIGH 立即修复
+   d. 全部 PASS → 更新 `prd.json`：`passes` → `true`
+8. 写 `progress.txt`
 
 ## 验证铁律
 
