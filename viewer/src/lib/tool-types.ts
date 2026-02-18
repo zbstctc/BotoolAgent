@@ -105,9 +105,9 @@ export interface ConstitutionRule {
   id: string;
   name: string;
   category: string;
-  file: string;          // 路径引用 (e.g., "rules/API_Rules.md")
-  checklist: string[];   // 3-8 条核心检查项
-  content?: string;      // 保留 optional，向后兼容旧 prd.json
+  file?: string;          // 路径引用 (e.g., "rules/API_Rules.md") — optional for backward compat
+  checklist?: string[];   // 3-8 条核心检查项 — optional for backward compat
+  content?: string;       // 完整内容（旧模式）
 }
 
 export interface Constitution {

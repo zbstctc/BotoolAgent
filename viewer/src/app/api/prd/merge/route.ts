@@ -193,7 +193,13 @@ async function fuseRulesIntoPrdMd(
   const fusableRules = rules.filter((r) => r.checklist && r.checklist.length > 0);
   if (fusableRules.length === 0) return;
 
-  const absolutePath = path.resolve(getBotoolRoot(), prdFilePath);
+  const botoolRoot = getBotoolRoot();
+  const absolutePath = path.resolve(botoolRoot, prdFilePath);
+  // Guard: resolved path must stay within project root (prevent path traversal)
+  if (!absolutePath.startsWith(botoolRoot + path.sep) && absolutePath !== botoolRoot) {
+    console.warn(`[fuseRulesIntoPrdMd] Path traversal blocked: ${prdFilePath}`);
+    return;
+  }
   if (!existsSync(absolutePath)) return;
 
   const original = await readFile(absolutePath, 'utf-8');
@@ -436,9 +442,9 @@ export async function POST(request: NextRequest) {
     if (basePrdJson.prdFile && safeRules.length > 0) {
       try {
         await fuseRulesIntoPrdMd(basePrdJson.prdFile, safeRules);
-      } catch {
+      } catch (err) {
         // Best-effort: silently skip if fusion fails
-        console.warn('Rule fusion into PRD.md skipped due to error');
+        console.warn('Rule fusion into PRD.md skipped due to error:', err);
       }
     }
 
