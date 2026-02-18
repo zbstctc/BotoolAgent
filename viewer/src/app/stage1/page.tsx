@@ -209,21 +209,27 @@ function Stage1PageContent() {
     setTerminalLines(prev => [...prev.slice(-19), formatTerminalLine(toolUse.name, toolUse.input)]);
 
     // Detect Write tool writing a PRD file (Transform mode writes PRD to file)
+    // Exclude marker files (导入转换中) from detection
     if (toolUse.name === 'Write' && typeof toolUse.input?.file_path === 'string') {
       const fp = toolUse.input.file_path as string;
       const match = fp.match(/(?:^|\/)(prd-[^/]+)\.md$/);
       if (match) {
         const prdId = match[1].replace(/^prd-/, '');
-        debugLog('[Stage1] Detected Write to PRD file:', prdId);
-        setWrittenPrdFileId(prdId);
+        if (!prdId.includes('导入转换中')) {
+          debugLog('[Stage1] Detected Write to PRD file:', prdId);
+          setWrittenPrdFileId(prdId);
+        } else {
+          debugLog('[Stage1] Ignoring marker file Write:', prdId);
+        }
       }
     }
 
     // Detect Bash tool that might write a PRD file (e.g. cat > tasks/prd-xxx.md)
+    // Exclude marker files (导入转换中) from detection
     if (toolUse.name === 'Bash' && typeof toolUse.input?.command === 'string') {
       const cmd = toolUse.input.command as string;
       const match = cmd.match(/prd-([a-zA-Z0-9_\u4e00-\u9fff-]+)\.md/);
-      if (match && (cmd.includes('>') || cmd.includes('tee') || cmd.includes('cat'))) {
+      if (match && (cmd.includes('>') || cmd.includes('tee') || cmd.includes('cat')) && !match[1].includes('导入转换中')) {
         debugLog('[Stage1] Detected Bash writing PRD file:', match[1]);
         setWrittenPrdFileId(match[1]);
       }
@@ -237,8 +243,30 @@ function Stage1PageContent() {
       // Update level from metadata
       if (input.metadata) {
         const metadata = input.metadata as PyramidMetadata;
-        debugLog('[Stage1] Level from metadata:', metadata.level, 'phase:', metadata.phase);
-        setCurrentLevel(metadata.level);
+        let inferredLevel = metadata.level;
+
+        // Transform mode: infer correct level from metadata.transformPhase or question content
+        // The AI sometimes sends incorrect level metadata in transform mode
+        if (selectedMode === 'transform') {
+          const questionText = input.questions.map(q => q.question).join(' ');
+
+          if (metadata.transformPhase === 'gap-analysis' || questionText.includes('覆盖度') || questionText.includes('覆盖') || questionText.includes('coverage')) {
+            inferredLevel = 2 as LevelId; // T2 覆盖度分析
+          } else if (metadata.transformPhase === 'targeted-qa' || questionText.includes('Transform T4') || questionText.includes('补充问答')) {
+            inferredLevel = 3 as LevelId; // T3 补充问答
+          } else if (metadata.transformPhase === 'dt-decomposition' || questionText.includes('DT 分解') || questionText.includes('任务拆解')) {
+            inferredLevel = 4 as LevelId; // T4 需求分解
+          } else if (questionText.includes('L5') || questionText.includes('Tab 1/4') || questionText.includes('Tab 1/') || metadata.round) {
+            inferredLevel = 5 as LevelId; // T5 确认生成
+          }
+
+          if (inferredLevel !== metadata.level) {
+            debugLog('[Stage1] Transform mode level corrected:', metadata.level, '->', inferredLevel);
+          }
+        }
+
+        debugLog('[Stage1] Level from metadata:', metadata.level, 'inferred:', inferredLevel, 'phase:', metadata.phase);
+        setCurrentLevel(inferredLevel);
 
         // Track codebase scan status
         if (metadata.codebaseScanned !== undefined) {
@@ -256,13 +284,14 @@ function Stage1PageContent() {
 
         // Mark previous levels as completed
         const completed: LevelId[] = [];
-        for (let i = 1; i < metadata.level; i++) {
+        for (let i = 1; i < inferredLevel; i++) {
           completed.push(i as LevelId);
         }
         setCompletedLevels(completed);
       }
     }
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMode]);
 
   // CLI Chat hook
   const {
@@ -344,13 +373,14 @@ function Stage1PageContent() {
   }, [writtenPrdFileId, prdDraft]);
 
   // Fallback: detect PRD file path from assistant messages (e.g. "PRD 已在 tasks/prd-xxx.md")
+  // Exclude marker files (导入转换中) from detection
   useEffect(() => {
     if (prdDraft || writtenPrdFileId) return;
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
       if (msg.role === 'assistant') {
         const fileMatch = msg.content.match(/(?:tasks\/)?prd-([a-zA-Z0-9_\u4e00-\u9fff-]+)\.md/);
-        if (fileMatch && (msg.content.includes('PRD 已') || msg.content.includes('已生成') || msg.content.includes('已写入') || msg.content.includes('written'))) {
+        if (fileMatch && !fileMatch[1].includes('导入转换中') && (msg.content.includes('PRD 已') || msg.content.includes('已生成') || msg.content.includes('已写入') || msg.content.includes('written'))) {
           debugLog('[Stage1] Detected PRD file reference in message:', fileMatch[1]);
           setWrittenPrdFileId(fileMatch[1]);
           break;

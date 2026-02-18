@@ -2,6 +2,19 @@
   "version": 1,
   "entries": [
     {
+      "id": "botool/performance-update",
+      "name": "BotoolAgent Performance Update",
+      "description": "Constitution 瘦身（272KB→<30KB）+ 执行质量提升（验证铁律+双阶段 Review）+ 规范融合（PRD.md 成为唯一真理源）",
+      "branchName": "botool/performance-update",
+      "status": "running",
+      "stage": 4,
+      "tasksCompleted": 12,
+      "tasksTotal": 13,
+      "startTime": "2026-02-18T08:15:02.018Z",
+      "isMerged": false,
+      "lastUpdated": "2026-02-18T08:55:31.842Z"
+    },
+    {
       "id": "botool/stage3-factory-dashboard",
       "name": "Stage 3 工厂看板改造",
       "description": "将 Stage 3 页面从静态展示改造为实时数据驱动的代理监控面板，接入 useAgentStatus hook 和 SSE 数据流，实现精确步骤高亮、状态指示灯、启动/停止控制，全面中文化",

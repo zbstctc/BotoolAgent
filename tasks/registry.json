@@ -1,5 +1,16 @@
 {
   "version": 1,
-  "projects": {},
-  "activeProject": null
+  "projects": {
+    "performance-update": {
+      "name": "BotoolAgent Performance Update",
+      "prdMd": "prd-performance-update.md",
+      "prdJson": "prd-performance-update.json",
+      "progress": "progress-performance-update.txt",
+      "branch": "botool/performance-update",
+      "status": "coding",
+      "createdAt": "2026-02-18T12:00:00.000Z",
+      "updatedAt": "2026-02-18T12:00:00.000Z"
+    }
+  },
+  "activeProject": "performance-update"
 }
