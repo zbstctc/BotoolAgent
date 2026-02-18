@@ -145,7 +145,7 @@
       "title": "PRD2JSON SKILL — 规范融合 + checklist 模式",
       "prdSection": "7.2 (L222-309)",
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "dependsOn": ["DT-001"],
       "evals": [
         {
@@ -172,7 +172,7 @@
       "title": "PRD2JSON SKILL — 新增 steps 字段生成",
       "prdSection": "7.2 (L222-309)",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "dependsOn": ["DT-004"],
       "evals": [
         {

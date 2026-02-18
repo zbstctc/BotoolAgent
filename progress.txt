@@ -27,3 +27,29 @@
   - review-summary 通过 parsePrdData 解析 JSON，用 Array.isArray 防御性检查 checklist
   - 安全：错误响应返回通用消息，不泄露内部路径
 ---
+
+## Session 结束 — 已完成 3 个，剩余 10 个留给下一 session
+S1 (DT-001, DT-002, DT-003) 全部通过。下一 session: S2 (DT-004, DT-005)。
+
+## 2026-02-18 - DT-004
+- PRD2JSON SKILL 新增「规范融合」章节（Step 3: Constitution Fusion）
+- constitution schema 更新为 file+checklist 模式（取代 content）
+- 新增向后兼容检测逻辑（Q4）和 checklist 条数校验（3-8 条）
+- 修改了：`skills/BotoolAgent/PRD2JSON/SKILL.md`
+- **未来迭代的经验教训：**
+  - SKILL.md 中有两处 constitution 示例 JSON 需要同步更新（Output Format + Example）
+  - 规范融合规则使用关键词匹配策略，需根据实际使用反馈调整匹配精度
+---
+
+## 2026-02-18 - DT-005
+- PRD2JSON SKILL 新增 steps 生成规则章节（5 种 action 类型）
+- 新增颗粒度规则文档：每步可单条命令验证，3-6 步
+- 更新 Field Reference 和示例 JSON 包含 steps 字段
+- 修改了：`skills/BotoolAgent/PRD2JSON/SKILL.md`
+- **未来迭代的经验教训：**
+  - steps 是可选字段，简单 DT 不需要生成
+  - 判断标准：≥ 2 个文件或有明确顺序约束时生成 steps
+---
+
+## Session 结束 — 已完成 5 个，剩余 8 个留给下一 session
+S2 (DT-004, DT-005) 全部通过。下一 session: S3 (DT-006, DT-007, DT-008, DT-009)。
