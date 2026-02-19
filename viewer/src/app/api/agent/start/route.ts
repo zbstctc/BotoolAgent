@@ -201,7 +201,7 @@ export async function POST(request: Request) {
       if (testingUseTeams) {
         claudeArgs.push('--teammate-mode', testingTeammateMode);
       }
-      claudeArgs.push('-p', prompt);
+      claudeArgs.push('--verbose', '--output-format', 'stream-json', '-p', prompt);
 
       // Write initial status so Stage 4 UI can track progress
       writeAgentStatus({
@@ -220,13 +220,16 @@ export async function POST(request: Request) {
         // Ignore log initialization failures
       }
 
-      let stderrTail = '';
+      // Write stdout/stderr directly to log file fd — survives parent death.
+      // stream-json output goes to the file; /api/agent/log parses it for the UI.
+      const logFd = fs.openSync(testingLogFile, 'a');
+
       // Remove CLAUDECODE to prevent "nested session" rejection
       const { CLAUDECODE: _c1, ...cleanEnv1 } = process.env;
       child = spawn(claudeArgs[0], claudeArgs.slice(1), {
         cwd: PROJECT_ROOT,
-        detached: false,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: true,
+        stdio: ['ignore', logFd, logFd],
         env: {
           ...cleanEnv1,
           CLAUDE_CODE_NON_INTERACTIVE: '1',
@@ -234,35 +237,17 @@ export async function POST(request: Request) {
         },
       });
 
-      const appendLog = (chunk: string) => {
-        try {
-          fs.appendFileSync(testingLogFile, chunk);
-        } catch {
-          // Ignore log write failures
-        }
-      };
+      // Parent closes its copy of the fd; child keeps writing via its own copy.
+      fs.closeSync(logFd);
 
-      child.stdout?.on('data', (data: Buffer) => {
-        appendLog(data.toString());
-      });
-
-      child.stderr?.on('data', (data: Buffer) => {
-        const text = data.toString();
-        appendLog(text);
-        stderrTail = (stderrTail + text).slice(-2000);
-      });
-
-      // Listen for exit to write final status.
-      // Keep testing child attached so this callback can reliably update status.
+      // Exit handler still fires as long as this Next.js server is alive.
+      // If server restarts, checkAndHandleOrphan() in /api/agent/status covers it.
       child.on('exit', (code) => {
-        const tailMessage = stderrTail.trim().split('\n').slice(-1)[0];
         writeAgentStatus({
           status: code === 0 ? 'complete' : 'error',
           message: code === 0
-            ? 'Testing pipeline completed'
-            : tailMessage
-              ? `Testing failed (exit code ${code}): ${tailMessage}`
-              : `Testing failed (exit code ${code})`,
+            ? '验收流程已完成'
+            : `验收失败（退出码 ${code}）`,
         }, statusFile);
         cleanPidFile(pidFile);
       });
@@ -295,14 +280,13 @@ export async function POST(request: Request) {
         env: {
           ...cleanEnv2,
           ...(maxIterations ? { BOTOOL_MAX_ROUNDS: String(maxIterations) } : {}),
+          BOTOOL_MODEL: process.env.BOTOOL_MODEL || 'claude-opus-4-6',
         },
       });
     }
 
-    // Allow coding mode process to continue independently.
-    if (mode !== 'testing') {
-      child.unref();
-    }
+    // Both coding and testing modes run as detached processes.
+    child.unref();
 
     // Write per-project PID lock file
     if (child.pid) {

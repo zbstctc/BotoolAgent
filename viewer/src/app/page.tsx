@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useState, useMemo } from 'react';
-import { Settings, Plus, Search } from 'lucide-react';
+import { Settings, Plus, Search, RefreshCw } from 'lucide-react';
 import { RequirementCard } from '@/components/RequirementCard';
 import { RequirementDrawer } from '@/components/RequirementDrawer';
 import { CreateRequirementDialog } from '@/components/CreateRequirementDialog';
@@ -44,6 +44,7 @@ function DashboardContent() {
     setSelectedId,
     deleteRequirement,
     archiveRequirement,
+    refreshRequirements,
   } = useRequirement();
 
   const [filter, setFilter] = useState<RequirementFilter>('all');
@@ -184,8 +185,15 @@ function DashboardContent() {
           ))}
         </div>
 
-        {/* Search */}
-        <div className="relative flex-1 max-w-xs ml-auto">
+        {/* Refresh + Search */}
+        <button
+          onClick={() => refreshRequirements()}
+          className="ml-auto p-1.5 rounded-md text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
+          title="刷新"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+        </button>
+        <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 pointer-events-none" />
           <input
             type="text"

@@ -9,6 +9,7 @@ import { PipelineProgress, DEFAULT_STEPS } from '@/components/pipeline/PipelineP
 import { RuleCheckStep, type RuleDocument } from '@/components/pipeline/RuleCheckStep';
 import { AutoEnrichStep, type AutoEnrichResult } from '@/components/pipeline/AutoEnrichStep';
 import { EnrichmentSummary } from '@/components/pipeline/EnrichmentSummary';
+import { AdversarialReviewStep, type ReviewStepResult } from '@/components/pipeline/AdversarialReviewStep';
 import type { EnrichedPrdJson, PipelineMode } from '@/lib/tool-types';
 
 function Stage2PageContent() {
@@ -40,7 +41,10 @@ function Stage2PageContent() {
 
   // Step results
   const [selectedRules, setSelectedRules] = useState<RuleDocument[]>([]);
+  const [fixedPrdContent, setFixedPrdContent] = useState<string>('');
+  const [ruleAuditSummary, setRuleAuditSummary] = useState<string>('');
   const [enrichResult, setEnrichResult] = useState<AutoEnrichResult | null>(null);
+  const [fixedEnrichResult, setFixedEnrichResult] = useState<AutoEnrichResult | null>(null);
 
   // Load PRD content from API if not already loaded from sessionStorage
   useEffect(() => {
@@ -73,16 +77,41 @@ function Stage2PageContent() {
   }, [currentStep]);
 
   // Step completion handlers
+  // Step 0: Rule selection complete
   const handleRuleCheckComplete = useCallback((rules: RuleDocument[]) => {
     setSelectedRules(rules);
     setCurrentStep(1);
   }, []);
 
-  const handleAutoEnrichComplete = useCallback((result: AutoEnrichResult) => {
-    setEnrichResult(result);
+  // Step 1: PRD adversarial review complete
+  const handlePrdReviewComplete = useCallback((result: ReviewStepResult) => {
+    setFixedPrdContent(result.fixedContent);
+    setRuleAuditSummary(result.ruleAuditSummary || '');
     setCurrentStep(2);
   }, []);
 
+  // Step 2: Auto enrich complete — clear stale fixed result from any prior run
+  const handleAutoEnrichComplete = useCallback((result: AutoEnrichResult) => {
+    setEnrichResult(result);
+    setFixedEnrichResult(null);
+    setCurrentStep(3);
+  }, []);
+
+  // Step 3: Enrich adversarial review complete
+  const handleEnrichReviewComplete = useCallback((result: ReviewStepResult) => {
+    // Try to parse the fixed enrich content back to AutoEnrichResult
+    if (result.fixedContent) {
+      try {
+        const parsed = JSON.parse(result.fixedContent) as AutoEnrichResult;
+        setFixedEnrichResult(parsed);
+      } catch {
+        // If parsing fails, keep original enrichResult
+      }
+    }
+    setCurrentStep(4);
+  }, []);
+
+  // Step 4: Enrichment summary complete → navigate to Stage 3
   const handleEnrichmentSummaryComplete = useCallback((prdJson: EnrichedPrdJson) => {
     // Update project stage (always advance to 3, branchName is optional metadata)
     if (activeProject) {
@@ -104,6 +133,11 @@ function Stage2PageContent() {
     }
   }, [currentStep]);
 
+  // Derived values
+  const effectivePrdContent = fixedPrdContent || prdContent;
+  const selectedRuleIds = selectedRules.map(r => r.id);
+  const effectiveEnrichResult = fixedEnrichResult || enrichResult;
+
   // Render current step content
   const renderStepContent = () => {
     switch (currentStep) {
@@ -116,23 +150,45 @@ function Stage2PageContent() {
         );
       case 1:
         return (
-          <AutoEnrichStep
-            prdContent={prdContent}
-            mode={mode}
-            onComplete={handleAutoEnrichComplete}
+          <AdversarialReviewStep
+            reviewTarget="prd"
+            content={prdContent}
+            selectedRuleIds={selectedRuleIds}
+            projectId={activeProject?.id}
+            onComplete={handlePrdReviewComplete}
             onBack={handleBack}
           />
         );
       case 2:
         return (
+          <AutoEnrichStep
+            prdContent={effectivePrdContent}
+            mode={mode}
+            onComplete={handleAutoEnrichComplete}
+            onBack={handleBack}
+          />
+        );
+      case 3:
+        return (
+          <AdversarialReviewStep
+            reviewTarget="enrich"
+            content={enrichResult ? JSON.stringify(enrichResult) : ''}
+            projectId={activeProject?.id}
+            onComplete={handleEnrichReviewComplete}
+            onBack={handleBack}
+          />
+        );
+      case 4:
+        return (
           <EnrichmentSummary
-            prdContent={prdContent}
+            prdContent={effectivePrdContent}
             projectName={activeProject?.name || 'New Project'}
             projectId={activeProject?.id}
             sourcePrdId={sourcePrdId}
             mode={mode}
             selectedRules={selectedRules}
-            enrichResult={enrichResult}
+            enrichResult={effectiveEnrichResult}
+            ruleAuditSummary={ruleAuditSummary}
             onComplete={handleEnrichmentSummaryComplete}
             onBack={handleBack}
           />
@@ -159,7 +215,7 @@ function Stage2PageContent() {
         currentStage={2}
         completedStages={[1]}
         projectName={activeProject?.name}
-        stageStatus={`步骤 ${currentStep + 1}/3`}
+        stageStatus={`步骤 ${currentStep + 1}/5`}
       />
 
       {/* Pipeline Progress */}

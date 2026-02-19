@@ -109,12 +109,17 @@ function inferStage(
     return 5;
   }
 
-  // All tasks done → Stage 5 (development complete, pending merge)
+  // All tasks done → need to check if testing was completed
   if (allTasksDone) {
-    return 5;
+    // Testing report exists → Stage 5 (tested + ready to merge)
+    if (hasTestingReport(projectId)) {
+      return 5;
+    }
+    // No testing report → Stage 4 (development done, pending testing)
+    return 4;
   }
 
-  // Testing report exists → Stage 4
+  // Testing report exists but not all tasks done (edge case) → Stage 4
   if (hasTestingReport(projectId)) {
     return 4;
   }
@@ -132,10 +137,6 @@ function inferStage(
  */
 function inferStatus(stage: RequirementStage, prdJson: PrdJson | null): RequirementStatus {
   if (stage === 5) return 'completed';
-  if (prdJson?.devTasks && prdJson.devTasks.length > 0) {
-    const allDone = prdJson.devTasks.every(t => t.passes);
-    if (allDone) return 'completed';
-  }
   return 'active';
 }
 

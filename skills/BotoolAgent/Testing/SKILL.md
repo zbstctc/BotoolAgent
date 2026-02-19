@@ -371,23 +371,34 @@ E2E 测试依赖 dev server，必须先确保环境干净：
 # 1. 杀掉残留的 Playwright 测试进程（避免端口/锁冲突）
 pkill -f "playwright test" 2>/dev/null || true
 
-# 2. Auto-detect port: BotoolAgent repo = 3000, other project = 3100
-VIEWER_PORT="$([ -d BotoolAgent/viewer ] && echo 3101 || echo 3100)"
+# 2. 分配测试端口（从 3200 开始动态分配，绝对不使用 3100/3101）
+# Port 3100 = 主 Viewer（用户界面，永久保护，禁止 kill）
+# Port 3101 = BotoolAgent dev repo Viewer（同样保护）
+# Port 3200+ = 测试专用，动态分配
+find_free_test_port() {
+  local port=3200
+  while lsof -i :"$port" &>/dev/null; do
+    ((port++))
+  done
+  echo "$port"
+}
+TEST_PORT=$(find_free_test_port)
+export TEST_PORT
 
-# 3. 检查 dev server 是否在运行且健康
-curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:$VIEWER_PORT
+# 3. 检查 test server 端口是否已被占用（正常情况应该是空闲的）
+curl -s -o /dev/null -w "%{http_code}" --max-time 3 http://localhost:$TEST_PORT
 ```
 
 **处理逻辑：**
-- HTTP 200 → dev server 健康，继续
-- 超时或非 200 → dev server 假死或未运行，需要重启：
-  ```bash
-  VIEWER_PORT="$([ -d BotoolAgent/viewer ] && echo 3101 || echo 3100)"
-  lsof -ti :"$VIEWER_PORT" | xargs kill -9 2>/dev/null || true
-  sleep 2
-  # Playwright config 中的 webServer 会自动启动，无需手动启动
-  ```
-- 如果杀掉后仍无法启动（端口仍被占用）→ AskUserQuestion 让用户排查
+- 端口空闲 → Playwright webServer 会自动在 `$TEST_PORT` 启动 dev server，继续
+- 端口被占用（find_free_test_port 已跳过，理论上不会发生）→ 重新调用 `find_free_test_port`
+
+**⚠️ 严禁操作：**
+- 禁止 kill port 3100（主 Viewer）
+- 禁止 kill port 3101（BotoolAgent dev Viewer）
+- 测试完成后只 kill `$TEST_PORT` 上的进程
+
+- 如果所有 3200-3299 端口都被占用 → AskUserQuestion 让用户排查
 
 ### 3b. 检测 E2E 配置
 
