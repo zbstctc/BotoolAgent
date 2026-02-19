@@ -396,13 +396,16 @@ export function AdversarialReviewStep({
     if (!content) return;
     hasStartedRef.current = true;
     runAdversarialLoop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content]);
 
+  // Abort in-flight requests on unmount
+  useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ============================================================================

@@ -257,12 +257,11 @@ function loadRulesContent(ruleIds: string[]): string {
 
   for (const ruleId of ruleIds) {
     const ruleEntry = RULE_ID_MAP[ruleId];
-    if (!ruleEntry) {
-      console.warn(`[prd-review] Unknown ruleId: ${ruleId}, skipping`);
-      continue;
-    }
+    // Fall back to treating ruleId as a relative file path within the rules directory
+    const filePath = ruleEntry?.filePath ?? (ruleId.endsWith('.md') ? ruleId : `${ruleId}.md`);
+    const ruleName = ruleEntry?.name ?? ruleId;
 
-    const fullPath = path.join(rulesDir, ruleEntry.filePath);
+    const fullPath = path.join(rulesDir, filePath);
 
     // Path traversal protection: ensure resolved path is under rules directory
     try {
@@ -279,7 +278,7 @@ function loadRulesContent(ruleIds: string[]): string {
 
     try {
       const content = fs.readFileSync(fullPath, 'utf-8');
-      parts.push(`### Rule: ${ruleEntry.name} (${ruleId})\n\n${content}`);
+      parts.push(`### Rule: ${ruleName} (${ruleId})\n\n${content}`);
     } catch {
       console.warn(`[prd-review] Failed to read rule file for ruleId: ${ruleId}`);
     }
