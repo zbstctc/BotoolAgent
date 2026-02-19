@@ -35,3 +35,7 @@ export type { ReviewSummaryProps } from "./ReviewSummary";
 export { ErrorRecovery } from "./ErrorRecovery";
 export type { ErrorRecoveryProps, ErrorAction } from "./ErrorRecovery";
 export { TabBar } from "./TabBar";
+export { LayerProgressBar } from "./LayerProgressBar";
+export type { LayerResult, LayerStatus, LayerProgressBarProps } from "./LayerProgressBar";
+export { CodexReviewPanel } from "./CodexReviewPanel";
+export type { CodexReviewPanelProps } from "./CodexReviewPanel";

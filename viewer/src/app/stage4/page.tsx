@@ -3,6 +3,9 @@
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator, StageTransitionModal } from '@/components';
+import { LayerProgressBar } from '@/components/LayerProgressBar';
+import type { LayerResult } from '@/components/LayerProgressBar';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
 import { useProject } from '@/contexts/ProjectContext';
 import { useRequirement } from '@/contexts/RequirementContext';
@@ -42,6 +45,16 @@ function Stage4PageContent() {
   const [projectName, setProjectName] = useState('');
   const logEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+
+  // Layer progress state (default: all pending)
+  const [layers, setLayers] = useState<LayerResult[]>([
+    { id: 'L1', name: 'TypeCheck+Lint', status: 'pending' },
+    { id: 'L2', name: 'Unit Tests', status: 'pending' },
+    { id: 'L3', name: 'E2E Tests', status: 'pending' },
+    { id: 'L4', name: 'Self-Review', status: 'pending' },
+    { id: 'L5', name: 'Codex Red-Team', status: 'pending' },
+    { id: 'L6', name: 'PR + PR-Agent', status: 'pending' },
+  ]);
 
   // File watcher for PRD
   const { prd } = useFileWatcher({
@@ -94,12 +107,60 @@ function Stage4PageContent() {
           });
         }
 
+        // Map currentTask to layer progress
+        if (status.currentTask) {
+          const task = status.currentTask.toLowerCase();
+          setLayers(prev => {
+            const updated = [...prev];
+            // Determine which layer is active based on currentTask keywords
+            const layerKeywords: Record<string, string[]> = {
+              L1: ['typecheck', 'lint', 'tsc'],
+              L2: ['unit', 'jest', 'vitest'],
+              L3: ['e2e', 'playwright', 'cypress'],
+              L4: ['self-review', 'review', 'self_review'],
+              L5: ['codex', 'red-team', 'red_team', 'adversarial'],
+              L6: ['pr', 'pr-agent', 'merge', 'push'],
+            };
+
+            for (const layer of updated) {
+              const keywords = layerKeywords[layer.id];
+              if (keywords && keywords.some(kw => task.includes(kw))) {
+                // Mark previous layers as pass if they are still pending
+                const layerIdx = updated.findIndex(l => l.id === layer.id);
+                for (let i = 0; i < layerIdx; i++) {
+                  if (updated[i].status === 'pending') {
+                    updated[i] = { ...updated[i], status: 'pass' };
+                  }
+                }
+                // Mark current layer as running
+                if (layer.status === 'pending') {
+                  updated[layerIdx] = { ...updated[layerIdx], status: 'running' };
+                }
+                break;
+              }
+            }
+            return updated;
+          });
+        }
+
         // Map agent status to testing status
         if (status.status === 'complete') {
           setTestingStatus('complete');
+          // Mark all remaining pending/running layers as pass
+          setLayers(prev => prev.map(l =>
+            l.status === 'pending' || l.status === 'running'
+              ? { ...l, status: 'pass' as const }
+              : l
+          ));
           es.close();
         } else if (status.status === 'failed' || status.status === 'error') {
           setTestingStatus('failed');
+          // Mark current running layer as fail
+          setLayers(prev => prev.map(l =>
+            l.status === 'running'
+              ? { ...l, status: 'fail' as const }
+              : l
+          ));
           es.close();
         } else if (status.status === 'running' || status.status === 'iteration_complete') {
           setTestingStatus('running');
@@ -130,7 +191,9 @@ function Stage4PageContent() {
   // Start testing via agent
   const handleStartTesting = useCallback(async () => {
     setTestingStatus('running');
-    setAgentLog([`[${new Date().toLocaleTimeString()}] Starting 4-layer verification pipeline...`]);
+    setAgentLog([`[${new Date().toLocaleTimeString()}] Starting 6-layer verification pipeline...`]);
+    // Reset layers to pending
+    setLayers(prev => prev.map(l => ({ ...l, status: 'pending' as const })));
     setStatusMessage('Starting testing...');
 
     try {
@@ -219,9 +282,9 @@ function Stage4PageContent() {
       {/* Main Content */}
       <div className="flex-1 overflow-hidden flex flex-col p-6">
         <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col">
-          <h2 className="text-lg font-semibold text-neutral-900 mb-1">4-Layer Verification Pipeline</h2>
+          <h2 className="text-lg font-semibold text-neutral-900 mb-1">6-Layer Verification Pipeline</h2>
           <p className="text-sm text-neutral-500 mb-4">
-            Runs /botoolagent-testing: TypeCheck + Lint → Unit Tests → E2E → Code Review
+            TypeCheck + Lint → Unit → E2E → Self-Review → Codex Red-Team → PR + PR-Agent
           </p>
 
           {/* Status Bar */}
@@ -243,41 +306,78 @@ function Stage4PageContent() {
             </span>
           </div>
 
-          {/* Log Output */}
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Output</span>
-            <a
-              href="http://localhost:9323"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-600 bg-neutral-100 border border-neutral-200 rounded-md hover:bg-neutral-200 hover:text-neutral-900 transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clipRule="evenodd" />
-                <path fillRule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clipRule="evenodd" />
-              </svg>
-              Playwright Results
-            </a>
+          {/* Layer Progress Bar */}
+          <div className="mb-4 rounded-lg border border-neutral-200 bg-white">
+            <LayerProgressBar layers={layers} />
           </div>
-          <div className="flex-1 min-h-0 rounded-lg border border-neutral-200 bg-neutral-900 overflow-auto">
-            <div className="p-4 font-mono text-xs text-neutral-300 space-y-1">
-              {agentLog.length === 0 ? (
-                <p className="text-neutral-500 italic">Waiting for testing to start...</p>
-              ) : (
-                agentLog.map((line, i) => (
-                  <p key={i} className={
-                    line.includes('Error') || line.includes('FAIL') ? 'text-red-400' :
-                    line.includes('PASS') || line.includes('✓') ? 'text-green-400' :
-                    line.includes('Running') || line.includes('Starting') ? 'text-neutral-400' :
-                    'text-neutral-300'
-                  }>
-                    {line}
-                  </p>
-                ))
-              )}
-              <div ref={logEndRef} />
+
+          {/* Tabbed Content */}
+          <Tabs defaultValue="logs" className="flex-1 min-h-0 flex flex-col">
+            <div className="flex items-center justify-between mb-2">
+              <TabsList>
+                <TabsTrigger value="logs">测试日志</TabsTrigger>
+                <TabsTrigger value="codex">Codex 审查</TabsTrigger>
+                <TabsTrigger value="pr-agent">PR-Agent</TabsTrigger>
+                <TabsTrigger value="report">报告</TabsTrigger>
+              </TabsList>
+              <a
+                href="http://localhost:9323"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-600 bg-neutral-100 border border-neutral-200 rounded-md hover:bg-neutral-200 hover:text-neutral-900 transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clipRule="evenodd" />
+                  <path fillRule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clipRule="evenodd" />
+                </svg>
+                Playwright Results
+              </a>
             </div>
-          </div>
+
+            {/* Tab: 测试日志 */}
+            <TabsContent value="logs" className="flex-1 min-h-0">
+              <div className="h-full rounded-lg border border-neutral-200 bg-neutral-900 overflow-auto">
+                <div className="p-4 font-mono text-xs text-neutral-300 space-y-1">
+                  {agentLog.length === 0 ? (
+                    <p className="text-neutral-500 italic">Waiting for testing to start...</p>
+                  ) : (
+                    agentLog.map((line, i) => (
+                      <p key={i} className={
+                        line.includes('Error') || line.includes('FAIL') ? 'text-red-400' :
+                        line.includes('PASS') || line.includes('✓') ? 'text-green-400' :
+                        line.includes('Running') || line.includes('Starting') ? 'text-neutral-400' :
+                        'text-neutral-300'
+                      }>
+                        {line}
+                      </p>
+                    ))
+                  )}
+                  <div ref={logEndRef} />
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* Tab: Codex 审查 */}
+            <TabsContent value="codex" className="flex-1 min-h-0">
+              <div className="h-full rounded-lg border border-neutral-200 bg-white overflow-auto flex items-center justify-center">
+                <p className="text-sm text-neutral-400">Codex review data will appear here when available</p>
+              </div>
+            </TabsContent>
+
+            {/* Tab: PR-Agent */}
+            <TabsContent value="pr-agent" className="flex-1 min-h-0">
+              <div className="h-full rounded-lg border border-neutral-200 bg-white overflow-auto flex items-center justify-center">
+                <p className="text-sm text-neutral-400">PR-Agent comments will appear here when available</p>
+              </div>
+            </TabsContent>
+
+            {/* Tab: 报告 */}
+            <TabsContent value="report" className="flex-1 min-h-0">
+              <div className="h-full rounded-lg border border-neutral-200 bg-white overflow-auto flex items-center justify-center">
+                <p className="text-sm text-neutral-400">Testing report summary will appear here when available</p>
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
 
