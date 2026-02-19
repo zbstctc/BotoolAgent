@@ -31,7 +31,9 @@ export function useAgentLogs({ projectId, enabled }: UseAgentLogsOptions) {
     setLines([]);
     setAlive(false);
     lastSnapshotRef.current = [];
-    pendingReqIdRef.current = 0;
+    // Do NOT reset pendingReqIdRef: keeping it monotonic ensures any in-flight
+    // requests from a previous polling cycle still fail the staleness check
+    // (their captured id < the next incremented id after restart).
   }, []);
 
   useEffect(() => {
