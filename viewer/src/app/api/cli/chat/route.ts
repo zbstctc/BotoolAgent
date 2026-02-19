@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { CLIManager, CLIMessage } from '@/lib/cli-manager';
 import { getProjectRoot } from '@/lib/project-root';
 
@@ -14,10 +14,7 @@ export async function POST(request: NextRequest) {
     const { message, sessionId, mode } = body;
 
     if (!message || typeof message !== 'string') {
-      return new Response(JSON.stringify({ error: 'Message is required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
     // Get working directory (user's project root)
@@ -118,9 +115,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('CLI Chat API error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

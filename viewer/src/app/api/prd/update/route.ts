@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
-import { getProjectPrdJsonPath } from '@/lib/project-root';
+import { getProjectPrdJsonPath, normalizeProjectId } from '@/lib/project-root';
+import { verifyCsrfProtection } from '@/lib/api-guard';
 
 interface DevTask {
   id: string;
@@ -20,8 +21,20 @@ interface PrdJson {
 }
 
 export async function POST(request: NextRequest) {
+  const csrfError = verifyCsrfProtection(request);
+  if (csrfError) return csrfError;
+
   try {
     const body: PrdJson & { projectId?: string } = await request.json();
+
+    // Validate projectId (if provided) to prevent path traversal
+    if (body.projectId) {
+      const safeProjectId = normalizeProjectId(body.projectId);
+      if (!safeProjectId) {
+        return NextResponse.json({ error: 'Invalid projectId' }, { status: 400 });
+      }
+      body.projectId = safeProjectId;
+    }
 
     // Validate required fields
     if (!body.project || !body.branchName || !body.devTasks) {
