@@ -113,6 +113,8 @@ function Stage1PageContent() {
 
   // Initial description from Dashboard
   const [initialDescription, setInitialDescription] = useState<string>('');
+  // Gate for manual start — user must click "启动" before AI begins
+  const [userClickedStart, setUserClickedStart] = useState(false);
   // CLI session ID for resuming conversation
   const [cliSessionId, setCliSessionId] = useState<string | undefined>(undefined);
   // Track if we've restored state (use ref to avoid re-renders)
@@ -188,22 +190,28 @@ function Stage1PageContent() {
     }
   }, [urlMode, urlFile, selectedMode, isStarted]);
 
-  // Load initial description from sessionStorage or fallback to project name
+  // Load initial description from sessionStorage or fallback to project/requirement name
   useEffect(() => {
-    if (!sessionId) return;
     // Skip if already set by URL params (import flow)
     if (urlMode === 'transform' && urlFile) return;
-    // First try sessionStorage (set when creating new project)
-    const desc = sessionStorage.getItem(`botool-initial-description-${sessionId}`);
-    if (desc) {
-      setInitialDescription(desc);
-      return;
+    // First try sessionStorage (when sessionId is available)
+    if (sessionId) {
+      const desc = sessionStorage.getItem(`botool-initial-description-${sessionId}`);
+      if (desc) {
+        setInitialDescription(desc);
+        return;
+      }
     }
     // Fallback: use project name if available (for existing projects)
     if (activeProject?.name) {
       setInitialDescription(activeProject.name);
+      return;
     }
-  }, [sessionId, activeProject?.name, urlMode, urlFile]);
+    // Fallback: use requirement name (navigated from Dashboard via reqId)
+    if (activeRequirement?.name) {
+      setInitialDescription(activeRequirement.name);
+    }
+  }, [sessionId, activeProject?.name, activeRequirement?.name, urlMode, urlFile]);
 
   // Redirect invalid direct access without session context
   // Allow access when reqId is present (navigated from Dashboard via RequirementContext)
@@ -485,22 +493,22 @@ function Stage1PageContent() {
     }
   }, [needsPrdGeneration, cliSessionId, hasAttemptedPrdGeneration, sendMessage, qaHistory]);
 
-  // Auto-resume when needed (only once)
+  // Auto-resume when needed (only once, after user clicks start)
   useEffect(() => {
-    debugLog('[Stage1] Auto-resume check:', { needsResume, cliSessionId: !!cliSessionId, hasAttemptedResume });
-    if (needsResume && cliSessionId && !hasAttemptedResume) {
+    debugLog('[Stage1] Auto-resume check:', { needsResume, cliSessionId: !!cliSessionId, hasAttemptedResume, userClickedStart });
+    if (needsResume && cliSessionId && !hasAttemptedResume && userClickedStart) {
       debugLog('[Stage1] Auto-resuming from saved state...');
       setHasAttemptedResume(true);
       resumePyramid();
     }
-  }, [needsResume, cliSessionId, hasAttemptedResume, resumePyramid]);
+  }, [needsResume, cliSessionId, hasAttemptedResume, userClickedStart, resumePyramid]);
 
-  // Auto-start when description is loaded and mode is selected
+  // Auto-start when description is loaded, mode is selected, AND user clicked start
   useEffect(() => {
-    if (initialDescription && !isStarted && !isLoading && selectedMode) {
+    if (initialDescription && !isStarted && !isLoading && selectedMode && userClickedStart) {
       startPyramid();
     }
-  }, [initialDescription, isStarted, isLoading, selectedMode, startPyramid]);
+  }, [initialDescription, isStarted, isLoading, selectedMode, userClickedStart, startPyramid]);
 
   // Handle answer selection
   const handleAnswer = useCallback((questionIndex: number, value: string | string[]) => {
@@ -702,15 +710,20 @@ function Stage1PageContent() {
   const handleQuickFixSubmit = useCallback(() => {
     if (!quickFixDescription.trim()) return;
     setInitialDescription(quickFixDescription.trim());
-    // startPyramid will auto-trigger via the useEffect since selectedMode and initialDescription are set
+    setUserClickedStart(true);
   }, [quickFixDescription]);
 
   // Handle transform mode submission
   const handleTransformSubmit = useCallback(() => {
     if (!transformFilePath.trim()) return;
     setInitialDescription(transformFilePath.trim());
-    // startPyramid will auto-trigger via the useEffect since selectedMode and initialDescription are set
+    setUserClickedStart(true);
   }, [transformFilePath]);
+
+  // Handle manual start button click
+  const handleManualStart = useCallback(() => {
+    setUserClickedStart(true);
+  }, []);
 
   // Redirect if no session and no requirement context
   if (!sessionId && !reqId && !projectsLoading) {
@@ -1232,7 +1245,7 @@ function Stage1PageContent() {
                 />
               </div>
             </div>
-          ) : needsResume && !hasAttemptedResume ? (
+          ) : needsResume && userClickedStart && !hasAttemptedResume ? (
             <div className="flex items-center justify-center h-full">
               <div className="flex flex-col items-center">
                 <div className="animate-spin h-8 w-8 border-4 border-neutral-600 border-t-transparent rounded-full mb-2"></div>
@@ -1244,7 +1257,7 @@ function Stage1PageContent() {
                 <TerminalActivityFeed lines={terminalLines} />
               </div>
             </div>
-          ) : needsResume && hasAttemptedResume ? (
+          ) : needsResume && userClickedStart && hasAttemptedResume ? (
             <div className="flex items-center justify-center h-full p-6">
               <ErrorRecovery
                 error="无法恢复上次进度"
@@ -1272,7 +1285,49 @@ function Stage1PageContent() {
             </div>
           ) : (
             <div className="flex items-center justify-center h-full">
-              <p className="text-neutral-500">等待问题加载...</p>
+              <div className="flex flex-col items-center max-w-sm text-center">
+                <div className="w-16 h-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4">
+                  <svg className="w-8 h-8 text-neutral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+                  </svg>
+                </div>
+                {isStarted ? (
+                  <>
+                    <h3 className="text-lg font-semibold text-neutral-900 mb-1">继续需求整理</h3>
+                    <p className="text-sm text-neutral-500 mb-1">
+                      上次进度：{selectedMode === 'transform' ? 'T' : 'L'}{currentLevel} · 已完成 {completedLevels.length} {selectedMode === 'transform' ? '步' : '层'}
+                    </p>
+                    <p className="text-xs text-neutral-400 mb-6">
+                      AI 将从上次中断的位置继续
+                    </p>
+                    <button
+                      onClick={handleManualStart}
+                      className="px-6 py-2.5 rounded-lg bg-neutral-900 text-white font-medium hover:bg-neutral-800 transition-colors"
+                    >
+                      继续需求整理
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-lg font-semibold text-neutral-900 mb-1">准备就绪</h3>
+                    <p className="text-sm text-neutral-500 mb-6">
+                      AI 将通过多轮问答收集需求，帮你生成 PRD 文档
+                    </p>
+                    <button
+                      onClick={handleManualStart}
+                      className="px-6 py-2.5 rounded-lg bg-neutral-900 text-white font-medium hover:bg-neutral-800 transition-colors"
+                    >
+                      启动 AI 需求整理
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => setSelectedMode(null)}
+                  className="mt-3 text-sm text-neutral-400 hover:text-neutral-600 transition-colors"
+                >
+                  返回选择模式
+                </button>
+              </div>
             </div>
           )}
         </div>
