@@ -365,6 +365,11 @@ function Stage4PageContent() {
           testingStatus === 'running' ? '验收中...' :
           '准备就绪'
         }
+        showAutoMode
+        autoMode={activeProject?.autoMode ?? false}
+        onAutoModeChange={(checked) => {
+          if (activeProject) updateProject(activeProject.id, { autoMode: checked });
+        }}
       />
 
       {/* Main Content */}

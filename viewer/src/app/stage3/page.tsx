@@ -410,6 +410,11 @@ function Stage3PageContent() {
                 ? `${completedTasks}/${totalTasks} 完成`
                 : undefined
             }
+            showAutoMode
+            autoMode={activeProject?.autoMode ?? false}
+            onAutoModeChange={(checked) => {
+              if (activeProject) updateProject(activeProject.id, { autoMode: checked });
+            }}
           />
         </div>
         <div className="flex items-center gap-2 px-4 flex-shrink-0">

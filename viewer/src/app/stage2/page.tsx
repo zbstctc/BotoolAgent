@@ -216,6 +216,11 @@ function Stage2PageContent() {
         completedStages={[1]}
         projectName={activeProject?.name}
         stageStatus={`步骤 ${currentStep + 1}/5`}
+        showAutoMode
+        autoMode={activeProject?.autoMode ?? false}
+        onAutoModeChange={(checked) => {
+          if (activeProject) updateProject(activeProject.id, { autoMode: checked });
+        }}
       />
 
       {/* Pipeline Progress */}

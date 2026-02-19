@@ -247,6 +247,11 @@ function Stage5PageContent() {
           pageState === 'no_pr' ? 'No PR yet' :
           'Loading...'
         }
+        showAutoMode
+        autoMode={activeProject?.autoMode ?? false}
+        onAutoModeChange={(checked) => {
+          if (activeProject) updateProject(activeProject.id, { autoMode: checked });
+        }}
       />
 
       {/* Main Content — single centered panel */}
