@@ -375,6 +375,7 @@ export async function GET() {
         const dirPath = path.join(archivesDir, dirName);
         const draftMdPath = path.join(dirPath, 'DRAFT.md');
         const prdMdPath = path.join(dirPath, 'prd.md');
+        const prdJsonPath = path.join(dirPath, 'prd.json');
         const hasDraftMd = fs.existsSync(draftMdPath);
         const hasPrdMd = fs.existsSync(prdMdPath);
         if (!hasDraftMd && !hasPrdMd) continue;
@@ -393,14 +394,61 @@ export async function GET() {
           updatedAt = stats.mtimeMs;
         } catch {}
 
-        requirements.push({
+        // Infer stage from archive files (similar to active items)
+        let archivePrdJson: PrdJson | null = null;
+        const hasArchivePrdJson = fs.existsSync(prdJsonPath);
+        if (hasArchivePrdJson) {
+          try { archivePrdJson = JSON.parse(fs.readFileSync(prdJsonPath, 'utf-8')) as PrdJson; } catch {}
+        }
+
+        let archiveStage: RequirementStage = 0;
+        if (!hasPrdMd && hasDraftMd) {
+          archiveStage = 0;
+        } else if (hasPrdMd && !hasArchivePrdJson) {
+          archiveStage = 1;
+        } else if (hasArchivePrdJson) {
+          // prd.json exists — check registry and branch
+          const registryStatus = getRegistryStatus(canonical);
+          const branchName = archivePrdJson?.branchName;
+          if (registryStatus === 'complete' || (branchName && isBranchMergedIntoMain(branchName))) {
+            archiveStage = 5;
+          } else {
+            // Infer from devTasks progress
+            const devTasks = archivePrdJson?.devTasks ?? [];
+            const completedCount = devTasks.filter(t => t.passes).length;
+            const allTasksDone = devTasks.length > 0 && completedCount === devTasks.length;
+            if (allTasksDone) {
+              archiveStage = 4;
+            } else if (completedCount > 0) {
+              archiveStage = 3;
+            } else {
+              archiveStage = 2;
+            }
+          }
+        }
+
+        const archiveReq: Requirement = {
           id: canonical,
           name,
-          stage: 0,
+          stage: archiveStage,
           status: 'archived',
           createdAt,
           updatedAt,
-        });
+        };
+
+        if (hasDraftMd) archiveReq.sourceFile = draftMdPath;
+        if (hasPrdMd) archiveReq.prdId = canonical;
+        if (archivePrdJson?.branchName) archiveReq.branchName = archivePrdJson.branchName;
+        if (hasArchivePrdJson) {
+          archiveReq.prdJsonPath = prdJsonPath;
+          const devTasks = archivePrdJson?.devTasks ?? [];
+          if (devTasks.length > 0) {
+            archiveReq.taskCount = devTasks.length;
+            archiveReq.tasksCompleted = devTasks.filter(t => t.passes).length;
+          }
+        }
+
+        requirements.push(archiveReq);
       }
     }
 
