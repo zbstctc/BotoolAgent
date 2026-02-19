@@ -9,3 +9,4 @@ export { useTeammates } from './useTeammates';
 export type { TeammateInfo, UseTeammatesReturn } from './useTeammates';
 export { useTaskTimings } from './useTaskTimings';
 export type { TaskTiming, UseTaskTimingsReturn } from './useTaskTimings';
+export { useTabNotification, TabNotificationMount } from './useTabNotification';

@@ -1,0 +1,51 @@
+{
+  "findings": [
+    {
+      "severity": "LOW",
+      "category": "style",
+      "rule": "react-hooks/exhaustive-deps",
+      "file": "viewer/src/app/stage3/page.tsx",
+      "line": 119,
+      "message": "useEffect for syncing agentStatus to TabContext has exhaustive-deps lint warning: 'agentStatus.status' is referenced via optional chaining on primitive fields but the parent object is not in deps. Functionally correct but generates a warning.",
+      "suggestion": "Either add agentStatus.status to deps array (and adjust condition) or suppress with eslint-disable-next-line",
+      "resolution": "unresolved"
+    },
+    {
+      "severity": "LOW",
+      "category": "style",
+      "rule": "code-duplication",
+      "file": "viewer/src/components/TabBar.tsx",
+      "line": 15,
+      "message": "RUNNING_STATUSES and ERROR_STATUSES are defined in both TabBar.tsx and useTabNotification.ts, creating duplication.",
+      "suggestion": "Extract shared status sets to tab-storage.ts or a shared constants file.",
+      "resolution": "unresolved"
+    },
+    {
+      "severity": "LOW",
+      "category": "style",
+      "rule": "file-organization",
+      "file": "viewer/src/hooks/useTabNotification.ts",
+      "line": 43,
+      "message": "TabNotificationMount component is defined in a hooks file. Per project convention, components should be in components/ directory.",
+      "suggestion": "Move TabNotificationMount to components/ or keep as-is since it's a headless mount component.",
+      "resolution": "unresolved"
+    },
+    {
+      "severity": "LOW",
+      "category": "logic",
+      "rule": "missing-timer-cleanup",
+      "file": "viewer/src/components/TabBar.tsx",
+      "line": 52,
+      "message": "hoverTimerRef is not cleaned up via useEffect on component unmount. If component unmounts while timer is pending, stale state setter will be called (no-op in React 18, but not idiomatic).",
+      "suggestion": "Add useEffect(() => () => { if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current); }, []) for cleanup.",
+      "resolution": "unresolved"
+    }
+  ],
+  "adversarialState": {
+    "round": 0,
+    "maxRounds": 3,
+    "status": "converged",
+    "rounds": []
+  },
+  "timestamp": "2026-02-19T14:00:00Z"
+}

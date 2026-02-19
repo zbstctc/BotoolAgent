@@ -108,6 +108,16 @@ body {
   border-color: rgb(147 197 253);
 }
 
+/* Tab attention pulse animation - amber border flash */
+@keyframes pulse-border-amber {
+  0%, 100% { border-color: rgb(251 191 36); } /* amber-400 */
+  50% { border-color: transparent; }
+}
+
+.animate-pulse-border-amber {
+  animation: pulse-border-amber 1s ease-in-out infinite;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

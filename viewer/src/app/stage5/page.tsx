@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
 import { useProject } from '@/contexts/ProjectContext';
 import { useRequirement } from '@/contexts/RequirementContext';
+import { useTab } from '@/contexts/TabContext';
 import { cn } from '@/lib/utils';
 
 interface PRInfo {
@@ -60,6 +61,23 @@ function Stage5PageContent() {
   const [pageState, setPageState] = useState<PageState>('loading');
   const [error, setError] = useState<string | null>(null);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
+
+  // Sync page state to TabContext
+  const { updateTabStatus } = useTab();
+  useEffect(() => {
+    if (!reqId) return;
+    const statusMap: Record<string, string> = {
+      loading: 'idle',
+      no_pr: 'idle',
+      creating_pr: 'running',
+      ready: 'session_done',
+      merging: 'running',
+      merged: 'complete',
+      error: 'error',
+    };
+    const mapped = statusMap[pageState] || 'idle';
+    updateTabStatus(reqId, mapped);
+  }, [reqId, pageState, updateTabStatus]);
 
   // Use file watcher for PRD
   const { prd } = useFileWatcher({

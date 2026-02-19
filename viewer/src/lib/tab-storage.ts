@@ -6,6 +6,9 @@ export interface TabItem {
   stage: number;       // current stage (1-5), 0 for utility tabs
   isRunning?: boolean; // agent is running
   url?: string;        // fixed URL for utility tabs (overrides stage-based URL)
+  agentStatus?: string;       // agent-status raw value (e.g. 'running', 'complete', 'error')
+  needsAttention?: boolean;   // flashing indicator when user action needed
+  progress?: { completed: number; total: number }; // task progress
 }
 
 export interface TabStorage {
