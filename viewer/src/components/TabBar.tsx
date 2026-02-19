@@ -15,6 +15,17 @@ import {
 import { Button } from '@/components/ui/button';
 import type { TabItem } from '@/lib/tab-storage';
 
+const RUNNING_STATUSES = new Set(['running', 'starting', 'waiting_network']);
+const ERROR_STATUSES = new Set(['error', 'failed', 'stopped']);
+
+function getStatusBorderClass(tab: TabItem): string {
+  if (tab.needsAttention) return 'animate-pulse-border-amber';
+  if (!tab.agentStatus) return 'border-amber-400'; // no status = pending
+  if (RUNNING_STATUSES.has(tab.agentStatus)) return 'border-green-500';
+  if (ERROR_STATUSES.has(tab.agentStatus)) return 'border-red-500';
+  return 'border-amber-400'; // idle/complete/session_done etc
+}
+
 interface TabBarProps {
   className?: string;
 }
@@ -80,37 +91,41 @@ export function TabBar({ className }: TabBarProps) {
         </button>
 
         {/* Project tabs */}
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => handleTabClick(tab)}
-            className={cn(
-              'group relative flex items-center gap-1.5 px-3 h-9 text-sm font-medium rounded-t-md border border-b-0 transition-colors max-w-[180px]',
-              activeTabId === tab.id
-                ? 'bg-white border-neutral-200 text-neutral-900'
-                : 'bg-neutral-100 border-transparent text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50'
-            )}
-          >
-            {tab.isRunning && (
-              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
-            )}
-            <span className="truncate max-w-[120px]">{tab.name}</span>
-            {!tab.url && (
-              <span className="text-xs text-neutral-400 flex-shrink-0">(S{tab.stage})</span>
-            )}
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => handleClose(e, tab)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') handleClose(e as unknown as React.MouseEvent, tab);
-              }}
-              className="ml-1 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-neutral-200 transition-opacity flex-shrink-0"
+        {tabs.map((tab) => {
+          const isActive = activeTabId === tab.id;
+          const statusBorder = tab.url ? undefined : getStatusBorderClass(tab);
+          const displayName = tab.name.replace(/^PRD:\s*/i, '');
+
+          return (
+            <button
+              key={tab.id}
+              onClick={() => handleTabClick(tab)}
+              className={cn(
+                'group relative flex items-center gap-1.5 px-3 h-9 text-sm font-medium rounded-t-md border-2 border-b-0 transition-colors max-w-[180px]',
+                isActive
+                  ? 'bg-white text-neutral-900'
+                  : 'bg-neutral-100 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50',
+                statusBorder ?? (isActive ? 'border-neutral-200' : 'border-transparent')
+              )}
             >
-              <X className="h-3 w-3" />
-            </span>
-          </button>
-        ))}
+              <span className="truncate max-w-[120px]">{displayName}</span>
+              {!tab.url && (
+                <span className="text-xs text-neutral-400 flex-shrink-0">(S{tab.stage})</span>
+              )}
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => handleClose(e, tab)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') handleClose(e as unknown as React.MouseEvent, tab);
+                }}
+                className="ml-1 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-neutral-200 transition-opacity flex-shrink-0"
+              >
+                <X className="h-3 w-3" />
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Close confirmation dialog */}
