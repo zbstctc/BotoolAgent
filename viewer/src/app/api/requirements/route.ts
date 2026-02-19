@@ -349,6 +349,61 @@ export async function GET() {
       requirements.push(requirement);
     }
 
+    // Also scan tasks/archives/ for archived requirements
+    const archivesDir = path.join(tasksDir, 'archives');
+    if (fs.existsSync(archivesDir)) {
+      let archiveEntries: fs.Dirent[] = [];
+      try {
+        archiveEntries = fs.readdirSync(archivesDir, { withFileTypes: true });
+      } catch {
+        // non-fatal
+      }
+
+      // Deduplicate: "foo-{timestamp}" is a duplicate of "foo"; keep latest by mtime
+      const seen = new Map<string, { dirName: string; mtime: number }>();
+      for (const e of archiveEntries.filter(e => e.isDirectory())) {
+        const canonical = e.name.replace(/-\d{10,}$/, '');
+        let mtime = 0;
+        try { mtime = fs.statSync(path.join(archivesDir, e.name)).mtimeMs; } catch {}
+        const prev = seen.get(canonical);
+        if (!prev || mtime > prev.mtime) {
+          seen.set(canonical, { dirName: e.name, mtime });
+        }
+      }
+
+      for (const [canonical, { dirName }] of seen) {
+        const dirPath = path.join(archivesDir, dirName);
+        const draftMdPath = path.join(dirPath, 'DRAFT.md');
+        const prdMdPath = path.join(dirPath, 'prd.md');
+        const hasDraftMd = fs.existsSync(draftMdPath);
+        const hasPrdMd = fs.existsSync(prdMdPath);
+        if (!hasDraftMd && !hasPrdMd) continue;
+
+        let name = canonical;
+        try {
+          const content = fs.readFileSync(hasPrdMd ? prdMdPath : draftMdPath, 'utf-8');
+          name = extractTitle(content, canonical);
+        } catch {}
+
+        let createdAt = Date.now();
+        let updatedAt = Date.now();
+        try {
+          const stats = fs.statSync(hasPrdMd ? prdMdPath : draftMdPath);
+          createdAt = stats.birthtimeMs || stats.ctimeMs;
+          updatedAt = stats.mtimeMs;
+        } catch {}
+
+        requirements.push({
+          id: canonical,
+          name,
+          stage: 0,
+          status: 'archived',
+          createdAt,
+          updatedAt,
+        });
+      }
+    }
+
     // Sort by updatedAt descending (most recently modified first)
     requirements.sort((a, b) => b.updatedAt - a.updatedAt);
 
