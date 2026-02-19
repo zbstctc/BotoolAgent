@@ -4,6 +4,7 @@ import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
 import { getProjectRoot, getProjectPrdJsonPath, getProjectProgressPath, normalizeProjectId } from '@/lib/project-root';
+import { verifyCsrfProtection } from '@/lib/api-guard';
 
 const execAsync = promisify(exec);
 
@@ -322,6 +323,9 @@ export async function GET(request: NextRequest) {
  * - draft: create as draft PR (default: false)
  */
 export async function POST(request: NextRequest) {
+  const csrfError = verifyCsrfProtection(request);
+  if (csrfError) return csrfError;
+
   try {
     // Check gh CLI
     if (!await checkGhCli()) {

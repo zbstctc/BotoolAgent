@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 
 interface MarkdownEditorProps {
   content: string;
@@ -224,7 +225,7 @@ function MarkdownPreview({ content }: { content: string }) {
 
   return (
     <div
-      dangerouslySetInnerHTML={{ __html: `<p>${html}</p>` }}
+      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(`<p>${html}</p>`) }}
       className="[&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mb-3 [&_h3]:text-base [&_h3]:font-medium [&_h3]:mb-2 [&_code]:bg-neutral-200 [&_code]:px-1 [&_code]:rounded [&_pre]:bg-neutral-800 [&_pre]:text-white [&_pre]:p-3 [&_pre]:rounded [&_pre]:overflow-x-auto [&_a]:text-neutral-700 [&_a]:underline [&_li]:ml-4 [&_li]:list-disc"
     />
   );

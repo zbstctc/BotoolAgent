@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
-import { getTasksDir, getBotoolRoot, getProjectPrdJsonPath, getProjectSessionPath } from '@/lib/project-root';
+import { execFileSync } from 'child_process';
+import { getTasksDir, getBotoolRoot, getProjectPrdJsonPath, getProjectSessionPath, isSafeGitRef } from '@/lib/project-root';
 import type { RequirementStage, RequirementStatus, Requirement } from '@/lib/requirement-types';
 
 interface PrdJson {
@@ -51,10 +51,13 @@ function extractTitle(content: string, dirName: string): string {
  * (handles the case where the local branch was deleted after merge).
  */
 function isBranchMergedIntoMain(branchName: string): boolean {
+  // Validate branch name to prevent injection
+  if (!isSafeGitRef(branchName)) return false;
+
   try {
     const botoolRoot = getBotoolRoot();
     // Check local branches
-    const mergedBranches = execSync('git branch --merged main', {
+    const mergedBranches = execFileSync('git', ['branch', '--merged', 'main'], {
       cwd: botoolRoot,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -66,8 +69,9 @@ function isBranchMergedIntoMain(branchName: string): boolean {
     if (found) return true;
 
     // Fallback: check merge commits in git log (branch may have been deleted)
-    const mergeLog = execSync(
-      `git log --merges --oneline main | head -20`,
+    // Use git's native -20 flag instead of piping to head
+    const mergeLog = execFileSync(
+      'git', ['log', '--merges', '--oneline', 'main', '-20'],
       { cwd: botoolRoot, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
     );
     return mergeLog.includes(branchName);
@@ -105,10 +109,17 @@ function hasTestingReport(projectId: string, branchName?: string): boolean {
   }
   // Check on the feature branch (testing agent commits artifacts there)
   if (branchName) {
+    // Validate branchName to prevent injection
+    if (!isSafeGitRef(branchName)) return false;
+
     try {
       const botoolRoot = getBotoolRoot();
       const relativePath = path.relative(botoolRoot, path.join(tasksDir, projectId, 'testing-report.json'));
-      execSync(`git cat-file -e ${branchName}:${relativePath}`, {
+
+      // Validate relativePath: reject absolute paths and path traversal
+      if (path.isAbsolute(relativePath) || relativePath.includes('..')) return false;
+
+      execFileSync('git', ['cat-file', '-e', `${branchName}:${relativePath}`], {
         cwd: botoolRoot,
         stdio: ['pipe', 'pipe', 'pipe'],
       });

@@ -48,6 +48,33 @@ export function normalizeProjectId(projectId?: string | null): string | null {
 }
 
 /**
+ * Validate a git reference (branch name, tag, etc.) is safe.
+ * Follows git check-ref-format rules: blocks control chars, space,
+ * ~, ^, :, ?, *, [, \, DEL while allowing Unicode and +.
+ */
+export function isSafeGitRef(ref: string): boolean {
+  if (!ref || ref.length > 255) return false;
+  // Block control chars (0x00-0x1F), DEL (0x7F), space, and git-forbidden chars
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f\x7f ~^:?*[\\\x20]/.test(ref)) return false;
+  if (ref.includes('..')) return false;
+  if (ref.startsWith('-')) return false;
+  if (ref.includes('@{')) return false;
+  if (ref.endsWith('.lock')) return false;
+  if (ref.startsWith('/') || ref.endsWith('/')) return false;
+  if (ref.includes('//')) return false;
+
+  const segments = ref.split('/');
+  for (const seg of segments) {
+    if (!seg) return false;
+    if (seg.startsWith('.') || seg.endsWith('.')) return false;
+    if (seg.endsWith('.lock')) return false;
+  }
+
+  return true;
+}
+
+/**
  * Get the BotoolAgent directory (parent of viewer/).
  * This is where BotoolAgent's own files live: tasks/, rules/, etc.
  */
@@ -239,4 +266,36 @@ export function getAgentPidPath(projectId?: string | null): string {
 export function resetPathCache(): void {
   _botoolRoot = null;
   _projectRoot = null;
+}
+
+/**
+ * Resolve a user-supplied path segment and verify it stays within baseDir.
+ * Uses realpath (following symlinks) for robust containment check.
+ * Throws if the resolved path escapes baseDir.
+ */
+export function ensureContainedPath(baseDir: string, ...segments: string[]): string {
+  const resolved = path.resolve(baseDir, ...segments);
+  const realBase = fs.realpathSync(baseDir);
+
+  if (fs.existsSync(resolved)) {
+    const real = fs.realpathSync(resolved);
+    if (!real.startsWith(realBase + path.sep) && real !== realBase) {
+      throw new Error(`Path escapes base directory: ${resolved}`);
+    }
+    return real;
+  }
+
+  // Target doesn't exist: walk up to nearest existing ancestor and validate
+  let ancestor = path.dirname(resolved);
+  while (!fs.existsSync(ancestor)) {
+    const parent = path.dirname(ancestor);
+    if (parent === ancestor) break;
+    ancestor = parent;
+  }
+  const realAncestor = fs.realpathSync(ancestor);
+  if (!realAncestor.startsWith(realBase + path.sep) && realAncestor !== realBase) {
+    throw new Error(`Path escapes base directory: ${resolved}`);
+  }
+
+  return resolved;
 }

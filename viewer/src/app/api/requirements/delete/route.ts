@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getTasksDir, normalizeProjectId } from '@/lib/project-root';
+import { verifyCsrfProtection } from '@/lib/api-guard';
 
 /**
  * POST /api/requirements/delete
@@ -9,6 +10,9 @@ import { getTasksDir, normalizeProjectId } from '@/lib/project-root';
  * Also removes timestamp-suffixed duplicate archive folders.
  */
 export async function POST(request: Request) {
+  const csrfError = verifyCsrfProtection(request);
+  if (csrfError) return csrfError;
+
   try {
     const body = (await request.json()) as { id?: string };
     const id = normalizeProjectId(body.id);

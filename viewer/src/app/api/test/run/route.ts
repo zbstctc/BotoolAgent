@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { verifyCsrfProtection } from '@/lib/api-guard';
 
 // Test types supported
 type TestType = 'typecheck' | 'unit' | 'integration' | 'e2e' | 'lint';
@@ -11,6 +12,7 @@ interface TestCommand {
   command: string;
   args: string[];
   name: string;
+  cwd?: string;
 }
 
 interface PackageJson {
@@ -65,6 +67,7 @@ function detectTestCommands(projectRoot: string): TestCommand[] {
           command: 'npm',
           args: ['run', scriptName],
           name: `TypeCheck (${path.basename(pkg.dir)})`,
+          cwd: pkg.dir,
         });
       } else if (scripts['tsc']) {
         commands.push({
@@ -72,6 +75,7 @@ function detectTestCommands(projectRoot: string): TestCommand[] {
           command: 'npm',
           args: ['run', 'tsc'],
           name: `TypeCheck (${path.basename(pkg.dir)})`,
+          cwd: pkg.dir,
         });
       }
 
@@ -82,6 +86,7 @@ function detectTestCommands(projectRoot: string): TestCommand[] {
           command: 'npm',
           args: ['run', 'lint'],
           name: `Lint (${path.basename(pkg.dir)})`,
+          cwd: pkg.dir,
         });
       }
 
@@ -92,6 +97,7 @@ function detectTestCommands(projectRoot: string): TestCommand[] {
           command: 'npm',
           args: ['run', 'test'],
           name: `Unit Tests (${path.basename(pkg.dir)})`,
+          cwd: pkg.dir,
         });
       } else if (scripts['test:unit']) {
         commands.push({
@@ -99,6 +105,7 @@ function detectTestCommands(projectRoot: string): TestCommand[] {
           command: 'npm',
           args: ['run', 'test:unit'],
           name: `Unit Tests (${path.basename(pkg.dir)})`,
+          cwd: pkg.dir,
         });
       }
 
@@ -109,6 +116,7 @@ function detectTestCommands(projectRoot: string): TestCommand[] {
           command: 'npm',
           args: ['run', 'test:integration'],
           name: `Integration Tests (${path.basename(pkg.dir)})`,
+          cwd: pkg.dir,
         });
       }
 
@@ -120,15 +128,8 @@ function detectTestCommands(projectRoot: string): TestCommand[] {
           command: 'npm',
           args: ['run', scriptName],
           name: `E2E Tests (${path.basename(pkg.dir)})`,
+          cwd: pkg.dir,
         });
-      }
-
-      // Also store the directory for running commands
-      for (const cmd of commands) {
-        if (!cmd.args.includes('--prefix')) {
-          // Add the working directory info
-          (cmd as TestCommand & { cwd?: string }).cwd = pkg.dir;
-        }
       }
     } catch {
       // Skip if package.json can't be read
@@ -194,7 +195,7 @@ function parseTestOutput(output: string, type: TestType): { passed: number; fail
 
 // Run a single test command
 async function runTestCommand(
-  cmd: TestCommand & { cwd?: string },
+  cmd: TestCommand,
   onOutput: (data: string) => void
 ): Promise<TestResult> {
   return new Promise((resolve) => {
@@ -272,6 +273,9 @@ export async function GET() {
 
 // POST: Run tests
 export async function POST(request: NextRequest) {
+  const csrfError = verifyCsrfProtection(request);
+  if (csrfError) return csrfError;
+
   try {
     const body = await request.json().catch(() => ({}));
     const requestedTypes: TestType[] = body.types || ['typecheck', 'lint', 'unit', 'integration', 'e2e'];
@@ -316,7 +320,7 @@ export async function POST(request: NextRequest) {
           })),
         });
 
-        for (const cmd of commands as (TestCommand & { cwd?: string })[]) {
+        for (const cmd of commands) {
           // Send start event
           sendEvent('start', {
             type: cmd.type,

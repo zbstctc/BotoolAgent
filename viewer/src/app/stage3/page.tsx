@@ -416,12 +416,12 @@ function Stage3PageContent() {
           {agentStatus.isRunning ? (
             <Fragment>
               {showStopConfirm ? (
-                <div className="flex items-center gap-2 bg-white border border-red-200 rounded-lg px-3 py-1.5 shadow-sm">
-                  <span className="text-xs text-red-600">确认停止代理？</span>
+                <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-lg px-3 py-1.5 shadow-sm">
+                  <span className="text-xs text-neutral-600">确认停止代理？</span>
                   <button
                     onClick={handleStopAgent}
                     disabled={agentActionLoading}
-                    className="px-2 py-0.5 text-xs font-medium bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                    className="px-2 py-0.5 text-xs font-medium bg-neutral-900 text-white rounded hover:bg-neutral-800 disabled:opacity-50"
                   >
                     {agentActionLoading ? '停止中...' : '确认'}
                   </button>
@@ -435,9 +435,9 @@ function Stage3PageContent() {
               ) : (
                 <button
                   onClick={() => setShowStopConfirm(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-neutral-100 text-neutral-700 border border-neutral-300 rounded-lg hover:bg-neutral-200 transition-colors"
                 >
-                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                  <span className="w-2 h-2 bg-neutral-500 rounded-full animate-pulse" />
                   停止代理
                 </button>
               )}
@@ -809,7 +809,7 @@ function Stage3PageContent() {
                     <div className="text-sm text-green-600">
                       <span className="font-medium">+{gitChanges.totals.additions}</span>
                     </div>
-                    <div className="text-sm text-red-600">
+                    <div className="text-sm text-neutral-600">
                       <span className="font-medium">-{gitChanges.totals.deletions}</span>
                     </div>
                     <button

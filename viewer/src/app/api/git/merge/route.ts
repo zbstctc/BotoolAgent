@@ -4,8 +4,9 @@ import { promisify } from 'util';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
-import { getProjectRoot, getProjectPrdJsonPath, getBotoolRoot, normalizeProjectId, getTasksDir } from '@/lib/project-root';
+import { getProjectRoot, getProjectPrdJsonPath, getBotoolRoot, normalizeProjectId, getTasksDir, isSafeGitRef } from '@/lib/project-root';
 import path from 'path';
+import { verifyCsrfProtection } from '@/lib/api-guard';
 
 const execAsync = promisify(exec);
 
@@ -67,15 +68,6 @@ interface MergeResult {
   deletedBranch: boolean;
   commitSha?: string;
   message: string;
-}
-
-function isSafeGitRef(ref: string): boolean {
-  return (
-    /^[A-Za-z0-9._/-]+$/.test(ref) &&
-    !ref.startsWith('-') &&
-    !ref.includes('..') &&
-    !ref.includes('//')
-  );
 }
 
 function shellQuote(value: string): string {
@@ -149,6 +141,9 @@ async function getPRInfo(branch?: string): Promise<{ number: number; url: string
  * - baseBranch: string (default: 'main') - base branch to merge into
  */
 export async function POST(request: NextRequest) {
+  const csrfError = verifyCsrfProtection(request);
+  if (csrfError) return csrfError;
+
   try {
     // Check gh CLI
     if (!await checkGhCli()) {

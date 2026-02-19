@@ -6,6 +6,7 @@ import {
   previewSkillContent,
   getSkillsDir,
 } from '@/lib/rules-to-skill';
+import { verifyCsrfProtection } from '@/lib/api-guard';
 
 // GET: List all generated skills or preview a skill
 export async function GET(request: NextRequest) {
@@ -56,6 +57,9 @@ export async function GET(request: NextRequest) {
 
 // POST: Generate skill from rule
 export async function POST(request: NextRequest) {
+  const csrfError = verifyCsrfProtection(request);
+  if (csrfError) return csrfError;
+
   try {
     const body = await request.json();
     const { category, name, content } = body;
@@ -95,6 +99,9 @@ export async function POST(request: NextRequest) {
 
 // DELETE: Remove skill file
 export async function DELETE(request: NextRequest) {
+  const csrfError = verifyCsrfProtection(request);
+  if (csrfError) return csrfError;
+
   const { searchParams } = new URL(request.url);
   const category = searchParams.get('category');
   const name = searchParams.get('name');

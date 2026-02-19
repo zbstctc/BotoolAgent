@@ -9,6 +9,7 @@ import {
   type TaskStage,
 } from '@/lib/task-history';
 import { getAgentStatusPath, getProjectPrdJsonPath, getAgentPidPath, getTasksDir, normalizeProjectId } from '@/lib/project-root';
+import { verifyCsrfProtection } from '@/lib/api-guard';
 
 interface AgentPidInfo {
   pid: number;
@@ -366,6 +367,9 @@ export async function GET(request: NextRequest) {
 
 // DELETE: Stop the agent (kill the process)
 export async function DELETE(request: NextRequest) {
+  const csrfError = verifyCsrfProtection(request);
+  if (csrfError) return csrfError;
+
   try {
     const url = new URL(request.url);
     const rawProjectId = url.searchParams.get('projectId');

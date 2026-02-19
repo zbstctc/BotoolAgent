@@ -1,8 +1,9 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { readdir, writeFile, unlink, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { getRulesDir } from '@/lib/project-root';
+import { getRulesDir, ensureContainedPath } from '@/lib/project-root';
+import { verifyCsrfProtection } from '@/lib/api-guard';
 
 const RULES_DIR = getRulesDir();
 
@@ -71,6 +72,9 @@ export async function GET() {
 
 // POST: Save a rule document
 export async function POST(request: NextRequest) {
+  const csrfError = verifyCsrfProtection(request);
+  if (csrfError) return csrfError;
+
   try {
     const body = await request.json();
     const { category, name, content } = body;
@@ -80,6 +84,16 @@ export async function POST(request: NextRequest) {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
+    }
+
+    // Ensure rules directory exists before path validation
+    await ensureRulesDir();
+
+    // 验证 category 路径安全
+    try {
+      ensureContainedPath(RULES_DIR, category);
+    } catch {
+      return NextResponse.json({ error: `Invalid category: ${category}` }, { status: 400 });
     }
 
     // Sanitize name
@@ -107,6 +121,9 @@ export async function POST(request: NextRequest) {
 
 // DELETE: Delete a rule document
 export async function DELETE(request: NextRequest) {
+  const csrfError = verifyCsrfProtection(request);
+  if (csrfError) return csrfError;
+
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
@@ -120,10 +137,20 @@ export async function DELETE(request: NextRequest) {
 
     const [category, name] = id.split('/');
     if (!category || !name) {
-      return new Response(JSON.stringify({ error: 'Invalid id format' }), {
+      return new Response(JSON.stringify({ error: 'Invalid rule id' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
+    }
+
+    // Ensure rules directory exists before path validation
+    await ensureRulesDir();
+
+    // 验证路径安全
+    try {
+      ensureContainedPath(RULES_DIR, category, `${name}.md`);
+    } catch {
+      return NextResponse.json({ error: `Invalid category: ${category}` }, { status: 400 });
     }
 
     const filePath = join(RULES_DIR, category, `${name}.md`);

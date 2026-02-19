@@ -1,6 +1,6 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
-import { getProjectPrdJsonPath, getProjectProgressPath, getProjectTeammatesPath } from '@/lib/project-root';
+import { getProjectPrdJsonPath, getProjectProgressPath, getProjectTeammatesPath, normalizeProjectId } from '@/lib/project-root';
 
 interface FileContent {
   prd: string | null;
@@ -38,7 +38,18 @@ function getFileContents(projectId?: string | null): FileContent {
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
-  const projectId = url.searchParams.get('projectId') || undefined;
+  const rawProjectId = url.searchParams.get('projectId') || undefined;
+
+  // Validate projectId to prevent path traversal
+  let projectId: string | undefined;
+  if (rawProjectId) {
+    const safeProjectId = normalizeProjectId(rawProjectId);
+    if (!safeProjectId) {
+      return NextResponse.json({ error: 'Invalid projectId' }, { status: 400 });
+    }
+    projectId = safeProjectId;
+  }
+
   const encoder = new TextEncoder();
 
   // Get the abort signal from the request

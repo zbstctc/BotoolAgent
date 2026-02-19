@@ -303,7 +303,7 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
       }));
       throw err;
     }
-  }, [fetchStatus]);
+  }, [fetchStatus, projectId]);
 
   // Helper to check if agent is actively running
   const isRunning = state.status?.status === 'running' ||

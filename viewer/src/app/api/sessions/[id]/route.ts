@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getSnapshotsDir } from '@/lib/project-root';
+import { getSnapshotsDir, normalizeProjectId } from '@/lib/project-root';
+import { verifyCsrfProtection } from '@/lib/api-guard';
 
 const ARCHIVE_DIR = getSnapshotsDir();
 
@@ -33,7 +34,11 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const sessionDir = path.join(ARCHIVE_DIR, id);
+    const safeId = normalizeProjectId(id);
+    if (!safeId) {
+      return NextResponse.json({ error: 'Invalid project id' }, { status: 400 });
+    }
+    const sessionDir = path.join(ARCHIVE_DIR, safeId);
 
     // Check if session directory exists
     if (!fs.existsSync(sessionDir)) {
@@ -86,14 +91,14 @@ export async function GET(
 
     // Try to extract date from directory name or use file modification time
     let date = stats.mtime.toISOString();
-    const dateMatch = id.match(/^(\d{4}-\d{2}-\d{2})/);
+    const dateMatch = safeId.match(/^(\d{4}-\d{2}-\d{2})/);
     if (dateMatch) {
       date = new Date(dateMatch[1]).toISOString();
     }
 
     const session: SessionDetail = {
-      id,
-      name: prdJson.project || id,
+      id: safeId,
+      name: prdJson.project || safeId,
       description: prdJson.description,
       branchName: prdJson.branchName,
       date,
@@ -123,8 +128,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const csrfError = verifyCsrfProtection(request);
+    if (csrfError) return csrfError;
+
     const { id } = await params;
-    const sessionDir = path.join(ARCHIVE_DIR, id);
+    const safeId = normalizeProjectId(id);
+    if (!safeId) {
+      return NextResponse.json({ error: 'Invalid project id' }, { status: 400 });
+    }
+    const sessionDir = path.join(ARCHIVE_DIR, safeId);
 
     // Check if session directory exists
     if (!fs.existsSync(sessionDir)) {
@@ -137,7 +149,7 @@ export async function DELETE(
     // Delete the directory recursively
     fs.rmSync(sessionDir, { recursive: true, force: true });
 
-    return NextResponse.json({ success: true, deleted: id });
+    return NextResponse.json({ success: true, deleted: safeId });
   } catch (error) {
     console.error('Error deleting session:', error);
     return NextResponse.json(
