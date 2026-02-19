@@ -20,7 +20,8 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: `npm run dev -- --port ${testPort}`,
+    // --no-turbopack: use webpack for test server to avoid symlinked node_modules issues in worktrees
+    command: `npm run dev -- --port ${testPort} --no-turbopack`,
     url: `http://localhost:${testPort}`,
     reuseExistingServer: false,
   },
