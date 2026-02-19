@@ -16,7 +16,7 @@ interface AgentLogsResponse {
 export function useAgentLogs({ projectId, enabled }: UseAgentLogsOptions) {
   const [lines, setLines] = useState<string[]>([]);
   const [alive, setAlive] = useState(false);
-  const [isPolling, setIsPolling] = useState(false);
+  const isPolling = enabled && !!projectId;
   const seenRef = useRef<Set<string>>(new Set());
 
   const reset = useCallback(() => {
@@ -27,11 +27,8 @@ export function useAgentLogs({ projectId, enabled }: UseAgentLogsOptions) {
 
   useEffect(() => {
     if (!enabled || !projectId) {
-      setIsPolling(false);
       return;
     }
-
-    setIsPolling(true);
 
     const fetchLogs = async () => {
       try {
@@ -64,7 +61,6 @@ export function useAgentLogs({ projectId, enabled }: UseAgentLogsOptions) {
 
     return () => {
       clearInterval(intervalId);
-      setIsPolling(false);
     };
   }, [enabled, projectId]);
 
