@@ -14,6 +14,8 @@ interface TabContextValue {
   updateTabName: (id: string, name: string) => void;
   updateTabStage: (id: string, stage: number) => void;
   updateTabRunning: (id: string, isRunning: boolean) => void;
+  updateTabStatus: (id: string, status: string, progress?: { completed: number; total: number }) => void;
+  setNeedsAttention: (id: string, needsAttention: boolean) => void;
 }
 
 const TabContext = createContext<TabContextValue | null>(null);
@@ -111,6 +113,8 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
 
   const switchTab = useCallback((id: string, url: string) => {
     setActiveTabId(id);
+    // Auto clear attention when switching to a tab
+    setTabs((prev) => prev.map((t) => t.id === id && t.needsAttention ? { ...t, needsAttention: false } : t));
     router.push(url);
   }, [router]);
 
@@ -126,6 +130,19 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     setTabs((prev) => prev.map((t) => t.id === id ? { ...t, isRunning } : t));
   }, []);
 
+  const updateTabStatus = useCallback((id: string, status: string, progress?: { completed: number; total: number }) => {
+    setTabs((prev) => prev.map((t) => {
+      if (t.id !== id) return t;
+      const updated: TabItem = { ...t, agentStatus: status };
+      if (progress !== undefined) updated.progress = progress;
+      return updated;
+    }));
+  }, []);
+
+  const setNeedsAttention = useCallback((id: string, needsAttention: boolean) => {
+    setTabs((prev) => prev.map((t) => t.id === id ? { ...t, needsAttention } : t));
+  }, []);
+
   return (
     <TabContext.Provider
       value={{
@@ -137,6 +154,8 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
         updateTabName,
         updateTabStage,
         updateTabRunning,
+        updateTabStatus,
+        setNeedsAttention,
       }}
     >
       {children}
