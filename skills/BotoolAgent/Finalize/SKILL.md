@@ -1,34 +1,37 @@
 ---
 name: botoolagent-finalize
-description: "Finalize the BotoolAgent development cycle: push code, create PR, review changes, merge to main, and clean up branches. Use when development and testing are complete. Triggers on: finalize, create pr, merge, finish project."
+description: "Finalize the BotoolAgent development cycle: review testing report, merge PR to main, and clean up branches. Use when development and testing are complete. Triggers on: finalize, create pr, merge, finish project."
 user-invocable: true
 ---
 
-# BotoolAgent Finalize 流水线
+# BotoolAgent Finalize 流水线（一键 Merge）
 
-CLI 端的 PR 创建、Code Review 摘要、合并、清理流程。
+CLI 端的合并发布流程。**前置条件：Testing 已完成（agent-status = `testing_complete`）。**
 
-前置条件：开发（`/botoolagent-coding`）和测试（`/botoolagent-testing`）已完成。
+Testing Skill 负责全部质量保障（6 层自动质检 + PR 创建），Finalize 只负责：
+1. 检查 Testing 是否完成
+2. 展示质检摘要
+3. 用户确认 merge
+4. 执行 merge + 清理
+5. 输出完成摘要
 
-**Announce at start:** "正在启动 BotoolAgent Finalize 流水线..."
+**Announce at start:** "正在启动 BotoolAgent Finalize 流水线（一键 Merge 模式）..."
 
 ---
 
-## Step 0: 项目选择（多 PRD 模式）
+## Step 1: 项目选择 + 前置检查
+
+### 1a. 项目选择（多 PRD 模式）
 
 检查 `tasks/registry.json`（或 `BotoolAgent/tasks/registry.json`）是否存在：
 - 如果存在且有多个项目 → 用 AskUserQuestion 列出项目让用户选择
 - 选择后，设置 `PRD_PATH="tasks/${PROJECT_ID}/prd.json"`
 - 如果不存在 registry 或只有一个项目 → 设置 `PRD_PATH="prd.json"`（向后兼容）
 
----
-
-## Step 1: 前置检查 & 推送代码
-
-### 1a. 检查 prd.json 和 branchName
+### 1b. 检查 prd.json 和 branchName
 
 ```bash
-# 使用 Step 0 确定的 PRD_PATH（per-project 或根目录）
+# 使用 Step 1a 确定的 PRD_PATH（per-project 或根目录）
 ls "$PRD_PATH" 2>/dev/null
 ```
 
@@ -38,12 +41,12 @@ ls "$PRD_PATH" 2>/dev/null
 
 恢复建议：
 - 运行 /botoolagent-prd2json 从 PRD 文档生成
-- 或通过 Viewer the Viewer /stage2 page 完成 Stage 2
+- 或通过 Viewer /stage2 page 完成 Stage 2
 ```
 Then stop here.
 
 ```bash
-grep -o '"branchName": "[^"]*"' "$PRD_PATH" | cut -d'"' -f4
+BRANCH_NAME=$(grep -o '"branchName": "[^"]*"' "$PRD_PATH" | cut -d'"' -f4)
 ```
 
 **如果 branchName 为空：**
@@ -54,162 +57,113 @@ grep -o '"branchName": "[^"]*"' "$PRD_PATH" | cut -d'"' -f4
 ```
 Then stop here.
 
-### 1b. 确保在正确的分支上
+### 1c. 检查 testing_complete 状态
 
 ```bash
-git branch --show-current
+# 读取 agent-status（per-project 路径）
+STATUS_PATH="tasks/${PROJECT_ID}/agent-status"
+STATUS=$(node -e "
+  try {
+    const s = JSON.parse(require('fs').readFileSync('$STATUS_PATH','utf8'));
+    console.log(s.status || 'unknown');
+  } catch(e) { console.log('not_found'); }
+")
+echo "agent-status: $STATUS"
 ```
 
-**如果当前分支不是 branchName：**
-```bash
-git checkout <branchName>
+**如果 status 不是 `testing_complete`：**
 ```
+错误：Testing 尚未完成。当前状态：{status}
 
-**如果当前分支是 main：**
-```
-错误：当前在 main 分支上，没有可合并的功能分支。
-
-恢复建议：切换到开发分支后重试
+Finalize 需要 Testing 全部通过后才能执行。
+请先运行 /botoolagent-testing 完成 6 层自动质检。
 ```
 Then stop here.
 
-### 1c-pre. 检查未提交的更改
-
-```bash
-git status --porcelain
-```
-
-如果有未提交的更改（Testing 自动修复残留）：
-```bash
-git add -A
-git commit -m "fix: commit testing auto-fixes before finalize"
-```
-
-### 1c. 推送代码到远程
-
-```bash
-git push origin <branchName>
-```
-
-**如果推送失败：**
-```
-错误：推送失败。
-
-恢复建议：
-- 检查是否有未提交的更改：git status
-- 检查远程仓库连接：git remote -v
-- 如果有冲突，先 pull 再 push
-```
-Then stop here.
-
-**推送成功后告知用户：** "代码已推送到远程分支 `<branchName>`。"
+**前置检查通过后，告知用户：** "前置检查通过，Testing 已完成。"
 
 ---
 
-## Step 2: 检查 / 创建 PR
+## Step 2: 展示质检摘要
 
-### 2a. 检查是否已有 PR
-
-```bash
-gh pr list --head <branchName> --json number,title,url,state --jq '.[0]'
-```
-
-**如果已有 PR：**
-- 输出 PR 信息（编号、标题、URL）
-- 跳到 Step 3
-
-### 2b. 创建新 PR
-
-读取 prd.json 中的 `project`（项目名称）和 `description`（项目描述）。
+### 2a. 读取 testing-report.json
 
 ```bash
-gh pr create --title "feat: $PROJECT_NAME" --body "$(cat <<EOF
-## 自动生成 PR
-
-**项目：** $PROJECT_NAME
-
-**描述：** $PROJECT_DESCRIPTION
-
-### 变更摘要
-
-本 PR 包含 BotoolAgent 自动开发的全部代码变更。
-
----
-*由 BotoolAgent Finalize 自动创建*
-EOF
-)"
+REPORT_PATH="tasks/${PROJECT_ID}/testing-report.json"
+cat "$REPORT_PATH"
 ```
 
-**如果创建失败：**
+**如果 testing-report.json 不存在：**
 ```
-错误：PR 创建失败。
+警告：未找到 testing-report.json。Testing 可能使用了旧版本。
 
-恢复建议：
-- 检查 gh 是否已认证：gh auth status
-- 检查远程仓库是否有写入权限
-- 手动创建 PR：gh pr create
+跳过质检摘要展示，直接进入确认合并。
 ```
-Then stop here.
+跳到 Step 3。
 
-**创建成功后：** 输出 PR 编号、标题和 URL。
+### 2b. 展示 6 层质检报告
 
----
+解析 testing-report.json，展示格式化的质检摘要：
 
-## Step 3: Code Review 摘要
+```
+质检报告摘要:
 
-生成代码审查摘要，审查 `main` 分支到当前分支的所有变更。
+  Layer 1 — Regression:       ✓ 通过 / ✗ 失败 / ○ 跳过
+  Layer 2 — Unit Tests:       ✓ 通过 / ✗ 失败 / ○ 跳过
+  Layer 3 — E2E Tests:        ✓ 通过 / ✗ 失败 / ○ 跳过
+  Layer 4 — Code Review:      ✓ 通过 / ✗ 失败 / ○ 跳过
+  Layer 5 — Codex 红队审查:    ✓ 通过 / ✗ 失败 / ○ 跳过
+  Layer 6 — PR 创建:          ✓ 通过 / ✗ 失败 / ○ 跳过
 
-### 3a. 获取变更差异
+  Verdict: {verdict}
+  PR: #{prNumber} — {prUrl}
+```
+
+### 2c. 读取 PR 信息
 
 ```bash
-git diff main...HEAD --stat
-git diff main...HEAD
+# 从 agent-status 获取 PR URL
+PR_URL=$(node -e "
+  try {
+    const s = JSON.parse(require('fs').readFileSync('$STATUS_PATH','utf8'));
+    console.log(s.prUrl || '');
+  } catch(e) { console.log(''); }
+")
+PR_NUMBER=$(node -e "
+  try {
+    const s = JSON.parse(require('fs').readFileSync('$STATUS_PATH','utf8'));
+    console.log(s.prNumber || '');
+  } catch(e) { console.log(''); }
+")
+
+# 如果 agent-status 中没有 PR 信息，从 gh CLI 获取
+if [ -z "$PR_URL" ]; then
+  PR_URL=$(gh pr list --head "$BRANCH_NAME" --json url --jq '.[0].url')
+  PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number')
+fi
+
+echo "PR #$PR_NUMBER: $PR_URL"
 ```
 
-### 3b. Claude 生成 Review 摘要
-
-分析 diff 内容，生成结构化的审查摘要，涵盖以下方面：
-
-1. **变更概述**：修改了哪些模块、新增了什么功能
-2. **代码质量**：代码风格一致性、命名规范、注释完整度
-3. **潜在风险**：可能的 bug、安全隐患、性能问题
-4. **改进建议**：可选的优化方向
-5. **总体评价**：是否建议合并（推荐/谨慎/不推荐）
-
-输出格式：
+**如果没有找到 PR：**
 ```
-## Code Review 摘要
+错误：未找到对应的 PR。
 
-### 变更概述
-- ...
-
-### 代码质量
-评分: ⭐⭐⭐⭐ (4/5)
-- ...
-
-### 潜在风险
-- ...（如果没有风险则标注"未发现明显风险"）
-
-### 改进建议
-- ...（可选优化，不阻塞合并）
-
-### 总体评价
-✅ 建议合并 / ⚠️ 谨慎合并 / ❌ 不建议合并
-理由: ...
+Testing Layer 6 应该已经创建了 PR。
+请检查远程仓库是否有该分支的 PR，或手动创建：gh pr create
 ```
+AskUserQuestion 让用户选择：手动创建后继续 / 终止 finalize。
 
 ---
 
-## Step 4: 确认合并
-
-展示 Review 摘要后，向用户确认是否合并。
+## Step 3: 用户确认 Merge
 
 **使用 AskUserQuestion 询问：**
 ```
-Code Review 已完成。是否将 PR #<number> 合并到 main？
+质检报告已展示。是否将 PR #<number> 合并到 main？
 
 选项：
-1. 合并 — 执行普通 merge 到 main
+1. 确认 Merge — 执行普通 merge 到 main
 2. 取消 — 保留 PR，稍后手动处理
 ```
 
@@ -222,12 +176,23 @@ Then stop here.
 
 ---
 
-## Step 5: 执行合并
+## Step 4: 执行 Merge + 清理
+
+### 4a. 确保在正确的分支上
+
+```bash
+CURRENT_BRANCH=$(git branch --show-current)
+if [ "$CURRENT_BRANCH" = "main" ]; then
+  echo "错误：当前在 main 分支上"
+fi
+```
+
+### 4b. 执行 Merge
 
 使用普通 merge（**不使用 squash**），保留完整的提交历史。
 
 ```bash
-gh pr merge <pr-number> --merge
+gh pr merge "$PR_NUMBER" --merge
 ```
 
 **重要：使用 `--merge` 而不是 `--squash`，以保留每个任务的独立提交记录。**
@@ -245,37 +210,33 @@ Then stop here.
 
 **合并成功后告知用户：** "PR #<number> 已成功合并到 main！"
 
----
-
-## Step 6: 清理
-
-### 6a. 删除远程分支
+### 4c. 清理远程分支
 
 ```bash
-git push origin --delete <branchName>
+git push origin --delete "$BRANCH_NAME" 2>/dev/null || echo "远程分支删除失败（可能已自动删除）"
 ```
 
 如果删除失败，记录警告但不阻塞流程。
 
-### 6b. 切换到 main 并拉取最新代码
+### 4d. 切换到 main 并拉取最新代码
 
 ```bash
 git checkout main
 git pull origin main
 ```
 
-### 6c. 删除本地分支（可选）
+### 4e. 删除本地分支
 
 ```bash
-git branch -d <branchName>
+git branch -d "$BRANCH_NAME" 2>/dev/null || echo "本地分支删除失败（可能未完全合并）"
 ```
 
-如果删除失败（未完全合并），记录警告但不阻塞流程。
+如果删除失败，记录警告但不阻塞流程。
 
-### 6d. 清理 per-project 状态文件
+### 4f. 清理 per-project 状态文件
 
 ```bash
-# 清理 per-project 状态文件（如果使用了 PROJECT_ID）
+# 清理 per-project 运行时状态文件
 if [ -n "$PROJECT_ID" ]; then
   rm -f "tasks/${PROJECT_ID}/agent-status"
   rm -f "tasks/${PROJECT_ID}/agent-pid"
@@ -284,19 +245,35 @@ if [ -n "$PROJECT_ID" ]; then
 fi
 ```
 
-同时更新 `tasks/registry.json` 中该项目的 status 为 `"complete"`（通过 jq 或 sed）。
+同时更新 `tasks/registry.json` 中该项目的 status 为 `"complete"`。
+
+### 4g. 清理 worktree + PID（如有残留）
+
+```bash
+# 清理可能残留的 git worktree
+git worktree list | grep "$BRANCH_NAME" | awk '{print $1}' | while read wt; do
+  git worktree remove "$wt" --force 2>/dev/null || true
+done
+
+# 清理可能残留的 agent PID
+if [ -n "$PROJECT_ID" ] && [ -f "tasks/${PROJECT_ID}/agent-pid" ]; then
+  PID=$(cat "tasks/${PROJECT_ID}/agent-pid")
+  kill "$PID" 2>/dev/null || true
+  rm -f "tasks/${PROJECT_ID}/agent-pid"
+fi
+```
 
 ---
 
-## Step 7: 输出总结
+## Step 5: 完成摘要
 
 ```
 BotoolAgent Finalize 完成！
 
-📋 PR: #<number> - <title>
-🔗 URL: <pr-url>
-✅ 状态: 已合并到 main
-🧹 清理: 远程分支已删除，已切换到 main
+  PR: #<number> - <title>
+  URL: <pr-url>
+  状态: 已合并到 main
+  清理: 远程分支已删除，已切换到 main
 
 项目 "<project-name>" 开发周期已完成。
 ```
@@ -309,9 +286,10 @@ BotoolAgent Finalize 完成！
 |------|----------|
 | prd.json 不存在 | 运行 `/botoolagent-prd2json` 先生成 |
 | branchName 缺失 | 在 prd.json 中添加 branchName 字段 |
-| 推送失败 | 检查 `git status` 和 `git remote -v` |
+| agent-status 不是 testing_complete | 运行 `/botoolagent-testing` 完成 6 层质检 |
+| testing-report.json 不存在 | 运行 `/botoolagent-testing` 生成报告 |
+| 未找到 PR | 检查远程仓库，或手动 `gh pr create` |
 | gh 未认证 | 运行 `gh auth login` |
-| PR 创建失败 | 检查 gh 权限，或手动 `gh pr create` |
 | 合并冲突 | 先解决冲突，再重新运行 finalize |
 | 合并失败 | 检查 PR checks，手动 `gh pr merge --merge` |
 | 分支删除失败 | 手动 `git push origin --delete <branch>` |
@@ -325,10 +303,11 @@ CLI Finalize Skill 对应 Viewer 的 Stage 5（合并发布）。
 | CLI Skill | Viewer Stage | 说明 |
 |-----------|-------------|------|
 | `/botoolagent-coding` | Stage 3 | 自动开发（Teams 或单 agent） |
-| `/botoolagent-testing` | Stage 4 | 质量检查 + 测试验证 |
-| `/botoolagent-finalize` | Stage 5 | PR 创建 + Review + 合并 + 清理 |
+| `/botoolagent-testing` | Stage 4 | 6 层质检 + PR 创建 + PR-Agent 守门 |
+| `/botoolagent-finalize` | Stage 5 | 展示摘要 + 确认 merge + 清理 |
 
 **CLI 与 Viewer 的行为一致性：**
+- 两者都在 Finalize 前检查 `testing_complete` 状态
 - 两者都使用**普通 merge**（非 squash），保留完整提交历史
 - 两者都在合并后执行分支清理
-- CLI 额外提供交互式 Review 确认步骤
+- PR 创建已移至 Testing Layer 6，Finalize 只负责 merge
