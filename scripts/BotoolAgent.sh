@@ -176,18 +176,23 @@ update_status() {
   [ -z "$completed" ] && completed=0
   local total=$(grep -c '"id": "DT-' "$PRD_FILE" 2>/dev/null | tr -d '[:space:]')
   [ -z "$total" ] && total=0
-  local current_task=$(grep -o '## [0-9-]* - DT-[0-9]*' "$PROGRESS_FILE" 2>/dev/null | tail -1 | grep -o 'DT-[0-9]*' || echo "无")
+  local current_task=$(grep -o '## [0-9-]* - DT-[0-9]*' "$PROGRESS_FILE" 2>/dev/null | tail -1 | grep -o 'DT-[0-9]*' || echo "none")
+
+  # Sanitize strings for safe JSON embedding (strip ", \, control chars)
+  local safe_status=$(printf '%s' "$status" | tr -d '"\\\n\r')
+  local safe_message=$(printf '%s' "$message" | tr -d '"\\\n\r')
+  local safe_task=$(printf '%s' "$current_task" | tr -d '"\\\n\r')
 
   cat > "$STATUS_FILE" << EOF
 {
-  "status": "$status",
-  "message": "$message",
+  "status": "$safe_status",
+  "message": "$safe_message",
   "timestamp": "$timestamp",
   "iteration": ${CURRENT_ROUND:-0},
   "maxIterations": $MAX_ROUNDS,
   "completed": $completed,
   "total": $total,
-  "currentTask": "$current_task",
+  "currentTask": "$safe_task",
   "retryCount": 0
 }
 EOF
