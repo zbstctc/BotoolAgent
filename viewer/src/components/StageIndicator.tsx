@@ -5,6 +5,9 @@ interface StageIndicatorProps {
   completedStages?: number[];
   projectName?: string;
   stageStatus?: string;
+  autoMode?: boolean;
+  onAutoModeChange?: (checked: boolean) => void;
+  showAutoMode?: boolean;
 }
 
 const stages = [
@@ -15,7 +18,7 @@ const stages = [
   { id: 5, name: '确认合并', available: true },
 ];
 
-export function StageIndicator({ currentStage, completedStages = [], projectName, stageStatus }: StageIndicatorProps) {
+export function StageIndicator({ currentStage, completedStages = [], projectName, stageStatus, autoMode, onAutoModeChange, showAutoMode }: StageIndicatorProps) {
   return (
     <div className="w-full bg-white border-b border-neutral-200">
       <div className="px-6 py-4">
@@ -123,6 +126,19 @@ export function StageIndicator({ currentStage, completedStages = [], projectName
             );
           })}
           </div>
+
+          {/* Auto Mode checkbox */}
+          {showAutoMode && (
+            <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={autoMode ?? false}
+                onChange={(e) => onAutoModeChange?.(e.target.checked)}
+                className="accent-neutral-900"
+              />
+              <span className="text-sm text-neutral-600">全自动模式</span>
+            </label>
+          )}
         </div>
       </div>
     </div>
