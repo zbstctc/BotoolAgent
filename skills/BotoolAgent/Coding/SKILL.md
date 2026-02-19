@@ -39,9 +39,13 @@ CLI 自动开发流水线：前置检查 → 运行 BotoolAgent.sh (tmux + Agent
 ### 1a. 检查 prd.json
 
 ```bash
-# 如果 Step 0 选定了 projectId，检查项目特定的 prd.json
-# 否则检查根目录 prd.json
-ls prd.json 2>/dev/null
+# 如果 Step 0 选定了 projectId，检查 per-project prd.json
+# 否则检查根目录 prd.json（向后兼容）
+if [ -n "$PROJECT_ID" ]; then
+  ls tasks/${PROJECT_ID}/prd.json 2>/dev/null
+else
+  ls prd.json 2>/dev/null
+fi
 ```
 
 **如果 prd.json 不存在：**
@@ -82,7 +86,12 @@ git checkout <branchName> 2>/dev/null || git checkout -b <branchName>
 ### 1d. 检查是否有重复进程
 
 ```bash
-pgrep -f "BotoolAgent" 2>/dev/null
+# 检查当前项目是否有 agent 在运行
+if [ -n "$PROJECT_ID" ]; then
+  pgrep -f "project-id.*$PROJECT_ID" 2>/dev/null
+else
+  pgrep -f "BotoolAgent.sh" 2>/dev/null
+fi
 ```
 
 **如果有进程在运行：**

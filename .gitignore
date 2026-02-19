@@ -8,6 +8,12 @@ logs/
 tasks/prd-*.json
 tasks/progress-*.txt
 tasks/registry.json
+tasks/teammates.json
+tasks/*/agent-status
+tasks/*/agent-pid
+tasks/*/teammates.json
+tasks/*/last-branch
+tasks/*/progress.txt
 
 # ===== User PRD documents (external project examples) =====
 v1.6_Botool_Present_*.md

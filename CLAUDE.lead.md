@@ -120,13 +120,13 @@
    b. **Stage A: Spec + Constitution Review**：对照 acceptanceCriteria + constitution checklist → FAIL 则修复后重新验证
    c. **Stage B: Quick Quality Check**：安全/调试遗留 → HIGH 立即修复
    d. 全部 PASS → 更新该 DT 的 `passes: true`
-5. 更新 `.state/agent-status`
+5. 更新 `$STATUS_PATH`（agent-status）
 6. 写 `progress.txt`
 7. 执行 `/compact` 释放上下文
 
 ### 批次间
 
-- 更新 `.state/agent-status`（iteration 递增）
+- 更新 `$STATUS_PATH`（agent-status，iteration 递增）
 - `progress.txt` 追加日志
 - `/compact` 释放上下文
 

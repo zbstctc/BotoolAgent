@@ -87,7 +87,6 @@ if [ -z "$PROJECT_DIR" ]; then
 fi
 
 ARCHIVE_DIR="$SCRIPT_DIR/archive"
-LAST_BRANCH_FILE="$SCRIPT_DIR/.state/last-branch"
 
 # --prd-path 覆盖：支持多 PRD 模式
 if [ -n "$PRD_PATH_OVERRIDE" ]; then
@@ -123,12 +122,14 @@ if [ -n "$PROJECT_ID" ]; then
   PID_FILE="$SCRIPT_DIR/tasks/${PROJECT_ID}/agent-pid"
   # Ensure per-project directory exists
   mkdir -p "$SCRIPT_DIR/tasks/${PROJECT_ID}"
+  LAST_BRANCH_FILE="$SCRIPT_DIR/tasks/${PROJECT_ID}/last-branch"
 else
   # 用项目目录的短 hash 隔离 session name，防止不同项目 session 互相冲突
   PROJECT_HASH=$(echo "$PROJECT_DIR" | md5 2>/dev/null | cut -c1-6 || echo "$PROJECT_DIR" | md5sum 2>/dev/null | cut -c1-6 || echo "default")
   SESSION_NAME="botool-teams-${PROJECT_HASH}"
   STATUS_FILE="$SCRIPT_DIR/.state/agent-status"
   PID_FILE="$SCRIPT_DIR/.state/agent-pid"
+  LAST_BRANCH_FILE="$SCRIPT_DIR/.state/last-branch"
 fi
 
 if [ "$PROJECT_DIR" != "$SCRIPT_DIR" ]; then

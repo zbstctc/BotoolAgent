@@ -273,6 +273,20 @@ git branch -d <branchName>
 
 如果删除失败（未完全合并），记录警告但不阻塞流程。
 
+### 6d. 清理 per-project 状态文件
+
+```bash
+# 清理 per-project 状态文件（如果使用了 PROJECT_ID）
+if [ -n "$PROJECT_ID" ]; then
+  rm -f "tasks/${PROJECT_ID}/agent-status"
+  rm -f "tasks/${PROJECT_ID}/agent-pid"
+  rm -f "tasks/${PROJECT_ID}/teammates.json"
+  rm -f "tasks/${PROJECT_ID}/last-branch"
+fi
+```
+
+同时更新 `tasks/registry.json` 中该项目的 status 为 `"complete"`（通过 jq 或 sed）。
+
 ---
 
 ## Step 7: 输出总结
