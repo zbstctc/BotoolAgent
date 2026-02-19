@@ -171,9 +171,16 @@ export function useTaskTimings(
   teammates: UseTeammatesReturn,
   currentTaskId: string | null,
   agentStartTimestamp?: string,
+  projectId?: string,
 ): UseTaskTimingsReturn {
   // Accumulated batch history: persists task→batchIndex across batch transitions
+  // Reset when projectId changes to prevent cross-project batch data contamination
   const batchHistoryRef = useRef<Map<string, number>>(new Map());
+  const prevProjectIdRef = useRef<string | undefined>(undefined);
+  if (prevProjectIdRef.current !== projectId) {
+    batchHistoryRef.current = new Map();
+    prevProjectIdRef.current = projectId;
+  }
 
   // Tick counter for 1-second updates of currentTaskElapsed
   const [tick, setTick] = useState(0);

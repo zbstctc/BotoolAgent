@@ -298,8 +298,8 @@ fi
 # ============================================================================
 update_status "starting" "BotoolAgent 启动中"
 
-# 写入 PID 文件（BotoolAgent.sh 自身的 PID）
-echo $$ > "$PID_FILE"
+# 写入 PID 文件（JSON 格式，与 agent/status API 期望的 AgentPidInfo 结构一致）
+printf '{"pid":%d,"startedAt":"%s"}\n' $$ "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$PID_FILE"
 
 # ============================================================================
 # start_session(): 创建 tmux session，发送 prompt，等待结束
