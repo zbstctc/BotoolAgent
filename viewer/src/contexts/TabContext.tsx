@@ -64,6 +64,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
   // Sync activeTabId + tab stage from pathname changes
   useEffect(() => {
     if (pathname === '/') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveTabId('dashboard');
       return;
     }

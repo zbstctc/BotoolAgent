@@ -63,12 +63,14 @@ export function ClaudeProcesses() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchProcesses();
     const interval = setInterval(fetchProcesses, 10_000);
     return () => clearInterval(interval);
   }, [fetchProcesses]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) fetchProcesses();
   }, [open, fetchProcesses]);
 
