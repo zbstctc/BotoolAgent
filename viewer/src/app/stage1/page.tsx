@@ -66,8 +66,8 @@ function Stage1PageContent() {
   // Project context
   const { activeProject, updateProject, isLoading: projectsLoading } = useProject();
 
-  // Project validation
-  const hasUrlContext = Boolean(sessionId);
+  // Project validation — skip when navigated via RequirementContext (req param) or session
+  const hasUrlContext = Boolean(sessionId || reqId);
   useProjectValidation({ currentStage: 1, skipValidation: hasUrlContext });
 
   // CLI Chat state
@@ -206,11 +206,12 @@ function Stage1PageContent() {
   }, [sessionId, activeProject?.name, urlMode, urlFile]);
 
   // Redirect invalid direct access without session context
+  // Allow access when reqId is present (navigated from Dashboard via RequirementContext)
   useEffect(() => {
-    if (!sessionId && !projectsLoading) {
+    if (!sessionId && !reqId && !projectsLoading) {
       router.replace('/');
     }
-  }, [sessionId, projectsLoading, router]);
+  }, [sessionId, reqId, projectsLoading, router]);
 
   // Handle tool use from CLI
   const handleToolUse = useCallback((toolUse: { id: string; name: string; input: Record<string, unknown> }) => {
@@ -711,8 +712,8 @@ function Stage1PageContent() {
     // startPyramid will auto-trigger via the useEffect since selectedMode and initialDescription are set
   }, [transformFilePath]);
 
-  // Redirect if no session
-  if (!sessionId && !projectsLoading) {
+  // Redirect if no session and no requirement context
+  if (!sessionId && !reqId && !projectsLoading) {
     return (
       <div className="flex flex-col h-full bg-white">
         <StageIndicator currentStage={1} completedStages={[]} />
