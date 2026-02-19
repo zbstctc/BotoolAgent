@@ -912,6 +912,7 @@ function Stage1PageContent() {
         summary="PRD 已生成，可以开始将需求转换为开发任务。"
         onConfirm={handleTransitionConfirm}
         onLater={handleTransitionLater}
+        autoCountdown={activeProject?.autoMode ? 3 : undefined}
       />
 
       {/* Main Content - Three Column Layout */}
@@ -1232,19 +1233,41 @@ function Stage1PageContent() {
                   </div>
                   <h2 className="text-lg font-semibold text-neutral-900">PRD 已生成</h2>
                 </div>
-                <button
-                  onClick={handleSavePRD}
-                  disabled={isSaving || saveSuccess}
-                  className={`px-5 py-2 rounded-lg font-medium text-sm transition-colors ${
-                    saveSuccess
-                      ? 'bg-green-100 text-green-700'
-                      : isSaving
-                        ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-                        : 'bg-neutral-900 text-white hover:bg-neutral-800'
-                  }`}
-                >
-                  {saveSuccess ? '已保存' : isSaving ? '保存中...' : '保存 PRD 并继续'}
-                </button>
+                <div className="flex items-center gap-4">
+                  {/* Auto mode checkbox */}
+                  <div className="flex flex-col items-end">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={activeProject?.autoMode ?? false}
+                        onChange={(e) => {
+                          if (activeProject) {
+                            updateProject(activeProject.id, { autoMode: e.target.checked });
+                          }
+                        }}
+                        className="accent-neutral-900"
+                      />
+                      <span className="text-sm text-neutral-600">全自动模式</span>
+                    </label>
+                    {activeProject?.autoMode && (
+                      <span className="text-xs text-neutral-500 mt-0.5">将自动完成后续所有步骤</span>
+                    )}
+                  </div>
+                  {/* Save button */}
+                  <button
+                    onClick={handleSavePRD}
+                    disabled={isSaving || saveSuccess}
+                    className={`px-5 py-2 rounded-lg font-medium text-sm transition-colors ${
+                      saveSuccess
+                        ? 'bg-green-100 text-green-700'
+                        : isSaving
+                          ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                          : 'bg-neutral-900 text-white hover:bg-neutral-800'
+                    }`}
+                  >
+                    {saveSuccess ? '已保存' : isSaving ? '保存中...' : '保存 PRD 并继续'}
+                  </button>
+                </div>
               </div>
               {saveError && (
                 <div className="px-6 py-2 bg-red-50 border-b border-red-200 text-sm text-red-600">{saveError}</div>
