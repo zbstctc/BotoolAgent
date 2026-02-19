@@ -1,0 +1,383 @@
+{
+  "project": "PRD 对抗性审查 (PRD Adversarial Review)",
+  "branchName": "botool/prd-adversarial-review",
+  "description": "在 Stage 2 的两个关键节点（PRD 文档 + Enrich 产出）用 Codex CLI 做对抗性审查，通过 Codex↔Claude 全自动对抗循环（最多 3 轮）收敛，确保进入自动开发的输入质量",
+  "prdFile": "tasks/prd-adversarial-review/prd.md",
+  "constitution": {
+    "rules": [
+      {
+        "id": "rule-001",
+        "name": "API设计规范",
+        "category": "backend",
+        "file": "rules/backend/API设计规范.md",
+        "checklist": [
+          "route.ts 放在 api/{feature}/ 下",
+          "handler 用 try/catch 包裹",
+          "SSE 响应设置正确 headers (Content-Type, Cache-Control)",
+          "spawn 移除 CLAUDECODE 环境变量",
+          "输入校验在 handler 顶部完成",
+          "错误响应不泄露内部路径"
+        ]
+      },
+      {
+        "id": "rule-002",
+        "name": "命名规范",
+        "category": "frontend",
+        "file": "rules/frontend/命名规范.md",
+        "checklist": [
+          "组件文件使用 PascalCase",
+          "Props 接口使用 {ComponentName}Props 格式",
+          "Hooks 使用 use 前缀 + camelCase",
+          "变量和函数使用 camelCase",
+          "barrel exports 统一导出"
+        ]
+      },
+      {
+        "id": "rule-003",
+        "name": "样式规范",
+        "category": "frontend",
+        "file": "rules/frontend/样式规范.md",
+        "checklist": [
+          "按钮全部黑底白字，禁止彩色按钮",
+          "彩色仅用于状态 Badge（成功绿/错误红/警告琥珀）",
+          "所有样式使用 Tailwind 工具类",
+          "弹窗和下拉框必须白色背景",
+          "圆角使用 rounded-lg"
+        ]
+      },
+      {
+        "id": "rule-004",
+        "name": "前端测试",
+        "category": "frontend",
+        "file": "rules/frontend/测试.md",
+        "checklist": [
+          "E2E 使用 Playwright",
+          "关键用户流程必须有 E2E 覆盖",
+          "网络请求验证用 page.waitForResponse()"
+        ]
+      },
+      {
+        "id": "rule-005",
+        "name": "测试用例规范",
+        "category": "testing",
+        "file": "rules/testing/测试用例规范.md",
+        "checklist": [
+          "describe/it 模式描述测试",
+          "单元测试覆盖率 > 80%",
+          "每个 API 至少正常+错误路径测试",
+          "避免 sleep，使用条件等待",
+          "Typecheck 必须通过"
+        ]
+      },
+      {
+        "id": "rule-006",
+        "name": "状态管理规范",
+        "category": "application",
+        "file": "rules/application/状态管理规范.md",
+        "checklist": [
+          "Context > localStorage > state > URL 层级",
+          "localStorage 用 scopedKey() 加前缀",
+          "SSR 安全: 'use client' 标记",
+          "流式数据使用 SSE 模式"
+        ]
+      },
+      {
+        "id": "rule-007",
+        "name": "项目结构规范",
+        "category": "application",
+        "file": "rules/application/项目结构规范.md",
+        "checklist": [
+          "API 路由: app/api/{feature}/route.ts",
+          "组件放 components/ 子目录",
+          "工具函数放 lib/ 无 React 依赖",
+          "新建文件后更新 barrel index.ts"
+        ]
+      }
+    ],
+    "ruleAuditSummary": "(由 DT-003 AdversarialReviewStep 在 Stage 2 Step 2 的 PRD 审查中填充)"
+  },
+  "devTasks": [
+    {
+      "id": "DT-001",
+      "title": "创建 /api/prd/review API 路由（两步法 + 规范审查）",
+      "prdSection": "7.1 (L406-438)",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Review API route file exists",
+          "command": "test -f viewer/src/app/api/prd/review/route.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "unit", "desc": "两步法 Codex 调用 + 自由文本解析容错", "tdd": true }
+      ],
+      "steps": [
+        { "action": "create", "file": "viewer/src/app/api/prd/review/route.ts", "description": "创建 API 路由文件" },
+        { "action": "implement", "description": "实现两步法 Codex 调用（codex exec --full-auto → 自由文本 → 服务端解析 ReviewFinding[]）+ 规范文件读取 + 规范作为 prompt 附加上下文 + SSE 流式响应 + 解析 fail-closed" },
+        { "action": "verify", "command": "npx tsc --noEmit", "expected": "exit 0" },
+        { "action": "commit", "message": "feat: DT-001 - add /api/prd/review endpoint" }
+      ]
+    },
+    {
+      "id": "DT-002",
+      "title": "创建 /api/prd/fix API 路由",
+      "prdSection": "7.1 (L430-438)",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Fix API route file exists",
+          "command": "test -f viewer/src/app/api/prd/fix/route.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "unit", "desc": "Claude API 修正调用和 SSE 响应", "tdd": true }
+      ],
+      "steps": [
+        { "action": "create", "file": "viewer/src/app/api/prd/fix/route.ts", "description": "创建 API 路由文件" },
+        { "action": "implement", "description": "实现 Claude API 修正调用 + SSE 流式响应" },
+        { "action": "verify", "command": "npx tsc --noEmit", "expected": "exit 0" },
+        { "action": "commit", "message": "feat: DT-002 - add /api/prd/fix endpoint" }
+      ]
+    },
+    {
+      "id": "DT-003",
+      "title": "创建 AdversarialReviewStep 组件（含规范审查传递）",
+      "prdSection": "7.2 (L440-462)",
+      "priority": 3,
+      "passes": false,
+      "dependsOn": ["DT-001"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "AdversarialReviewStep component exists",
+          "command": "test -f viewer/src/components/pipeline/AdversarialReviewStep.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "e2e", "desc": "组件渲染进度条和 Badge 状态" }
+      ],
+      "steps": [
+        { "action": "create", "file": "viewer/src/components/pipeline/AdversarialReviewStep.tsx", "description": "创建组件文件" },
+        { "action": "implement", "description": "实现进度条 + TerminalActivityFeed + SSE 解析 + Badge 统计 + selectedRules 透传 + ruleAuditSummary 提取" },
+        { "action": "verify", "command": "npx tsc --noEmit", "expected": "exit 0" },
+        { "action": "commit", "message": "feat: DT-003 - add AdversarialReviewStep component" }
+      ]
+    },
+    {
+      "id": "DT-004",
+      "title": "重构 Stage 2 页面步骤编排（5 步）",
+      "prdSection": "7.2 (L464-478)",
+      "priority": 4,
+      "passes": false,
+      "dependsOn": ["DT-003"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "e2e", "desc": "Stage 2 页面 5 步流水线可导航" }
+      ],
+      "steps": [
+        { "action": "modify", "file": "viewer/src/app/stage2/page.tsx", "description": "重构步骤编排为 5 步（规则选择前置）" },
+        { "action": "implement", "description": "更新 currentStep 状态管理 (0-4) + 数据传递链 + selectedRules → PRD 审查 → ruleAuditSummary → 汇总" },
+        { "action": "verify", "command": "npx tsc --noEmit", "expected": "exit 0" },
+        { "action": "commit", "message": "feat: DT-004 - refactor Stage 2 to 5-step pipeline" }
+      ]
+    },
+    {
+      "id": "DT-005",
+      "title": "实现对抗循环编排逻辑",
+      "prdSection": "7.3 (L480-498)",
+      "priority": 5,
+      "passes": false,
+      "dependsOn": ["DT-001", "DT-002"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Adversarial loop module exists",
+          "command": "test -f viewer/src/lib/adversarial-loop.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "unit", "desc": "状态机所有路径：passed/acknowledged/skipped", "tdd": true }
+      ],
+      "steps": [
+        { "action": "create", "file": "viewer/src/lib/adversarial-loop.ts", "description": "创建对抗循环模块" },
+        { "action": "implement", "description": "实现状态机 + 收敛条件 + 重试逻辑 + onProgress 回调" },
+        { "action": "verify", "command": "npx tsc --noEmit", "expected": "exit 0" },
+        { "action": "commit", "message": "feat: DT-005 - implement adversarial loop orchestration" }
+      ]
+    },
+    {
+      "id": "DT-006",
+      "title": "实现审查结果持久化",
+      "prdSection": "7.3 (L500-510)",
+      "priority": 6,
+      "passes": false,
+      "dependsOn": ["DT-005"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Review save API route exists",
+          "command": "test -f viewer/src/app/api/prd/review-save/route.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "unit", "desc": "持久化写入正确文件路径", "tdd": true }
+      ],
+      "steps": [
+        { "action": "create", "file": "viewer/src/app/api/prd/review-save/route.ts", "description": "创建持久化 API 路由" },
+        { "action": "implement", "description": "实现 reviewResult 写入 + PRD 覆盖 + portable 模式兼容" },
+        { "action": "verify", "command": "npx tsc --noEmit", "expected": "exit 0" },
+        { "action": "commit", "message": "feat: DT-006 - add review result persistence" }
+      ]
+    },
+    {
+      "id": "DT-007",
+      "title": "创建 botoolagent-prdreview CLI Skill",
+      "prdSection": "7.4 (L512-530)",
+      "priority": 7,
+      "passes": false,
+      "dependsOn": ["DT-001"],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "SKILL.md exists",
+          "command": "test -f skills/BotoolAgent/PRDReview/SKILL.md",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Symlink registered in ~/.claude/skills/",
+          "command": "test -L ~/.claude/skills/botoolagent-prdreview/SKILL.md",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "SKILL.md 格式校验" },
+        { "type": "manual", "desc": "CLI skill 可独立运行 PRD 审查" }
+      ],
+      "steps": [
+        { "action": "create", "file": "skills/BotoolAgent/PRDReview/SKILL.md", "description": "创建 Skill 文件" },
+        { "action": "implement", "description": "编写 Skill 指令：codex exec 调用 + 对抗循环 + 报告输出" },
+        { "action": "run", "command": "mkdir -p ~/.claude/skills/botoolagent-prdreview && ln -sf \"$(pwd)/skills/BotoolAgent/PRDReview/SKILL.md\" ~/.claude/skills/botoolagent-prdreview/SKILL.md", "description": "注册 symlink 到 ~/.claude/skills/" },
+        { "action": "verify", "command": "test -L ~/.claude/skills/botoolagent-prdreview/SKILL.md", "expected": "exit 0" },
+        { "action": "commit", "message": "feat: DT-007 - add botoolagent-prdreview CLI skill" }
+      ]
+    },
+    {
+      "id": "DT-008",
+      "title": "修复 Enrich codeExamples 全局分配 Bug",
+      "prdSection": "7.4 (L532-540)",
+      "priority": 8,
+      "passes": false,
+      "dependsOn": [],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck passes",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        { "type": "typecheck", "desc": "TypeScript 编译通过" },
+        { "type": "unit", "desc": "codeExamples 按 taskId 正确分配", "tdd": true }
+      ],
+      "steps": [
+        { "action": "modify", "file": "viewer/src/app/api/prd/merge/route.ts", "description": "修改 mergeEnrichedPrdJson 逻辑" },
+        { "action": "modify", "file": "viewer/src/app/api/prd/enrich/route.ts", "description": "更新 enrich prompt 要求 taskId" },
+        { "action": "implement", "description": "按 taskId 过滤 codeExamples + 向后兼容" },
+        { "action": "verify", "command": "npx tsc --noEmit", "expected": "exit 0" },
+        { "action": "commit", "message": "fix: DT-008 - filter codeExamples by taskId" }
+      ]
+    }
+  ],
+  "sessions": [
+    {
+      "id": "S1",
+      "tasks": ["DT-001", "DT-002"],
+      "reason": "Phase 1 API 基础设施，两个端点可并行开发"
+    },
+    {
+      "id": "S2",
+      "tasks": ["DT-003", "DT-004"],
+      "reason": "Phase 2 Viewer 组件，DT-004 依赖 DT-003"
+    },
+    {
+      "id": "S3",
+      "tasks": ["DT-005", "DT-006"],
+      "reason": "Phase 3 对抗循环 + 持久化，DT-006 依赖 DT-005 的循环逻辑"
+    },
+    {
+      "id": "S4",
+      "tasks": ["DT-007", "DT-008"],
+      "reason": "Phase 4 CLI Skill + Bug 修复，独立于 Phase 2/3 可并行"
+    }
+  ]
+}
