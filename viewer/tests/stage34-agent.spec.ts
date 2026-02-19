@@ -168,7 +168,7 @@ test.describe('Stage3/Stage4 Agent Integration', () => {
 
   test.afterEach(async ({ request }) => {
     if (hasPreexistingAgent) return;
-    await request.delete('/api/agent/status').catch(() => null);
+    await request.delete(`/api/agent/status?projectId=${PROJECT_ID}`).catch(() => null);
   });
 
   test.afterAll(() => {
@@ -182,7 +182,7 @@ test.describe('Stage3/Stage4 Agent Integration', () => {
   test('stage3 can trigger agent start and report status', async ({ page, request }) => {
     test.skip(hasPreexistingAgent, 'Detected a pre-existing running agent; skip to avoid interrupting it.');
 
-    await request.delete('/api/agent/status').catch(() => null);
+    await request.delete(`/api/agent/status?projectId=${PROJECT_ID}`).catch(() => null);
 
     await seedProjectInStorage(page, 3);
     await page.goto(`/stage3?projectId=${PROJECT_ID}`);
@@ -213,7 +213,7 @@ test.describe('Stage3/Stage4 Agent Integration', () => {
   test('stage4 can trigger testing start and transition status', async ({ page, request }) => {
     test.skip(hasPreexistingAgent, 'Detected a pre-existing running agent; skip to avoid interrupting it.');
 
-    await request.delete('/api/agent/status').catch(() => null);
+    await request.delete(`/api/agent/status?projectId=${PROJECT_ID}`).catch(() => null);
 
     await seedProjectInStorage(page, 4);
     await page.goto(`/stage4?projectId=${PROJECT_ID}`);
@@ -246,7 +246,7 @@ test.describe('Stage3/Stage4 Agent Integration', () => {
     expect(['running', 'complete', 'error', 'failed', 'waiting_network', 'iteration_complete']).toContain(status);
 
     // Explicit cleanup for testing mode and assert it returns idle.
-    await request.delete('/api/agent/status').catch(() => null);
+    await request.delete(`/api/agent/status?projectId=${PROJECT_ID}`).catch(() => null);
     const finalStatus = await waitForIdleStatus(request, 30_000);
     expect(finalStatus).toBe('idle');
   });
@@ -256,7 +256,7 @@ test.describe('Stage3/Stage4 Agent Integration', () => {
     test.skip(hasPreexistingAgent, 'Detected a pre-existing running agent; skip to avoid interrupting it.');
     test.setTimeout(4 * 60 * 1000);
 
-    await request.delete('/api/agent/status').catch(() => null);
+    await request.delete(`/api/agent/status?projectId=${PROJECT_ID}`).catch(() => null);
 
     await seedProjectInStorage(page, 4);
     await page.goto(`/stage4?projectId=${PROJECT_ID}`);

@@ -28,7 +28,11 @@ CLI 自动开发流水线：前置检查 → 运行 BotoolAgent.sh (tmux + Agent
 - 选择后，使用 `tasks/{projectId}/prd.json` 作为 prd.json 路径
 - 如果不存在 registry 或只有一个项目 → 直接读根目录 `prd.json`（向后兼容）
 
-选定后，设置 `PRD_PATH="tasks/${PROJECT_ID}/prd.json"`，后续所有对 prd.json 的引用均使用 `$PRD_PATH`。
+选定后，设置 `PRD_PATH`：
+- 有 `PROJECT_ID` 时：`PRD_PATH="tasks/${PROJECT_ID}/prd.json"`
+- 无 `PROJECT_ID`（单项目兼容）时：`PRD_PATH="prd.json"`
+
+后续所有对 prd.json 的引用均使用 `$PRD_PATH`。
 
 ---
 

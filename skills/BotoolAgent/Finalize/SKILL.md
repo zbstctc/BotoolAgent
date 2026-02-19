@@ -18,8 +18,8 @@ CLI 端的 PR 创建、Code Review 摘要、合并、清理流程。
 
 检查 `tasks/registry.json`（或 `BotoolAgent/tasks/registry.json`）是否存在：
 - 如果存在且有多个项目 → 用 AskUserQuestion 列出项目让用户选择
-- 选择后，使用 `tasks/{projectId}/prd.json` 作为 prd.json 路径（设置 `PRD_PATH`）
-- 如果不存在 registry 或只有一个项目 → 直接读根目录 `prd.json`（向后兼容，`PRD_PATH="prd.json"`）
+- 选择后，设置 `PRD_PATH="tasks/${PROJECT_ID}/prd.json"`
+- 如果不存在 registry 或只有一个项目 → 设置 `PRD_PATH="prd.json"`（向后兼容）
 
 ---
 

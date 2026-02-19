@@ -3,7 +3,8 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
-import { getProjectRoot, getProjectPrdJsonPath, getBotoolRoot, normalizeProjectId, getAgentPidPath } from '@/lib/project-root';
+import { getProjectRoot, getProjectPrdJsonPath, getBotoolRoot, normalizeProjectId, getTasksDir } from '@/lib/project-root';
+import path from 'path';
 
 const execAsync = promisify(exec);
 
@@ -242,14 +243,11 @@ export async function POST(request: NextRequest) {
           } catch (worktreeErr) {
             console.warn(`[merge] Failed to remove worktree .worktrees/${safeId}:`, worktreeErr);
           }
-          // Remove the agent-pid file
-          const pidPath = getAgentPidPath(safeId);
-          if (fs.existsSync(pidPath)) {
-            try {
-              fs.unlinkSync(pidPath);
-            } catch (pidErr) {
-              console.warn(`[merge] Failed to delete agent-pid at ${pidPath}:`, pidErr);
-            }
+          // Remove per-project state files (agent-pid, agent-status, teammates.json, last-branch)
+          const projectDir = path.join(getTasksDir(), safeId);
+          for (const stateFile of ['agent-pid', 'agent-status', 'teammates.json', 'last-branch']) {
+            const filePath = path.join(projectDir, stateFile);
+            try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* ignore */ }
           }
         }
       } catch (cleanupErr) {

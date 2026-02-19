@@ -164,6 +164,7 @@ test.describe('Large PRD Viewer Pipeline', () => {
       prdFile?: string;
     };
 
-    expect(generatedPrdJson.prdFile).toBe(`tasks/prd-${SOURCE_PRD_ID}.md`);
+    // New per-project format: tasks/{prdId}/prd.md (see prd/convert/route.ts line 144)
+    expect(generatedPrdJson.prdFile).toBe(`tasks/${SOURCE_PRD_ID}/prd.md`);
   });
 });

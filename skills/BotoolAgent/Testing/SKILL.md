@@ -32,8 +32,8 @@ CLI 端自动化测试验收：Layer 1 Regression → Layer 2 Unit → Layer 3 E
 
 检查 `tasks/registry.json`（或 `BotoolAgent/tasks/registry.json`）是否存在：
 - 如果存在且有多个项目 → 用 AskUserQuestion 列出项目让用户选择
-- 选择后，使用 `tasks/{projectId}/prd.json` 作为 prd.json 路径（设置 `PRD_PATH`）
-- 如果不存在 registry 或只有一个项目 → 直接读根目录 `prd.json`（向后兼容，`PRD_PATH="prd.json"`）
+- 选择后，设置 `PRD_PATH="tasks/${PROJECT_ID}/prd.json"`
+- 如果不存在 registry 或只有一个项目 → 设置 `PRD_PATH="prd.json"`（向后兼容）
 
 ### 前置检查
 
