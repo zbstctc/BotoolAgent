@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator, StageTransitionModal } from '@/components';
-import { useFileWatcher, parsePrdJson, useProjectValidation, useTeammates, useTaskTimings } from '@/hooks';
+import { useFileWatcher, parsePrdJson, useProjectValidation, useTeammates, useTaskTimings, useAgentLogs } from '@/hooks';
 import type { DevTask, PrdData } from '@/hooks';
 import { FlowChart, type AgentPhase } from '@/components/FlowChart';
 import { useProject } from '@/contexts/ProjectContext';
@@ -14,9 +14,10 @@ import type { GitStats } from '@/components/AgentDataPanel/AgentDataPanel';
 import { ProgressStrip } from '@/components/ProgressStrip';
 import BatchPanel from '@/components/BatchPanel';
 import BatchTimeline from '@/components/BatchTimeline';
+import { AgentActivityFeed } from '@/components/AgentActivityFeed';
 
 type TaskStatus = 'pending' | 'in-progress' | 'completed' | 'failed';
-type RightPanelTab = 'changes' | 'commits' | 'flowchart';
+type RightPanelTab = 'changes' | 'commits' | 'flowchart' | 'activity';
 
 interface FileChange {
   path: string;
@@ -104,6 +105,9 @@ function Stage3PageContent() {
   // Agent status via SSE
   const agentStatus = useAgentStatus({ stream: true, projectId });
 
+  // Agent logs polling (activity feed)
+  const agentLogs = useAgentLogs({ projectId: projectId ?? '', enabled: agentStatus.isRunning });
+
   const [prdData, setPrdData] = useState<PrdData | null>(null);
   const [progressLog, setProgressLog] = useState<string>('');
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
@@ -133,6 +137,7 @@ function Stage3PageContent() {
   const handleStartAgent = useCallback(async () => {
     setAgentActionLoading(true);
     setAgentStartError(null);
+    agentLogs.reset();
     try {
       await agentStatus.startAgent(maxIterations, agentMode);
       setShowIterationInput(false);
@@ -144,7 +149,7 @@ function Stage3PageContent() {
     } finally {
       setAgentActionLoading(false);
     }
-  }, [agentStatus, maxIterations, agentMode]);
+  }, [agentStatus, maxIterations, agentMode, agentLogs]);
 
   // Handle stop agent (with confirmation)
   const handleStopAgent = useCallback(async () => {
@@ -230,6 +235,13 @@ function Stage3PageContent() {
       setExpandedTaskId(currentTaskId);
     }
   }, [currentTaskId]);
+
+  // Auto-switch to activity tab when agent is running with no file changes
+  useEffect(() => {
+    if (agentStatus.isRunning && (!gitChanges || gitChanges.changes.length === 0) && activeTab !== 'activity') {
+      setActiveTab('activity');
+    }
+  }, [agentStatus.isRunning, gitChanges, activeTab]);
 
   // Fetch git changes
   const fetchGitChanges = useCallback(async () => {
@@ -725,6 +737,19 @@ function Stage3PageContent() {
             >
               流程图
             </button>
+            <button
+              onClick={() => setActiveTab('activity')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'activity'
+                  ? 'bg-neutral-900 text-white'
+                  : 'text-neutral-600 hover:bg-neutral-100'
+              }`}
+            >
+              {agentLogs.alive && (
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+              )}
+              活动
+            </button>
             {lastUpdated && (
               <span className="ml-auto text-xs text-neutral-400">
                 最近更新: {new Date(lastUpdated).toLocaleTimeString()}
@@ -736,6 +761,11 @@ function Stage3PageContent() {
           {activeTab === 'flowchart' && (
             <div className="flex-1 overflow-hidden">
               <FlowChart agentPhase={agentPhase as AgentPhase} agentStatus={agentStatus.status} currentIteration={iterationCount} />
+            </div>
+          )}
+          {activeTab === 'activity' && (
+            <div className="flex-1 overflow-hidden">
+              <AgentActivityFeed lines={agentLogs.lines} alive={agentLogs.alive} />
             </div>
           )}
           {activeTab === 'changes' && (
@@ -799,8 +829,16 @@ function Stage3PageContent() {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-full">
+                <div className="flex flex-col items-center justify-center h-full gap-2">
                   <p className="text-neutral-500 text-sm">暂无文件变更</p>
+                  {agentStatus.isRunning && (
+                    <button
+                      onClick={() => setActiveTab('activity')}
+                      className="text-xs text-neutral-500 hover:text-neutral-700 underline"
+                    >
+                      查看代理活动
+                    </button>
+                  )}
                 </div>
               )}
             </div>
