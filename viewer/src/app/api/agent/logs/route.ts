@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     let lines: string[] = [];
     try {
       const { stdout } = await execFileAsync('tmux', [
-        'capture-pane', '-t', sessionName, '-p', '-l', '40',
+        'capture-pane', '-t', sessionName, '-p', '-S', '-40',
       ]);
 
       lines = stdout

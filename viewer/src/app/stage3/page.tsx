@@ -113,6 +113,8 @@ function Stage3PageContent() {
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<RightPanelTab>('changes');
+  // Ref to ensure auto-switch to activity tab only fires once per agent run
+  const hasAutoSwitchedRef = useRef(false);
   const [gitChanges, setGitChanges] = useState<GitChangesData | null>(null);
   const [gitChangesLoading, setGitChangesLoading] = useState(false);
   const [gitCommits, setGitCommits] = useState<GitCommitsData | null>(null);
@@ -236,12 +238,18 @@ function Stage3PageContent() {
     }
   }, [currentTaskId]);
 
-  // Auto-switch to activity tab when agent is running with no file changes
+  // Auto-switch to activity tab once when agent starts with no file changes.
+  // Uses a ref guard so the user can manually switch tabs without being bounced back.
   useEffect(() => {
-    if (agentStatus.isRunning && (!gitChanges || gitChanges.changes.length === 0) && activeTab !== 'activity') {
+    if (!agentStatus.isRunning) {
+      hasAutoSwitchedRef.current = false;
+      return;
+    }
+    if (!hasAutoSwitchedRef.current && (!gitChanges || gitChanges.changes.length === 0)) {
+      hasAutoSwitchedRef.current = true;
       setActiveTab('activity');
     }
-  }, [agentStatus.isRunning, gitChanges, activeTab]);
+  }, [agentStatus.isRunning, gitChanges]);
 
   // Fetch git changes
   const fetchGitChanges = useCallback(async () => {
