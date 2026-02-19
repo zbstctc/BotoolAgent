@@ -3,7 +3,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
-import { getProjectRoot, getProjectPrdJsonPath, getProjectProgressPath } from '@/lib/project-root';
+import { getProjectRoot, getProjectPrdJsonPath, getProjectProgressPath, normalizeProjectId } from '@/lib/project-root';
 
 const execAsync = promisify(exec);
 
@@ -186,10 +186,39 @@ async function checkGhAuth(): Promise<boolean> {
 }
 
 /**
- * GET /api/git/pr
- * Returns the PR status for current branch
+ * Resolve the feature branch name for a project.
+ * If projectId is given, reads branchName from tasks/{projectId}/prd.json.
+ * Falls back to git branch --show-current (for non-worktree usage).
  */
-export async function GET() {
+async function resolveBranch(projectId?: string | null): Promise<string | null> {
+  const safeId = normalizeProjectId(projectId);
+  if (safeId) {
+    try {
+      const prdPath = getProjectPrdJsonPath(safeId);
+      const content = await fs.readFile(prdPath, 'utf-8');
+      const prd = JSON.parse(content);
+      if (prd.branchName && isSafeGitRef(prd.branchName)) {
+        return prd.branchName;
+      }
+    } catch {
+      // prd.json not found or invalid — fall through to git fallback
+    }
+  }
+  try {
+    const { stdout } = await execAsync('git branch --show-current', { cwd: PROJECT_ROOT });
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET /api/git/pr?projectId=xxx
+ * Returns the PR status for the project's feature branch.
+ * In worktree model, resolves the branch from prd.json rather than git branch --show-current.
+ * Also detects already-merged PRs (--state all).
+ */
+export async function GET(request: NextRequest) {
   try {
     // Check gh CLI
     if (!await checkGhCli()) {
@@ -206,11 +235,16 @@ export async function GET() {
       );
     }
 
-    // Get current branch
-    const { stdout: branchStdout } = await execAsync('git branch --show-current', {
-      cwd: PROJECT_ROOT,
-    });
-    const currentBranch = branchStdout.trim();
+    const url = new URL(request.url);
+    const projectId = url.searchParams.get('projectId') || undefined;
+
+    const currentBranch = await resolveBranch(projectId);
+    if (!currentBranch) {
+      return NextResponse.json(
+        { error: 'Could not determine branch name' },
+        { status: 400 }
+      );
+    }
 
     if (!isSafeGitRef(currentBranch)) {
       return NextResponse.json(
@@ -219,10 +253,23 @@ export async function GET() {
       );
     }
 
-    // Check if PR exists for this branch
+    // Find PR by branch using gh pr list --head (works from any branch, including main).
+    // Use --state all so merged PRs are also returned.
     try {
+      const { stdout: listJson } = await execAsync(
+        `gh pr list --head ${shellQuote(currentBranch)} --json number --state all`,
+        { cwd: PROJECT_ROOT }
+      );
+      const prList = JSON.parse(listJson);
+
+      if (prList.length === 0) {
+        return NextResponse.json({ branch: currentBranch, hasPR: false, pr: null });
+      }
+
+      // Get full PR details by number
+      const prNumber = prList[0].number;
       const { stdout: prJson } = await execAsync(
-        `gh pr view --json number,title,url,state,isDraft,mergeable,additions,deletions,changedFiles,createdAt,updatedAt`,
+        `gh pr view ${prNumber} --json number,title,url,state,isDraft,mergeable,additions,deletions,changedFiles,createdAt,updatedAt`,
         { cwd: PROJECT_ROOT }
       );
 
@@ -317,11 +364,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get current branch
-    const { stdout: branchStdout } = await execAsync('git branch --show-current', {
-      cwd: PROJECT_ROOT,
-    });
-    const currentBranch = branchStdout.trim();
+    // Resolve branch: use projectId → prd.json → branchName, or fall back to git
+    const currentBranch = await resolveBranch(projectId);
+    if (!currentBranch) {
+      return NextResponse.json(
+        { error: 'Could not determine branch name' },
+        { status: 400 }
+      );
+    }
 
     if (!isSafeGitRef(currentBranch)) {
       return NextResponse.json(
@@ -338,20 +388,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if PR already exists
+    // Check if PR already exists (search by branch name, works from any branch)
     try {
-      const { stdout: existingPR } = await execAsync(
-        `gh pr view --json url`,
+      const { stdout: listJson } = await execAsync(
+        `gh pr list --head ${shellQuote(currentBranch)} --json number,url`,
         { cwd: PROJECT_ROOT }
       );
-      const prData = JSON.parse(existingPR);
-
-      return NextResponse.json({
-        branch: currentBranch,
-        created: false,
-        message: 'PR already exists',
-        url: prData.url,
-      });
+      const prList = JSON.parse(listJson);
+      if (prList.length > 0) {
+        const prData = prList[0];
+        return NextResponse.json({
+          branch: currentBranch,
+          created: false,
+          message: 'PR already exists',
+          url: prData.url,
+        });
+      }
     } catch {
       // No existing PR, continue to create
     }
@@ -399,9 +451,16 @@ export async function POST(request: NextRequest) {
       // Get the PR URL from output
       const prUrl = prOutput.trim();
 
-      // Get full PR info
+      // Get full PR info by looking up by branch (just created, so should exist)
+      const { stdout: newPrListJson } = await execAsync(
+        `gh pr list --head ${shellQuote(currentBranch)} --json number`,
+        { cwd: PROJECT_ROOT }
+      );
+      const newPrList = JSON.parse(newPrListJson);
+      const newPrNumber = newPrList.length > 0 ? newPrList[0].number : undefined;
+
       const { stdout: prJson } = await execAsync(
-        `gh pr view --json number,title,url,state,isDraft,mergeable,additions,deletions,changedFiles,createdAt,updatedAt`,
+        `gh pr view ${newPrNumber ?? ''} --json number,title,url,state,isDraft,mergeable,additions,deletions,changedFiles,createdAt,updatedAt`,
         { cwd: PROJECT_ROOT }
       );
 

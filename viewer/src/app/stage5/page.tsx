@@ -97,7 +97,8 @@ function Stage5PageContent() {
   // Fetch merge status
   const fetchMergeStatus = useCallback(async () => {
     try {
-      const response = await fetch('/api/git/merge');
+      const params = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+      const response = await fetch(`/api/git/merge${params}`);
       if (response.ok) {
         const data = await response.json();
         setMergeStatus(data);
@@ -105,17 +106,23 @@ function Stage5PageContent() {
     } catch (err) {
       console.error('Failed to fetch merge status:', err);
     }
-  }, []);
+  }, [projectId]);
 
   // Check for existing PR on page load
   useEffect(() => {
     const checkExistingPR = async () => {
       try {
-        const response = await fetch('/api/git/pr');
+        const params = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+        const response = await fetch(`/api/git/pr${params}`);
         if (response.ok) {
           const data = await response.json();
           if (data.hasPR && data.pr) {
             setPrInfo(data.pr);
+            // If PR is already merged, jump straight to completed state
+            if (data.pr.state === 'merged') {
+              setPageState('merged');
+              return;
+            }
             setPageState('ready');
             fetchMergeStatus();
             return;
@@ -129,7 +136,7 @@ function Stage5PageContent() {
     };
 
     checkExistingPR();
-  }, [fetchMergeStatus]);
+  }, [fetchMergeStatus, projectId]);
 
   // Create PR (user-initiated)
   const handleCreatePR = useCallback(async () => {
