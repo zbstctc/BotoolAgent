@@ -156,8 +156,9 @@ function parseCodexOutput(rawOutput: string): ParseResult {
     return { success: false, findings: [] };
   }
 
-  // Check for explicit "no issues" signal
-  if (trimmed.includes('NO_ISSUES_FOUND')) {
+  // Check for explicit "no issues" signal — exact match only to prevent false positives
+  // when Codex echoes the marker while also outputting findings
+  if (trimmed === 'NO_ISSUES_FOUND') {
     return { success: true, findings: [] };
   }
 
@@ -324,7 +325,11 @@ function getCleanEnv(): NodeJS.ProcessEnv {
   return cleanEnv;
 }
 
-function spawnCodex(prompt: string, timeoutMs: number): Promise<{ stdout: string; exitCode: number }> {
+function spawnCodex(
+  prompt: string,
+  timeoutMs: number,
+  onProcess?: (proc: ChildProcess) => void,
+): Promise<{ stdout: string; exitCode: number }> {
   return new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
@@ -336,6 +341,9 @@ function spawnCodex(prompt: string, timeoutMs: number): Promise<{ stdout: string
       env: getCleanEnv(),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+
+    // Expose process reference so caller can kill it on stream cancel
+    onProcess?.(proc);
 
     const timer = setTimeout(() => {
       if (!resolved) {
@@ -429,6 +437,7 @@ export async function POST(request: NextRequest) {
 
     const encoder = new TextEncoder();
     let streamClosed = false;
+    let activeCodexProcess: ChildProcess | null = null;
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -454,8 +463,11 @@ export async function POST(request: NextRequest) {
             }
           }, 5000);
 
-          // Spawn Codex (60s timeout)
-          const { stdout, exitCode } = await spawnCodex(prompt, 60_000);
+          // Spawn Codex (60s timeout); track process for cancel cleanup
+          const { stdout, exitCode } = await spawnCodex(prompt, 60_000, (proc) => {
+            activeCodexProcess = proc;
+          });
+          activeCodexProcess = null;
 
           clearInterval(progressInterval);
 
@@ -514,6 +526,15 @@ export async function POST(request: NextRequest) {
       },
       cancel() {
         streamClosed = true;
+        // Kill in-flight Codex subprocess to avoid resource leak
+        if (activeCodexProcess) {
+          try {
+            activeCodexProcess.kill('SIGTERM');
+          } catch {
+            // Ignore kill errors
+          }
+          activeCodexProcess = null;
+        }
         // Clean up temp file on cancel
         try {
           if (tempFileToClean) {

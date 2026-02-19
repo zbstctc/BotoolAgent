@@ -90,9 +90,10 @@ function Stage2PageContent() {
     setCurrentStep(2);
   }, []);
 
-  // Step 2: Auto enrich complete
+  // Step 2: Auto enrich complete — clear stale fixed result from any prior run
   const handleAutoEnrichComplete = useCallback((result: AutoEnrichResult) => {
     setEnrichResult(result);
+    setFixedEnrichResult(null);
     setCurrentStep(3);
   }, []);
 
