@@ -1,28 +1,28 @@
 ---
 name: botoolagent-testing
-description: "Run the 4-layer automated verification pipeline for BotoolAgent projects. Use when development is complete and you need to verify quality before merging. Triggers on: run tests, verify, test my code, start testing, run verification."
+description: "Run the 6-layer automated verification pipeline for BotoolAgent projects. Use when development is complete and you need to verify quality before merging. Triggers on: run tests, verify, test my code, start testing, run verification."
 user-invocable: true
 ---
 
-# BotoolAgent 4 层自动化测试流水线
+# BotoolAgent 6 层自动化测试流水线
 
-CLI 端自动化测试验收：Layer 1 Regression → Layer 2 Unit → Layer 3 E2E → Layer 4 Code Review。全部自动化，通过后直接进入 finalize。
+CLI 端自动化测试验收：Layer 1 Regression → Layer 2 Unit → Layer 3 E2E → Layer 4 Code Review → Layer 5 Codex 红队审查 → Layer 6 PR 创建 + PR-Agent 守门。全部自动化，通过后直接进入 finalize。
 
-**核心升级：Ralph 弹性迭代 + Agent Teams 并行修复。** 遇到错误不停止，自动修复后重跑，直到通过或断路器触发。
+**核心升级：Ralph 弹性迭代 + Agent Teams 并行修复 + Codex 红队对抗审查。** 遇到错误不停止，自动修复后重跑，直到通过或断路器触发。
 
-**Announce at start:** "正在启动 BotoolAgent 4 层自动化测试流水线（Ralph 迭代模式）..."
+**Announce at start:** "正在启动 BotoolAgent 6 层自动化测试流水线（Ralph 迭代模式 + Codex 对抗审查）..."
 
 ---
 
 ## 参数解析
 
 如果用户提供了参数（如 `/botoolagent-testing 3`），将第一个数字参数作为 `startLayer`，表示从第 N 层开始执行。
-默认值：`startLayer=1`（从头执行全部 4 层）。
+默认值：`startLayer=1`（从头执行全部 6 层）。
 
 用法示例：
-- `/botoolagent-testing` — 执行全部 4 层
+- `/botoolagent-testing` — 执行全部 6 层
 - `/botoolagent-testing 3` — 从 Layer 3 (E2E) 开始执行
-- `/botoolagent-testing 4` — 只执行 Layer 4 (Code Review)
+- `/botoolagent-testing 5` — 从 Layer 5 (Codex 红队审查) 开始执行
 
 ---
 
@@ -84,7 +84,7 @@ fi
 echo "项目目录: $PROJECT_DIR"
 ```
 
-**前置检查通过后，告知用户：** "前置检查通过，开始执行 4 层自动化测试（Ralph 迭代模式）..."
+**前置检查通过后，告知用户：** "前置检查通过，开始执行 6 层自动化测试（Ralph 迭代模式 + Codex 对抗审查）..."
 
 并显示测试计划：
 ```
@@ -93,6 +93,8 @@ echo "项目目录: $PROJECT_DIR"
   Layer 2 — Unit Tests: npm test （自动修复）
   Layer 3 — E2E Tests: Playwright （自动修复）
   Layer 4 — Code Review: Claude 审查 git diff （自动修复 HIGH）
+  Layer 5 — Codex 红队审查: Codex 对抗审查 （对抗循环 ≤ 3 轮）
+  Layer 6 — PR 创建 + PR-Agent 守门 （PR-Agent 修复循环 ≤ 2 轮）
 ```
 
 ---
@@ -535,17 +537,176 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 
 ---
 
-## 最终总结
+## Layer 5 — Codex 红队对抗审查
 
-全部 4 层自动化测试通过后，输出总结：
+**跳过条件：** `startLayer > 5` 时跳过此层。
+
+### 5a. 检测 Codex CLI 可用性
+
+```bash
+which codex >/dev/null 2>&1 && echo "codex available" || echo "codex not available"
+```
+
+**如果 codex 不可用：**
+```
+Layer 5: 跳过（codex CLI 未安装。安装方式: npm install -g @openai/codex）
+```
+记录跳过并继续 Layer 6。
+
+### 5b. 获取 diff 并计算规模
+
+```bash
+DIFF_LINES=$(git diff main...HEAD | wc -l | tr -d ' ')
+echo "Diff lines: $DIFF_LINES"
+```
+
+根据 diff 规模选择审查模式：
+- `DIFF_LINES <= 5000` → **全量审查模式**（一次审查全部 diff）
+- `DIFF_LINES > 5000` → **分文件审查模式**（逐文件审查后合并 findings）
+
+### 5c. 全量审查模式
+
+```bash
+# 创建临时输出文件
+REVIEW_OUTPUT=$(mktemp /tmp/codex-review-XXXXXX.json)
+
+codex exec -a never --full-auto \
+  "You are a red-team security reviewer. Read AGENTS.md for project conventions. \
+   Analyze the following git diff output for: \
+   1. Security vulnerabilities (OWASP Top 10: injection, XSS, SSRF, path traversal, hardcoded secrets) \
+   2. Logic bugs (off-by-one, null/undefined handling, race conditions, boundary errors) \
+   3. Missing error handling (uncaught exceptions, missing fallbacks, unvalidated inputs) \
+   4. Test coverage gaps (critical paths not tested, edge cases missed) \
+   \
+   Output ONLY a valid JSON object with a 'findings' array. Each finding must have: \
+   severity (HIGH/MEDIUM/LOW), category (security/logic/error-handling/test-coverage/style), \
+   rule (identifier like owasp-injection), file (relative path), line (number), \
+   message (description), suggestion (actionable fix). \
+   \
+   If no issues found, output: {\"findings\": []} \
+   \
+   Git diff: \
+   $(git diff main...HEAD)" \
+   > "$REVIEW_OUTPUT" 2>/dev/null
+```
+
+### 5d. 分文件审查模式（大 diff 缓解）
+
+当 diff 超过 5000 行时自动拆分：
+
+```bash
+REVIEW_OUTPUT=$(mktemp /tmp/codex-review-XXXXXX.json)
+echo '{"findings":[]}' > "$REVIEW_OUTPUT"
+
+for file in $(git diff main...HEAD --name-only); do
+  FILE_REVIEW=$(mktemp /tmp/codex-file-review-XXXXXX.json)
+
+  codex exec -a never --full-auto \
+    "You are a red-team security reviewer. Read AGENTS.md for project conventions. \
+     Review $file for security vulnerabilities, logic bugs, missing error handling, \
+     and test coverage gaps. \
+     Output ONLY a valid JSON object with a 'findings' array per codex-review-schema.json format. \
+     Focus on: OWASP Top 10, logic bugs, boundary conditions, missing validation. \
+     If no issues found, output: {\"findings\": []} \
+     \
+     File diff: \
+     $(git diff main...HEAD -- "$file")" \
+     > "$FILE_REVIEW" 2>/dev/null
+
+  # 合并 findings（使用 node 合并 JSON 数组）
+  node -e "
+    const fs = require('fs');
+    const main = JSON.parse(fs.readFileSync('$REVIEW_OUTPUT','utf8'));
+    try {
+      const part = JSON.parse(fs.readFileSync('$FILE_REVIEW','utf8'));
+      if (part.findings) main.findings.push(...part.findings);
+    } catch(e) { /* skip unparseable output */ }
+    fs.writeFileSync('$REVIEW_OUTPUT', JSON.stringify(main, null, 2));
+  "
+  rm -f "$FILE_REVIEW"
+done
+```
+
+### 5e. 解析审查结果
+
+```bash
+# 读取 Codex 审查输出
+node -e "
+  const fs = require('fs');
+  try {
+    const raw = fs.readFileSync('$REVIEW_OUTPUT', 'utf8');
+    // 尝试提取 JSON（Codex 输出可能包含额外文本）
+    const jsonMatch = raw.match(/\{[\s\S]*\"findings\"[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.log(JSON.stringify({findings:[], parseError: 'No valid JSON found in codex output'}));
+      process.exit(0);
+    }
+    const data = JSON.parse(jsonMatch[0]);
+    const findings = data.findings || [];
+    const high = findings.filter(f => f.severity === 'HIGH');
+    const medium = findings.filter(f => f.severity === 'MEDIUM');
+    const low = findings.filter(f => f.severity === 'LOW');
+    console.log(JSON.stringify({
+      total: findings.length,
+      high: high.length,
+      medium: medium.length,
+      low: low.length,
+      findings: findings
+    }, null, 2));
+  } catch(e) {
+    console.log(JSON.stringify({findings:[], parseError: e.message}));
+  }
+"
+```
+
+### 5f. 按 severity 分类处理
+
+**解析结果后，将审查数据写入项目目录：**
+
+将完整 findings 写入 `tasks/{projectId}/codex-review.json`（供 Viewer 读取）。
+
+**分类处理逻辑：**
+
+1. **HIGH + MEDIUM findings** → 记录列表，传给 DT-004 对抗修复循环处理
+2. **LOW findings** → 存入 `lowFindings` 列表，后续 Layer 6 写入 PR body 的 "Advisory" 章节
+3. **无 findings 或全部 LOW** → Layer 5 直接通过，跳过对抗循环
 
 ```
-BotoolAgent 4 层自动化测试 — 全部通过!
+判断：
+  有 HIGH 或 MEDIUM → 进入对抗修复循环（Layer 5 对抗阶段）
+  只有 LOW 或无 findings → Layer 5 通过，继续 Layer 6
+```
 
-  Layer 1 — Regression:   通过 (TypeCheck + Lint)
-  Layer 2 — Unit Tests:   通过 / 跳过
-  Layer 3 — E2E Tests:    通过 / 跳过
-  Layer 4 — Code Review:  通过 (无 HIGH 级别问题)
+**如果 Codex 输出无法解析为 JSON（parseError）：**
+```
+Layer 5: Codex 审查输出无法解析。原始输出已保存到 codex-review.json。
+跳过对抗循环，继续 Layer 6。
+```
+记录为 warning，不阻塞流水线。
+
+**Layer 5 审查完成后（无 HIGH/MEDIUM 或对抗循环已收敛），告知用户：**
+```
+Layer 5 Codex 红队审查 通过
+  发现问题: {total}  HIGH: {high}  MEDIUM: {medium}  LOW: {low}
+  对抗轮次: {rounds}/3
+  已修复: {fixed}  论证拒绝: {rejected}
+```
+
+---
+
+## 最终总结
+
+全部 6 层自动化测试通过后，输出总结：
+
+```
+BotoolAgent 6 层自动化测试 — 全部通过!
+
+  Layer 1 — Regression:       通过 (TypeCheck + Lint)
+  Layer 2 — Unit Tests:       通过 / 跳过
+  Layer 3 — E2E Tests:        通过 / 跳过
+  Layer 4 — Code Review:      通过 (无 HIGH 级别问题)
+  Layer 5 — Codex 红队审查:    通过 / 跳过 (对抗轮次: N/3)
+  Layer 6 — PR + PR-Agent:    通过 / 跳过
 
   自动修复统计:
   - TypeCheck: N 轮修复 / 直接通过
@@ -553,6 +714,8 @@ BotoolAgent 4 层自动化测试 — 全部通过!
   - Unit Tests: N 轮修复 / 直接通过 / 跳过
   - E2E Tests: N 轮修复 / 直接通过 / 跳过
   - Code Review: N 轮修复 / 直接通过
+  - Codex 审查: N 个问题修复, M 个论证拒绝 / 跳过
+  - PR-Agent: N 轮修复 / 跳过
 
 下一步：运行 /botoolagent-finalize 完成合并流程
 ```
@@ -563,9 +726,9 @@ BotoolAgent 4 层自动化测试 — 全部通过!
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| startLayer | 从第 N 层开始执行（跳过之前的层） | 1 |
+| startLayer | 从第 N 层开始执行（跳过之前的层，1-6） | 1 |
 
-用法：`/botoolagent-testing 3`（从 Layer 3 E2E Tests 开始执行）
+用法：`/botoolagent-testing 5`（从 Layer 5 Codex 红队审查开始执行）
 
 ---
 
@@ -580,12 +743,15 @@ BotoolAgent 4 层自动化测试 — 全部通过!
 | Layer 2 | 单元测试失败 | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
 | Layer 3 | E2E 测试失败 | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
 | Layer 4 | Code Review 有 HIGH | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
+| Layer 5 | Codex CLI 不可用 | 跳过 Layer 5，继续 Layer 6 |
+| Layer 5 | Codex 输出无法解析 | 记录 warning，跳过对抗循环，继续 Layer 6 |
+| Layer 5 | 对抗循环未收敛 | 3 轮后 Circuit Breaker → AskUserQuestion 转人工 |
 
 ---
 
 ## 与 Viewer 对齐
 
-CLI 的 4 层自动化测试对应 Viewer Stage 4 的分层验收：
+CLI 的 6 层自动化测试对应 Viewer Stage 4 的分层验收：
 
 | CLI Layer | Viewer Layer | 说明 |
 |-----------|-------------|------|
@@ -593,11 +759,14 @@ CLI 的 4 层自动化测试对应 Viewer Stage 4 的分层验收：
 | Layer 2 — Unit Tests | 单元测试 | npm test / npm run test:unit |
 | Layer 3 — E2E Tests | E2E 测试 | npx playwright test |
 | Layer 4 — Code Review | Code Review | git diff → Claude 审查 |
+| Layer 5 — Codex 红队审查 | Codex 审查 | codex exec → 对抗循环 |
+| Layer 6 — PR + PR-Agent | PR 守门 | gh pr create → PR-Agent 修复 |
 
 **手动验收（Manual Checklist）已移出 testing 流水线**，用户可在 finalize 前自行验证。
 
 **行为一致性：**
 - 两端都从 prd.json 读取 testCases
-- CLI 4 层全自动（Ralph 自动修复）：失败不停止，自动修 → 重跑 → 超限才问用户
+- CLI 6 层全自动（Ralph 自动修复 + Codex 对抗审查）：失败不停止，自动修 → 重跑 → 超限才问用户
 - Layer 2/3 在没有对应 testCases 或脚本时自动跳过
+- Layer 5 在 codex CLI 不可用时自动跳过
 - 全部通过后，CLI 直接提示运行 `/botoolagent-finalize`
