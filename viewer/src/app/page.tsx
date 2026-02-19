@@ -25,9 +25,10 @@ function filterRequirements(
   filter: RequirementFilter,
   search: string
 ): Requirement[] {
-  let result = requirements.filter((r) => r.status !== 'archived');
-  if (filter === 'active') result = result.filter((r) => r.status === 'active');
-  if (filter === 'completed') result = result.filter((r) => r.status === 'completed');
+  let result =
+    filter === 'archived'
+      ? requirements.filter((r) => r.status === 'archived')
+      : requirements.filter((r) => r.status !== 'archived');
   if (search.trim()) {
     const q = search.toLowerCase();
     result = result.filter((r) => r.name.toLowerCase().includes(q));
@@ -47,7 +48,7 @@ function DashboardContent() {
     refreshRequirements,
   } = useRequirement();
 
-  const [filter, setFilter] = useState<RequirementFilter>('all');
+  const [filter, setFilter] = useState<RequirementFilter>('active');
   const [search, setSearch] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -64,14 +65,13 @@ function DashboardContent() {
 
   // Counts for filter badges
   const activeCount = useMemo(
-    () => requirements.filter((r) => r.status === 'active').length,
+    () => requirements.filter((r) => r.status !== 'archived').length,
     [requirements]
   );
-  const completedCount = useMemo(
-    () => requirements.filter((r) => r.status === 'completed').length,
+  const archivedCount = useMemo(
+    () => requirements.filter((r) => r.status === 'archived').length,
     [requirements]
   );
-  const totalCount = activeCount + completedCount;
 
   function handleCardClick(id: string) {
     setSelectedId(id);
@@ -128,9 +128,8 @@ function DashboardContent() {
   }
 
   const filterOptions: { key: RequirementFilter; label: string; count: number }[] = [
-    { key: 'all', label: '全部', count: totalCount },
     { key: 'active', label: '进行中', count: activeCount },
-    { key: 'completed', label: '已完成', count: completedCount },
+    { key: 'archived', label: '已归档', count: archivedCount },
   ];
 
   return (
@@ -240,7 +239,6 @@ function DashboardContent() {
             </div>
           ) : (
             <EmptyState
-              hasRequirements={requirements.filter((r) => r.status !== 'archived').length > 0}
               filter={filter}
               search={search}
               onCreateNew={() => setDialogOpen(true)}
@@ -269,12 +267,10 @@ function DashboardContent() {
 }
 
 function EmptyState({
-  hasRequirements,
   filter,
   search,
   onCreateNew,
 }: {
-  hasRequirements: boolean;
   filter: RequirementFilter;
   search: string;
   onCreateNew: () => void;
@@ -290,12 +286,10 @@ function EmptyState({
     );
   }
 
-  if (hasRequirements && filter !== 'all') {
+  if (filter === 'archived') {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <p className="text-sm font-medium text-neutral-700">
-          暂无{filter === 'active' ? '进行中' : '已完成'}的需求
-        </p>
+        <p className="text-sm font-medium text-neutral-700">暂无已归档的需求</p>
       </div>
     );
   }

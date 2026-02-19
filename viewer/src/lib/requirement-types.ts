@@ -29,7 +29,7 @@ export interface Requirement {
   updatedAt: number;
 }
 
-export type RequirementFilter = 'all' | 'active' | 'completed' | 'archived';
+export type RequirementFilter = 'active' | 'archived';
 
 export interface StageMeta {
   label: string;          // 主标签
