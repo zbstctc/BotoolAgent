@@ -245,10 +245,7 @@ function SerialDetailCard({
       )}
 
       {/* Bottom row: Status */}
-      <div className="flex items-center justify-between pt-2 border-t border-neutral-100">
-        <span className="text-xs text-neutral-400">
-          {'\u91CD\u8BD5'}: {iterationCount > 1 ? iterationCount - 1 : '\u65E0'}
-        </span>
+      <div className="flex items-center justify-end pt-2 border-t border-neutral-100">
         <div className="flex items-center gap-1.5">
           {isRunning && (
             <>

@@ -10,8 +10,10 @@ const TASKS_DIR = path.join(REPO_ROOT, 'tasks');
 const STATE_DIR = path.join(REPO_ROOT, '.state');
 
 const PROJECT_ID = 'e2e-stage34-project';
-const PROJECT_PRD_FILE = path.join(TASKS_DIR, `prd-${PROJECT_ID}.json`);
-const PROJECT_PROGRESS_FILE = path.join(TASKS_DIR, `progress-${PROJECT_ID}.txt`);
+// Use the new per-project directory format: tasks/{projectId}/prd.json
+// Matches getProjectPrdJsonPath(projectId) in lib/project-root.ts
+const PROJECT_PRD_FILE = path.join(TASKS_DIR, PROJECT_ID, 'prd.json');
+const PROJECT_PROGRESS_FILE = path.join(TASKS_DIR, PROJECT_ID, 'progress.txt');
 const TASK_HISTORY_FILE = path.join(TASKS_DIR, '.task-history.json');
 const AGENT_STATUS_FILE = path.join(STATE_DIR, 'agent-status');
 const AGENT_PID_FILE = path.join(STATE_DIR, 'agent-pid');
@@ -138,7 +140,8 @@ test.describe('Stage3/Stage4 Agent Integration', () => {
   test.setTimeout(TEST_TIMEOUT);
 
   test.beforeAll(() => {
-    fs.mkdirSync(TASKS_DIR, { recursive: true });
+    // Create the per-project subdirectory (new path format: tasks/{projectId}/)
+    fs.mkdirSync(path.join(TASKS_DIR, PROJECT_ID), { recursive: true });
     fs.mkdirSync(STATE_DIR, { recursive: true });
 
     backupFile(PROJECT_PRD_FILE);

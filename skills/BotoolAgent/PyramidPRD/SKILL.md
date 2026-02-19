@@ -187,21 +187,36 @@ L5: 确认门控 - ASCII 多维度可视化确认（架构/数据/UI/规则/计�
 
 #### 步骤 2：发起 L0 方向探索提问（2-3 个 AskUserQuestion）
 
-**第 1 次 AskUserQuestion — 需求方向理解 + 实现方案选择：**
+**第 1 次 AskUserQuestion — 需求方向理解 + 实现方案选择（带架构预览）：**
 
-根据用户的初始需求描述和项目扫描结果，提出 2-3 种需求理解方式和对应的实现方案。
+根据用户的初始需求描述和项目扫描结果，提出 2-3 种需求理解方式和对应的实现方案。**使用 `markdown` 字段为每个方向提供 ASCII 架构预览**，用户选择不同方向时右侧会展示对应的架构图。
 
 ```json
 {
   "questions": [
     {
-      "question": "【L0: 方向探索】\n\n基于你的描述和项目现状，我有以下几种理解方式：\n\n**方向 A**: [理解方式 A 的一句话描述]\n- 实现思路: [简要技术方案]\n- 涉及范围: [预估文件/模块]\n- 优势: [优势]\n- 劣势: [劣势]\n\n**方向 B**: [理解方式 B 的一句话描述]\n- 实现思路: [简要技术方案]\n- 涉及范围: [预估文件/模块]\n- 优势: [优势]\n- 劣势: [劣势]\n\n**方向 C（可选）**: [理解方式 C 的一句话描述]\n- 实现思路: [简要技术方案]\n- 优势: [优势]\n- 劣势: [劣势]\n\n请选择最接近你意图的方向：",
+      "question": "【L0: 方向探索】\n\n基于你的描述和项目现状，我有以下几种实现方向。\n选择方向查看右侧架构预览：",
       "header": "需求方向",
       "options": [
-        { "label": "方向 A（推荐）", "description": "[一句话总结]" },
-        { "label": "方向 B", "description": "[一句话总结]" },
-        { "label": "方向 C", "description": "[一句话总结（如有）]" },
-        { "label": "都不对，我来说明", "description": "以上理解都有偏差，我会补充说明" }
+        {
+          "label": "方向 A（推荐）",
+          "description": "[一句话总结核心思路]",
+          "markdown": "方向 A: [名称]\n\n实现思路: [简要技术方案]\n涉及范围: [预估文件/模块]\n\n┌─────────────────────────────┐\n│  [架构示意图]                │\n│                             │\n│  [模块A] ──▶ [模块B]        │\n│     │                      │\n│     └──▶ [模块C]            │\n└─────────────────────────────┘\n\n✅ 优势: [优势]\n⚠️ 劣势: [劣势]"
+        },
+        {
+          "label": "方向 B",
+          "description": "[一句话总结核心思路]",
+          "markdown": "方向 B: [名称]\n\n实现思路: [简要技术方案]\n涉及范围: [预估文件/模块]\n\n┌─────────────────────────────┐\n│  [架构示意图]                │\n│                             │\n│  [不同的模块布局]            │\n│                             │\n└─────────────────────────────┘\n\n✅ 优势: [优势]\n⚠️ 劣势: [劣势]"
+        },
+        {
+          "label": "方向 C",
+          "description": "[一句话总结（如有）]",
+          "markdown": "方向 C: [名称]\n\n实现思路: [简要技术方案]\n涉及范围: [预估文件/模块]\n\n┌─────────────────────────────┐\n│  [架构示意图]                │\n└─────────────────────────────┘\n\n✅ 优势: [优势]\n⚠️ 劣势: [劣势]"
+        },
+        {
+          "label": "都不对，我来说明",
+          "description": "以上理解都有偏差，我会补充说明"
+        }
       ],
       "multiSelect": false
     }
@@ -217,7 +232,13 @@ L5: 确认门控 - ASCII 多维度可视化确认（架构/数据/UI/规则/计�
 }
 ```
 
-注意：「推荐」标记应根据 AI 评估结果放在最匹配的选项上。如果方向只有 2 个，去掉方向 C 选项。
+**markdown 预览规则：**
+- 每个方向的 `markdown` 必须包含：名称、实现思路、涉及范围、ASCII 架构示意图、优劣势
+- ASCII 图应体现该方向的核心模块关系和数据流向（使用 `┌─┐│└─┘──▶` 等 box-drawing 字符）
+- 图的复杂度根据方案而定：简单方案 3-5 行，复杂方案 8-15 行
+- 「都不对」选项不需要 `markdown` 字段
+- 「推荐」标记应根据 AI 评估结果放在最匹配的选项上
+- 如果方向只有 2 个，去掉方向 C 选项
 
 **第 2 次 AskUserQuestion — 范围确认（YAGNI）：**
 
@@ -275,8 +296,8 @@ L0 上下文摘要:
 2. 执行代码库扫描（如果有代码库）
 3. AI 自动生成 1-3 个 DT 任务
 4. 使用 AskUserQuestion 确认任务列表
-5. 自动检测 tasks 目录：`TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"`
-6. 生成极简 PRD.md 到 `$TASKS_DIR/prd-[feature-name].md`（只含 § 1 项目概述 + § 7 开发计划，无 § 2-6）
+5. 自动检测 tasks 目录并创建项目子目录：`TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"` → `mkdir -p "$TASKS_DIR/<projectId>"`
+6. 生成极简 PRD.md 到 `$TASKS_DIR/<projectId>/prd.md`（只含 § 1 项目概述 + § 7 开发计划，无 § 2-6）
 7. 快速模式规范处理（跳过 Stage 2 的交互式规则选择，但自动检测规范）：
    - 使用 Glob 检查项目中是否存在 `rules/*.md` 或 `BotoolAgent/rules/*.md` 目录
    - **有 rules/ 目录时**：自动扫描所有 `rules/*.md` 文件，为每个规范文件生成 `file + checklist` 格式的 constitution 条目（与功能开发/完整规划模式一致）：
@@ -301,7 +322,7 @@ L0 上下文摘要:
      - 将 checklist 中的 `[规范]` 条目注入到 PRD.md § 7 对应 DT 的验收条件中
    - **无 rules/ 目录时**：跳过规范处理，constitution 为空数组（向后兼容旧行为）
    - **旧模式兼容**：如果项目使用旧的 `content` 格式规范，检测逻辑为 `rule.file ? "新模式" : rule.content ? "旧模式" : "无规范"`
-8. 生成 prd.json 到项目根目录（含 prdFile 指向 `$TASKS_DIR/prd-xxx.md`、每个 DT 有 prdSection、constitution 使用 file+checklist 格式）
+8. 生成 prd.json 到 `$TASKS_DIR/<projectId>/prd.json`（含 prdFile 指向 `<projectId>/prd.md`、每个 DT 有 prdSection、constitution 使用 file+checklist 格式），同时更新 `$TASKS_DIR/registry.json`
 9. 执行安全关键词扫描（仅对高风险关键词：认证/支付）
 
 ---
@@ -922,12 +943,15 @@ LOW:    [风险项]
 
 **L5 确认门控通过后，根据收集的所有信息和代码库扫描结果，生成多维度、高颗粒度的 PRD 文档。**
 
-**输出路径（兼容 portable 模式）：**
+**输出路径（per-project 子目录）：**
 ```bash
 TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"
-# PRD 写入: $TASKS_DIR/prd-[feature-name].md
-# prd.json 双写: $TASKS_DIR/prd-[feature-name].json + 项目根目录 ./prd.json
-# registry 更新: $TASKS_DIR/registry.json
+# projectId 从功能名称派生（kebab-case，如 "adversarial-review"）
+PROJECT_DIR="$TASKS_DIR/<projectId>"
+mkdir -p "$PROJECT_DIR"
+# PRD 写入: $PROJECT_DIR/prd.md
+# prd.json 写入: $PROJECT_DIR/prd.json
+# registry 更新: $TASKS_DIR/registry.json（路径格式: "<projectId>/prd.md"）
 ```
 
 #### 复杂度裁剪规则
@@ -1514,15 +1538,20 @@ Phase T6 输出 → 喂入现有 Phase 6 (L5 Confirmation Gate, 2 轮 Tabs)
 **自动检测 tasks 目录（兼容 standalone 和 portable 模式）：**
 ```bash
 TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"
+PROJECT_DIR="$TASKS_DIR/<projectId>"
+mkdir -p "$PROJECT_DIR"
 ```
 
 ```
 $TASKS_DIR/
-  [user-original].md         ← 用户原始 PRD（不修改，保持原位）
-  prd-[feature-name].md      ← 生成的 BotoolAgent PRD（标准格式）
+  <projectId>/
+    DRAFT.md                 ← 用户原始 Draft（如从 brainstorm 导入）
+    prd.md                   ← 生成的 BotoolAgent PRD（标准格式）
+    prd.json                 ← 自动化执行用 JSON
+  registry.json              ← 项目注册表
 ```
 
-用户原始文件不动，不复制。BotoolAgent PRD 作为新文件写入 `$TASKS_DIR/`。
+用户原始文件不动，不复制。BotoolAgent PRD 写入项目子目录 `$PROJECT_DIR/prd.md`。
 
 ---
 

@@ -221,6 +221,7 @@ function Stage3PageContent() {
     teammatesData,
     currentTaskId,
     agentStartIso,
+    projectId ?? undefined,
   );
 
   // Auto-expand current task when currentTaskId changes
