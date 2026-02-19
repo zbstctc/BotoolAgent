@@ -11,9 +11,10 @@ const SOURCE_PRD_PATH = path.join(REPO_ROOT, 'v1.6_Botool_Present_v2PRD copy.md'
 const SOURCE_PRD_ID = 'e2e-large-prd-source';
 const SOURCE_PRD_FILE = path.join(TASKS_DIR, `prd-${SOURCE_PRD_ID}.md`);
 const PROJECT_ID = 'e2e-large-prd-project';
-const PROJECT_JSON_FILE = path.join(TASKS_DIR, `prd-${PROJECT_ID}.json`);
-const PROJECT_PROGRESS_FILE = path.join(TASKS_DIR, `progress-${PROJECT_ID}.txt`);
-const ROOT_PRD_FILE = path.join(REPO_ROOT, 'prd.json');
+// Use the new per-project directory format: tasks/{projectId}/prd.json
+const PROJECT_DIR = path.join(TASKS_DIR, PROJECT_ID);
+const PROJECT_JSON_FILE = path.join(PROJECT_DIR, 'prd.json');
+const PROJECT_PROGRESS_FILE = path.join(PROJECT_DIR, 'progress.txt');
 
 const STORAGE_KEY = 'botool-projects';
 const LARGE_TIMEOUT = 14 * 60 * 1000;
@@ -64,9 +65,9 @@ test.describe('Large PRD Viewer Pipeline', () => {
     preExistingArchiveEntries = new Set(fs.readdirSync(ARCHIVE_DIR));
 
     backupFile(SOURCE_PRD_FILE);
+    fs.mkdirSync(PROJECT_DIR, { recursive: true });
     backupFile(PROJECT_JSON_FILE);
     backupFile(PROJECT_PROGRESS_FILE);
-    backupFile(ROOT_PRD_FILE);
 
     const largePrdContent = fs.readFileSync(SOURCE_PRD_PATH, 'utf-8');
     fs.writeFileSync(SOURCE_PRD_FILE, largePrdContent, 'utf-8');
@@ -76,7 +77,6 @@ test.describe('Large PRD Viewer Pipeline', () => {
     restoreFile(SOURCE_PRD_FILE);
     restoreFile(PROJECT_JSON_FILE);
     restoreFile(PROJECT_PROGRESS_FILE);
-    restoreFile(ROOT_PRD_FILE);
 
     // Remove task markdown files created by this test run.
     for (const name of fs.readdirSync(TASKS_DIR)) {

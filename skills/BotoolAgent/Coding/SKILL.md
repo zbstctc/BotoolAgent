@@ -25,10 +25,10 @@ CLI 自动开发流水线：前置检查 → 运行 BotoolAgent.sh (tmux + Agent
 
 检查 `tasks/registry.json`（或 `BotoolAgent/tasks/registry.json`）是否存在：
 - 如果存在且有多个项目 → 用 AskUserQuestion 列出项目让用户选择
-- 选择后，使用 `tasks/prd-{projectId}.json` 作为 prd.json 路径
+- 选择后，使用 `tasks/{projectId}/prd.json` 作为 prd.json 路径
 - 如果不存在 registry 或只有一个项目 → 直接读根目录 `prd.json`（向后兼容）
 
-选定后，后续所有对 prd.json 的引用均指向选定项目的路径。
+选定后，设置 `PRD_PATH="tasks/${PROJECT_ID}/prd.json"`，后续所有对 prd.json 的引用均使用 `$PRD_PATH`。
 
 ---
 
@@ -61,7 +61,8 @@ Then stop here.
 ### 1b. 检查 branchName
 
 ```bash
-grep -o '"branchName": "[^"]*"' prd.json | cut -d'"' -f4
+# 使用 Step 0 确定的 PRD_PATH（per-project 或根目录）
+grep -o '"branchName": "[^"]*"' "$PRD_PATH" | cut -d'"' -f4
 ```
 
 **如果 branchName 为空：**

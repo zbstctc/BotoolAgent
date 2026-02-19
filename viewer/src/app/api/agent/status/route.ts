@@ -441,6 +441,15 @@ export async function DELETE(request: NextRequest) {
 
     cleanPidFile(pidFile);
 
+    // Clean up additional per-project state files (teammates.json, last-branch)
+    if (projectId) {
+      const projectDir = path.join(getTasksDir(), projectId);
+      for (const stateFile of ['teammates.json', 'last-branch']) {
+        const filePath = path.join(projectDir, stateFile);
+        try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* ignore */ }
+      }
+    }
+
     const stoppedStatus: AgentStatus = {
       ...getDefaultStatus(projectId),
       status: 'idle',

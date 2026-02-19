@@ -7,16 +7,15 @@ const RUN_STAGE4_FULL = process.env.BOTOOL_E2E_STAGE4_FULL === '1';
 const VIEWER_DIR = process.cwd();
 const REPO_ROOT = path.resolve(VIEWER_DIR, '..');
 const TASKS_DIR = path.join(REPO_ROOT, 'tasks');
-const STATE_DIR = path.join(REPO_ROOT, '.state');
-
 const PROJECT_ID = 'e2e-stage34-project';
 // Use the new per-project directory format: tasks/{projectId}/prd.json
 // Matches getProjectPrdJsonPath(projectId) in lib/project-root.ts
 const PROJECT_PRD_FILE = path.join(TASKS_DIR, PROJECT_ID, 'prd.json');
 const PROJECT_PROGRESS_FILE = path.join(TASKS_DIR, PROJECT_ID, 'progress.txt');
 const TASK_HISTORY_FILE = path.join(TASKS_DIR, '.task-history.json');
-const AGENT_STATUS_FILE = path.join(STATE_DIR, 'agent-status');
-const AGENT_PID_FILE = path.join(STATE_DIR, 'agent-pid');
+// Per-project state files live under tasks/{projectId}/, not .state/
+const AGENT_STATUS_FILE = path.join(TASKS_DIR, PROJECT_ID, 'agent-status');
+const AGENT_PID_FILE = path.join(TASKS_DIR, PROJECT_ID, 'agent-pid');
 
 const STORAGE_KEY = 'botool-projects';
 const TEST_TIMEOUT = 3 * 60 * 1000;
@@ -142,7 +141,6 @@ test.describe('Stage3/Stage4 Agent Integration', () => {
   test.beforeAll(() => {
     // Create the per-project subdirectory (new path format: tasks/{projectId}/)
     fs.mkdirSync(path.join(TASKS_DIR, PROJECT_ID), { recursive: true });
-    fs.mkdirSync(STATE_DIR, { recursive: true });
 
     backupFile(PROJECT_PRD_FILE);
     backupFile(PROJECT_PROGRESS_FILE);

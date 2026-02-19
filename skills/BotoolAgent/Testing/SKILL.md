@@ -32,8 +32,8 @@ CLI 端自动化测试验收：Layer 1 Regression → Layer 2 Unit → Layer 3 E
 
 检查 `tasks/registry.json`（或 `BotoolAgent/tasks/registry.json`）是否存在：
 - 如果存在且有多个项目 → 用 AskUserQuestion 列出项目让用户选择
-- 选择后，使用 `tasks/prd-{projectId}.json` 作为 prd.json 路径
-- 如果不存在 registry 或只有一个项目 → 直接读根目录 `prd.json`（向后兼容）
+- 选择后，使用 `tasks/{projectId}/prd.json` 作为 prd.json 路径（设置 `PRD_PATH`）
+- 如果不存在 registry 或只有一个项目 → 直接读根目录 `prd.json`（向后兼容，`PRD_PATH="prd.json"`）
 
 ### 前置检查
 
@@ -42,9 +42,8 @@ CLI 端自动化测试验收：Layer 1 Regression → Layer 2 Unit → Layer 3 E
 ### 0a. 检查 prd.json
 
 ```bash
-# 如果选定了 projectId，检查 tasks/prd-{projectId}.json
-# 否则检查根目录 prd.json
-ls prd.json 2>/dev/null
+# 使用 Step 0 确定的 PRD_PATH（per-project 或根目录）
+ls "$PRD_PATH" 2>/dev/null
 ```
 
 **如果 prd.json 不存在：**
@@ -60,7 +59,7 @@ Then stop here.
 ### 0b. 检查 branchName
 
 ```bash
-grep -o '"branchName": "[^"]*"' prd.json | cut -d'"' -f4
+grep -o '"branchName": "[^"]*"' "$PRD_PATH" | cut -d'"' -f4
 ```
 
 **如果 branchName 为空：**
