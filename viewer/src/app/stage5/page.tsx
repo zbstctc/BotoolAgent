@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator, StageTransitionModal } from '@/components';
 import { TestingReportSummary } from '@/components/TestingReportSummary';
@@ -49,7 +49,6 @@ function Stage5PageContent() {
   useProjectValidation({ currentStage: 5 });
 
   // Data states
-  const [projectName, setProjectName] = useState<string>('');
   const [prInfo, setPrInfo] = useState<PRInfo | null>(null);
   const [mergeStatus, setMergeStatus] = useState<MergeStatus | null>(null);
 
@@ -65,17 +64,15 @@ function Stage5PageContent() {
   const { prd } = useFileWatcher({
     projectId,
     enabled: true,
-    onPrdUpdate: (content) => {
-      const parsed = parsePrdJson(content);
-      if (parsed) setProjectName(parsed.project || '');
-    },
   });
 
-  useEffect(() => {
+  // Derive projectName from prd (avoids setState-in-effect lint error)
+  const projectName = useMemo(() => {
     if (prd) {
       const parsed = parsePrdJson(prd);
-      if (parsed) setProjectName(parsed.project || '');
+      return parsed?.project || '';
     }
+    return '';
   }, [prd]);
 
   // Fetch merge status
