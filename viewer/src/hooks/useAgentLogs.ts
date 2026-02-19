@@ -17,12 +17,16 @@ export function useAgentLogs({ projectId, enabled }: UseAgentLogsOptions) {
   const [lines, setLines] = useState<string[]>([]);
   const [alive, setAlive] = useState(false);
   const isPolling = enabled && !!projectId;
-  const seenRef = useRef<Set<string>>(new Set());
+  // Track the previous snapshot to compute truly new lines via overlap detection.
+  // Content-based Set deduplication would silently drop repeated lines (e.g. the
+  // same command run twice), so we instead find the longest suffix of the previous
+  // snapshot that matches a prefix of the new snapshot and only append the remainder.
+  const lastSnapshotRef = useRef<string[]>([]);
 
   const reset = useCallback(() => {
     setLines([]);
     setAlive(false);
-    seenRef.current = new Set();
+    lastSnapshotRef.current = [];
   }, []);
 
   useEffect(() => {
@@ -41,13 +45,27 @@ export function useAgentLogs({ projectId, enabled }: UseAgentLogsOptions) {
         setAlive(data.alive);
 
         if (data.lines.length > 0) {
-          const newLines = data.lines.filter(
-            (line) => !seenRef.current.has(line)
-          );
-          if (newLines.length > 0) {
-            for (const line of newLines) {
-              seenRef.current.add(line);
+          const newSnapshot = data.lines;
+          const prevSnapshot = lastSnapshotRef.current;
+
+          // Find the longest suffix of prevSnapshot that is a prefix of newSnapshot.
+          // This tells us how many lines the two snapshots share (i.e. already shown).
+          let overlapLen = 0;
+          const maxOverlap = Math.min(prevSnapshot.length, newSnapshot.length);
+          for (let len = maxOverlap; len > 0; len--) {
+            const match = prevSnapshot
+              .slice(prevSnapshot.length - len)
+              .every((l, i) => l === newSnapshot[i]);
+            if (match) {
+              overlapLen = len;
+              break;
             }
+          }
+
+          const newLines = newSnapshot.slice(overlapLen);
+          lastSnapshotRef.current = newSnapshot;
+
+          if (newLines.length > 0) {
             setLines((prev) => [...prev, ...newLines].slice(-50));
           }
         }
