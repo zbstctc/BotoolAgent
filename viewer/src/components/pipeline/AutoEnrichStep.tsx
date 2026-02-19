@@ -24,6 +24,7 @@ interface AutoEnrichStepProps {
   mode: PipelineMode;
   onComplete: (result: AutoEnrichResult) => void;
   onBack?: () => void;
+  autoMode?: boolean;
 }
 
 // Generation state
@@ -34,6 +35,7 @@ export function AutoEnrichStep({
   mode,
   onComplete,
   onBack,
+  autoMode = false,
 }: AutoEnrichStepProps) {
   const [result, setResult] = useState<AutoEnrichResult | null>(null);
 
@@ -173,6 +175,18 @@ export function AutoEnrichStep({
     setGeneratingProgress(0);
     setGeneratingMessage('');
   }, []);
+
+  // AutoMode: auto-start generation after 2s delay
+  useEffect(() => {
+    if (!autoMode || generatingState !== 'idle' || result) return;
+    if (!prdContent) return;
+
+    const timer = setTimeout(() => {
+      handleStartGeneration();
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [autoMode, generatingState, result, prdContent, handleStartGeneration]);
 
   // Show initial state - prompt user to start generation
   if (generatingState === 'idle' && !result) {

@@ -53,12 +53,14 @@ interface RuleCheckStepProps {
   prdContent: string;
   onComplete: (selectedRules: RuleDocument[]) => void;
   onBack?: () => void;
+  autoMode?: boolean;
 }
 
 export function RuleCheckStep({
   prdContent,
   onComplete,
   onBack,
+  autoMode = false,
 }: RuleCheckStepProps) {
   const [categories, setCategories] = useState<RuleCategory[]>([]);
   const [selectedRules, setSelectedRules] = useState<Set<string>>(new Set());
@@ -75,6 +77,7 @@ export function RuleCheckStep({
   const [terminalLines, setTerminalLines] = useState<string[]>([]);
   const [realAdaptingProgress, setRealAdaptingProgress] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const autoModeTriggeredRef = useRef(false);
 
   // Simulated progress while waiting for SSE
   useSimulatedProgress({
@@ -387,6 +390,42 @@ ${rulesText}
     setAdaptingMessage('');
     setAdaptingResult(null);
   }, []);
+
+  // AutoMode: auto-select all rules and trigger confirm after 2s
+  useEffect(() => {
+    if (!autoMode || isLoading || autoModeTriggeredRef.current) return;
+    if (categories.length === 0) return;
+
+    const allRuleIds = categories.flatMap(cat => cat.documents.map(doc => doc.id));
+    if (allRuleIds.length === 0) {
+      // No rules available, skip directly
+      autoModeTriggeredRef.current = true;
+      onComplete([]);
+      return;
+    }
+
+    // Select all rules
+    setSelectedRules(new Set(allRuleIds));
+    autoModeTriggeredRef.current = true;
+
+    // Trigger confirm after 2s delay
+    const timer = setTimeout(() => {
+      handleConfirm();
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [autoMode, isLoading, categories, onComplete, handleConfirm]);
+
+  // AutoMode: auto-confirm adapting result dialog after 2s
+  useEffect(() => {
+    if (!autoMode || !showConfirmDialog || !adaptingResult) return;
+
+    const timer = setTimeout(() => {
+      handleConfirmResult();
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [autoMode, showConfirmDialog, adaptingResult, handleConfirmResult]);
 
   // Calculate totals
   const totalRules = categories.reduce((sum, cat) => sum + cat.documents.length, 0);
