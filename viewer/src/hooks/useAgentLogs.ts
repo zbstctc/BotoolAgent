@@ -22,11 +22,16 @@ export function useAgentLogs({ projectId, enabled }: UseAgentLogsOptions) {
   // same command run twice), so we instead find the longest suffix of the previous
   // snapshot that matches a prefix of the new snapshot and only append the remainder.
   const lastSnapshotRef = useRef<string[]>([]);
+  // Monotonically increasing request id. Each fetch captures its own id; if a newer
+  // request has been dispatched by the time this response arrives, discard the stale
+  // result to prevent out-of-order snapshot merging.
+  const pendingReqIdRef = useRef(0);
 
   const reset = useCallback(() => {
     setLines([]);
     setAlive(false);
     lastSnapshotRef.current = [];
+    pendingReqIdRef.current = 0;
   }, []);
 
   useEffect(() => {
@@ -35,6 +40,7 @@ export function useAgentLogs({ projectId, enabled }: UseAgentLogsOptions) {
     }
 
     const fetchLogs = async () => {
+      const myId = ++pendingReqIdRef.current;
       try {
         const response = await fetch(
           `/api/agent/logs?projectId=${encodeURIComponent(projectId)}`
@@ -42,6 +48,10 @@ export function useAgentLogs({ projectId, enabled }: UseAgentLogsOptions) {
         if (!response.ok) return;
 
         const data: AgentLogsResponse = await response.json();
+
+        // Discard if a newer request has already been dispatched
+        if (myId < pendingReqIdRef.current) return;
+
         setAlive(data.alive);
 
         if (data.lines.length > 0) {
