@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getTasksDir } from '@/lib/project-root';
+import { getTasksDir, normalizeProjectId } from '@/lib/project-root';
 
 const TASKS_DIR = getTasksDir();
 
@@ -11,15 +11,19 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const safeId = normalizeProjectId(id);
+    if (!safeId) {
+      return NextResponse.json({ error: 'Invalid project id' }, { status: 400 });
+    }
 
     // Try new format: tasks/{id}/prd.md
-    const newFormatPath = path.join(TASKS_DIR, id, 'prd.md');
+    const newFormatPath = path.join(TASKS_DIR, safeId, 'prd.md');
     if (fs.existsSync(newFormatPath)) {
       const content = fs.readFileSync(newFormatPath, 'utf-8');
       const stats = fs.statSync(newFormatPath);
       return NextResponse.json({
-        id,
-        filename: `${id}/prd.md`,
+        id: safeId,
+        filename: `${safeId}/prd.md`,
         content,
         createdAt: stats.birthtime.toISOString(),
         modifiedAt: stats.mtime.toISOString(),
@@ -27,13 +31,13 @@ export async function GET(
     }
 
     // Fall back to legacy format: tasks/prd-{id}.md
-    const legacyFilename = `prd-${id}.md`;
+    const legacyFilename = `prd-${safeId}.md`;
     const legacyPath = path.join(TASKS_DIR, legacyFilename);
     if (fs.existsSync(legacyPath)) {
       const content = fs.readFileSync(legacyPath, 'utf-8');
       const stats = fs.statSync(legacyPath);
       return NextResponse.json({
-        id,
+        id: safeId,
         filename: legacyFilename,
         content,
         createdAt: stats.birthtime.toISOString(),

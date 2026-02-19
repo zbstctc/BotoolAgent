@@ -7,6 +7,7 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { mkdir, writeFile, unlink, readdir, stat } from 'fs/promises';
 import { existsSync } from 'fs';
+import { ensureContainedPath } from '@/lib/project-root';
 
 // Skill 目录路径
 const SKILLS_DIR = join(homedir(), '.claude', 'skills', 'botool-rules');
@@ -22,10 +23,29 @@ const CATEGORY_NAMES: Record<string, { en: string; zh: string }> = {
 };
 
 /**
+ * Validate that a category string is safe for use in file paths.
+ * Rejects categories containing path separators or traversal sequences.
+ */
+function validateCategory(category: string): void {
+  if (
+    !category ||
+    category.includes('/') ||
+    category.includes('\\') ||
+    category.includes('..') ||
+    category.includes('\0')
+  ) {
+    throw new Error(`Invalid category: ${category}`);
+  }
+}
+
+/**
  * 生成 Skill 文件名
  * 格式: {category}-{name}.md
  */
 export function generateSkillFileName(category: string, name: string): string {
+  // Validate category before using in file path
+  validateCategory(category);
+
   // 将中文名转换为拼音/英文或直接使用
   const safeName = name
     .toLowerCase()
@@ -107,6 +127,14 @@ export async function saveRuleAsSkill(
     await ensureSkillsDir();
 
     const fileName = generateSkillFileName(category, name);
+
+    // Validate the resolved path stays within SKILLS_DIR
+    try {
+      ensureContainedPath(SKILLS_DIR, fileName);
+    } catch {
+      throw new Error(`Invalid skill path: ${fileName}`);
+    }
+
     const skillPath = join(SKILLS_DIR, fileName);
     const skillContent = generateSkillContent(category, name, content);
     const skillName = `botool-rules:${category}:${name.toLowerCase().replace(/\s+/g, '-')}`;
@@ -138,6 +166,19 @@ export async function deleteSkill(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const fileName = generateSkillFileName(category, name);
+
+    // Validate the resolved path stays within SKILLS_DIR
+    // For delete, SKILLS_DIR may not exist yet — if so, there's nothing to delete
+    if (!existsSync(SKILLS_DIR)) {
+      return { success: true };
+    }
+
+    try {
+      ensureContainedPath(SKILLS_DIR, fileName);
+    } catch {
+      throw new Error(`Invalid skill path: ${fileName}`);
+    }
+
     const skillPath = join(SKILLS_DIR, fileName);
 
     if (existsSync(skillPath)) {

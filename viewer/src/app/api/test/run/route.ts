@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { verifyCsrfProtection } from '@/lib/api-guard';
 
 // Test types supported
 type TestType = 'typecheck' | 'unit' | 'integration' | 'e2e' | 'lint';
@@ -272,6 +273,9 @@ export async function GET() {
 
 // POST: Run tests
 export async function POST(request: NextRequest) {
+  const csrfError = verifyCsrfProtection(request);
+  if (csrfError) return csrfError;
+
   try {
     const body = await request.json().catch(() => ({}));
     const requestedTypes: TestType[] = body.types || ['typecheck', 'lint', 'unit', 'integration', 'e2e'];

@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
 import { getProjectRoot, getProjectPrdJsonPath, getAgentScriptPath, getAgentPidPath, getAgentStatusPath, isPortableMode, normalizeProjectId } from '@/lib/project-root';
+import { verifyCsrfProtection } from '@/lib/api-guard';
 
 const PROJECT_ROOT = getProjectRoot();
 
@@ -99,6 +100,9 @@ function readPRD(projectId?: string | null): PRDJson | null {
 }
 
 export async function POST(request: Request) {
+  const csrfError = verifyCsrfProtection(request);
+  if (csrfError) return csrfError;
+
   try {
     const requestBody = await request.json().catch(() => ({}));
     const { mode = 'teams', projectId: rawProjectId } = requestBody as {

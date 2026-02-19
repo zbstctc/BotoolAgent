@@ -3,6 +3,7 @@ import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import { getTasksDir } from "@/lib/project-root";
+import { verifyCsrfProtection } from "@/lib/api-guard";
 
 interface AgentProcess {
   pid: number;
@@ -310,6 +311,9 @@ export async function GET() {
  * Safety: validates that the PID belongs to a running claude process.
  */
 export async function POST(request: Request) {
+  const csrfError = verifyCsrfProtection(request);
+  if (csrfError) return csrfError;
+
   try {
     const body = await request.json();
     const pid = Number(body?.pid);

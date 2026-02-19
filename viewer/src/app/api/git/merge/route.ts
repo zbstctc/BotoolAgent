@@ -6,6 +6,7 @@ import fsPromises from 'fs/promises';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
 import { getProjectRoot, getProjectPrdJsonPath, getBotoolRoot, normalizeProjectId, getTasksDir, isSafeGitRef } from '@/lib/project-root';
 import path from 'path';
+import { verifyCsrfProtection } from '@/lib/api-guard';
 
 const execAsync = promisify(exec);
 
@@ -140,6 +141,9 @@ async function getPRInfo(branch?: string): Promise<{ number: number; url: string
  * - baseBranch: string (default: 'main') - base branch to merge into
  */
 export async function POST(request: NextRequest) {
+  const csrfError = verifyCsrfProtection(request);
+  if (csrfError) return csrfError;
+
   try {
     // Check gh CLI
     if (!await checkGhCli()) {

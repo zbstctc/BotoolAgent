@@ -1,8 +1,8 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { getRulesDir } from '@/lib/project-root';
+import { getRulesDir, ensureContainedPath } from '@/lib/project-root';
 
 const RULES_DIR = getRulesDir();
 
@@ -23,6 +23,13 @@ export async function GET(
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
+    }
+
+    // 验证路径安全
+    try {
+      ensureContainedPath(RULES_DIR, category, `${name}.md`);
+    } catch {
+      return NextResponse.json({ error: 'Invalid rule path' }, { status: 400 });
     }
 
     const filePath = join(RULES_DIR, category, `${name}.md`);
