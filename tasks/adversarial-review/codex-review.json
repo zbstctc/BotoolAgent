@@ -1,0 +1,49 @@
+{
+  "findings": [
+    {
+      "severity": "HIGH",
+      "category": "logic",
+      "rule": "merge-gate-design",
+      "file": "viewer/src/app/stage5/page.tsx",
+      "line": 205,
+      "message": "canMerge forced false when isAllPass is null (no testing report loaded)",
+      "suggestion": "Allow merge when no projectId / testing report exists",
+      "resolution": "rejected",
+      "rejectionReason": "By design: 6-layer testing pipeline requires all tests to pass before merge. UI shows clear warning message at lines 325-333. Normal workflow always has projectId.",
+      "codexAccepted": true
+    },
+    {
+      "severity": "HIGH",
+      "category": "logic",
+      "rule": "invalid-json-structure",
+      "file": "tasks/registry.json",
+      "line": 45,
+      "message": "remote-mobile-pwa entry placed outside the projects object, making JSON invalid",
+      "suggestion": "Move entry inside projects object",
+      "resolution": "fixed",
+      "fixCommit": "4b144e1"
+    }
+  ],
+  "adversarialState": {
+    "round": 1,
+    "maxRounds": 3,
+    "status": "converged",
+    "rounds": [
+      {
+        "round": 1,
+        "codexFindings": 2,
+        "fixed": 1,
+        "rejected": 1,
+        "rejectionReasons": [
+          {
+            "finding": "Stage 5 merge blocking when no projectId",
+            "reason": "By design: testing gate requires report before merge. UI shows warning. Normal flow always has projectId.",
+            "codexAccepted": true
+          }
+        ],
+        "remaining": 0
+      }
+    ]
+  },
+  "timestamp": "2026-02-19T15:30:00Z"
+}
