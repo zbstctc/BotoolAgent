@@ -40,6 +40,23 @@
           "suggestion": {
             "type": "string",
             "description": "Actionable fix suggestion"
+          },
+          "resolution": {
+            "type": "string",
+            "enum": ["fixed", "rejected", "unresolved"],
+            "description": "Resolution status after adversarial loop: fixed=code changed, rejected=argued away, unresolved=still open"
+          },
+          "rejectionReason": {
+            "type": "string",
+            "description": "Developer's argument for rejecting the finding (only when resolution=rejected)"
+          },
+          "codexAccepted": {
+            "type": "boolean",
+            "description": "Whether Codex accepted the rejection argument (only when resolution=rejected)"
+          },
+          "fixCommit": {
+            "type": "string",
+            "description": "Git commit hash of the fix (only when resolution=fixed)"
           }
         }
       }

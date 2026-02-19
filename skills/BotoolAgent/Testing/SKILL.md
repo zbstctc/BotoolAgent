@@ -566,98 +566,77 @@ echo "Diff lines: $DIFF_LINES"
 
 ### 5c. 全量审查模式
 
+**两步法：** `codex exec review` 的 `--base` 参数与自定义 prompt 互斥，因此采用两步法：
+1. Codex 以自由文本输出审查结果
+2. Claude 解析自由文本，结构化为 JSON
+
 ```bash
 # 创建临时输出文件
-REVIEW_OUTPUT=$(mktemp /tmp/codex-review-XXXXXX.json)
+REVIEW_OUTPUT=$(mktemp /tmp/codex-review-XXXXXX.txt)
 
-codex exec -a never --full-auto \
-  "You are a red-team security reviewer. Read AGENTS.md for project conventions. \
-   Analyze the following git diff output for: \
-   1. Security vulnerabilities (OWASP Top 10: injection, XSS, SSRF, path traversal, hardcoded secrets) \
-   2. Logic bugs (off-by-one, null/undefined handling, race conditions, boundary errors) \
-   3. Missing error handling (uncaught exceptions, missing fallbacks, unvalidated inputs) \
-   4. Test coverage gaps (critical paths not tested, edge cases missed) \
-   \
-   Output ONLY a valid JSON object with a 'findings' array. Each finding must have: \
-   severity (HIGH/MEDIUM/LOW), category (security/logic/error-handling/test-coverage/style), \
-   rule (identifier like owasp-injection), file (relative path), line (number), \
-   message (description), suggestion (actionable fix). \
-   \
-   If no issues found, output: {\"findings\": []} \
-   \
-   Git diff: \
-   $(git diff main...HEAD)" \
-   > "$REVIEW_OUTPUT" 2>/dev/null
+# Step 1: Codex 审查（自由文本输出）
+codex exec review --base main --full-auto 2>&1 | tee "$REVIEW_OUTPUT"
 ```
+
+**Step 2: Claude 解析 Codex 输出**
+
+读取 `$REVIEW_OUTPUT` 的内容，Claude 自行解析 Codex 的自由文本审查结果，提取每个 finding 并结构化为 `codex-review-schema.json` 格式：
+
+```json
+{
+  "findings": [
+    {
+      "severity": "HIGH|MEDIUM|LOW",
+      "category": "security|logic|error-handling|test-coverage|style",
+      "rule": "rule-identifier",
+      "file": "relative/path.ts",
+      "line": 42,
+      "message": "问题描述",
+      "suggestion": "修复建议"
+    }
+  ]
+}
+```
+
+解析规则：
+- Codex 输出中每个提到具体文件+行号+问题描述的段落 → 一个 finding
+- severity 根据问题性质判断：安全漏洞/崩溃=HIGH，逻辑错误/缺失处理=MEDIUM，风格/命名=LOW
+- 如果 Codex 输出为空或无法解析 → `{"findings": []}`
 
 ### 5d. 分文件审查模式（大 diff 缓解）
 
-当 diff 超过 5000 行时自动拆分：
+当 diff 超过 5000 行时，按文件分批审查：
 
 ```bash
-REVIEW_OUTPUT=$(mktemp /tmp/codex-review-XXXXXX.json)
-echo '{"findings":[]}' > "$REVIEW_OUTPUT"
+# 获取变更文件列表
+CHANGED_FILES=$(git diff main...HEAD --name-only)
 
-for file in $(git diff main...HEAD --name-only); do
-  FILE_REVIEW=$(mktemp /tmp/codex-file-review-XXXXXX.json)
-
-  codex exec -a never --full-auto \
-    "You are a red-team security reviewer. Read AGENTS.md for project conventions. \
-     Review $file for security vulnerabilities, logic bugs, missing error handling, \
-     and test coverage gaps. \
-     Output ONLY a valid JSON object with a 'findings' array per codex-review-schema.json format. \
-     Focus on: OWASP Top 10, logic bugs, boundary conditions, missing validation. \
-     If no issues found, output: {\"findings\": []} \
-     \
-     File diff: \
-     $(git diff main...HEAD -- "$file")" \
-     > "$FILE_REVIEW" 2>/dev/null
-
-  # 合并 findings（使用 node 合并 JSON 数组）
-  node -e "
-    const fs = require('fs');
-    const main = JSON.parse(fs.readFileSync('$REVIEW_OUTPUT','utf8'));
-    try {
-      const part = JSON.parse(fs.readFileSync('$FILE_REVIEW','utf8'));
-      if (part.findings) main.findings.push(...part.findings);
-    } catch(e) { /* skip unparseable output */ }
-    fs.writeFileSync('$REVIEW_OUTPUT', JSON.stringify(main, null, 2));
-  "
-  rm -f "$FILE_REVIEW"
+# 按 10 个文件一批分组，每批运行一次 codex exec review
+# 使用 --base main 审查指定文件
+for batch in $(echo "$CHANGED_FILES" | xargs -n 10); do
+  BATCH_OUTPUT=$(mktemp /tmp/codex-batch-XXXXXX.txt)
+  codex exec review --base main --full-auto 2>&1 | tee "$BATCH_OUTPUT"
+  # Claude 解析每批输出，合并到总 findings 列表
 done
 ```
 
+**Claude 解析**：同 5c Step 2，将每批 Codex 自由文本输出解析为结构化 findings，合并去重后生成最终 JSON。
+
 ### 5e. 解析审查结果
 
-```bash
-# 读取 Codex 审查输出
-node -e "
-  const fs = require('fs');
-  try {
-    const raw = fs.readFileSync('$REVIEW_OUTPUT', 'utf8');
-    // 尝试提取 JSON（Codex 输出可能包含额外文本）
-    const jsonMatch = raw.match(/\{[\s\S]*\"findings\"[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.log(JSON.stringify({findings:[], parseError: 'No valid JSON found in codex output'}));
-      process.exit(0);
-    }
-    const data = JSON.parse(jsonMatch[0]);
-    const findings = data.findings || [];
-    const high = findings.filter(f => f.severity === 'HIGH');
-    const medium = findings.filter(f => f.severity === 'MEDIUM');
-    const low = findings.filter(f => f.severity === 'LOW');
-    console.log(JSON.stringify({
-      total: findings.length,
-      high: high.length,
-      medium: medium.length,
-      low: low.length,
-      findings: findings
-    }, null, 2));
-  } catch(e) {
-    console.log(JSON.stringify({findings:[], parseError: e.message}));
-  }
-"
+**Claude 直接解析 Codex 自由文本输出**（5c Step 2 已完成结构化），无需 node 脚本。
+
+Claude 读取 `$REVIEW_OUTPUT` 文件内容，将 Codex 的自由文本审查结果结构化为 findings JSON。
+
+统计摘要：
 ```
+total: findings 总数
+high:  HIGH severity 数量
+medium: MEDIUM severity 数量
+low:   LOW severity 数量
+```
+
+如果 Codex 输出为空或无法识别任何 finding → `findings: []`（不阻塞流水线）。
 
 ### 5f. 按 severity 分类处理
 
@@ -716,16 +695,19 @@ Layer 5: Codex 审查输出无法解析。原始输出已保存到 codex-review.
 - 调用 codex exec 让 Codex 判断是否接受论证：
 
 ```bash
-codex exec -a never --full-auto \
+REJECTION_EVAL=$(mktemp /tmp/codex-rejection-XXXXXX.txt)
+codex exec --full-auto \
   "A developer argues this finding should NOT be fixed. \
    Finding: {finding.message} (file: {finding.file}, line: {finding.line}) \
    Developer's argument: {rejection_reason} \
    \
    As an independent reviewer, evaluate the argument. \
-   Output ONLY a JSON object: {\"accepted\": true/false, \"reason\": \"your reasoning\"} \
-   \
-   Accept only if the argument is technically sound and the finding is indeed a false positive or non-issue."
+   State clearly whether you ACCEPT or REJECT the developer's argument, and explain your reasoning. \
+   Accept only if the argument is technically sound and the finding is indeed a false positive or non-issue." \
+   2>&1 | tee "$REJECTION_EVAL"
 ```
+
+Claude 解析 Codex 的自由文本回复，判断是否包含 "accept" 或 "reject" 语义，提取为 `{accepted: boolean, reason: string}`。
 
 - **Codex 接受论证** → 记录到日志，该 finding 标记为 resolved
 - **Codex 不接受论证** → 该 finding 计入未解决 (unresolved)
@@ -745,17 +727,14 @@ git commit -m "fix(testing): adversarial round {round} fixes"
 # 获取本轮修改的文件列表
 CHANGED_FILES=$(git diff HEAD~1 --name-only | tr '\n' ' ')
 
-codex exec -a never --full-auto \
-  "You are a red-team security reviewer performing incremental re-review. \
-   Only review the following changed files: $CHANGED_FILES \
-   Check if the fixes properly address the previously reported issues. \
-   Also check if the fixes introduced any NEW issues. \
-   \
-   Output ONLY a valid JSON object with a 'findings' array. Each finding must have: \
-   severity (HIGH/MEDIUM/LOW), category, rule, file, line, message, suggestion. \
-   If all issues are resolved and no new issues, output: {\"findings\": []}" \
-   > "$REVIEW_OUTPUT" 2>/dev/null
+# 使用 codex exec review 复审变更文件
+INCREMENTAL_OUTPUT=$(mktemp /tmp/codex-incremental-XXXXXX.txt)
+codex exec review --base HEAD~1 --full-auto 2>&1 | tee "$INCREMENTAL_OUTPUT"
 ```
+
+Claude 解析增量复审的自由文本输出（同 5c Step 2），提取新的 findings。重点关注：
+- 之前报告的问题是否已修复
+- 修复是否引入了新问题
 
 #### Step 4: 解析增量复审结果
 
@@ -817,9 +796,55 @@ Codex 红队对抗审查 — 3 轮未收敛。以下问题仍未解决：
 3. 终止测试
 ```
 
-### 5h. 更新 codex-review.json
+### 5h. 写入审查结果文件
 
-对抗循环结束后，将最终状态写入 `tasks/{projectId}/codex-review.json`（合并初始 findings + 对抗循环结果），供 Viewer 读取。
+对抗循环结束后，写入**两个文件**供 Viewer API 读取：
+
+**文件 1: `tasks/{projectId}/codex-review.json`** — findings 列表（含 resolution 字段）
+
+```json
+{
+  "findings": [
+    {
+      "severity": "HIGH",
+      "category": "logic",
+      "rule": "rule-id",
+      "file": "path/to/file.ts",
+      "line": 42,
+      "message": "问题描述",
+      "suggestion": "修复建议",
+      "resolution": "fixed|rejected|unresolved",
+      "rejectionReason": "拒绝理由（仅 rejected 时）",
+      "codexAccepted": true,
+      "fixCommit": "commit-hash（仅 fixed 时）"
+    }
+  ],
+  "adversarialState": { ... },
+  "timestamp": "ISO timestamp"
+}
+```
+
+**文件 2: `tasks/{projectId}/adversarial-state.json`** — 对抗循环状态（独立文件，Viewer API 单独读取）
+
+```json
+{
+  "round": 1,
+  "maxRounds": 3,
+  "status": "converged|in_progress|circuit_breaker",
+  "rounds": [
+    {
+      "round": 1,
+      "codexFindings": 8,
+      "fixed": 6,
+      "rejected": 1,
+      "rejectionReasons": [...],
+      "remaining": 1
+    }
+  ]
+}
+```
+
+**注意：** Viewer API (`/api/codex-review`) 从两个独立文件分别读取 findings 和 adversarialState，因此必须写两个文件。
 
 **Layer 5 完成后，告知用户：**
 ```

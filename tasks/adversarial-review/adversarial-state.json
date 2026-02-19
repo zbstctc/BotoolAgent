@@ -1,0 +1,21 @@
+{
+  "round": 1,
+  "maxRounds": 3,
+  "status": "converged",
+  "rounds": [
+    {
+      "round": 1,
+      "codexFindings": 2,
+      "fixed": 1,
+      "rejected": 1,
+      "rejectionReasons": [
+        {
+          "finding": "Stage 5 merge blocking when no projectId",
+          "reason": "By design: testing gate requires report before merge. UI shows warning. Normal flow always has projectId.",
+          "codexAccepted": true
+        }
+      ],
+      "remaining": 0
+    }
+  ]
+}

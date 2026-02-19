@@ -13,6 +13,10 @@ export interface CodexFinding {
   line: number;
   message: string;
   suggestion: string;
+  resolution?: 'fixed' | 'rejected' | 'unresolved';
+  rejectionReason?: string;
+  codexAccepted?: boolean;
+  fixCommit?: string;
 }
 
 export interface CodexReviewOutput {

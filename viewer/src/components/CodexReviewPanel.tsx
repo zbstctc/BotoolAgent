@@ -58,6 +58,14 @@ function FindingCard({
         <Badge variant={severityVariant[finding.severity]} className="mt-0.5 shrink-0">
           {severityLabel[finding.severity]}
         </Badge>
+        {finding.resolution && (
+          <Badge
+            variant={finding.resolution === 'fixed' ? 'success' : finding.resolution === 'rejected' ? 'neutral' : 'warning'}
+            className="mt-0.5 shrink-0"
+          >
+            {finding.resolution === 'fixed' ? 'Fixed' : finding.resolution === 'rejected' ? 'Rejected' : 'Open'}
+          </Badge>
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-semibold text-neutral-700">{finding.rule}</span>
@@ -83,11 +91,31 @@ function FindingCard({
         </svg>
       </button>
 
-      {/* Suggestion (collapsible) */}
-      {isExpanded && finding.suggestion && (
-        <div className="border-t border-neutral-100 bg-neutral-50 px-3 py-2.5">
-          <p className="text-xs font-medium text-neutral-500 mb-1">Suggestion</p>
-          <p className="text-sm text-neutral-700 leading-snug">{finding.suggestion}</p>
+      {/* Suggestion + Resolution details (collapsible) */}
+      {isExpanded && (finding.suggestion || finding.rejectionReason) && (
+        <div className="border-t border-neutral-100 bg-neutral-50 px-3 py-2.5 space-y-2">
+          {finding.suggestion && (
+            <div>
+              <p className="text-xs font-medium text-neutral-500 mb-1">Suggestion</p>
+              <p className="text-sm text-neutral-700 leading-snug">{finding.suggestion}</p>
+            </div>
+          )}
+          {finding.rejectionReason && (
+            <div>
+              <p className="text-xs font-medium text-neutral-500 mb-1">
+                Rejection Reason
+                {finding.codexAccepted != null && (
+                  <span className={cn('ml-2', finding.codexAccepted ? 'text-green-600' : 'text-red-500')}>
+                    {finding.codexAccepted ? '(Codex accepted)' : '(Codex rejected)'}
+                  </span>
+                )}
+              </p>
+              <p className="text-sm text-neutral-700 leading-snug">{finding.rejectionReason}</p>
+            </div>
+          )}
+          {finding.fixCommit && (
+            <p className="text-xs text-neutral-400">Fix commit: {finding.fixCommit}</p>
+          )}
         </div>
       )}
     </div>
