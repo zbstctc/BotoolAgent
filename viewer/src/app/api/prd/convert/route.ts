@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CLIManager, CLIMessage } from '@/lib/cli-manager';
-import { getProjectRoot, getPrdJsonPath, getProgressPath, getProjectPrdJsonPath, getProjectPrdMdPath, getProjectProgressPath, getArchiveDir, getRegistryPath, getTasksDir, isPortableMode } from '@/lib/project-root';
+import { getProjectRoot, getPrdJsonPath, getProgressPath, getProjectPrdJsonPath, getProjectPrdMdPath, getProjectProgressPath, getSnapshotsDir, getRegistryPath, getTasksDir, isPortableMode } from '@/lib/project-root';
 
 // System prompt for PRD to JSON conversion (slim index format)
 const SYSTEM_PROMPT = `You are a PRD to JSON converter for BotoolAgent. Convert a PRD markdown document into a **slim prd.json** — an automation index. The PRD.md is the Single Source of Truth; prd.json only contains automation fields.
@@ -287,7 +287,7 @@ async function archiveIfNeeded(newPrdJson: { branchName: string }) {
       // Create archive directory
       const date = new Date().toISOString().split('T')[0];
       const featureName = existingPrd.branchName?.replace('botool/', '') || 'unknown';
-      const archiveDir = path.join(getArchiveDir(), `${date}-${featureName}`);
+      const archiveDir = path.join(getSnapshotsDir(), `${date}-${featureName}`);
 
       fs.mkdirSync(archiveDir, { recursive: true });
 

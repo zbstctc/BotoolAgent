@@ -86,7 +86,7 @@ if [ -z "$PROJECT_DIR" ]; then
   fi
 fi
 
-ARCHIVE_DIR="$SCRIPT_DIR/archive"
+ARCHIVE_DIR="$SCRIPT_DIR/tasks/snapshots"
 
 # --prd-path 覆盖：支持多 PRD 模式
 if [ -n "$PRD_PATH_OVERRIDE" ]; then

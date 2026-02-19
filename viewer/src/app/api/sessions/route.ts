@@ -3,11 +3,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { getArchiveDir, getProjectRoot } from '@/lib/project-root';
+import { getSnapshotsDir, getProjectRoot } from '@/lib/project-root';
 
 const execAsync = promisify(exec);
 
-const ARCHIVE_DIR = getArchiveDir();
+const ARCHIVE_DIR = getSnapshotsDir();
 
 // Task status type - more detailed than before
 export type TaskStatus = 'running' | 'completed' | 'partial' | 'failed' | 'waiting_merge';

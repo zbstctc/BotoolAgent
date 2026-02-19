@@ -160,7 +160,7 @@ export async function GET() {
       return NextResponse.json({ data: [] });
     }
 
-    const projectDirs = entries.filter(e => e.isDirectory() && e.name !== 'archives');
+    const projectDirs = entries.filter(e => e.isDirectory() && e.name !== 'archives' && e.name !== 'snapshots');
 
     // First pass: collect transformedFrom references
     for (const dir of projectDirs) {

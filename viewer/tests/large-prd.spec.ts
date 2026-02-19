@@ -6,7 +6,7 @@ const RUN_LARGE_PRD = process.env.BOTOOL_E2E_LARGE_PRD === '1';
 const VIEWER_DIR = process.cwd();
 const REPO_ROOT = path.resolve(VIEWER_DIR, '..');
 const TASKS_DIR = path.join(REPO_ROOT, 'tasks');
-const ARCHIVE_DIR = path.join(REPO_ROOT, 'archive');
+const ARCHIVE_DIR = path.join(REPO_ROOT, 'tasks', 'snapshots');
 const SOURCE_PRD_PATH = path.join(REPO_ROOT, 'v1.6_Botool_Present_v2PRD copy.md');
 const SOURCE_PRD_ID = 'e2e-large-prd-source';
 const SOURCE_PRD_FILE = path.join(TASKS_DIR, `prd-${SOURCE_PRD_ID}.md`);

@@ -8,7 +8,7 @@ import * as fs from 'fs';
  * we need to distinguish between two root directories:
  *
  * 1. botoolRoot: Where BotoolAgent itself lives (parent of viewer/)
- *    - Contains: tasks/, archive/, rules/, scripts/, .state/, skills/
+ *    - Contains: tasks/, rules/, scripts/, .state/, skills/
  *
  * 2. projectRoot: Where the user's actual project/git repo lives
  *    - Used for: git operations, Claude CLI working directory, prd.json, progress.txt
@@ -49,7 +49,7 @@ export function normalizeProjectId(projectId?: string | null): string | null {
 
 /**
  * Get the BotoolAgent directory (parent of viewer/).
- * This is where BotoolAgent's own files live: tasks/, archive/, rules/, etc.
+ * This is where BotoolAgent's own files live: tasks/, rules/, etc.
  */
 export function getBotoolRoot(): string {
   if (_botoolRoot) return _botoolRoot;
@@ -117,9 +117,12 @@ export function getTasksDir(): string {
   return path.join(getBotoolRoot(), 'tasks');
 }
 
-export function getArchiveDir(): string {
-  return path.join(getBotoolRoot(), 'archive');
+export function getSnapshotsDir(): string {
+  return path.join(getBotoolRoot(), 'tasks', 'snapshots');
 }
+
+/** @deprecated Use getSnapshotsDir() */
+export const getArchiveDir = getSnapshotsDir;
 
 export function getRulesDir(): string {
   return path.join(getBotoolRoot(), 'rules');

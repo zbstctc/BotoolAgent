@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getArchiveDir } from '@/lib/project-root';
+import { getSnapshotsDir } from '@/lib/project-root';
 
-const ARCHIVE_DIR = getArchiveDir();
+const ARCHIVE_DIR = getSnapshotsDir();
 
 interface DevTask {
   id: string;
