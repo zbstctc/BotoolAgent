@@ -134,6 +134,7 @@ function Stage2PageContent() {
   }, [currentStep]);
 
   // Derived values
+  const isAutoMode = activeProject?.autoMode ?? false;
   const effectivePrdContent = fixedPrdContent || prdContent;
   const selectedRuleIds = selectedRules.map(r => r.id);
   const effectiveEnrichResult = fixedEnrichResult || enrichResult;
@@ -146,6 +147,7 @@ function Stage2PageContent() {
           <RuleCheckStep
             prdContent={prdContent}
             onComplete={handleRuleCheckComplete}
+            autoMode={isAutoMode}
           />
         );
       case 1:
@@ -166,6 +168,7 @@ function Stage2PageContent() {
             mode={mode}
             onComplete={handleAutoEnrichComplete}
             onBack={handleBack}
+            autoMode={isAutoMode}
           />
         );
       case 3:
@@ -191,6 +194,7 @@ function Stage2PageContent() {
             ruleAuditSummary={ruleAuditSummary}
             onComplete={handleEnrichmentSummaryComplete}
             onBack={handleBack}
+            autoMode={isAutoMode}
           />
         );
       default:
@@ -216,6 +220,11 @@ function Stage2PageContent() {
         completedStages={[1]}
         projectName={activeProject?.name}
         stageStatus={`步骤 ${currentStep + 1}/5`}
+        showAutoMode
+        autoMode={activeProject?.autoMode ?? false}
+        onAutoModeChange={(checked) => {
+          if (activeProject) updateProject(activeProject.id, { autoMode: checked });
+        }}
       />
 
       {/* Pipeline Progress */}

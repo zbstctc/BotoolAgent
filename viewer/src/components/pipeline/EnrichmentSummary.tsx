@@ -18,6 +18,7 @@ interface EnrichmentSummaryProps {
   ruleAuditSummary?: string;
   onComplete: (prdJson: EnrichedPrdJson) => void;
   onBack?: () => void;
+  autoMode?: boolean;
 }
 
 type ConvertingState = 'idle' | 'converting' | 'completed' | 'error';
@@ -33,6 +34,7 @@ export function EnrichmentSummary({
   ruleAuditSummary,
   onComplete,
   onBack,
+  autoMode = false,
 }: EnrichmentSummaryProps) {
   const [prdJson, setPrdJson] = useState<EnrichedPrdJson | null>(null);
   const [jsonString, setJsonString] = useState('');
@@ -299,6 +301,18 @@ export function EnrichmentSummary({
       setIsSaving(false);
     }
   }, [prdJson, parseError, projectId, onComplete]);
+
+  // AutoMode: auto-save and start development after 2s delay
+  // Guard: skip if saveError is set to prevent infinite retry loop on persistent failures
+  useEffect(() => {
+    if (!autoMode || convertingState !== 'completed' || !prdJson || isSaving || saveError) return;
+
+    const timer = setTimeout(() => {
+      handleSave();
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [autoMode, convertingState, prdJson, isSaving, saveError, handleSave]);
 
   // Summary stats
   const rulesCount = selectedRules.length;

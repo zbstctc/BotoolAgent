@@ -149,6 +149,11 @@ function Stage3PageContent() {
   // Agent start error state
   const [agentStartError, setAgentStartError] = useState<string | null>(null);
 
+  // Auto-mode: separate retry counters for agent errors vs startup errors
+  const [autoRetryCount, setAutoRetryCount] = useState(0);
+  const [startupRetryCount, setStartupRetryCount] = useState(0);
+  const autoStartedRef = useRef(false);
+
   // Handle start agent
   const handleStartAgent = useCallback(async () => {
     setAgentActionLoading(true);
@@ -179,6 +184,66 @@ function Stage3PageContent() {
       setShowStopConfirm(false);
     }
   }, [agentStatus]);
+
+  // --- Auto-mode effects ---
+
+  // Reset retry counts & guard when autoMode is toggled off
+  useEffect(() => {
+    if (!activeProject?.autoMode) {
+      setAutoRetryCount(0);
+      setStartupRetryCount(0);
+      autoStartedRef.current = false;
+    }
+  }, [activeProject?.autoMode]);
+
+  // Auto-start agent when autoMode is on and agent is idle
+  useEffect(() => {
+    if (!activeProject?.autoMode) return;
+    if (agentStatus.isRunning || agentStatus.isComplete || agentActionLoading) return;
+    if (autoStartedRef.current) return;
+
+    autoStartedRef.current = true;
+    const timer = setTimeout(() => {
+      handleStartAgent();
+    }, 1000); // Small delay to allow page to settle
+    return () => clearTimeout(timer);
+  }, [activeProject?.autoMode, agentStatus.isRunning, agentStatus.isComplete, agentActionLoading, handleStartAgent]);
+
+  // Auto-retry on agent error (max 1 retry), then disable autoMode
+  useEffect(() => {
+    if (!activeProject?.autoMode || !agentStatus.hasError) return;
+
+    if (autoRetryCount < 1) {
+      setAutoRetryCount(prev => prev + 1);
+      autoStartedRef.current = false; // Allow re-start
+      const timer = setTimeout(() => {
+        handleStartAgent();
+      }, 2000);
+      return () => clearTimeout(timer);
+    } else {
+      // Second failure: disable autoMode
+      if (activeProject) {
+        updateProject(activeProject.id, { autoMode: false });
+      }
+    }
+  }, [activeProject?.autoMode, agentStatus.hasError, autoRetryCount, handleStartAgent, activeProject, updateProject]);
+
+  // Auto-mode: handle API startup failure (agentStartError set but agentStatus not in error)
+  // Uses separate startupRetryCount to avoid sharing retry slots with agentStatus.hasError handler
+  useEffect(() => {
+    if (!activeProject?.autoMode || !agentStartError) return;
+    if (agentStatus.hasError) return; // Already handled by the effect above
+
+    if (startupRetryCount < 1) {
+      setStartupRetryCount(prev => prev + 1);
+      autoStartedRef.current = false; // Allow re-start
+      setAgentStartError(null);
+    } else {
+      if (activeProject) {
+        updateProject(activeProject.id, { autoMode: false });
+      }
+    }
+  }, [activeProject?.autoMode, agentStartError, agentStatus.hasError, startupRetryCount, activeProject, updateProject]);
 
   // Track agent start time for ProgressStrip and useTaskTimings
   const agentStartTimeRef = useRef<number>(0);
@@ -410,6 +475,11 @@ function Stage3PageContent() {
                 ? `${completedTasks}/${totalTasks} 完成`
                 : undefined
             }
+            showAutoMode
+            autoMode={activeProject?.autoMode ?? false}
+            onAutoModeChange={(checked) => {
+              if (activeProject) updateProject(activeProject.id, { autoMode: checked });
+            }}
           />
         </div>
         <div className="flex items-center gap-2 px-4 flex-shrink-0">
@@ -503,7 +573,7 @@ function Stage3PageContent() {
         summary={`全部 ${totalTasks} 个开发任务已完成，准备进入质量验证阶段。`}
         onConfirm={handleTransitionConfirm}
         onLater={handleTransitionLater}
-        autoCountdown={3}
+        autoCountdown={activeProject?.autoMode ? 3 : undefined}
       />
 
       {/* Main Content - Three Column Layout */}

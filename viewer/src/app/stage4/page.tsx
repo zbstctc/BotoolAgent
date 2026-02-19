@@ -51,6 +51,10 @@ function Stage4PageContent() {
   const logContainerRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
+  // Auto-mode state
+  const [autoRetryCount, setAutoRetryCount] = useState(0);
+  const autoStartedRef = useRef(false);
+
   // Layer progress state (default: all pending)
   const [layers, setLayers] = useState<LayerResult[]>([
     { id: 'L1', name: 'TypeCheck+Lint', status: 'pending' },
@@ -343,6 +347,58 @@ function Stage4PageContent() {
     router.push(`/stage3${params}`);
   }, [router, projectId]);
 
+  // ── Auto-mode effects ──
+
+  // Reset when autoMode toggled off
+  useEffect(() => {
+    if (!activeProject?.autoMode) {
+      setAutoRetryCount(0);
+      autoStartedRef.current = false;
+    }
+  }, [activeProject?.autoMode]);
+
+  // Auto-start testing when idle
+  useEffect(() => {
+    if (!activeProject?.autoMode) return;
+    if (testingStatus !== 'idle') return;
+    if (autoStartedRef.current) return;
+
+    autoStartedRef.current = true;
+    const timer = setTimeout(() => {
+      handleStartTesting();
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [activeProject?.autoMode, testingStatus, handleStartTesting]);
+
+  // Auto-proceed to Stage 5 on completion
+  useEffect(() => {
+    if (!activeProject?.autoMode || testingStatus !== 'complete') return;
+    const timer = setTimeout(() => {
+      handleProceedToStage5();
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [activeProject?.autoMode, testingStatus, handleProceedToStage5]);
+
+  // Auto-retry on failure (max 1 retry), then disable autoMode
+  useEffect(() => {
+    if (!activeProject?.autoMode) return;
+    if (testingStatus !== 'failed' && testingStatus !== 'error') return;
+
+    if (autoRetryCount < 1) {
+      setAutoRetryCount(prev => prev + 1);
+      autoStartedRef.current = false;
+      const timer = setTimeout(() => {
+        setTestingStatus('idle');
+        setAgentLog([]);
+      }, 2000);
+      return () => clearTimeout(timer);
+    } else {
+      if (activeProject) {
+        updateProject(activeProject.id, { autoMode: false });
+      }
+    }
+  }, [activeProject?.autoMode, testingStatus, autoRetryCount, activeProject, updateProject]);
+
   const getStatusColor = () => {
     switch (testingStatus) {
       case 'complete': return 'text-green-600';
@@ -365,6 +421,11 @@ function Stage4PageContent() {
           testingStatus === 'running' ? '验收中...' :
           '准备就绪'
         }
+        showAutoMode
+        autoMode={activeProject?.autoMode ?? false}
+        onAutoModeChange={(checked) => {
+          if (activeProject) updateProject(activeProject.id, { autoMode: checked });
+        }}
       />
 
       {/* Main Content */}
@@ -526,7 +587,7 @@ function Stage4PageContent() {
         summary="Testing verification complete. Ready to create PR and merge."
         onConfirm={handleTransitionConfirm}
         onLater={handleTransitionLater}
-        autoCountdown={3}
+        autoCountdown={activeProject?.autoMode ? 3 : undefined}
       />
     </div>
   );
