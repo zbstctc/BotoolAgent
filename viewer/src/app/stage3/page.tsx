@@ -253,11 +253,12 @@ function Stage3PageContent() {
     }
   }, [gitChanges, fetchGitChanges]);
 
-  // Refresh git changes periodically (always active for stats panel)
+  // Refresh git changes periodically only while agent is running
   useEffect(() => {
+    if (!agentStatus.isRunning) return;
     const interval = setInterval(fetchGitChanges, 10000);
     return () => clearInterval(interval);
-  }, [fetchGitChanges]);
+  }, [agentStatus.isRunning, fetchGitChanges]);
 
   // Fetch git commits
   const fetchGitCommits = useCallback(async () => {
@@ -282,11 +283,12 @@ function Stage3PageContent() {
     }
   }, [gitCommits, fetchGitCommits]);
 
-  // Refresh commits periodically (always active for stats panel)
+  // Refresh commits periodically only while agent is running
   useEffect(() => {
+    if (!agentStatus.isRunning) return;
     const interval = setInterval(fetchGitCommits, 10000);
     return () => clearInterval(interval);
-  }, [fetchGitCommits]);
+  }, [agentStatus.isRunning, fetchGitCommits]);
 
   // Task statistics
   const completedTasks = prdData?.devTasks.filter((t) => t.passes).length || 0;
@@ -720,7 +722,7 @@ function Stage3PageContent() {
                   : 'text-neutral-600 hover:bg-neutral-100'
               }`}
             >
-              流程图ℹ️
+              流程图
             </button>
             {lastUpdated && (
               <span className="ml-auto text-xs text-neutral-400">

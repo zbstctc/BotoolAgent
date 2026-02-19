@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { UseTeammatesReturn, TeammateInfo } from './useTeammates';
 
 // ---------- Public types ----------
@@ -70,16 +70,18 @@ function parseProgressLog(progressLog: string): ProgressEntry[] {
 }
 
 /**
- * Build a map of taskId -> batchIndex from the teammates data.
- * The hook only gives us the *current* batch info, so tasks in that batch
- * get teammates.batchIndex; tasks not present default to -1 (unknown).
+ * Merge the current batch's teammates into an accumulated map.
+ * New task IDs are added; existing entries are preserved (history survives batch transitions).
  */
-function buildBatchMap(teammates: UseTeammatesReturn): Map<string, number> {
-  const map = new Map<string, number>();
+function mergeBatchIntoHistory(
+  accMap: Map<string, number>,
+  teammates: UseTeammatesReturn,
+): void {
   for (const tm of teammates.teammates) {
-    map.set(tm.id, teammates.batchIndex);
+    if (!accMap.has(tm.id)) {
+      accMap.set(tm.id, teammates.batchIndex);
+    }
   }
-  return map;
 }
 
 /**
@@ -170,6 +172,9 @@ export function useTaskTimings(
   currentTaskId: string | null,
   agentStartTimestamp?: string,
 ): UseTaskTimingsReturn {
+  // Accumulated batch history: persists task→batchIndex across batch transitions
+  const batchHistoryRef = useRef<Map<string, number>>(new Map());
+
   // Tick counter for 1-second updates of currentTaskElapsed
   const [tick, setTick] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -200,12 +205,18 @@ export function useTaskTimings(
   // Parse progress log entries (memoized)
   const progressEntries = useMemo(() => parseProgressLog(progressLog), [progressLog]);
 
-  // Build the batch map from teammates data
-  const batchMap = useMemo(() => buildBatchMap(teammates), [teammates]);
+  // Merge current batch into accumulated history (runs during render, safe for refs)
+  // useCallback gives us a stable reference so we can call it from useMemo safely
+  const getAccumulatedBatchMap = useCallback((): Map<string, number> => {
+    mergeBatchIntoHistory(batchHistoryRef.current, teammates);
+    return batchHistoryRef.current;
+  }, [teammates]);
 
   // Compute all derived values, including the tick-dependent currentTaskElapsed
   return useMemo(() => {
     const now = Date.now();
+    // Merge current batch into history (safe to call in useMemo since it only mutates a ref)
+    const batchMap = getAccumulatedBatchMap();
 
     // --- Collect all known task IDs ---
     const allTaskIds = new Set<string>();
@@ -322,7 +333,7 @@ export function useTaskTimings(
     teammates,
     currentTaskId,
     agentStartMs,
-    batchMap,
+    getAccumulatedBatchMap,
     tick, // triggers re-computation every second
   ]);
 }
