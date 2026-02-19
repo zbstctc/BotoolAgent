@@ -49,11 +49,8 @@ claude auth login
 ```bash
 cd my-project
 
-# 自动下载最新版并安装
-VERSION=$(curl -s https://api.github.com/repos/zbstctc/BotoolAgent/releases/latest | grep '"tag_name"' | sed 's/.*: "//;s/".*//')
-curl -L -O "https://github.com/zbstctc/BotoolAgent/releases/download/${VERSION}/BotoolAgent-${VERSION}.tar.gz"
-tar -xzf "BotoolAgent-${VERSION}.tar.gz"
-cd BotoolAgent && ./setup.sh
+# 一行下载最新版并安装
+curl -fsSL https://github.com/zbstctc/BotoolAgent/releases/latest/download/BotoolAgent.tar.gz | tar xz && cd BotoolAgent && ./setup.sh
 ```
 
 `setup.sh` 会自动完成：

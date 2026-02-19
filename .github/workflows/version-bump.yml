@@ -112,9 +112,13 @@ jobs:
           git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
           git push origin "$NEW_TAG"
 
-          # Create GitHub Release with distribution package attached
+          # Create a fixed-name copy for stable download URL
+          cp "BotoolAgent-${NEW_TAG}.tar.gz" "BotoolAgent.tar.gz"
+
+          # Create GitHub Release with both versioned and fixed-name assets
           gh release create "$NEW_TAG" \
-            "BotoolAgent-${NEW_TAG}.tar.gz#BotoolAgent Distribution Package" \
+            "BotoolAgent-${NEW_TAG}.tar.gz#BotoolAgent ${NEW_TAG}" \
+            "BotoolAgent.tar.gz#BotoolAgent (latest)" \
             --title "$NEW_TAG" \
             --notes "$NOTES" \
             --latest
