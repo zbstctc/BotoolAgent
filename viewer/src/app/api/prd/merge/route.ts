@@ -140,12 +140,18 @@ function mergeEnrichedPrdJson(
     // Slim prd.json may already have dependsOn
     const resolvedDeps = depInfo?.dependsOn || task.dependsOn || [];
 
+    // Filter codeExamples by taskId — only assign examples belonging to this task.
+    // Examples without a taskId are treated as universal and included for all tasks (backward compat).
+    const taskExamples = enrichResult.codeExamples.filter(
+      (ex) => ex.taskId === task.id || !ex.taskId,
+    );
+
     return {
       ...task,
       dependsOn: resolvedDeps,
       contextHint: '',
       spec: {
-        codeExamples: enrichResult.codeExamples,
+        codeExamples: taskExamples,
         testCases: enrichResult.testCases,
         filesToModify: enrichResult.filesToModify,
         relatedFiles: [],

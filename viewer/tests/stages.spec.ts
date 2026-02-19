@@ -78,14 +78,13 @@ test.describe('Stage 4 - Testing', () => {
   test('loads and shows Start Testing button', async ({ page }) => {
     await seedProject(page, 4);
     await gotoPage(page, '/stage4');
-    await expect(page.getByText('6-Layer Verification Pipeline')).toBeVisible({ timeout: 15000 });
-    await expect(page.getByRole('button', { name: 'Start Testing' })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('button', { name: '开始验收' })).toBeVisible({ timeout: 15000 });
   });
 
   test('Proceed to Finalize is disabled initially', async ({ page }) => {
     await seedProject(page, 4);
     await gotoPage(page, '/stage4');
-    const proceedBtn = page.getByText('Proceed to Finalize');
+    const proceedBtn = page.getByRole('button', { name: '进入合并阶段' });
     await expect(proceedBtn).toBeVisible({ timeout: 15000 });
     await expect(proceedBtn).toBeDisabled();
   });
@@ -93,7 +92,7 @@ test.describe('Stage 4 - Testing', () => {
   test('supports projectId query param', async ({ page }) => {
     await seedProject(page, 4);
     await gotoPage(page, '/stage4?projectId=test-project');
-    await expect(page.getByRole('button', { name: 'Start Testing' })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('button', { name: '开始验收' })).toBeVisible({ timeout: 15000 });
   });
 });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, startTransition } from "react";
 import { Terminal, X } from "lucide-react";
 import {
   Popover,
@@ -55,7 +55,8 @@ export function ClaudeProcesses() {
     try {
       const res = await fetch("/api/claude-processes");
       if (res.ok) {
-        setData(await res.json());
+        const result = await res.json();
+        startTransition(() => setData(result));
       }
     } catch {
       // keep previous data on error
