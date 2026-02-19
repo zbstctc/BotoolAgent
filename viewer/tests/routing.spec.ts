@@ -139,7 +139,9 @@ test.describe('Dashboard drawer stage action button routing', () => {
     const reqId = `test-stage-${stage}`;
 
     test(`Stage ${stage} drawer button navigates to /stage${target}`, async ({ page }) => {
-      const req = makeRequirement(stage);
+      // Use status 'active' so the StageTimeline shows the action button
+      // (status 'completed' at stage 5 means "merged" — no action button shown)
+      const req = { ...makeRequirement(stage), status: 'active' as const };
       await mockApi(page, [req]);
       await gotoPage(page, '/');
 
