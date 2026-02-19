@@ -113,7 +113,7 @@ SUGGESTION: (how to fix the PRD to comply)
 ---
 
 === PROJECT RULES ===
-${rulesContext}
+${rulesContext.replace(/^---$/gm, '- - -')}
 === END PROJECT RULES ===`;
   }
 

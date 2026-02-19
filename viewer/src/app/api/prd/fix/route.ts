@@ -6,11 +6,16 @@ import type { ReviewFinding } from '../review/route';
 // Prompt builders
 // ============================================================================
 
+// Escape prompt separator sequences in user-provided strings to prevent injection
+function escapeSep(s: string): string {
+  return s.replace(/===/g, '= = =');
+}
+
 function buildPrdFixPrompt(content: string, findings: ReviewFinding[]): string {
   const findingsList = findings
     .map(
       (f, i) =>
-        `${i + 1}. [${f.severity}] ${f.category}${f.section ? ` (${f.section})` : ''}: ${f.message}\n   Suggestion: ${f.suggestion}`,
+        `${i + 1}. [${f.severity}] ${f.category}${f.section ? ` (${f.section})` : ''}: ${escapeSep(f.message)}\n   Suggestion: ${escapeSep(f.suggestion ?? '')}`,
     )
     .join('\n');
 
@@ -28,7 +33,7 @@ ${findingsList}
 === END FINDINGS ===
 
 === ORIGINAL PRD ===
-${content}
+${escapeSep(content)}
 === END PRD ===
 
 Output the complete fixed PRD below. Do not include any commentary, explanation, or markdown code fences — output ONLY the PRD content.`;
@@ -38,7 +43,7 @@ function buildEnrichFixPrompt(content: string, findings: ReviewFinding[]): strin
   const findingsList = findings
     .map(
       (f, i) =>
-        `${i + 1}. [${f.severity}] ${f.category}${f.taskId ? ` (${f.taskId})` : ''}: ${f.message}\n   Suggestion: ${f.suggestion}`,
+        `${i + 1}. [${f.severity}] ${f.category}${f.taskId ? ` (${f.taskId})` : ''}: ${escapeSep(f.message)}\n   Suggestion: ${escapeSep(f.suggestion ?? '')}`,
     )
     .join('\n');
 
@@ -58,7 +63,7 @@ ${findingsList}
 === END FINDINGS ===
 
 === ORIGINAL ENRICHMENT RESULT ===
-${content}
+${escapeSep(content)}
 === END ENRICHMENT RESULT ===
 
 Output the complete fixed enrichment result below. Do not include any commentary, explanation, or markdown code fences — output ONLY the enrichment content.`;
@@ -108,6 +113,20 @@ export async function POST(request: NextRequest) {
     if (!findings || !Array.isArray(findings) || findings.length === 0) {
       return NextResponse.json(
         { error: 'findings is required and must be a non-empty array' },
+        { status: 400 },
+      );
+    }
+
+    if (findings.length > 100) {
+      return NextResponse.json(
+        { error: 'findings must not exceed 100 items' },
+        { status: 400 },
+      );
+    }
+
+    if (content.length > 500_000) {
+      return NextResponse.json(
+        { error: 'content must not exceed 500KB' },
         { status: 400 },
       );
     }

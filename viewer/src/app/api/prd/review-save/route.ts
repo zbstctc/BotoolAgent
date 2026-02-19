@@ -162,7 +162,8 @@ export async function POST(request: NextRequest) {
       // Backup original prd.md if it exists
       if (fs.existsSync(prdMdPath)) {
         const timestamp = Date.now();
-        const backupPath = path.join(projectDir, `prd-${timestamp}.md.bak`);
+        const rand = Math.random().toString(36).slice(2);
+        const backupPath = path.join(projectDir, `prd-${timestamp}-${rand}.md.bak`);
         assertPathUnderTasks(backupPath, tasksDir);
 
         try {
