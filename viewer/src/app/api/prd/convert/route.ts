@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CLIManager, CLIMessage } from '@/lib/cli-manager';
-import { getProjectRoot, getPrdJsonPath, getProgressPath, getProjectPrdJsonPath, getProjectPrdMdPath, getProjectProgressPath, getSnapshotsDir, getRegistryPath, getTasksDir, isPortableMode } from '@/lib/project-root';
+import { getProjectRoot, getPrdJsonPath, getProgressPath, getProjectPrdJsonPath, getProjectPrdMdPath, getProjectProgressPath, getSnapshotsDir, getTasksDir, isPortableMode } from '@/lib/project-root';
+import { withRegistry } from '@/lib/registry-lock';
 
 // System prompt for PRD to JSON conversion (slim index format)
 const SYSTEM_PROMPT = `You are a PRD to JSON converter for BotoolAgent. Convert a PRD markdown document into a **slim prd.json** — an automation index. The PRD.md is the Single Source of Truth; prd.json only contains automation fields.
@@ -165,7 +166,24 @@ export async function POST(request: NextRequest) {
 
             if (projectId) {
               // Update registry (no root prd.json double-write)
-              updateRegistry(projectId, prdJson.project || prdId, prdJson.branchName, 'coding');
+              await withRegistry((reg) => {
+                const now = new Date().toISOString();
+                const existing = reg.projects[projectId];
+                const name = prdJson.project || prdId;
+                const branch = prdJson.branchName;
+
+                reg.projects[projectId] = {
+                  name: name || existing?.name || projectId,
+                  prdMd: `${projectId}/prd.md`,
+                  prdJson: `${projectId}/prd.json`,
+                  progress: `${projectId}/progress.txt`,
+                  branch: branch || existing?.branch || `botool/${projectId}`,
+                  status: 'coding',
+                  createdAt: existing?.createdAt || now,
+                  updatedAt: now,
+                };
+                reg.activeProject = projectId;
+              });
             }
 
             // Reset progress.txt with fresh header
@@ -303,50 +321,3 @@ async function archiveIfNeeded(newPrdJson: { branchName: string }) {
   }
 }
 
-interface RegistryProject {
-  name: string;
-  prdMd: string;
-  prdJson: string;
-  progress: string;
-  branch: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface Registry {
-  version: number;
-  projects: Record<string, RegistryProject>;
-  activeProject: string | null;
-}
-
-function updateRegistry(projectId: string, name: string, branch?: string, status?: string): void {
-  try {
-    const registryPath = getRegistryPath();
-    let registry: Registry = { version: 1, projects: {}, activeProject: null };
-
-    if (fs.existsSync(registryPath)) {
-      registry = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
-    }
-
-    const now = new Date().toISOString();
-    const existing = registry.projects[projectId];
-
-    registry.projects[projectId] = {
-      name: name || existing?.name || projectId,
-      prdMd: `${projectId}/prd.md`,
-      prdJson: `${projectId}/prd.json`,
-      progress: `${projectId}/progress.txt`,
-      branch: branch || existing?.branch || `botool/${projectId}`,
-      status: status || existing?.status || 'draft',
-      createdAt: existing?.createdAt || now,
-      updatedAt: now,
-    };
-
-    registry.activeProject = projectId;
-
-    fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2));
-  } catch (error) {
-    console.error('Registry update error:', error);
-  }
-}

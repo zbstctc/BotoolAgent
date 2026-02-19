@@ -1,40 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as fs from 'fs';
-import { getRegistryPath } from '@/lib/project-root';
-
-interface RegistryProject {
-  name: string;
-  prdMd: string;
-  prdJson: string;
-  progress: string;
-  branch: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface Registry {
-  version: number;
-  projects: Record<string, RegistryProject>;
-  activeProject: string | null;
-}
-
-function readRegistry(): Registry {
-  const registryPath = getRegistryPath();
-  try {
-    if (fs.existsSync(registryPath)) {
-      return JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
-    }
-  } catch {
-    // Ignore
-  }
-  return { version: 1, projects: {}, activeProject: null };
-}
-
-function writeRegistry(registry: Registry): void {
-  const registryPath = getRegistryPath();
-  fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2));
-}
+import { readRegistry, withRegistry } from '@/lib/registry-lock';
 
 /**
  * GET /api/registry
@@ -52,13 +17,14 @@ export async function GET() {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const registry = readRegistry();
 
-    if (body.activeProject !== undefined) {
-      registry.activeProject = body.activeProject;
-    }
+    const registry = await withRegistry((reg) => {
+      if (body.activeProject !== undefined) {
+        reg.activeProject = body.activeProject;
+      }
+      return reg;
+    });
 
-    writeRegistry(registry);
     return NextResponse.json({ success: true, registry });
   } catch (error) {
     console.error('Registry update error:', error);
