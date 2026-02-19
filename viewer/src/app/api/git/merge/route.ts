@@ -182,14 +182,24 @@ export async function POST(request: NextRequest) {
 
     // Build merge command
     const methodFlag = method === 'merge' ? '--merge' : method === 'rebase' ? '--rebase' : '--squash';
-    const deleteFlag = deleteBranch ? '--delete-branch' : '';
-
     try {
-      // Execute merge
+      // Execute merge — do NOT pass --delete-branch to gh; we handle local cleanup ourselves.
+      // gh's --delete-branch tries to delete the local branch, which fails when a worktree
+      // is checked out on that branch (worktree model). We remove the worktree first, then
+      // delete the local branch manually.
       await execAsync(
-        `gh pr merge ${prInfo.number} ${methodFlag} ${deleteFlag}`,
+        `gh pr merge ${prInfo.number} ${methodFlag}`,
         { cwd: PROJECT_ROOT }
       );
+
+      // Delete remote branch via git push (separate from gh merge)
+      if (deleteBranch) {
+        try {
+          await execAsync(`git push origin --delete ${shellQuote(currentBranch)}`, { cwd: PROJECT_ROOT });
+        } catch {
+          // Remote branch may already be deleted (gh sometimes deletes it); ignore
+        }
+      }
 
       // Get merge commit SHA (if available)
       let commitSha: string | undefined;
@@ -203,18 +213,6 @@ export async function POST(request: NextRequest) {
         commitSha = shaOutput.trim();
       } catch {
         // Ignore errors getting commit SHA
-      }
-
-      // If branch was deleted, switch to base branch locally
-      if (deleteBranch) {
-        try {
-          await execAsync(`git checkout ${shellQuote(baseBranch)}`, { cwd: PROJECT_ROOT });
-          await execAsync(`git pull origin ${shellQuote(baseBranch)}`, { cwd: PROJECT_ROOT });
-          // Delete local branch if it still exists
-          await execAsync(`git branch -D ${shellQuote(currentBranch)}`, { cwd: PROJECT_ROOT }).catch(() => {});
-        } catch {
-          // Ignore checkout errors
-        }
       }
 
       const result: MergeResult = {
@@ -234,7 +232,7 @@ export async function POST(request: NextRequest) {
         const safeId = normalizeProjectId(projectId);
         if (safeId) {
           const botoolRoot = getBotoolRoot();
-          // Remove the worktree
+          // Remove the worktree FIRST — must happen before local branch deletion
           try {
             await execAsync(
               `git worktree remove ${shellQuote(`.worktrees/${safeId}`)} --force`,
@@ -242,6 +240,14 @@ export async function POST(request: NextRequest) {
             );
           } catch (worktreeErr) {
             console.warn(`[merge] Failed to remove worktree .worktrees/${safeId}:`, worktreeErr);
+          }
+          // Now delete local branch (safe after worktree is removed)
+          if (deleteBranch) {
+            try {
+              await execAsync(`git branch -D ${shellQuote(currentBranch)}`, { cwd: botoolRoot });
+            } catch {
+              // Branch may already be gone; ignore
+            }
           }
           // Remove per-project state files (agent-pid, agent-status, teammates.json, last-branch)
           const projectDir = path.join(getTasksDir(), safeId);

@@ -2,6 +2,21 @@
   "version": 1,
   "entries": [
     {
+      "id": "botool/viewer-tab-enhancement",
+      "name": "Tab Bar 增强 — 悬停信息卡 + 状态色边框 + 通知音效",
+      "description": "Tab Bar hover info cards + status color borders + Web Audio notification tones",
+      "branchName": "botool/viewer-tab-enhancement",
+      "status": "completed",
+      "stage": 5,
+      "tasksCompleted": 8,
+      "tasksTotal": 8,
+      "startTime": "2026-02-19T00:00:00.000Z",
+      "endTime": "2026-02-19T17:10:28.000Z",
+      "isMerged": true,
+      "prUrl": "https://github.com/zbstctc/BotoolAgent/pull/12",
+      "lastUpdated": "2026-02-19T17:10:28.000Z"
+    },
+    {
       "id": "botool/performance-update",
       "name": "BotoolAgent Performance Update",
       "description": "Constitution 瘦身（272KB→<30KB）+ 执行质量提升（验证铁律+双阶段 Review）+ 规范融合（PRD.md 成为唯一真理源）",
