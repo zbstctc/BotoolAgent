@@ -283,10 +283,10 @@ function Stage4PageContent() {
       {/* Main Content */}
       <div className="flex-1 overflow-hidden flex flex-col p-6">
         <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col">
-          <h2 className="text-lg font-semibold text-neutral-900 mb-1">6-Layer Verification Pipeline</h2>
-          <p className="text-sm text-neutral-500 mb-4">
-            TypeCheck + Lint → Unit → E2E → Self-Review → Codex Red-Team → PR + PR-Agent
-          </p>
+          {/* Layer Progress Bar */}
+          <div className="mb-4 rounded-lg border border-neutral-200 bg-white">
+            <LayerProgressBar layers={layers} />
+          </div>
 
           {/* Status Bar */}
           <div className="flex items-center gap-3 mb-4 p-3 rounded-lg border border-neutral-200 bg-neutral-50">
@@ -305,11 +305,6 @@ function Stage4PageContent() {
             <span className={`text-sm font-medium ${getStatusColor()}`}>
               {statusMessage || 'Click "Start Testing" to begin verification'}
             </span>
-          </div>
-
-          {/* Layer Progress Bar */}
-          <div className="mb-4 rounded-lg border border-neutral-200 bg-white">
-            <LayerProgressBar layers={layers} />
           </div>
 
           {/* Tabbed Content */}
