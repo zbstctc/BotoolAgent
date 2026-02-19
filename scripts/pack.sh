@@ -142,6 +142,20 @@ done
 echo ""
 echo "BotoolAgent is ready!"
 echo ""
+
+# Check for optional Codex CLI
+echo "Optional tools status:"
+if command -v codex >/dev/null 2>&1; then
+  CODEX_VER=$(codex --version 2>/dev/null || echo "unknown")
+  echo "  ✅ Codex CLI: installed ($CODEX_VER)"
+  echo "     Adversarial review (Testing L5) is available."
+else
+  echo "  ⚠️  Codex CLI: not installed"
+  echo "     Adversarial review (Testing L5) will be skipped."
+  echo "     Install: npm install -g @openai/codex"
+fi
+echo ""
+
 echo "Usage:"
 echo "  1. Open Claude Code in your project root directory"
 echo "  2. Type /botoolagent to launch the Viewer"

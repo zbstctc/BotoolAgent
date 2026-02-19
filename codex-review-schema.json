@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Codex Review Output",
+  "description": "Structured output schema for Codex red-team adversarial code review",
+  "type": "object",
+  "required": ["findings"],
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "category", "rule", "file", "line", "message", "suggestion"],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "Issue severity: HIGH=security/crash, MEDIUM=logic/error-handling, LOW=style/naming"
+          },
+          "category": {
+            "type": "string",
+            "enum": ["security", "logic", "error-handling", "test-coverage", "style"],
+            "description": "Issue category"
+          },
+          "rule": {
+            "type": "string",
+            "description": "Rule identifier, e.g. owasp-injection, missing-null-check"
+          },
+          "file": {
+            "type": "string",
+            "description": "Relative file path, e.g. src/app/api/users/route.ts"
+          },
+          "line": {
+            "type": "integer",
+            "description": "Line number where the issue occurs"
+          },
+          "message": {
+            "type": "string",
+            "description": "Description of the issue"
+          },
+          "suggestion": {
+            "type": "string",
+            "description": "Actionable fix suggestion"
+          }
+        }
+      }
+    }
+  }
+}
