@@ -10,6 +10,7 @@
 # ============================================================================
 SESSION_NAME="botool-teams"
 BOTOOL_TEAMMATE_MODE="${BOTOOL_TEAMMATE_MODE:-in-process}"
+BOTOOL_MODEL="${BOTOOL_MODEL:-claude-opus-4-6}"  # Lead Agent 模型（默认 Opus）
 MAX_ROUNDS=20             # Ralph 外循环最大轮次
 ROUND_COOLDOWN=10         # 轮次间冷却（秒）
 STALL_TIMEOUT=900         # 卡住检测超时（秒，默认 15 分钟）
@@ -179,9 +180,10 @@ update_status() {
   local current_task=$(grep -o '## [0-9-]* - DT-[0-9]*' "$PROGRESS_FILE" 2>/dev/null | tail -1 | grep -o 'DT-[0-9]*' || echo "none")
 
   # Sanitize strings for safe JSON embedding (strip ", \, control chars)
-  local safe_status=$(printf '%s' "$status" | tr -d '"\\\n\r')
-  local safe_message=$(printf '%s' "$message" | tr -d '"\\\n\r')
-  local safe_task=$(printf '%s' "$current_task" | tr -d '"\\\n\r')
+  # LC_ALL=C: force byte-by-byte processing to avoid "Illegal byte sequence" with UTF-8/CJK chars on macOS
+  local safe_status=$(printf '%s' "$status" | LC_ALL=C tr -d '"\\\n\r')
+  local safe_message=$(printf '%s' "$message" | LC_ALL=C tr -d '"\\\n\r')
+  local safe_task=$(printf '%s' "$current_task" | LC_ALL=C tr -d '"\\\n\r')
 
   cat > "$STATUS_FILE" << EOF
 {
@@ -408,7 +410,7 @@ start_session() {
   CLAUDE_SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
 
   tmux new-session -d -s "$SESSION_NAME" -c "$WORK_DIR" \
-    "env -u CLAUDECODE $TMUX_ENV $CLAUDE_CMD --session-id $CLAUDE_SESSION_ID --dangerously-skip-permissions --teammate-mode $BOTOOL_TEAMMATE_MODE"
+    "env -u CLAUDECODE $TMUX_ENV $CLAUDE_CMD --session-id $CLAUDE_SESSION_ID --dangerously-skip-permissions --model $BOTOOL_MODEL --teammate-mode $BOTOOL_TEAMMATE_MODE"
 
   # 验证 session 是否成功启动
   sleep 2
