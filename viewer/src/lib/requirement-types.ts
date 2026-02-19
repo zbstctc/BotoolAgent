@@ -41,7 +41,7 @@ export const STAGE_META: StageMeta[] = [
   { label: '草稿', badgeVariant: 'neutral' },
   { label: 'PRD 生成中', labelCompleted: 'PRD 已完成', badgeVariant: 'warning' },
   { label: '待开发', badgeVariant: 'warning' },
-  { label: '开发中', badgeVariant: 'default' },  // primary mapped to default
+  { label: '开发中', labelCompleted: '开发完成', badgeVariant: 'default' },
   { label: '测试中', badgeVariant: 'warning' },
   { label: '待合并', labelCompleted: '已完成', badgeVariant: 'success' },
 ];

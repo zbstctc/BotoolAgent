@@ -363,9 +363,10 @@ function Stage3PageContent() {
     if (activeProject) {
       updateProject(activeProject.id, { currentStage: 4 });
     }
-    // Navigate to Stage 4
-    router.push('/stage4');
-  }, [router, activeProject, updateProject]);
+    // Navigate to Stage 4, preserving req param
+    const params = reqId ? `?req=${reqId}` : '';
+    router.push(`/stage4${params}`);
+  }, [router, activeProject, updateProject, reqId]);
 
   // Handle transition modal later (go back to Dashboard)
   const handleTransitionLater = useCallback(() => {

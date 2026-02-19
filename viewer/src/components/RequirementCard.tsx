@@ -33,9 +33,11 @@ export function RequirementCard({
   const { name, stage, status, updatedAt, taskCount, tasksCompleted } = requirement;
   const stageMeta = STAGE_META[stage];
 
-  // Determine stage label: use labelCompleted if all tasks done or stage 5
-  const isCompleted = status === 'completed' || stage === 5;
-  const stageLabel = isCompleted && stageMeta.labelCompleted
+  // Determine stage label: use labelCompleted when merged (status completed)
+  // or when all tasks done at a non-final stage (e.g., Stage 3 "开发完成")
+  const allTasksDone = typeof taskCount === 'number' && taskCount > 0 && tasksCompleted === taskCount;
+  const showCompleted = status === 'completed' || (allTasksDone && stage < 5);
+  const stageLabel = showCompleted && stageMeta.labelCompleted
     ? stageMeta.labelCompleted
     : stageMeta.label;
 
@@ -70,7 +72,7 @@ export function RequirementCard({
 
       {/* Progress bar + stage label + action button */}
       <div className="mt-3 flex items-center gap-3">
-        <StageProgressBar currentStage={stage} />
+        <StageProgressBar currentStage={stage} allDone={status === 'completed'} />
 
         <div className="flex flex-1 items-center gap-2">
           <Badge variant={stageMeta.badgeVariant as Parameters<typeof Badge>[0]['variant']}>
