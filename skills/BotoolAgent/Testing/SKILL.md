@@ -673,7 +673,7 @@ node -e "
 
 ```
 判断：
-  有 HIGH 或 MEDIUM → 进入对抗修复循环（Layer 5 对抗阶段）
+  有 HIGH 或 MEDIUM → 进入对抗修复循环（5g）
   只有 LOW 或无 findings → Layer 5 通过，继续 Layer 6
 ```
 
@@ -684,12 +684,149 @@ Layer 5: Codex 审查输出无法解析。原始输出已保存到 codex-review.
 ```
 记录为 warning，不阻塞流水线。
 
-**Layer 5 审查完成后（无 HIGH/MEDIUM 或对抗循环已收敛），告知用户：**
+### 5g. 对抗修复循环 (Adversarial Loop)
+
+**触发条件：** 5f 中检测到 HIGH 或 MEDIUM findings。
+
+**状态初始化：** 创建 `tasks/{projectId}/adversarial-state.json`
+
+```json
+{
+  "round": 0,
+  "maxRounds": 3,
+  "status": "in_progress",
+  "rounds": []
+}
+```
+
+**循环逻辑（最多 3 轮）：**
+
+对于每一轮 (round = 1, 2, 3):
+
+#### Step 1: Claude 逐条处理 HIGH/MEDIUM findings
+
+对每个 HIGH 或 MEDIUM finding，Claude 选择以下两种模式之一：
+
+**模式 A — 修复：**
+- 直接修改代码修复问题
+- 记录修复的文件和修改内容
+
+**模式 B — 论证拒绝：**
+- Claude 提供书面论证理由（为什么不需要修复）
+- 调用 codex exec 让 Codex 判断是否接受论证：
+
+```bash
+codex exec -a never --full-auto \
+  "A developer argues this finding should NOT be fixed. \
+   Finding: {finding.message} (file: {finding.file}, line: {finding.line}) \
+   Developer's argument: {rejection_reason} \
+   \
+   As an independent reviewer, evaluate the argument. \
+   Output ONLY a JSON object: {\"accepted\": true/false, \"reason\": \"your reasoning\"} \
+   \
+   Accept only if the argument is technically sound and the finding is indeed a false positive or non-issue."
+```
+
+- **Codex 接受论证** → 记录到日志，该 finding 标记为 resolved
+- **Codex 不接受论证** → 该 finding 计入未解决 (unresolved)
+
+#### Step 2: 提交修复
+
+```bash
+git add <修改的文件>
+git commit -m "fix(testing): adversarial round {round} fixes"
+```
+
+#### Step 3: Codex 增量复审
+
+只复审本轮变更的文件（不是全量重审）：
+
+```bash
+# 获取本轮修改的文件列表
+CHANGED_FILES=$(git diff HEAD~1 --name-only | tr '\n' ' ')
+
+codex exec -a never --full-auto \
+  "You are a red-team security reviewer performing incremental re-review. \
+   Only review the following changed files: $CHANGED_FILES \
+   Check if the fixes properly address the previously reported issues. \
+   Also check if the fixes introduced any NEW issues. \
+   \
+   Output ONLY a valid JSON object with a 'findings' array. Each finding must have: \
+   severity (HIGH/MEDIUM/LOW), category, rule, file, line, message, suggestion. \
+   If all issues are resolved and no new issues, output: {\"findings\": []}" \
+   > "$REVIEW_OUTPUT" 2>/dev/null
+```
+
+#### Step 4: 解析增量复审结果
+
+解析新的 findings（同 5e 逻辑），更新 adversarial-state.json：
+
+```json
+{
+  "round": {current_round},
+  "maxRounds": 3,
+  "status": "in_progress",
+  "rounds": [
+    {
+      "round": 1,
+      "codexFindings": 8,
+      "fixed": 6,
+      "rejected": 1,
+      "rejectionReasons": [
+        {
+          "finding": "问题摘要",
+          "reason": "Claude 的论证理由",
+          "codexAccepted": true
+        }
+      ],
+      "remaining": 1
+    }
+  ]
+}
+```
+
+#### Step 5: 收敛判断
+
+```
+检查增量复审结果：
+  无新 HIGH/MEDIUM findings → 对抗循环收敛 ✓
+    → adversarial-state.status = "converged"
+    → 继续 Layer 6
+
+  仍有 HIGH/MEDIUM 且 round < 3 → 继续下一轮
+    → 回到 Step 1
+
+  仍有 HIGH/MEDIUM 且 round = 3 → Circuit Breaker
+    → adversarial-state.status = "circuit_breaker"
+    → AskUserQuestion:
+```
+
+**Circuit Breaker 触发：**
+```
+Codex 红队对抗审查 — 3 轮未收敛。以下问题仍未解决：
+<未解决 findings 列表>
+
+对抗轮次详情：
+  Round 1: 发现 {n}, 修复 {m}, 拒绝 {r}
+  Round 2: ...
+  Round 3: ...
+
+选项：
+1. 我来手动修复未解决的问题，修好后继续
+2. 将未解决问题记录为 advisory，跳过继续 Layer 6
+3. 终止测试
+```
+
+### 5h. 更新 codex-review.json
+
+对抗循环结束后，将最终状态写入 `tasks/{projectId}/codex-review.json`（合并初始 findings + 对抗循环结果），供 Viewer 读取。
+
+**Layer 5 完成后，告知用户：**
 ```
 Layer 5 Codex 红队审查 通过
   发现问题: {total}  HIGH: {high}  MEDIUM: {medium}  LOW: {low}
   对抗轮次: {rounds}/3
-  已修复: {fixed}  论证拒绝: {rejected}
+  已修复: {fixed}  论证拒绝: {rejected}  未解决: {unresolved}
 ```
 
 ---
