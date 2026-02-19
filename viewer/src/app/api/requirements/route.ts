@@ -53,6 +53,23 @@ function hasWorktree(projectId: string): boolean {
 }
 
 /**
+ * Check if testing-report.json exists for this project.
+ */
+function hasTestingReport(projectId: string): boolean {
+  const tasksDir = getTasksDir();
+  return fs.existsSync(path.join(tasksDir, projectId, 'testing-report.json'));
+}
+
+/**
+ * Check if agent-status file exists and indicates development has started/completed.
+ */
+function hasAgentActivity(projectId: string): boolean {
+  const tasksDir = getTasksDir();
+  return fs.existsSync(path.join(tasksDir, projectId, 'agent-status'))
+    || fs.existsSync(path.join(tasksDir, projectId, 'progress.txt'));
+}
+
+/**
  * Infer the requirement stage based on which files exist:
  * - DRAFT.md only → Stage 0
  * - prd.md (no prd.json) → Stage 1
@@ -83,17 +100,27 @@ function inferStage(
 
   // Has prd.json → at least Stage 2
   const branchName = prdJson?.branchName;
+  const devTasks = prdJson?.devTasks ?? [];
+  const completedCount = devTasks.filter(t => t.passes).length;
+  const allTasksDone = devTasks.length > 0 && completedCount === devTasks.length;
 
   // Check if branch merged into main → Stage 5
   if (branchName && isBranchMergedIntoMain(branchName)) {
     return 5;
   }
 
-  // Check if worktree exists → Stage 3+
-  if (hasWorktree(projectId)) {
-    // Stage 3 = coding active, Stage 4 = testing
-    // We'll use Stage 3 as the default for worktree presence
-    // (Stage 4 would require additional testing-state detection)
+  // All tasks done → Stage 5 (development complete, pending merge)
+  if (allTasksDone) {
+    return 5;
+  }
+
+  // Testing report exists → Stage 4
+  if (hasTestingReport(projectId)) {
+    return 4;
+  }
+
+  // Worktree exists or agent has been active or some tasks completed → Stage 3
+  if (hasWorktree(projectId) || hasAgentActivity(projectId) || completedCount > 0) {
     return 3;
   }
 
@@ -133,7 +160,7 @@ export async function GET() {
       return NextResponse.json({ data: [] });
     }
 
-    const projectDirs = entries.filter(e => e.isDirectory());
+    const projectDirs = entries.filter(e => e.isDirectory() && e.name !== 'archives');
 
     // First pass: collect transformedFrom references
     for (const dir of projectDirs) {
@@ -235,6 +262,21 @@ export async function GET() {
           if (devTasks.length > 0) {
             requirement.taskCount = devTasks.length;
             requirement.tasksCompleted = devTasks.filter(t => t.passes).length;
+          }
+        }
+      }
+
+      // Try to extract prUrl from agent-status
+      if (!requirement.prUrl) {
+        const agentStatusPath = path.join(dirPath, 'agent-status');
+        if (fs.existsSync(agentStatusPath)) {
+          try {
+            const agentStatus = JSON.parse(fs.readFileSync(agentStatusPath, 'utf-8')) as Record<string, unknown>;
+            if (typeof agentStatus.prUrl === 'string') {
+              requirement.prUrl = agentStatus.prUrl;
+            }
+          } catch {
+            // non-fatal
           }
         }
       }

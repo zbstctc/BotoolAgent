@@ -27,7 +27,7 @@ interface RequirementContextValue {
   updateRequirement: (id: string, data: Partial<Requirement>) => void;
   /** Delete a requirement */
   deleteRequirement: (id: string) => void;
-  /** Archive a requirement */
+  /** Archive a requirement (moves folder to /tasks/archives/) */
   archiveRequirement: (id: string) => void;
   /** Re-fetch requirements from the API and merge with local */
   refreshRequirements: () => Promise<void>;
@@ -214,14 +214,37 @@ export function RequirementProvider({ children }: { children: React.ReactNode })
   }, []);
 
   /**
-   * Archive a requirement by setting its status to 'archived'.
+   * Archive a requirement: physically move its folder to /tasks/archives/
+   * and remove from local state.
    */
   const archiveRequirement = useCallback(
-    (id: string) => {
-      updateRequirement(id, { status: 'archived' });
+    async (id: string) => {
+      try {
+        const res = await fetch('/api/requirements/archive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          console.error('[RequirementContext] Archive failed:', err);
+        }
+      } catch (e) {
+        console.error('[RequirementContext] Archive request failed:', e);
+      }
+
+      // Remove from local state
+      setLocalRequirements((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
       setSelectedId((prev) => (prev === id ? null : prev));
+
+      // Re-fetch API data so the archived item disappears
+      await refreshRequirements();
     },
-    [updateRequirement]
+    [refreshRequirements]
   );
 
   const value: RequirementContextValue = useMemo(

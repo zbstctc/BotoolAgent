@@ -1,8 +1,6 @@
 'use client';
 
-import Link from 'next/link';
 import { Suspense, useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import { Settings, Plus, Search } from 'lucide-react';
 import { RequirementCard } from '@/components/RequirementCard';
 import { RequirementDrawer } from '@/components/RequirementDrawer';
@@ -14,7 +12,11 @@ import type { Requirement, RequirementFilter, RequirementStage } from '@/lib/req
 import type { TabItem } from '@/lib/tab-storage';
 
 function getStageUrl(req: Requirement): string {
-  const stage = req.stage === 0 ? 1 : req.stage;
+  // Map current stage to target page
+  const targetMap: Record<RequirementStage, number> = {
+    0: 1, 1: 1, 2: 3, 3: 3, 4: 4, 5: 5,
+  };
+  const stage = targetMap[req.stage];
   return `/stage${stage}?req=${req.id}`;
 }
 
@@ -34,7 +36,6 @@ function filterRequirements(
 }
 
 function DashboardContent() {
-  const router = useRouter();
   const { openTab } = useTab();
   const {
     requirements,
@@ -77,7 +78,10 @@ function DashboardContent() {
   }
 
   function handleAction(req: Requirement) {
-    const stage = req.stage === 0 ? 1 : req.stage;
+    const targetMap: Record<RequirementStage, number> = {
+      0: 1, 1: 1, 2: 3, 3: 3, 4: 4, 5: 5,
+    };
+    const stage = targetMap[req.stage];
     const tabItem: TabItem = {
       id: req.id,
       name: req.name,
@@ -88,7 +92,15 @@ function DashboardContent() {
 
   function handleNavigate(stage: RequirementStage) {
     if (!selectedReq) return;
-    const stageNum = stage === 0 ? 1 : stage;
+    // Map current stage to target page:
+    // Stage 0 (草稿) → /stage1 (PRD generation)
+    // Stage 1 (PRD 生成中) → /stage1 (continue)
+    // Stage 2 (待开发) → /stage3 (start development)
+    // Stage 3+ → same stage page
+    const targetMap: Record<RequirementStage, number> = {
+      0: 1, 1: 1, 2: 3, 3: 3, 4: 4, 5: 5,
+    };
+    const stageNum = targetMap[stage];
     const tabItem: TabItem = {
       id: selectedReq.id,
       name: selectedReq.name,
@@ -126,12 +138,15 @@ function DashboardContent() {
       <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 bg-white flex-shrink-0">
         <h1 className="text-lg font-semibold text-neutral-900">我的需求</h1>
         <div className="flex items-center gap-2">
-          <Link href="/rules">
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Settings className="h-3.5 w-3.5" />
-              规范
-            </Button>
-          </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => openTab({ id: 'rules', name: '规范管理', stage: 0, url: '/rules' }, '/rules')}
+          >
+            <Settings className="h-3.5 w-3.5" />
+            规范
+          </Button>
           <Button
             size="sm"
             className="gap-1.5"

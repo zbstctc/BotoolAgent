@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { LayoutDashboard, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTab } from '@/contexts/TabContext';
@@ -20,10 +21,14 @@ interface TabBarProps {
 
 export function TabBar({ className }: TabBarProps) {
   const { tabs, activeTabId, closeTab, switchTab } = useTab();
+  const pathname = usePathname();
   const [closeConfirmId, setCloseConfirmId] = useState<string | null>(null);
 
   function getTabUrl(tab: TabItem): string {
-    const stage = tab.stage === 0 ? 1 : tab.stage;
+    if (tab.url) return tab.url;
+    // Use the same stage→target mapping as page.tsx getStageUrl()
+    const targetMap: Record<number, number> = { 0: 1, 1: 1, 2: 3, 3: 3, 4: 4, 5: 5 };
+    const stage = targetMap[tab.stage] ?? tab.stage;
     return `/stage${stage}?req=${tab.id}`;
   }
 
@@ -33,7 +38,7 @@ export function TabBar({ className }: TabBarProps) {
   }
 
   function handleDashboardClick() {
-    if (activeTabId === 'dashboard') return;
+    if (pathname === '/') return;
     switchTab('dashboard', '/');
   }
 
@@ -65,7 +70,7 @@ export function TabBar({ className }: TabBarProps) {
           onClick={handleDashboardClick}
           className={cn(
             'flex items-center gap-1.5 px-3 h-9 text-sm font-medium rounded-t-md border border-b-0 transition-colors',
-            activeTabId === 'dashboard'
+            pathname === '/'
               ? 'bg-white border-neutral-200 text-neutral-900'
               : 'bg-neutral-100 border-transparent text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50'
           )}
@@ -90,7 +95,9 @@ export function TabBar({ className }: TabBarProps) {
               <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
             )}
             <span className="truncate max-w-[120px]">{tab.name}</span>
-            <span className="text-xs text-neutral-400 flex-shrink-0">(S{tab.stage === 0 ? 1 : tab.stage})</span>
+            {!tab.url && (
+              <span className="text-xs text-neutral-400 flex-shrink-0">(S{tab.stage})</span>
+            )}
             <span
               role="button"
               tabIndex={0}

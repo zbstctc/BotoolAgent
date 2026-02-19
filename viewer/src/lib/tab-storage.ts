@@ -1,10 +1,11 @@
 import { scopedKey } from '@/lib/workspace-id';
 
 export interface TabItem {
-  id: string;          // requirementId
-  name: string;        // requirement name
-  stage: number;       // current stage (1-5)
+  id: string;          // requirementId or special id (e.g. 'rules')
+  name: string;        // requirement name or tab label
+  stage: number;       // current stage (1-5), 0 for utility tabs
   isRunning?: boolean; // agent is running
+  url?: string;        // fixed URL for utility tabs (overrides stage-based URL)
 }
 
 export interface TabStorage {

@@ -53,10 +53,23 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     activeTabIdRef.current = activeTabId;
   }, [activeTabId]);
 
+  // Keep a ref of tabs for the pathname sync effect
+  const tabsRef = useRef(tabs);
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
+
   // Sync activeTabId + tab stage from pathname changes
   useEffect(() => {
     if (pathname === '/') {
-      startTransition(() => setActiveTabId('dashboard'));
+      setActiveTabId('dashboard');
+      return;
+    }
+
+    // Match utility tabs by their fixed URL
+    const utilityTab = tabsRef.current.find((t) => t.url && pathname.startsWith(t.url));
+    if (utilityTab) {
+      setActiveTabId(utilityTab.id);
       return;
     }
 
@@ -67,7 +80,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
       const currentActiveId = activeTabIdRef.current;
       if (currentActiveId && currentActiveId !== 'dashboard') {
         setTabs((prev) =>
-          prev.map((t) => t.id === currentActiveId ? { ...t, stage: stageNum } : t)
+          prev.map((t) => t.id === currentActiveId && !t.url ? { ...t, stage: stageNum } : t)
         );
       }
     }
@@ -88,20 +101,12 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
 
   const closeTab = useCallback((id: string) => {
     if (id === 'dashboard') return; // Dashboard cannot be closed
-    setTabs((prev) => {
-      const idx = prev.findIndex((t) => t.id === id);
-      if (idx === -1) return prev;
-      const next = prev.filter((t) => t.id !== id);
-      return next;
-    });
-    // If closing active tab, go to dashboard
-    setActiveTabId((prev) => {
-      if (prev === id) {
-        router.push('/');
-        return 'dashboard';
-      }
-      return prev;
-    });
+    const wasActive = activeTabIdRef.current === id;
+    setTabs((prev) => prev.filter((t) => t.id !== id));
+    if (wasActive) {
+      setActiveTabId('dashboard');
+      router.push('/');
+    }
   }, [router]);
 
   const switchTab = useCallback((id: string, url: string) => {

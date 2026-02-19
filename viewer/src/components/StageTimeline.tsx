@@ -17,7 +17,7 @@ export interface StageTimelineProps {
 const STAGE_ACTION_LABELS: Record<RequirementStage, string> = {
   0: '开始 PRD',
   1: '继续生成',
-  2: '开始规划',
+  2: '开始开发',
   3: '查看开发',
   4: '查看测试',
   5: '合并代码',
