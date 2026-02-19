@@ -831,6 +831,216 @@ Layer 5 Codex 红队审查 通过
 
 ---
 
+## Layer 6 — PR 创建 + Push
+
+**跳过条件：** `startLayer > 6` 时跳过此层。
+
+Layer 6 将审查通过的代码推送到远程并自动创建 PR，从而将 PR 创建职责从 Finalize 移至 Testing。
+
+### 6a. 确保所有修复已提交
+
+```bash
+# 检查是否有未提交的更改（L1-L5 自动修复残留）
+git status --porcelain
+```
+
+如果有未提交的更改：
+```bash
+git add -A
+git commit -m "fix(testing): commit remaining auto-fixes before PR creation"
+```
+
+### 6b. 推送代码到远程
+
+```bash
+# 从 prd.json 读取 branchName
+BRANCH_NAME=$(grep -o '"branchName": "[^"]*"' "$PRD_PATH" | cut -d'"' -f4)
+
+git push origin "$BRANCH_NAME"
+```
+
+**如果推送失败：**
+```
+Layer 6: 推送失败。
+
+恢复建议：
+- 检查是否有未提交的更改：git status
+- 检查远程仓库连接：git remote -v
+- 如果有冲突，先 pull 再 push
+```
+AskUserQuestion 让用户选择：手动修复后继续 / 跳过 Layer 6 / 终止测试。
+
+### 6c. 检查是否已有 PR
+
+```bash
+gh pr list --head "$BRANCH_NAME" --json number,title,url,state --jq '.[0]'
+```
+
+**如果已有 OPEN PR：**
+- 记录 PR 信息（编号、标题、URL）
+- 跳到 6e（更新 agent-status）
+
+### 6d. 创建 PR
+
+读取 prd.json 中的 `project`（项目名称）和 `description`（项目描述）。
+读取 progress.txt 的最近内容作为变更摘要。
+收集 Layer 5 的 LOW findings 列表，写入 PR body 的 Advisory 章节。
+
+```bash
+# 读取项目信息
+PROJECT_NAME=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$PRD_PATH','utf8')).project)")
+PROJECT_DESC=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$PRD_PATH','utf8')).description)")
+
+# 创建 PR
+gh pr create --title "feat: $PROJECT_NAME" --body "$(cat <<EOF
+## 自动生成 PR
+
+**项目：** $PROJECT_NAME
+
+**描述：** $PROJECT_DESC
+
+### 变更摘要
+
+$(tail -50 "$PROGRESS_FILE")
+
+### Advisory (LOW severity — 不阻塞合并)
+
+$(if [ -n "$LOW_FINDINGS" ]; then
+  echo "$LOW_FINDINGS"
+else
+  echo "_无 LOW severity 问题_"
+fi)
+
+---
+*由 BotoolAgent Testing Layer 6 自动创建*
+EOF
+)"
+```
+
+其中 `$LOW_FINDINGS` 来自 Layer 5 的 5f 步骤中收集的 LOW findings 列表，格式为每行一个 `- [severity] rule: message (file:line)`。
+
+**如果创建失败：**
+```
+Layer 6: PR 创建失败。
+
+恢复建议：
+- 检查 gh 是否已认证：gh auth status
+- 检查远程仓库是否有写入权限
+- 手动创建 PR：gh pr create
+```
+AskUserQuestion 让用户选择：手动创建后继续 / 跳过 PR 创建 / 终止测试。
+
+**创建成功后：** 记录 PR 编号、标题和 URL。
+
+### 6e. 更新 agent-status 为 testing_complete
+
+```bash
+# 获取 PR URL
+PR_URL=$(gh pr list --head "$BRANCH_NAME" --json url --jq '.[0].url')
+PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number')
+
+# 写入 agent-status（路径优先使用 per-project 路径）
+STATUS_PATH="tasks/${PROJECT_ID}/agent-status"
+cat > "$STATUS_PATH" << STATUSEOF
+{
+  "status": "testing_complete",
+  "message": "6 层质检全部通过，PR #${PR_NUMBER} 已创建",
+  "timestamp": "$(date '+%Y-%m-%d %H:%M:%S')",
+  "prUrl": "$PR_URL",
+  "prNumber": "$PR_NUMBER",
+  "currentTask": "testing_complete"
+}
+STATUSEOF
+```
+
+**重要：** `status` 必须为 `testing_complete`，这是 Finalize Skill 的前置检查条件。
+
+### 6f. 写入 testing-report.json
+
+将 6 层完整测试报告写入 `tasks/{projectId}/testing-report.json`，供 Viewer 和 Finalize 读取：
+
+```bash
+REPORT_PATH="tasks/${PROJECT_ID}/testing-report.json"
+```
+
+报告结构（根据每层执行情况动态生成）：
+
+```json
+{
+  "layers": [
+    {
+      "id": "L1",
+      "name": "Regression (TypeCheck + Lint)",
+      "status": "pass|fail|skipped",
+      "fixCount": 0,
+      "rounds": 0
+    },
+    {
+      "id": "L2",
+      "name": "Unit Tests",
+      "status": "pass|fail|skipped",
+      "fixCount": 0,
+      "rounds": 0
+    },
+    {
+      "id": "L3",
+      "name": "E2E Tests",
+      "status": "pass|fail|skipped",
+      "fixCount": 0,
+      "rounds": 0
+    },
+    {
+      "id": "L4",
+      "name": "Code Review",
+      "status": "pass|fail|skipped",
+      "fixCount": 0,
+      "rounds": 0
+    },
+    {
+      "id": "L5",
+      "name": "Codex 红队审查",
+      "status": "pass|fail|skipped",
+      "adversarialRounds": 0,
+      "findingsTotal": 0,
+      "fixed": 0,
+      "rejected": 0
+    },
+    {
+      "id": "L6",
+      "name": "PR 创建 + PR-Agent",
+      "status": "pass|fail|skipped",
+      "prUrl": "...",
+      "agentComments": 0,
+      "fixRounds": 0
+    }
+  ],
+  "verdict": "all_pass|has_failures|circuit_breaker",
+  "prReady": true,
+  "prUrl": "...",
+  "timestamp": "2026-02-19T14:30:00Z"
+}
+```
+
+**生成逻辑：**
+1. 遍历 L1-L6 每层的执行记录，填充 status/fixCount/rounds
+2. L5 数据从 `adversarial-state.json` 读取（如果存在）
+3. L6 数据从当前步骤的 PR 信息填充
+4. `verdict` 判断：全部 pass → `all_pass`；有 fail → `has_failures`；有 circuit_breaker → `circuit_breaker`
+5. `prReady` = verdict === "all_pass" && prUrl 存在
+
+写入完成后，告知用户报告路径。
+
+**Layer 6 通过后，告知用户：**
+```
+Layer 6 PR 创建 通过
+  PR: #<number> — <title>
+  URL: <pr-url>
+  agent-status: testing_complete
+  testing-report.json: 已生成
+```
+
+---
+
 ## 最终总结
 
 全部 6 层自动化测试通过后，输出总结：
@@ -883,6 +1093,9 @@ BotoolAgent 6 层自动化测试 — 全部通过!
 | Layer 5 | Codex CLI 不可用 | 跳过 Layer 5，继续 Layer 6 |
 | Layer 5 | Codex 输出无法解析 | 记录 warning，跳过对抗循环，继续 Layer 6 |
 | Layer 5 | 对抗循环未收敛 | 3 轮后 Circuit Breaker → AskUserQuestion 转人工 |
+| Layer 6 | 推送失败 | 检查 git status 和 git remote -v，解决冲突后重试 |
+| Layer 6 | PR 创建失败 | 检查 gh auth status，手动 gh pr create |
+| Layer 6 | gh 未认证 | 运行 gh auth login |
 
 ---
 
