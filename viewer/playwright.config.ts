@@ -20,8 +20,9 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    // --webpack: use webpack instead of Turbopack (default in Next.js 16) to avoid symlinked node_modules issues in worktrees
-    command: `npm run dev -- --port ${testPort} --webpack`,
+    // TURBOPACK= unsets any global TURBOPACK=1 env var to avoid bundler flag conflict
+    // --webpack: use webpack instead of Turbopack to avoid symlinked node_modules issues in worktrees
+    command: `TURBOPACK= npm run dev -- --port ${testPort} --webpack`,
     url: `http://localhost:${testPort}`,
     reuseExistingServer: false,
   },
