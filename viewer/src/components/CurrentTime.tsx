@@ -21,7 +21,10 @@ export function CurrentTime() {
   }, []);
 
   return (
-    <span className="flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-600">
+    <span
+      suppressHydrationWarning
+      className="flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-600"
+    >
       <Clock className="h-3 w-3" />
       {time}
     </span>
