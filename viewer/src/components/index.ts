@@ -32,6 +32,8 @@ export { ConfirmationCard } from "./pyramid/ConfirmationCard";
 export { ModeSelector } from "./pyramid/ModeSelector";
 export { ReviewSummary } from "./ReviewSummary";
 export type { ReviewSummaryProps } from "./ReviewSummary";
+export { TestingReportSummary } from "./TestingReportSummary";
+export type { TestingReportSummaryProps } from "./TestingReportSummary";
 export { ErrorRecovery } from "./ErrorRecovery";
 export type { ErrorRecoveryProps, ErrorAction } from "./ErrorRecovery";
 export { TabBar } from "./TabBar";

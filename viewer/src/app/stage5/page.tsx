@@ -2,11 +2,13 @@
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { StageIndicator, ChangeSummary, CompletionSummary, StageTransitionModal, ReviewSummary } from '@/components';
+import { StageIndicator, StageTransitionModal } from '@/components';
+import { TestingReportSummary } from '@/components/TestingReportSummary';
+import { Badge } from '@/components/ui/badge';
 import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
 import { useProject } from '@/contexts/ProjectContext';
 import { useRequirement } from '@/contexts/RequirementContext';
-import type { DiffSummary } from '@/components/ChangeSummary';
+import { cn } from '@/lib/utils';
 
 interface PRInfo {
   number: number;
@@ -47,30 +49,25 @@ function Stage5PageContent() {
   useProjectValidation({ currentStage: 5 });
 
   // Data states
-  const [diffSummary, setDiffSummary] = useState<DiffSummary | null>(null);
-  const [progressContent, setProgressContent] = useState<string | null>(null);
   const [projectName, setProjectName] = useState<string>('');
   const [prInfo, setPrInfo] = useState<PRInfo | null>(null);
   const [mergeStatus, setMergeStatus] = useState<MergeStatus | null>(null);
 
+  // Testing report verdict state (from child component callback)
+  const [isAllPass, setIsAllPass] = useState<boolean | null>(null);
+
   // UI states
   const [pageState, setPageState] = useState<PageState>('loading');
-  const [isLoadingDiff, setIsLoadingDiff] = useState(true);
-  const [isLoadingProgress, setIsLoadingProgress] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
 
-  // Use file watcher for PRD and progress
-  const { prd, progress } = useFileWatcher({
+  // Use file watcher for PRD
+  const { prd } = useFileWatcher({
     projectId,
     enabled: true,
     onPrdUpdate: (content) => {
       const parsed = parsePrdJson(content);
       if (parsed) setProjectName(parsed.project || '');
-    },
-    onProgressUpdate: (content) => {
-      setProgressContent(content);
-      setIsLoadingProgress(false);
     },
   });
 
@@ -80,13 +77,6 @@ function Stage5PageContent() {
       if (parsed) setProjectName(parsed.project || '');
     }
   }, [prd]);
-
-  useEffect(() => {
-    if (progress !== undefined) {
-      setProgressContent(progress);
-      setIsLoadingProgress(false);
-    }
-  }, [progress]);
 
   // Fetch merge status
   const fetchMergeStatus = useCallback(async () => {
@@ -101,26 +91,7 @@ function Stage5PageContent() {
     }
   }, []);
 
-  // Fetch diff summary
-  useEffect(() => {
-    const fetchDiff = async () => {
-      try {
-        setIsLoadingDiff(true);
-        const response = await fetch('/api/git/diff');
-        if (response.ok) {
-          const data = await response.json();
-          setDiffSummary(data);
-        }
-      } catch (err) {
-        console.error('Failed to fetch diff:', err);
-      } finally {
-        setIsLoadingDiff(false);
-      }
-    };
-    fetchDiff();
-  }, []);
-
-  // Check for existing PR on page load (but don't auto-create)
+  // Check for existing PR on page load
   useEffect(() => {
     const checkExistingPR = async () => {
       try {
@@ -141,10 +112,8 @@ function Stage5PageContent() {
       }
     };
 
-    if (!isLoadingDiff && !isLoadingProgress) {
-      checkExistingPR();
-    }
-  }, [isLoadingDiff, isLoadingProgress, fetchMergeStatus]);
+    checkExistingPR();
+  }, [fetchMergeStatus]);
 
   // Create PR (user-initiated)
   const handleCreatePR = useCallback(async () => {
@@ -226,7 +195,18 @@ function Stage5PageContent() {
     setShowCompletionModal(false);
   }, []);
 
-  const canMerge = pageState === 'ready' && mergeStatus?.canMerge && prInfo;
+  // Callback from TestingReportSummary
+  const handleReportLoaded = useCallback((report: { verdict: string } | null) => {
+    if (report) {
+      setIsAllPass(report.verdict === 'all_pass');
+    } else {
+      setIsAllPass(null);
+    }
+  }, []);
+
+  // Merge is allowed only when PR is ready, merge status allows it, AND testing passed
+  const isMergeBlocked = isAllPass === false || isAllPass === null;
+  const canMerge = pageState === 'ready' && mergeStatus?.canMerge && prInfo && !isMergeBlocked;
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white">
@@ -245,140 +225,125 @@ function Stage5PageContent() {
         }
       />
 
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel: Code Changes */}
-        <div className="flex-1 border-r border-neutral-200 flex flex-col">
-          <div className="p-4 border-b border-neutral-200 bg-white">
-            <h2 className="text-lg font-semibold text-neutral-900">Code Changes</h2>
-            <p className="text-sm text-neutral-500 mt-1">All modifications from this development cycle</p>
-          </div>
-          <div className="flex-1 overflow-auto p-4 bg-neutral-50">
-            <ChangeSummary diffSummary={diffSummary} isLoading={isLoadingDiff} />
-          </div>
-        </div>
+      {/* Main Content — single centered panel */}
+      <div className="flex-1 overflow-auto">
+        <div className="max-w-2xl mx-auto py-8 px-4 space-y-4">
+          {/* Testing Report Summary */}
+          <TestingReportSummary projectId={projectId} onReportLoaded={handleReportLoaded} />
 
-        {/* Right Panel */}
-        <div className="w-[420px] flex-shrink-0 flex flex-col">
-          <div className="p-4 border-b border-neutral-200 bg-white">
-            <h2 className="text-lg font-semibold text-neutral-900">Summary & PR</h2>
-            <p className="text-sm text-neutral-500 mt-1">Review summary and manage PR</p>
-          </div>
+          {/* PR Status Card */}
+          <div className="bg-white border border-neutral-200 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-neutral-900 mb-3">Pull Request</h3>
 
-          <div className="flex-1 overflow-auto p-4 bg-neutral-50 space-y-4">
-            {/* Review Summary */}
-            <ReviewSummary projectId={projectId} defaultExpanded />
+            {pageState === 'loading' && (
+              <div className="flex items-center gap-3">
+                <span className="w-4 h-4 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm text-neutral-500">Checking PR status...</span>
+              </div>
+            )}
 
-            {/* PR Status */}
-            <div className="bg-white border border-neutral-200 rounded-lg p-4">
-              {pageState === 'loading' && (
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center">
-                    <span className="w-4 h-4 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin" />
-                  </div>
-                  <span className="text-sm text-neutral-500">Checking PR status...</span>
+            {pageState === 'no_pr' && (
+              <div className="space-y-3">
+                <p className="text-sm text-neutral-600">No PR exists for this branch yet.</p>
+                <button
+                  onClick={handleCreatePR}
+                  className="w-full px-4 py-2.5 text-sm font-medium text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors"
+                >
+                  Create Pull Request
+                </button>
+              </div>
+            )}
+
+            {pageState === 'creating_pr' && (
+              <div className="flex items-center gap-3">
+                <span className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm text-amber-700 font-medium">Creating PR...</span>
+              </div>
+            )}
+
+            {pageState === 'error' && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-red-500">{'\u2717'}</span>
+                  <span className="text-sm text-red-700">{error}</span>
                 </div>
-              )}
+                <button
+                  onClick={handleCreatePR}
+                  className="text-sm text-neutral-600 hover:underline"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
 
-              {pageState === 'no_pr' && (
-                <div className="space-y-3">
-                  <p className="text-sm text-neutral-600">No PR exists for this branch yet.</p>
-                  <button
-                    onClick={handleCreatePR}
-                    className="w-full px-4 py-2.5 text-sm font-medium text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors"
+            {(pageState === 'ready' || pageState === 'merging') && prInfo && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-neutral-900">PR #{prInfo.number}</span>
+                  <Badge
+                    variant={
+                      prInfo.state === 'OPEN' ? 'success' :
+                      prInfo.state === 'MERGED' ? 'neutral' :
+                      'neutral'
+                    }
                   >
-                    Create Pull Request
-                  </button>
+                    {prInfo.state}
+                  </Badge>
                 </div>
-              )}
+                <p className="text-sm text-neutral-600 truncate">{prInfo.title}</p>
+                <div className="flex items-center gap-4 text-sm">
+                  <span className="text-green-600 font-mono">+{prInfo.additions}</span>
+                  <span className="text-red-600 font-mono">-{prInfo.deletions}</span>
+                </div>
+                {mergeStatus && (
+                  <div className={cn('text-sm', mergeStatus.canMerge ? 'text-green-600' : 'text-amber-600')}>
+                    {mergeStatus.message}
+                  </div>
+                )}
+                <a
+                  href={prInfo.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sm text-neutral-600 hover:underline"
+                >
+                  View on GitHub &rarr;
+                </a>
+              </div>
+            )}
 
-              {pageState === 'creating_pr' && (
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
-                    <span className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-                  </div>
-                  <span className="text-sm text-amber-700 font-medium">Creating PR...</span>
+            {pageState === 'merged' && (
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-neutral-200 flex items-center justify-center">
+                  <span className="text-neutral-600">{'\u2713'}</span>
                 </div>
-              )}
+                <div>
+                  <p className="font-medium text-neutral-900">PR Merged!</p>
+                  <p className="text-sm text-neutral-700">Code merged to main</p>
+                </div>
+              </div>
+            )}
+          </div>
 
-              {pageState === 'error' && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-red-500">✗</span>
-                    <span className="text-sm text-red-700">{error}</span>
-                  </div>
-                  <button
-                    onClick={handleCreatePR}
-                    className="text-sm text-neutral-600 hover:underline"
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
-
-              {(pageState === 'ready' || pageState === 'merging') && prInfo && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-neutral-900">PR #{prInfo.number}</span>
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                      prInfo.state === 'OPEN' ? 'bg-green-100 text-green-700' :
-                      prInfo.state === 'MERGED' ? 'bg-neutral-200 text-neutral-700' :
-                      'bg-neutral-100 text-neutral-700'
-                    }`}>
-                      {prInfo.state}
-                    </span>
-                  </div>
-                  <p className="text-sm text-neutral-600 truncate">{prInfo.title}</p>
-                  <div className="flex items-center gap-4 text-sm">
-                    <span className="text-green-600 font-mono">+{prInfo.additions}</span>
-                    <span className="text-red-600 font-mono">-{prInfo.deletions}</span>
-                  </div>
-                  {mergeStatus && (
-                    <div className={`text-sm ${mergeStatus.canMerge ? 'text-green-600' : 'text-amber-600'}`}>
-                      {mergeStatus.message}
-                    </div>
-                  )}
-                  <a
-                    href={prInfo.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sm text-neutral-600 hover:underline"
-                  >
-                    View on GitHub →
-                  </a>
-                </div>
-              )}
-
-              {pageState === 'merged' && (
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-neutral-200 flex items-center justify-center">
-                    <span className="text-neutral-600">✓</span>
-                  </div>
-                  <div>
-                    <p className="font-medium text-neutral-900">PR Merged!</p>
-                    <p className="text-sm text-neutral-700">Code merged to main</p>
-                  </div>
-                </div>
-              )}
+          {/* Merge blocked warning */}
+          {isMergeBlocked && pageState === 'ready' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-sm text-amber-800">
+                {isAllPass === false
+                  ? 'Testing report has failures. All quality checks must pass before merging.'
+                  : 'No testing report found. Run the testing pipeline before merging.'}
+              </p>
             </div>
-
-            {/* Completion Summary */}
-            <CompletionSummary
-              progressContent={progressContent}
-              isLoading={isLoadingProgress}
-              projectName={projectName}
-            />
-          </div>
+          )}
         </div>
       </div>
 
       {/* Bottom Action Bar */}
       <div className="border-t border-neutral-200 bg-white p-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
+        <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             {pageState === 'merged' ? (
               <div className="flex items-center gap-2 text-neutral-700">
-                <span>✓</span>
+                <span>{'\u2713'}</span>
                 <span className="font-medium text-sm">Complete!</span>
               </div>
             ) : pageState === 'ready' ? (
@@ -400,11 +365,12 @@ function Stage5PageContent() {
             <button
               onClick={handleMerge}
               disabled={!canMerge}
-              className={`px-6 py-2.5 rounded-lg font-medium text-sm transition-colors flex items-center gap-2 ${
+              className={cn(
+                'px-6 py-2.5 rounded-lg font-medium text-sm transition-colors flex items-center gap-2',
                 canMerge
                   ? 'bg-neutral-900 text-white hover:bg-neutral-800'
                   : 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
-              }`}
+              )}
             >
               {pageState === 'merging' ? (
                 <>
@@ -435,7 +401,7 @@ function Stage5PageContent() {
 function Stage5Fallback() {
   return (
     <div className="flex h-full items-center justify-center bg-neutral-50 text-sm text-neutral-500">
-      加载中...
+      Loading...
     </div>
   );
 }
