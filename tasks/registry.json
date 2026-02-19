@@ -30,7 +30,27 @@
       "status": "prd",
       "createdAt": "2026-02-19T04:00:00.000Z",
       "updatedAt": "2026-02-19T04:00:00.000Z"
+    },
+    "prd-adversarial-review": {
+      "name": "PRD 对抗性审查 (PRD Adversarial Review)",
+      "prdMd": "prd-adversarial-review/prd.md",
+      "prdJson": "prd-adversarial-review/prd.json",
+      "progress": "prd-adversarial-review/progress.txt",
+      "branch": "botool/prd-adversarial-review",
+      "status": "coding",
+      "createdAt": "2026-02-19T12:00:00.000Z",
+      "updatedAt": "2026-02-19T18:00:00.000Z"
+    },
+    "remote-mobile-pwa": {
+      "name": "BotoolAgent Remote Access + Mobile PWA",
+      "prdMd": "remote-mobile-pwa/prd.md",
+      "prdJson": "remote-mobile-pwa/prd.json",
+      "progress": "remote-mobile-pwa/progress.txt",
+      "branch": "botool/remote-mobile-pwa",
+      "status": "prd",
+      "createdAt": "2026-02-19T20:00:00.000Z",
+      "updatedAt": "2026-02-19T20:00:00.000Z"
     }
   },
-  "activeProject": "adversarial-review"
+  "activeProject": "remote-mobile-pwa"
 }

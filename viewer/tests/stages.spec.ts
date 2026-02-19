@@ -78,7 +78,7 @@ test.describe('Stage 4 - Testing', () => {
   test('loads and shows Start Testing button', async ({ page }) => {
     await seedProject(page, 4);
     await gotoPage(page, '/stage4');
-    await expect(page.getByText('4-Layer Verification Pipeline')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('6-Layer Verification Pipeline')).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole('button', { name: 'Start Testing' })).toBeVisible({ timeout: 15000 });
   });
 
@@ -99,24 +99,21 @@ test.describe('Stage 4 - Testing', () => {
 
 // === Stage 5 (Finalize) ===
 test.describe('Stage 5 - Finalize', () => {
-  test('loads and shows Code Changes panel', async ({ page }) => {
+  test('loads and shows Pull Request panel', async ({ page }) => {
     await seedProject(page, 5);
     await gotoPage(page, '/stage5');
-    await expect(page.getByText('Code Changes')).toBeVisible({ timeout: 15000 });
-    await expect(page.getByText('Summary & PR')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Pull Request')).toBeVisible({ timeout: 15000 });
   });
 
-  test('shows Review Summary section', async ({ page }) => {
+  test('shows Testing Report Summary section', async ({ page }) => {
     await seedProject(page, 5);
     await gotoPage(page, '/stage5');
-    await expect(page.getByText('Code Changes')).toBeVisible({ timeout: 15000 });
-    const reviewLoading = page.locator('[data-testid="review-summary-loading"]');
-    const reviewHeading = page.getByText('开发评审摘要');
-    const reviewError = page.getByText('暂无评审数据');
-    const reviewLoadError = page.getByText('无法加载评审摘要');
-    const reviewNetworkError = page.getByText('网络错误');
+    // TestingReportSummary renders one of: loading, error, empty, or report
+    const reportLoading = page.getByText('Loading testing report...');
+    const reportError = page.getByText('Failed to load testing report.');
+    const reportEmpty = page.getByText('No testing report available yet.');
     await expect(
-      reviewLoading.or(reviewHeading).or(reviewError).or(reviewLoadError).or(reviewNetworkError)
+      reportLoading.or(reportError).or(reportEmpty)
     ).toBeVisible({ timeout: 15000 });
   });
 
@@ -131,7 +128,7 @@ test.describe('Stage 5 - Finalize', () => {
   test('supports projectId query param', async ({ page }) => {
     await seedProject(page, 5);
     await gotoPage(page, '/stage5?projectId=test-project');
-    await expect(page.getByText('Code Changes')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Pull Request')).toBeVisible({ timeout: 15000 });
   });
 });
 

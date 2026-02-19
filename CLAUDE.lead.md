@@ -242,6 +242,48 @@ STATUS_PATH="${BOTOOL_STATUS_FILE:-$BOTOOL_SCRIPT_DIR/.state/agent-status}"
 ---
 ```
 
+## Codex CLI 集成（可选能力）
+
+如果系统安装了 `codex` CLI（OpenAI Codex），Lead Agent 可在 Testing L5 层使用它进行红队对抗审查。
+
+### 检测 codex 可用性
+
+```bash
+which codex >/dev/null 2>&1 && echo "codex available" || echo "codex not available"
+```
+
+如果 codex 不可用，Testing L5（Codex 红队审查）将被跳过，不影响 L1-L4 和 L6 的执行。
+
+### codex exec 调用方式
+
+```bash
+# 审查 git diff 变更
+codex exec -a never --full-auto \
+  "Review the following code changes as a red-team security reviewer. \
+   Read AGENTS.md for project conventions. \
+   Analyze: $(git diff main...HEAD --name-only | head -20) \
+   Output a JSON object with a 'findings' array following codex-review-schema.json format. \
+   Focus on: OWASP Top 10 vulnerabilities, logic bugs, missing error handling, test coverage gaps."
+```
+
+### 大 diff 缓解策略
+
+当 `git diff main...HEAD` 超过 5000 行时，自动拆分为按文件审查：
+
+```bash
+# 逐文件审查模式
+for file in $(git diff main...HEAD --name-only); do
+  codex exec -a never --full-auto \
+    "Review $file for security vulnerabilities, logic bugs, and missing error handling. \
+     Output JSON with 'findings' array per codex-review-schema.json."
+done
+# 合并所有文件的 findings
+```
+
+### 输出 schema
+
+审查结果需符合 `codex-review-schema.json` 定义的格式（类 ESLint 结构化 JSON）。
+
 ## 错误恢复
 
 - **Teammate 失败** → Lead 接管该任务，自己完成

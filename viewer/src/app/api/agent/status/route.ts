@@ -429,14 +429,15 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Tmux session cleanup (per-project or legacy).
+    // Use execFile (no shell) to prevent command injection via projectId.
     try {
-      const { exec } = await import('child_process');
+      const { execFile } = await import('child_process');
       const { promisify } = await import('util');
-      const execAsync = promisify(exec);
+      const execFileAsync = promisify(execFile);
       const sessionName = projectId ? `botool-teams-${projectId}` : 'botool-teams';
-      await execAsync(`tmux kill-session -t ${sessionName} 2>/dev/null || true`);
+      await execFileAsync('tmux', ['kill-session', '-t', sessionName]);
     } catch {
-      // Ignore tmux cleanup errors
+      // Ignore tmux cleanup errors (e.g. session not found)
     }
 
     cleanPidFile(pidFile);

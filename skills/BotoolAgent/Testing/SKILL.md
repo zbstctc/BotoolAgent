@@ -1,28 +1,28 @@
 ---
 name: botoolagent-testing
-description: "Run the 4-layer automated verification pipeline for BotoolAgent projects. Use when development is complete and you need to verify quality before merging. Triggers on: run tests, verify, test my code, start testing, run verification."
+description: "Run the 6-layer automated verification pipeline for BotoolAgent projects. Use when development is complete and you need to verify quality before merging. Triggers on: run tests, verify, test my code, start testing, run verification."
 user-invocable: true
 ---
 
-# BotoolAgent 4 层自动化测试流水线
+# BotoolAgent 6 层自动化测试流水线
 
-CLI 端自动化测试验收：Layer 1 Regression → Layer 2 Unit → Layer 3 E2E → Layer 4 Code Review。全部自动化，通过后直接进入 finalize。
+CLI 端自动化测试验收：Layer 1 Regression → Layer 2 Unit → Layer 3 E2E → Layer 4 Code Review → Layer 5 Codex 红队审查 → Layer 6 PR 创建 + PR-Agent 守门。全部自动化，通过后直接进入 finalize。
 
-**核心升级：Ralph 弹性迭代 + Agent Teams 并行修复。** 遇到错误不停止，自动修复后重跑，直到通过或断路器触发。
+**核心升级：Ralph 弹性迭代 + Agent Teams 并行修复 + Codex 红队对抗审查。** 遇到错误不停止，自动修复后重跑，直到通过或断路器触发。
 
-**Announce at start:** "正在启动 BotoolAgent 4 层自动化测试流水线（Ralph 迭代模式）..."
+**Announce at start:** "正在启动 BotoolAgent 6 层自动化测试流水线（Ralph 迭代模式 + Codex 对抗审查）..."
 
 ---
 
 ## 参数解析
 
 如果用户提供了参数（如 `/botoolagent-testing 3`），将第一个数字参数作为 `startLayer`，表示从第 N 层开始执行。
-默认值：`startLayer=1`（从头执行全部 4 层）。
+默认值：`startLayer=1`（从头执行全部 6 层）。
 
 用法示例：
-- `/botoolagent-testing` — 执行全部 4 层
+- `/botoolagent-testing` — 执行全部 6 层
 - `/botoolagent-testing 3` — 从 Layer 3 (E2E) 开始执行
-- `/botoolagent-testing 4` — 只执行 Layer 4 (Code Review)
+- `/botoolagent-testing 5` — 从 Layer 5 (Codex 红队审查) 开始执行
 
 ---
 
@@ -84,7 +84,7 @@ fi
 echo "项目目录: $PROJECT_DIR"
 ```
 
-**前置检查通过后，告知用户：** "前置检查通过，开始执行 4 层自动化测试（Ralph 迭代模式）..."
+**前置检查通过后，告知用户：** "前置检查通过，开始执行 6 层自动化测试（Ralph 迭代模式 + Codex 对抗审查）..."
 
 并显示测试计划：
 ```
@@ -93,6 +93,8 @@ echo "项目目录: $PROJECT_DIR"
   Layer 2 — Unit Tests: npm test （自动修复）
   Layer 3 — E2E Tests: Playwright （自动修复）
   Layer 4 — Code Review: Claude 审查 git diff （自动修复 HIGH）
+  Layer 5 — Codex 红队审查: Codex 对抗审查 （对抗循环 ≤ 3 轮）
+  Layer 6 — PR 创建 + PR-Agent 守门 （PR-Agent 修复循环 ≤ 2 轮）
 ```
 
 ---
@@ -535,17 +537,656 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 
 ---
 
-## 最终总结
+## Layer 5 — Codex 红队对抗审查
 
-全部 4 层自动化测试通过后，输出总结：
+**跳过条件：** `startLayer > 5` 时跳过此层。
+
+### 5a. 检测 Codex CLI 可用性
+
+```bash
+which codex >/dev/null 2>&1 && echo "codex available" || echo "codex not available"
+```
+
+**如果 codex 不可用：**
+```
+Layer 5: 跳过（codex CLI 未安装。安装方式: npm install -g @openai/codex）
+```
+记录跳过并继续 Layer 6。
+
+### 5b. 获取 diff 并计算规模
+
+```bash
+DIFF_LINES=$(git diff main...HEAD | wc -l | tr -d ' ')
+echo "Diff lines: $DIFF_LINES"
+```
+
+根据 diff 规模选择审查模式：
+- `DIFF_LINES <= 5000` → **全量审查模式**（一次审查全部 diff）
+- `DIFF_LINES > 5000` → **分文件审查模式**（逐文件审查后合并 findings）
+
+### 5c. 全量审查模式
+
+```bash
+# 创建临时输出文件
+REVIEW_OUTPUT=$(mktemp /tmp/codex-review-XXXXXX.json)
+
+codex exec -a never --full-auto \
+  "You are a red-team security reviewer. Read AGENTS.md for project conventions. \
+   Analyze the following git diff output for: \
+   1. Security vulnerabilities (OWASP Top 10: injection, XSS, SSRF, path traversal, hardcoded secrets) \
+   2. Logic bugs (off-by-one, null/undefined handling, race conditions, boundary errors) \
+   3. Missing error handling (uncaught exceptions, missing fallbacks, unvalidated inputs) \
+   4. Test coverage gaps (critical paths not tested, edge cases missed) \
+   \
+   Output ONLY a valid JSON object with a 'findings' array. Each finding must have: \
+   severity (HIGH/MEDIUM/LOW), category (security/logic/error-handling/test-coverage/style), \
+   rule (identifier like owasp-injection), file (relative path), line (number), \
+   message (description), suggestion (actionable fix). \
+   \
+   If no issues found, output: {\"findings\": []} \
+   \
+   Git diff: \
+   $(git diff main...HEAD)" \
+   > "$REVIEW_OUTPUT" 2>/dev/null
+```
+
+### 5d. 分文件审查模式（大 diff 缓解）
+
+当 diff 超过 5000 行时自动拆分：
+
+```bash
+REVIEW_OUTPUT=$(mktemp /tmp/codex-review-XXXXXX.json)
+echo '{"findings":[]}' > "$REVIEW_OUTPUT"
+
+for file in $(git diff main...HEAD --name-only); do
+  FILE_REVIEW=$(mktemp /tmp/codex-file-review-XXXXXX.json)
+
+  codex exec -a never --full-auto \
+    "You are a red-team security reviewer. Read AGENTS.md for project conventions. \
+     Review $file for security vulnerabilities, logic bugs, missing error handling, \
+     and test coverage gaps. \
+     Output ONLY a valid JSON object with a 'findings' array per codex-review-schema.json format. \
+     Focus on: OWASP Top 10, logic bugs, boundary conditions, missing validation. \
+     If no issues found, output: {\"findings\": []} \
+     \
+     File diff: \
+     $(git diff main...HEAD -- "$file")" \
+     > "$FILE_REVIEW" 2>/dev/null
+
+  # 合并 findings（使用 node 合并 JSON 数组）
+  node -e "
+    const fs = require('fs');
+    const main = JSON.parse(fs.readFileSync('$REVIEW_OUTPUT','utf8'));
+    try {
+      const part = JSON.parse(fs.readFileSync('$FILE_REVIEW','utf8'));
+      if (part.findings) main.findings.push(...part.findings);
+    } catch(e) { /* skip unparseable output */ }
+    fs.writeFileSync('$REVIEW_OUTPUT', JSON.stringify(main, null, 2));
+  "
+  rm -f "$FILE_REVIEW"
+done
+```
+
+### 5e. 解析审查结果
+
+```bash
+# 读取 Codex 审查输出
+node -e "
+  const fs = require('fs');
+  try {
+    const raw = fs.readFileSync('$REVIEW_OUTPUT', 'utf8');
+    // 尝试提取 JSON（Codex 输出可能包含额外文本）
+    const jsonMatch = raw.match(/\{[\s\S]*\"findings\"[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.log(JSON.stringify({findings:[], parseError: 'No valid JSON found in codex output'}));
+      process.exit(0);
+    }
+    const data = JSON.parse(jsonMatch[0]);
+    const findings = data.findings || [];
+    const high = findings.filter(f => f.severity === 'HIGH');
+    const medium = findings.filter(f => f.severity === 'MEDIUM');
+    const low = findings.filter(f => f.severity === 'LOW');
+    console.log(JSON.stringify({
+      total: findings.length,
+      high: high.length,
+      medium: medium.length,
+      low: low.length,
+      findings: findings
+    }, null, 2));
+  } catch(e) {
+    console.log(JSON.stringify({findings:[], parseError: e.message}));
+  }
+"
+```
+
+### 5f. 按 severity 分类处理
+
+**解析结果后，将审查数据写入项目目录：**
+
+将完整 findings 写入 `tasks/{projectId}/codex-review.json`（供 Viewer 读取）。
+
+**分类处理逻辑：**
+
+1. **HIGH + MEDIUM findings** → 记录列表，传给 DT-004 对抗修复循环处理
+2. **LOW findings** → 存入 `lowFindings` 列表，后续 Layer 6 写入 PR body 的 "Advisory" 章节
+3. **无 findings 或全部 LOW** → Layer 5 直接通过，跳过对抗循环
 
 ```
-BotoolAgent 4 层自动化测试 — 全部通过!
+判断：
+  有 HIGH 或 MEDIUM → 进入对抗修复循环（5g）
+  只有 LOW 或无 findings → Layer 5 通过，继续 Layer 6
+```
 
-  Layer 1 — Regression:   通过 (TypeCheck + Lint)
-  Layer 2 — Unit Tests:   通过 / 跳过
-  Layer 3 — E2E Tests:    通过 / 跳过
-  Layer 4 — Code Review:  通过 (无 HIGH 级别问题)
+**如果 Codex 输出无法解析为 JSON（parseError）：**
+```
+Layer 5: Codex 审查输出无法解析。原始输出已保存到 codex-review.json。
+跳过对抗循环，继续 Layer 6。
+```
+记录为 warning，不阻塞流水线。
+
+### 5g. 对抗修复循环 (Adversarial Loop)
+
+**触发条件：** 5f 中检测到 HIGH 或 MEDIUM findings。
+
+**状态初始化：** 创建 `tasks/{projectId}/adversarial-state.json`
+
+```json
+{
+  "round": 0,
+  "maxRounds": 3,
+  "status": "in_progress",
+  "rounds": []
+}
+```
+
+**循环逻辑（最多 3 轮）：**
+
+对于每一轮 (round = 1, 2, 3):
+
+#### Step 1: Claude 逐条处理 HIGH/MEDIUM findings
+
+对每个 HIGH 或 MEDIUM finding，Claude 选择以下两种模式之一：
+
+**模式 A — 修复：**
+- 直接修改代码修复问题
+- 记录修复的文件和修改内容
+
+**模式 B — 论证拒绝：**
+- Claude 提供书面论证理由（为什么不需要修复）
+- 调用 codex exec 让 Codex 判断是否接受论证：
+
+```bash
+codex exec -a never --full-auto \
+  "A developer argues this finding should NOT be fixed. \
+   Finding: {finding.message} (file: {finding.file}, line: {finding.line}) \
+   Developer's argument: {rejection_reason} \
+   \
+   As an independent reviewer, evaluate the argument. \
+   Output ONLY a JSON object: {\"accepted\": true/false, \"reason\": \"your reasoning\"} \
+   \
+   Accept only if the argument is technically sound and the finding is indeed a false positive or non-issue."
+```
+
+- **Codex 接受论证** → 记录到日志，该 finding 标记为 resolved
+- **Codex 不接受论证** → 该 finding 计入未解决 (unresolved)
+
+#### Step 2: 提交修复
+
+```bash
+git add <修改的文件>
+git commit -m "fix(testing): adversarial round {round} fixes"
+```
+
+#### Step 3: Codex 增量复审
+
+只复审本轮变更的文件（不是全量重审）：
+
+```bash
+# 获取本轮修改的文件列表
+CHANGED_FILES=$(git diff HEAD~1 --name-only | tr '\n' ' ')
+
+codex exec -a never --full-auto \
+  "You are a red-team security reviewer performing incremental re-review. \
+   Only review the following changed files: $CHANGED_FILES \
+   Check if the fixes properly address the previously reported issues. \
+   Also check if the fixes introduced any NEW issues. \
+   \
+   Output ONLY a valid JSON object with a 'findings' array. Each finding must have: \
+   severity (HIGH/MEDIUM/LOW), category, rule, file, line, message, suggestion. \
+   If all issues are resolved and no new issues, output: {\"findings\": []}" \
+   > "$REVIEW_OUTPUT" 2>/dev/null
+```
+
+#### Step 4: 解析增量复审结果
+
+解析新的 findings（同 5e 逻辑），更新 adversarial-state.json：
+
+```json
+{
+  "round": {current_round},
+  "maxRounds": 3,
+  "status": "in_progress",
+  "rounds": [
+    {
+      "round": 1,
+      "codexFindings": 8,
+      "fixed": 6,
+      "rejected": 1,
+      "rejectionReasons": [
+        {
+          "finding": "问题摘要",
+          "reason": "Claude 的论证理由",
+          "codexAccepted": true
+        }
+      ],
+      "remaining": 1
+    }
+  ]
+}
+```
+
+#### Step 5: 收敛判断
+
+```
+检查增量复审结果：
+  无新 HIGH/MEDIUM findings → 对抗循环收敛 ✓
+    → adversarial-state.status = "converged"
+    → 继续 Layer 6
+
+  仍有 HIGH/MEDIUM 且 round < 3 → 继续下一轮
+    → 回到 Step 1
+
+  仍有 HIGH/MEDIUM 且 round = 3 → Circuit Breaker
+    → adversarial-state.status = "circuit_breaker"
+    → AskUserQuestion:
+```
+
+**Circuit Breaker 触发：**
+```
+Codex 红队对抗审查 — 3 轮未收敛。以下问题仍未解决：
+<未解决 findings 列表>
+
+对抗轮次详情：
+  Round 1: 发现 {n}, 修复 {m}, 拒绝 {r}
+  Round 2: ...
+  Round 3: ...
+
+选项：
+1. 我来手动修复未解决的问题，修好后继续
+2. 将未解决问题记录为 advisory，跳过继续 Layer 6
+3. 终止测试
+```
+
+### 5h. 更新 codex-review.json
+
+对抗循环结束后，将最终状态写入 `tasks/{projectId}/codex-review.json`（合并初始 findings + 对抗循环结果），供 Viewer 读取。
+
+**Layer 5 完成后，告知用户：**
+```
+Layer 5 Codex 红队审查 通过
+  发现问题: {total}  HIGH: {high}  MEDIUM: {medium}  LOW: {low}
+  对抗轮次: {rounds}/3
+  已修复: {fixed}  论证拒绝: {rejected}  未解决: {unresolved}
+```
+
+---
+
+## Layer 6 — PR 创建 + PR-Agent 守门
+
+**跳过条件：** `startLayer > 6` 时跳过此层。
+
+Layer 6 将审查通过的代码推送到远程并自动创建 PR，然后等待 PR-Agent SaaS 自动审查。PR 创建职责从 Finalize 移至 Testing。
+
+### 6a. 确保所有修复已提交
+
+```bash
+# 检查是否有未提交的更改（L1-L5 自动修复残留）
+git status --porcelain
+```
+
+如果有未提交的更改：
+```bash
+git add -A
+git commit -m "fix(testing): commit remaining auto-fixes before PR creation"
+```
+
+### 6b. 推送代码到远程
+
+```bash
+# 从 prd.json 读取 branchName
+BRANCH_NAME=$(grep -o '"branchName": "[^"]*"' "$PRD_PATH" | cut -d'"' -f4)
+
+git push origin "$BRANCH_NAME"
+```
+
+**如果推送失败：**
+```
+Layer 6: 推送失败。
+
+恢复建议：
+- 检查是否有未提交的更改：git status
+- 检查远程仓库连接：git remote -v
+- 如果有冲突，先 pull 再 push
+```
+AskUserQuestion 让用户选择：手动修复后继续 / 跳过 Layer 6 / 终止测试。
+
+### 6c. 检查是否已有 PR
+
+```bash
+gh pr list --head "$BRANCH_NAME" --json number,title,url,state --jq '.[0]'
+```
+
+**如果已有 OPEN PR：**
+- 记录 PR 信息（编号、标题、URL）
+- 跳到 6e（PR-Agent 守门）
+
+### 6d. 创建 PR
+
+读取 prd.json 中的 `project`（项目名称）和 `description`（项目描述）。
+读取 progress.txt 的最近内容作为变更摘要。
+收集 Layer 5 的 LOW findings 列表，写入 PR body 的 Advisory 章节。
+
+```bash
+# 读取项目信息
+PROJECT_NAME=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$PRD_PATH','utf8')).project)")
+PROJECT_DESC=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$PRD_PATH','utf8')).description)")
+
+# 创建 PR
+gh pr create --title "feat: $PROJECT_NAME" --body "$(cat <<EOF
+## 自动生成 PR
+
+**项目：** $PROJECT_NAME
+
+**描述：** $PROJECT_DESC
+
+### 变更摘要
+
+$(tail -50 "$PROGRESS_FILE")
+
+### Advisory (LOW severity — 不阻塞合并)
+
+$(if [ -n "$LOW_FINDINGS" ]; then
+  echo "$LOW_FINDINGS"
+else
+  echo "_无 LOW severity 问题_"
+fi)
+
+---
+*由 BotoolAgent Testing Layer 6 自动创建*
+EOF
+)"
+```
+
+其中 `$LOW_FINDINGS` 来自 Layer 5 的 5f 步骤中收集的 LOW findings 列表，格式为每行一个 `- [severity] rule: message (file:line)`。
+
+**如果创建失败：**
+```
+Layer 6: PR 创建失败。
+
+恢复建议：
+- 检查 gh 是否已认证：gh auth status
+- 检查远程仓库是否有写入权限
+- 手动创建 PR：gh pr create
+```
+AskUserQuestion 让用户选择：手动创建后继续 / 跳过 PR 创建 / 终止测试。
+
+**创建成功后：** 记录 PR 编号、标题和 URL。
+
+### 6e. PR-Agent 守门 — 等待自动审查评论
+
+PR 创建后，等待 PR-Agent SaaS 自动触发 `/review` 和 `/improve` 评论。
+
+**PR-Agent 是可选层** — 如果仓库未配置 PR-Agent，超时后自动跳过。
+
+```bash
+# 获取 PR 编号
+PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number')
+
+# Polling: 等待 PR-Agent bot 评论（最多 60 秒）
+MAX_WAIT=60
+INTERVAL=10
+ELAPSED=0
+
+while [ $ELAPSED -lt $MAX_WAIT ]; do
+  # 获取 PR 评论，过滤 PR-Agent bot 评论
+  AGENT_COMMENTS=$(gh api repos/{owner}/{repo}/pulls/$PR_NUMBER/comments \
+    --jq '[.[] | select(.user.login | test("pr-agent|codiumai"; "i"))] | length')
+
+  if [ "$AGENT_COMMENTS" -gt 0 ]; then
+    echo "PR-Agent 评论已到达: $AGENT_COMMENTS 条"
+    break
+  fi
+
+  echo "等待 PR-Agent 评论... ($ELAPSED/$MAX_WAIT 秒)"
+  sleep $INTERVAL
+  ELAPSED=$((ELAPSED + INTERVAL))
+done
+
+if [ $ELAPSED -ge $MAX_WAIT ]; then
+  echo "PR-Agent 超时（${MAX_WAIT}秒未收到评论）。跳过 PR-Agent 守门。"
+fi
+```
+
+**超时处理：**
+```
+Layer 6: PR-Agent 未在 60 秒内响应。
+跳过 PR-Agent 守门，继续生成质检报告。
+（提示：若需配置 PR-Agent，参见 docs/pr-agent-setup.md）
+```
+记录为 warning，不阻塞流水线。跳到 6g。
+
+**收到评论后：** 读取并解析 PR-Agent 评论内容。
+
+```bash
+# 读取 PR-Agent 评论内容
+gh api repos/{owner}/{repo}/pulls/$PR_NUMBER/comments \
+  --jq '[.[] | select(.user.login | test("pr-agent|codiumai"; "i"))] | .[].body'
+```
+
+### 6f. PR-Agent 修复循环（最多 2 轮）
+
+解析 PR-Agent 评论中的 HIGH severity 问题：
+
+**解析逻辑：**
+1. 正则匹配评论中的 severity 标记（如 `severity: high`、`🔴`、`Critical`）
+2. 提取问题描述、涉及文件、建议修复
+3. 如果无法解析格式（PR-Agent 版本变化等）→ 将评论内容作为参考，记录 warning 跳过
+
+**修复循环（最多 2 轮）：**
+
+对于每一轮 (round = 1, 2):
+
+#### Step 1: 分析 HIGH 问题
+
+筛选 PR-Agent 评论中标记为 HIGH/Critical 的问题。
+
+- **如果没有 HIGH 问题** → PR-Agent 守门通过，跳到 6g
+- **如果有 HIGH 问题** → 进入修复
+
+#### Step 2: 自动修复
+
+逐个修复 PR-Agent 指出的 HIGH 问题：
+- 读取涉及文件
+- 按照 PR-Agent 的建议修改代码
+- 修复后提交：
+
+```bash
+git add <修改的文件>
+git commit -m "fix(testing): PR-Agent round $ROUND fixes"
+```
+
+#### Step 3: 重新推送
+
+```bash
+git push origin "$BRANCH_NAME"
+```
+
+推送后 PR-Agent SaaS 会自动重新审查。
+
+#### Step 4: 等待 PR-Agent 重审
+
+```bash
+# 等待新一轮 PR-Agent 评论（最多 60 秒）
+# 同 6e 的 polling 逻辑，但只关注推送后的新评论
+LAST_PUSH_TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+MAX_WAIT=60
+INTERVAL=10
+ELAPSED=0
+
+while [ $ELAPSED -lt $MAX_WAIT ]; do
+  NEW_COMMENTS=$(gh api repos/{owner}/{repo}/pulls/$PR_NUMBER/comments \
+    --jq "[.[] | select(.user.login | test(\"pr-agent|codiumai\"; \"i\")) | select(.created_at > \"$LAST_PUSH_TIME\")] | length")
+
+  if [ "$NEW_COMMENTS" -gt 0 ]; then
+    echo "PR-Agent 重审评论已到达"
+    break
+  fi
+
+  sleep $INTERVAL
+  ELAPSED=$((ELAPSED + INTERVAL))
+done
+```
+
+#### Step 5: 收敛判断
+
+```
+检查重审评论：
+  无新 HIGH 问题 → PR-Agent 守门通过，继续 6g
+  仍有 HIGH 且 round < 2 → 继续下一轮
+  仍有 HIGH 且 round = 2 → 记录未解决问题，继续 6g
+```
+
+**2 轮后仍有 HIGH 问题：**
+```
+PR-Agent 修复循环 2 轮后仍有 HIGH 问题未解决。
+将未解决问题记录到 testing-report.json，继续生成报告。
+```
+记录 warning，不阻塞（PR-Agent 为增强层，不是强制门控）。
+
+### 6g. 更新 agent-status 为 testing_complete
+
+```bash
+# 获取 PR URL
+PR_URL=$(gh pr list --head "$BRANCH_NAME" --json url --jq '.[0].url')
+PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number')
+
+# 写入 agent-status（路径优先使用 per-project 路径）
+STATUS_PATH="tasks/${PROJECT_ID}/agent-status"
+cat > "$STATUS_PATH" << STATUSEOF
+{
+  "status": "testing_complete",
+  "message": "6 层质检全部通过，PR #${PR_NUMBER} 已创建",
+  "timestamp": "$(date '+%Y-%m-%d %H:%M:%S')",
+  "prUrl": "$PR_URL",
+  "prNumber": "$PR_NUMBER",
+  "currentTask": "testing_complete"
+}
+STATUSEOF
+```
+
+**重要：** `status` 必须为 `testing_complete`，这是 Finalize Skill 的前置检查条件。
+
+### 6h. 写入 testing-report.json
+
+将 6 层完整测试报告写入 `tasks/{projectId}/testing-report.json`，供 Viewer 和 Finalize 读取：
+
+```bash
+REPORT_PATH="tasks/${PROJECT_ID}/testing-report.json"
+```
+
+报告结构（根据每层执行情况动态生成）：
+
+```json
+{
+  "layers": [
+    {
+      "id": "L1",
+      "name": "Regression (TypeCheck + Lint)",
+      "status": "pass|fail|skipped",
+      "fixCount": 0,
+      "rounds": 0
+    },
+    {
+      "id": "L2",
+      "name": "Unit Tests",
+      "status": "pass|fail|skipped",
+      "fixCount": 0,
+      "rounds": 0
+    },
+    {
+      "id": "L3",
+      "name": "E2E Tests",
+      "status": "pass|fail|skipped",
+      "fixCount": 0,
+      "rounds": 0
+    },
+    {
+      "id": "L4",
+      "name": "Code Review",
+      "status": "pass|fail|skipped",
+      "fixCount": 0,
+      "rounds": 0
+    },
+    {
+      "id": "L5",
+      "name": "Codex 红队审查",
+      "status": "pass|fail|skipped",
+      "adversarialRounds": 0,
+      "findingsTotal": 0,
+      "fixed": 0,
+      "rejected": 0
+    },
+    {
+      "id": "L6",
+      "name": "PR 创建 + PR-Agent",
+      "status": "pass|fail|skipped",
+      "prUrl": "...",
+      "agentComments": 0,
+      "fixRounds": 0
+    }
+  ],
+  "verdict": "all_pass|has_failures|circuit_breaker",
+  "prReady": true,
+  "prUrl": "...",
+  "timestamp": "2026-02-19T14:30:00Z"
+}
+```
+
+**生成逻辑：**
+1. 遍历 L1-L6 每层的执行记录，填充 status/fixCount/rounds
+2. L5 数据从 `adversarial-state.json` 读取（如果存在）
+3. L6 数据从当前步骤的 PR 信息 + PR-Agent 修复记录填充
+4. `verdict` 判断：全部 pass → `all_pass`；有 fail → `has_failures`；有 circuit_breaker → `circuit_breaker`
+5. `prReady` = verdict === "all_pass" && prUrl 存在
+
+写入完成后，告知用户报告路径。
+
+**Layer 6 通过后，告知用户：**
+```
+Layer 6 PR 创建 + PR-Agent 守门 通过
+  PR: #<number> — <title>
+  URL: <pr-url>
+  PR-Agent: {agent_comments} 条评论, {fix_rounds} 轮修复 / 超时跳过
+  agent-status: testing_complete
+  testing-report.json: 已生成
+```
+
+---
+
+## 最终总结
+
+全部 6 层自动化测试通过后，输出总结：
+
+```
+BotoolAgent 6 层自动化测试 — 全部通过!
+
+  Layer 1 — Regression:       通过 (TypeCheck + Lint)
+  Layer 2 — Unit Tests:       通过 / 跳过
+  Layer 3 — E2E Tests:        通过 / 跳过
+  Layer 4 — Code Review:      通过 (无 HIGH 级别问题)
+  Layer 5 — Codex 红队审查:    通过 / 跳过 (对抗轮次: N/3)
+  Layer 6 — PR + PR-Agent:    通过 / 跳过
 
   自动修复统计:
   - TypeCheck: N 轮修复 / 直接通过
@@ -553,6 +1194,8 @@ BotoolAgent 4 层自动化测试 — 全部通过!
   - Unit Tests: N 轮修复 / 直接通过 / 跳过
   - E2E Tests: N 轮修复 / 直接通过 / 跳过
   - Code Review: N 轮修复 / 直接通过
+  - Codex 审查: N 个问题修复, M 个论证拒绝 / 跳过
+  - PR-Agent: N 轮修复 / 跳过
 
 下一步：运行 /botoolagent-finalize 完成合并流程
 ```
@@ -563,9 +1206,9 @@ BotoolAgent 4 层自动化测试 — 全部通过!
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| startLayer | 从第 N 层开始执行（跳过之前的层） | 1 |
+| startLayer | 从第 N 层开始执行（跳过之前的层，1-6） | 1 |
 
-用法：`/botoolagent-testing 3`（从 Layer 3 E2E Tests 开始执行）
+用法：`/botoolagent-testing 5`（从 Layer 5 Codex 红队审查开始执行）
 
 ---
 
@@ -580,12 +1223,21 @@ BotoolAgent 4 层自动化测试 — 全部通过!
 | Layer 2 | 单元测试失败 | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
 | Layer 3 | E2E 测试失败 | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
 | Layer 4 | Code Review 有 HIGH | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
+| Layer 5 | Codex CLI 不可用 | 跳过 Layer 5，继续 Layer 6 |
+| Layer 5 | Codex 输出无法解析 | 记录 warning，跳过对抗循环，继续 Layer 6 |
+| Layer 5 | 对抗循环未收敛 | 3 轮后 Circuit Breaker → AskUserQuestion 转人工 |
+| Layer 6 | 推送失败 | 检查 git status 和 git remote -v，解决冲突后重试 |
+| Layer 6 | PR 创建失败 | 检查 gh auth status，手动 gh pr create |
+| Layer 6 | gh 未认证 | 运行 gh auth login |
+| Layer 6 | PR-Agent 超时 | PR-Agent 为可选层，超时自动跳过，参见 docs/pr-agent-setup.md |
+| Layer 6 | PR-Agent 评论无法解析 | 记录 warning，跳过 PR-Agent 守门 |
+| Layer 6 | PR-Agent 修复循环未收敛 | 2 轮后记录未解决问题，不阻塞 |
 
 ---
 
 ## 与 Viewer 对齐
 
-CLI 的 4 层自动化测试对应 Viewer Stage 4 的分层验收：
+CLI 的 6 层自动化测试对应 Viewer Stage 4 的分层验收：
 
 | CLI Layer | Viewer Layer | 说明 |
 |-----------|-------------|------|
@@ -593,11 +1245,14 @@ CLI 的 4 层自动化测试对应 Viewer Stage 4 的分层验收：
 | Layer 2 — Unit Tests | 单元测试 | npm test / npm run test:unit |
 | Layer 3 — E2E Tests | E2E 测试 | npx playwright test |
 | Layer 4 — Code Review | Code Review | git diff → Claude 审查 |
+| Layer 5 — Codex 红队审查 | Codex 审查 | codex exec → 对抗循环 |
+| Layer 6 — PR + PR-Agent | PR 守门 | gh pr create → PR-Agent 修复 |
 
 **手动验收（Manual Checklist）已移出 testing 流水线**，用户可在 finalize 前自行验证。
 
 **行为一致性：**
 - 两端都从 prd.json 读取 testCases
-- CLI 4 层全自动（Ralph 自动修复）：失败不停止，自动修 → 重跑 → 超限才问用户
+- CLI 6 层全自动（Ralph 自动修复 + Codex 对抗审查）：失败不停止，自动修 → 重跑 → 超限才问用户
 - Layer 2/3 在没有对应 testCases 或脚本时自动跳过
+- Layer 5 在 codex CLI 不可用时自动跳过
 - 全部通过后，CLI 直接提示运行 `/botoolagent-finalize`

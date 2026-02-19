@@ -17,6 +17,7 @@
     "viewer/playwright.config.ts",
     "viewer/next-env.d.ts",
     "CLAUDE.lead.md",
+    "AGENTS.md",
     ".github/workflows/",
     ".claude-plugin/",
     ".botoolagent-manifest.json",

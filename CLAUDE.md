@@ -2,6 +2,8 @@
 
 BotoolAgent 是一个自主 AI 开发代理，通过 tmux + Agent Teams 模式循环执行开发任务。
 
+> **审查规范**: See @AGENTS.md — 所有 AI 代理（Claude、Codex 等）的统一审查规范，包含构建命令、架构约定、代码风格、安全红线。
+
 ## 架构概要
 
 - **`scripts/BotoolAgent.sh`** — Ralph 外循环 (tmux launcher)，驱动 Lead Agent 执行
