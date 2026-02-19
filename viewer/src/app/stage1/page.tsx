@@ -19,6 +19,7 @@ import { ErrorRecovery } from '@/components/ErrorRecovery';
 import { TerminalActivityFeed, formatTerminalLine } from '@/components/TerminalActivityFeed';
 import { useProject } from '@/contexts/ProjectContext';
 import { useRequirement } from '@/contexts/RequirementContext';
+import { useTab } from '@/contexts/TabContext';
 import { useProjectValidation, useCliChat } from '@/hooks';
 import {
   type AskUserQuestionToolInput,
@@ -700,6 +701,21 @@ function Stage1PageContent() {
   const stageStatus = prdDraft
     ? '已生成 PRD'
     : `${selectedMode === 'transform' ? 'T' : 'L'}${currentLevel} 进行中`;
+
+  // Sync tab status
+  const { updateTabStatus } = useTab();
+  useEffect(() => {
+    if (!reqId) return;
+    if (prdDraft || writtenPrdFileId) {
+      updateTabStatus(reqId, 'complete');
+    } else if (currentQuestions.length > 0 && !isLoading) {
+      updateTabStatus(reqId, 'waiting_for_user');
+    } else if (isLoading) {
+      updateTabStatus(reqId, 'running');
+    } else if (isStarted) {
+      updateTabStatus(reqId, 'running');
+    }
+  }, [reqId, prdDraft, writtenPrdFileId, currentQuestions.length, isLoading, isStarted, updateTabStatus]);
 
   // Handle mode selection
   const handleModeSelect = useCallback((mode: PipelineMode) => {

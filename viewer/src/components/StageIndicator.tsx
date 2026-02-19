@@ -1,11 +1,8 @@
 'use client';
 
-import Link from 'next/link';
-
 interface StageIndicatorProps {
   currentStage: 1 | 2 | 3 | 4 | 5;
   completedStages?: number[];
-  showBackButton?: boolean;
   projectName?: string;
   stageStatus?: string;
 }
@@ -18,41 +15,17 @@ const stages = [
   { id: 5, name: '确认合并', available: true },
 ];
 
-export function StageIndicator({ currentStage, completedStages = [], showBackButton = true, projectName, stageStatus }: StageIndicatorProps) {
+export function StageIndicator({ currentStage, completedStages = [], projectName, stageStatus }: StageIndicatorProps) {
   return (
     <div className="w-full bg-white border-b border-neutral-200">
       <div className="px-6 py-4">
         <div className="flex items-center gap-6">
-          {/* Back to Dashboard button and Project Name */}
+          {/* Project Name and Stage Status */}
           <div className="flex items-center gap-3">
-            {showBackButton && (
-              <Link
-                href="/"
-                className="flex items-center gap-1.5 text-sm text-neutral-600 hover:text-neutral-900 transition-colors -ml-1 px-2 py-1 rounded-md hover:bg-neutral-100"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M10 19l-7-7m0 0l7-7m-7 7h18"
-                  />
-                </svg>
-                <span>主页</span>
-              </Link>
-            )}
             {projectName && (
-              <>
-                <span className="text-neutral-300">/</span>
-                <span className="text-sm font-medium text-neutral-900 truncate max-w-[200px]">
-                  {projectName}
-                </span>
-              </>
+              <span className="text-base font-semibold text-neutral-900 truncate max-w-[240px]">
+                {projectName}
+              </span>
             )}
             {stageStatus && (
               <>

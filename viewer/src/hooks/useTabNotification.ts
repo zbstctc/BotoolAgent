@@ -7,7 +7,7 @@ const RUNNING_STATUSES = new Set(['running', 'starting', 'waiting_network']);
 const COMPLETE_STATUSES = new Set(['idle', 'complete', 'session_done', 'max_iterations', 'max_rounds']);
 const ERROR_STATUSES = new Set(['error', 'failed', 'stopped', 'timeout']);
 
-function playTone(type: 'complete' | 'error'): void {
+function playTone(type: 'attention' | 'complete' | 'error'): void {
   try {
     const ctx = new AudioContext();
     const oscillator = ctx.createOscillator();
@@ -20,7 +20,11 @@ function playTone(type: 'complete' | 'error'): void {
     gain.gain.setValueAtTime(0.3, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
 
-    if (type === 'complete') {
+    if (type === 'attention') {
+      // Two-note chime: 660 -> 880 Hz (friendly "ding-dong")
+      oscillator.frequency.setValueAtTime(660, ctx.currentTime);
+      oscillator.frequency.setValueAtTime(880, ctx.currentTime + 0.15);
+    } else if (type === 'complete') {
       // Rising tone: 440 -> 880 Hz
       oscillator.frequency.setValueAtTime(440, ctx.currentTime);
       oscillator.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.3);
@@ -66,18 +70,25 @@ export function useTabNotification(): void {
       // Skip if status hasn't changed
       if (prevStatus === currentStatus) continue;
 
-      // Check transition: was running -> now terminal
-      if (prevStatus && RUNNING_STATUSES.has(prevStatus)) {
-        // Don't notify for the active tab (user is already looking at it)
-        const isActiveTab = tab.id === activeTabId;
+      const isActiveTab = tab.id === activeTabId;
 
+      // Transition to waiting_for_user: always notify (sound + flash)
+      if (currentStatus === 'waiting_for_user') {
+        playTone('attention');
+        if (!isActiveTab) {
+          setNeedsAttention(tab.id, true);
+        }
+        continue;
+      }
+
+      // Transition: was running -> now terminal
+      if (prevStatus && RUNNING_STATUSES.has(prevStatus)) {
         if (COMPLETE_STATUSES.has(currentStatus)) {
           if (!isActiveTab) {
             playTone('complete');
             setNeedsAttention(tab.id, true);
           }
         } else if (ERROR_STATUSES.has(currentStatus)) {
-          // Always notify on errors, even for active tab
           playTone('error');
           setNeedsAttention(tab.id, true);
         }

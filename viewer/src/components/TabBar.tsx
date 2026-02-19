@@ -28,20 +28,23 @@ const STAGE_NAMES: Record<number, string> = {
   5: '合并发布',
 };
 
-function getStatusBadge(agentStatus?: string): { label: string; variant: 'success' | 'warning' | 'error' } {
-  if (!agentStatus) return { label: '空闲', variant: 'warning' };
+function getStatusBadge(agentStatus?: string): { label: string; variant: 'success' | 'warning' | 'error' | 'neutral' } {
+  if (!agentStatus) return { label: '空闲', variant: 'neutral' };
+  if (agentStatus === 'waiting_for_user') return { label: '等待操作', variant: 'warning' };
   if (RUNNING_STATUSES.has(agentStatus)) return { label: '运行中', variant: 'success' };
   if (ERROR_STATUSES.has(agentStatus)) return { label: '错误', variant: 'error' };
   if (agentStatus === 'complete') return { label: '完成', variant: 'success' };
-  return { label: '空闲', variant: 'warning' };
+  return { label: '空闲', variant: 'neutral' };
 }
 
 function getStatusBorderClass(tab: TabItem): string {
   if (tab.needsAttention) return 'animate-pulse-border-amber';
-  if (!tab.agentStatus) return 'border-amber-400'; // no status = pending
+  if (!tab.agentStatus) return 'border-neutral-300';
+  if (tab.agentStatus === 'waiting_for_user') return 'border-amber-400';
   if (RUNNING_STATUSES.has(tab.agentStatus)) return 'border-green-500';
   if (ERROR_STATUSES.has(tab.agentStatus)) return 'border-red-500';
-  return 'border-amber-400'; // idle/complete/session_done etc
+  if (tab.agentStatus === 'complete') return 'border-green-500';
+  return 'border-neutral-300';
 }
 
 interface TabBarProps {

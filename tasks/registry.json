@@ -67,7 +67,7 @@
       "prdJson": "stage3-activity-feed/prd.json",
       "progress": "stage3-activity-feed/progress.txt",
       "branch": "botool/stage3-activity-feed",
-      "status": "testing",
+      "status": "complete",
       "createdAt": "2026-02-19T22:00:00.000Z",
       "updatedAt": "2026-02-19T22:00:00.000Z"
     },

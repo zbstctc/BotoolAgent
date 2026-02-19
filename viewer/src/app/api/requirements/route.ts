@@ -47,20 +47,30 @@ function extractTitle(content: string, dirName: string): string {
 
 /**
  * Check if a git branch has been merged into main.
- * Returns true if the branchName exists in the list of branches merged into main.
+ * First checks local branches, then falls back to checking merge commits in git log
+ * (handles the case where the local branch was deleted after merge).
  */
 function isBranchMergedIntoMain(branchName: string): boolean {
   try {
     const botoolRoot = getBotoolRoot();
+    // Check local branches
     const mergedBranches = execSync('git branch --merged main', {
       cwd: botoolRoot,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
-    return mergedBranches
+    const found = mergedBranches
       .split('\n')
       .map((b: string) => b.trim().replace(/^\*\s*/, ''))
       .includes(branchName);
+    if (found) return true;
+
+    // Fallback: check merge commits in git log (branch may have been deleted)
+    const mergeLog = execSync(
+      `git log --merges --oneline main | head -20`,
+      { cwd: botoolRoot, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
+    );
+    return mergeLog.includes(branchName);
   } catch {
     return false;
   }
