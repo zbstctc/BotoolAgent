@@ -391,7 +391,7 @@ ${rulesText}
     setAdaptingResult(null);
   }, []);
 
-  // AutoMode: auto-select all rules and trigger confirm after 2s
+  // AutoMode: auto-select all rules (step 1 — just select, don't confirm yet)
   useEffect(() => {
     if (!autoMode || isLoading || autoModeTriggeredRef.current) return;
     if (categories.length === 0) return;
@@ -404,17 +404,25 @@ ${rulesText}
       return;
     }
 
-    // Select all rules
+    // Select all rules — handleConfirm will be called by a separate effect
+    // after React commits the new selectedRules state (avoids stale closure)
     setSelectedRules(new Set(allRuleIds));
     autoModeTriggeredRef.current = true;
+  }, [autoMode, isLoading, categories, onComplete]);
 
-    // Trigger confirm after 2s delay
+  // AutoMode: trigger confirm after rules are committed (step 2 — avoids stale closure)
+  const autoConfirmFiredRef = useRef(false);
+  useEffect(() => {
+    if (!autoMode || !autoModeTriggeredRef.current || autoConfirmFiredRef.current) return;
+    if (selectedRules.size === 0) return;
+
+    autoConfirmFiredRef.current = true;
     const timer = setTimeout(() => {
       handleConfirm();
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [autoMode, isLoading, categories, onComplete, handleConfirm]);
+  }, [autoMode, selectedRules.size, handleConfirm]);
 
   // AutoMode: auto-confirm adapting result dialog after 2s
   useEffect(() => {

@@ -207,7 +207,7 @@ function Stage3PageContent() {
     return () => clearTimeout(timer);
   }, [activeProject?.autoMode, agentStatus.isRunning, agentStatus.isComplete, agentActionLoading, handleStartAgent]);
 
-  // Auto-retry on failure (max 1 retry), then disable autoMode
+  // Auto-retry on agent error (max 1 retry), then disable autoMode
   useEffect(() => {
     if (!activeProject?.autoMode || !agentStatus.hasError) return;
 
@@ -225,6 +225,23 @@ function Stage3PageContent() {
       }
     }
   }, [activeProject?.autoMode, agentStatus.hasError, autoRetryCount, handleStartAgent, activeProject, updateProject]);
+
+  // Auto-mode: handle API startup failure (agentStartError set but agentStatus not in error)
+  // Without this, autoStartedRef stays true and auto-mode gets stuck
+  useEffect(() => {
+    if (!activeProject?.autoMode || !agentStartError) return;
+    if (agentStatus.hasError) return; // Already handled by the effect above
+
+    if (autoRetryCount < 1) {
+      setAutoRetryCount(prev => prev + 1);
+      autoStartedRef.current = false; // Allow re-start
+      setAgentStartError(null);
+    } else {
+      if (activeProject) {
+        updateProject(activeProject.id, { autoMode: false });
+      }
+    }
+  }, [activeProject?.autoMode, agentStartError, agentStatus.hasError, autoRetryCount, activeProject, updateProject]);
 
   // Track agent start time for ProgressStrip and useTaskTimings
   const agentStartTimeRef = useRef<number>(0);

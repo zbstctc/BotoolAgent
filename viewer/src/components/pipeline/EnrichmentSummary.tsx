@@ -303,15 +303,16 @@ export function EnrichmentSummary({
   }, [prdJson, parseError, projectId, onComplete]);
 
   // AutoMode: auto-save and start development after 2s delay
+  // Guard: skip if saveError is set to prevent infinite retry loop on persistent failures
   useEffect(() => {
-    if (!autoMode || convertingState !== 'completed' || !prdJson || isSaving) return;
+    if (!autoMode || convertingState !== 'completed' || !prdJson || isSaving || saveError) return;
 
     const timer = setTimeout(() => {
       handleSave();
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [autoMode, convertingState, prdJson, isSaving, handleSave]);
+  }, [autoMode, convertingState, prdJson, isSaving, saveError, handleSave]);
 
   // Summary stats
   const rulesCount = selectedRules.length;
