@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogContent,
   DialogFooter,
+  DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 
@@ -167,9 +168,9 @@ export function StageTransitionModal({
               </svg>
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-neutral-900">
+              <DialogTitle className="text-lg font-semibold text-neutral-900">
                 {fromStageName}完成
-              </h3>
+              </DialogTitle>
               <p className="text-sm text-neutral-500">
                 {isCompletion ? '项目已全部完成' : `即将进入${toStageName}`}
               </p>

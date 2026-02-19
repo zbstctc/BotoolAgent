@@ -180,14 +180,82 @@ function Stage4PageContent() {
     };
   }, [projectId]);
 
+  // Poll /api/agent/log for real-time log lines (reads stream-json log file)
+  const logOffsetRef = useRef(0);
+  const logPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startLogPolling = useCallback(() => {
+    if (logPollRef.current) return; // already polling
+    logOffsetRef.current = 0;
+    logPollRef.current = setInterval(async () => {
+      if (!projectId) return;
+      try {
+        const res = await fetch(
+          `/api/agent/log?projectId=${encodeURIComponent(projectId)}&offset=${logOffsetRef.current}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.lines && data.lines.length > 0) {
+          setAgentLog(prev => [...prev, ...data.lines]);
+        }
+        if (typeof data.offset === 'number') {
+          logOffsetRef.current = data.offset;
+        }
+      } catch {
+        // ignore fetch errors
+      }
+    }, 2000);
+  }, [projectId]);
+
+  const stopLogPolling = useCallback(() => {
+    if (logPollRef.current) {
+      clearInterval(logPollRef.current);
+      logPollRef.current = null;
+    }
+  }, []);
+
+  // Stop log polling when testing finishes
+  useEffect(() => {
+    if (testingStatus === 'complete' || testingStatus === 'failed' || testingStatus === 'error' || testingStatus === 'idle') {
+      stopLogPolling();
+    }
+  }, [testingStatus, stopLogPolling]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
       }
+      stopLogPolling();
     };
-  }, []);
+  }, [stopLogPolling]);
+
+  // On mount: check if agent is already running and resume polling
+  useEffect(() => {
+    if (!projectId) return;
+    const params = new URLSearchParams();
+    if (projectId) params.set('projectId', projectId);
+    fetch(`/api/agent/status?${params.toString()}`)
+      .then(r => r.json())
+      .then((status) => {
+        if (status.status === 'running' || status.status === 'starting' || status.status === 'iteration_complete') {
+          setTestingStatus('running');
+          setStatusMessage(status.message || 'Testing in progress...');
+          setAgentLog([]);
+          startStatusPolling();
+          startLogPolling();
+        } else if (status.status === 'complete') {
+          setTestingStatus('complete');
+          setStatusMessage(status.message || 'Testing completed');
+          setLayers(prev => prev.map(l => ({ ...l, status: 'pass' as const })));
+        } else if (status.status === 'error' || status.status === 'failed') {
+          setTestingStatus('failed');
+          setStatusMessage(status.message || 'Testing failed');
+        }
+      })
+      .catch(() => { /* ignore */ });
+  }, [projectId, startStatusPolling, startLogPolling]);
 
   // Start testing via agent
   const handleStartTesting = useCallback(async () => {
@@ -209,14 +277,15 @@ function Stage4PageContent() {
         throw new Error(data.error || '启动验收失败');
       }
 
-      // Start polling for status
+      // Start polling for status and log
       startStatusPolling();
+      startLogPolling();
     } catch (err) {
       setTestingStatus('error');
       setStatusMessage(err instanceof Error ? err.message : '启动验收失败');
       setAgentLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] Error: ${err instanceof Error ? err.message : 'Unknown error'}`]);
     }
-  }, [projectId, startStatusPolling]);
+  }, [projectId, startStatusPolling, startLogPolling]);
 
   // Stop testing
   const handleStopTesting = useCallback(async () => {
