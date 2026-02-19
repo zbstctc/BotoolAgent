@@ -62,14 +62,14 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
   // Sync activeTabId + tab stage from pathname changes
   useEffect(() => {
     if (pathname === '/') {
-      setActiveTabId('dashboard');
+      startTransition(() => setActiveTabId('dashboard'));
       return;
     }
 
     // Match utility tabs by their fixed URL
     const utilityTab = tabsRef.current.find((t) => t.url && pathname.startsWith(t.url));
     if (utilityTab) {
-      setActiveTabId(utilityTab.id);
+      startTransition(() => setActiveTabId(utilityTab.id));
       return;
     }
 
@@ -79,9 +79,9 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
       const stageNum = parseInt(stageMatch[1], 10);
       const currentActiveId = activeTabIdRef.current;
       if (currentActiveId && currentActiveId !== 'dashboard') {
-        setTabs((prev) =>
+        startTransition(() => setTabs((prev) =>
           prev.map((t) => t.id === currentActiveId && !t.url ? { ...t, stage: stageNum } : t)
-        );
+        ));
       }
     }
   }, [pathname]);

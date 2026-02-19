@@ -34,7 +34,7 @@ ${prdContent}
 ## 要求
 
 1. 识别 PRD 中的所有开发任务
-2. 为每个涉及数据结构的任务生成 TypeScript 代码示例（接口定义、数据结构等）
+2. 为每个涉及数据结构的任务生成 TypeScript 代码示例（接口定义、数据结构等），每个 codeExample 必须包含 taskId 字段标明该示例属于哪个任务（如 "DT-001"）
 3. 为每个任务生成测试用例（单元测试和端到端测试）
 4. 列出需要修改的文件路径
 5. 为每个任务生成可执行的验证命令（evals）
@@ -59,7 +59,8 @@ ${prdContent}
     {
       "language": "typescript",
       "description": "代码描述",
-      "code": "代码内容"
+      "code": "代码内容",
+      "taskId": "DT-001"
     }
   ],
   "testCases": [
@@ -131,6 +132,7 @@ function normalizeEnrichResult(parsed: Record<string, unknown>): AutoEnrichResul
         language: (ex.language as string) || 'typescript',
         description: (ex.description as string) || '',
         code: (ex.code as string) || '',
+        taskId: (ex.taskId as string) || undefined,
       }))
     : [];
 

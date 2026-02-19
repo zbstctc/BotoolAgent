@@ -206,14 +206,14 @@ function Stage4PageContent() {
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to start testing');
+        throw new Error(data.error || '启动验收失败');
       }
 
       // Start polling for status
       startStatusPolling();
     } catch (err) {
       setTestingStatus('error');
-      setStatusMessage(err instanceof Error ? err.message : 'Failed to start testing');
+      setStatusMessage(err instanceof Error ? err.message : '启动验收失败');
       setAgentLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] Error: ${err instanceof Error ? err.message : 'Unknown error'}`]);
     }
   }, [projectId, startStatusPolling]);
@@ -272,21 +272,21 @@ function Stage4PageContent() {
         completedStages={[1, 2, 3]}
         projectName={activeProject?.name || projectName}
         stageStatus={
-          testingStatus === 'complete' ? 'Testing passed' :
-          testingStatus === 'failed' ? 'Testing failed' :
-          testingStatus === 'error' ? 'Error' :
-          testingStatus === 'running' ? 'Testing...' :
-          'Ready to test'
+          testingStatus === 'complete' ? '验收通过' :
+          testingStatus === 'failed' ? '验收失败' :
+          testingStatus === 'error' ? '发生错误' :
+          testingStatus === 'running' ? '验收中...' :
+          '准备就绪'
         }
       />
 
       {/* Main Content */}
       <div className="flex-1 overflow-hidden flex flex-col p-6">
         <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col">
-          <h2 className="text-lg font-semibold text-neutral-900 mb-1">6-Layer Verification Pipeline</h2>
-          <p className="text-sm text-neutral-500 mb-4">
-            TypeCheck + Lint → Unit → E2E → Self-Review → Codex Red-Team → PR + PR-Agent
-          </p>
+          {/* Layer Progress Bar */}
+          <div className="mb-4 rounded-lg border border-neutral-200 bg-white">
+            <LayerProgressBar layers={layers} />
+          </div>
 
           {/* Status Bar */}
           <div className="flex items-center gap-3 mb-4 p-3 rounded-lg border border-neutral-200 bg-neutral-50">
@@ -303,13 +303,8 @@ function Stage4PageContent() {
               <span className="w-4 h-4 border-2 border-neutral-300 rounded-full" />
             )}
             <span className={`text-sm font-medium ${getStatusColor()}`}>
-              {statusMessage || 'Click "Start Testing" to begin verification'}
+              {statusMessage || '点击"开始验收"以启动验证流程'}
             </span>
-          </div>
-
-          {/* Layer Progress Bar */}
-          <div className="mb-4 rounded-lg border border-neutral-200 bg-white">
-            <LayerProgressBar layers={layers} />
           </div>
 
           {/* Tabbed Content */}
@@ -331,7 +326,7 @@ function Stage4PageContent() {
                   <path fillRule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clipRule="evenodd" />
                   <path fillRule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clipRule="evenodd" />
                 </svg>
-                Playwright Results
+                Playwright 报告
               </a>
             </div>
 
@@ -340,7 +335,7 @@ function Stage4PageContent() {
               <div className="h-full rounded-lg border border-neutral-200 bg-neutral-900 overflow-auto">
                 <div className="p-4 font-mono text-xs text-neutral-300 space-y-1">
                   {agentLog.length === 0 ? (
-                    <p className="text-neutral-500 italic">Waiting for testing to start...</p>
+                    <p className="text-neutral-500 italic">等待验收启动...</p>
                   ) : (
                     agentLog.map((line, i) => (
                       <p key={i} className={
@@ -361,21 +356,21 @@ function Stage4PageContent() {
             {/* Tab: Codex 审查 */}
             <TabsContent value="codex" className="flex-1 min-h-0">
               <div className="h-full rounded-lg border border-neutral-200 bg-white overflow-auto flex items-center justify-center">
-                <p className="text-sm text-neutral-400">Codex review data will appear here when available</p>
+                <p className="text-sm text-neutral-400">Codex 审查数据将在完成后显示</p>
               </div>
             </TabsContent>
 
             {/* Tab: PR-Agent */}
             <TabsContent value="pr-agent" className="flex-1 min-h-0">
               <div className="h-full rounded-lg border border-neutral-200 bg-white overflow-auto flex items-center justify-center">
-                <p className="text-sm text-neutral-400">PR-Agent comments will appear here when available</p>
+                <p className="text-sm text-neutral-400">PR-Agent 评审意见将在完成后显示</p>
               </div>
             </TabsContent>
 
             {/* Tab: 报告 */}
             <TabsContent value="report" className="flex-1 min-h-0">
               <div className="h-full rounded-lg border border-neutral-200 bg-white overflow-auto flex items-center justify-center">
-                <p className="text-sm text-neutral-400">Testing report summary will appear here when available</p>
+                <p className="text-sm text-neutral-400">验收报告摘要将在完成后显示</p>
               </div>
             </TabsContent>
           </Tabs>
@@ -391,7 +386,7 @@ function Stage4PageContent() {
                 onClick={handleStartTesting}
                 className="px-5 py-2.5 text-sm font-medium text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors"
               >
-                Start Testing
+                开始验收
               </button>
             )}
             {testingStatus === 'running' && (
@@ -399,7 +394,7 @@ function Stage4PageContent() {
                 onClick={handleStopTesting}
                 className="px-5 py-2.5 text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
               >
-                Stop
+                停止
               </button>
             )}
             {(testingStatus === 'failed' || testingStatus === 'error') && (
@@ -408,13 +403,13 @@ function Stage4PageContent() {
                   onClick={handleBackToStage3}
                   className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
                 >
-                  Back to Stage 3
+                  返回第3阶段
                 </button>
                 <button
                   onClick={() => { setTestingStatus('idle'); setAgentLog([]); }}
                   className="px-4 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 border border-neutral-200 rounded-lg hover:bg-neutral-200 transition-colors"
                 >
-                  Retry
+                  重试
                 </button>
               </>
             )}
@@ -429,7 +424,7 @@ function Stage4PageContent() {
                 : 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
             }`}
           >
-            Proceed to Finalize
+            进入合并阶段
             <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
             </svg>
