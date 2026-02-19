@@ -39,7 +39,7 @@ function Stage5PageContent() {
   const { activeProject, updateProject, setActiveProject } = useProject();
 
   // Requirement context - resolve `req` param
-  const { requirements } = useRequirement();
+  const { requirements, refreshRequirements } = useRequirement();
   const reqId = searchParams.get('req') || undefined;
   const activeRequirement = reqId ? requirements.find(r => r.id === reqId) : undefined;
 
@@ -191,6 +191,7 @@ function Stage5PageContent() {
           if (activeProject) {
             updateProject(activeProject.id, { status: 'completed' });
           }
+          await refreshRequirements();
           setShowCompletionModal(true);
         } else {
           setError(data.error || 'Merge failed');
@@ -206,7 +207,7 @@ function Stage5PageContent() {
       setError('Network error');
       setPageState('error');
     }
-  }, [prInfo, projectId, activeProject, updateProject]);
+  }, [prInfo, projectId, activeProject, updateProject, refreshRequirements]);
 
   // Completion handlers
   const handleCompletionConfirm = useCallback(() => {
@@ -235,7 +236,7 @@ function Stage5PageContent() {
     <div className="flex flex-col h-full overflow-hidden bg-white">
       <StageIndicator
         currentStage={5}
-        completedStages={[1, 2, 3, 4]}
+        completedStages={pageState === 'merged' ? [1, 2, 3, 4, 5] : [1, 2, 3, 4]}
         projectName={activeProject?.name || projectName}
         stageStatus={
           pageState === 'merged' ? 'Merged' :
