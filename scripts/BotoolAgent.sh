@@ -430,10 +430,10 @@ start_session() {
     echo ">>> 尝试修正..."
   fi
 
-  # 发送初始 prompt（包含工作目录断言，防止 Agent 跑偏到其他项目）
+  # 发送初始 prompt（读取 Lead Agent 指令）
   tmux send-keys -t "$SESSION_NAME" C-u
   sleep 0.5
-  INITIAL_PROMPT="重要：你的工作目录必须是 $WORK_DIR — 先运行 cd $WORK_DIR 并用 pwd 确认，如果不匹配则停止并报错。确认后，读取 $SCRIPT_DIR/CLAUDE.lead.md 的全部内容，按照其中的指令执行。"
+  INITIAL_PROMPT="读取 $SCRIPT_DIR/CLAUDE.lead.md 的全部内容，按照其中的指令执行。"
   tmux send-keys -t "$SESSION_NAME" "$INITIAL_PROMPT"
   sleep 1
   tmux send-keys -t "$SESSION_NAME" Enter

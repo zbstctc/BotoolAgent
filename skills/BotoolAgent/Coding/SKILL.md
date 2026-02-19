@@ -16,21 +16,36 @@ CLI 自动开发流水线：前置检查 → 运行 BotoolAgent.sh (tmux + Agent
 
 ## 参数解析
 
-如果用户提供了参数（如 `/botoolagent-coding`），直接启动 Agent Teams 模式。
-无需额外参数。
+如果用户提供了参数（如 `/botoolagent-coding tasks/prd-adversarial-review/`），从参数中提取 PROJECT_ID：
+
+```bash
+# 参数形式: tasks/{projectId}/ 或 tasks/{projectId} 或直接 {projectId}
+# 提取 PROJECT_ID:
+#   "tasks/prd-adversarial-review/"  → "prd-adversarial-review"
+#   "tasks/prd-adversarial-review"   → "prd-adversarial-review"
+#   "prd-adversarial-review"         → "prd-adversarial-review"
+ARG="<用户参数>"
+ARG="${ARG%/}"                    # 去除尾部斜杠
+ARG="${ARG#tasks/}"               # 去除 tasks/ 前缀
+PROJECT_ID="$ARG"
+```
+
+如果没有参数，`PROJECT_ID` 留空，进入 Step 0 交互式选择。
 
 ---
 
 ## Step 0: 项目选择（多 PRD 模式）
 
-检查 `tasks/registry.json`（或 `BotoolAgent/tasks/registry.json`）是否存在：
-- 如果存在且有多个项目 → 用 AskUserQuestion 列出项目让用户选择
-- 选择后，使用 `tasks/{projectId}/prd.json` 作为 prd.json 路径
-- 如果不存在 registry 或只有一个项目 → 直接读根目录 `prd.json`（向后兼容）
+**优先级：用户参数 > registry.json > 单项目 fallback**
 
-选定后，设置 `PRD_PATH`：
-- 有 `PROJECT_ID` 时：`PRD_PATH="tasks/${PROJECT_ID}/prd.json"`
-- 无 `PROJECT_ID`（单项目兼容）时：`PRD_PATH="prd.json"`
+1. **如果参数已提供 PROJECT_ID** → 跳过选择，直接使用
+2. **否则**检查 `tasks/registry.json`（或 `BotoolAgent/tasks/registry.json`）：
+   - 如果存在且有多个项目 → 用 AskUserQuestion 列出项目让用户选择
+   - 如果不存在 registry 或只有一个项目 → 直接读根目录 `prd.json`（向后兼容）
+
+选定后，设置 `PRD_PATH`（**必须为绝对路径**，因为 BotoolAgent.sh 在 worktree 中运行时相对路径会失效）：
+- 有 `PROJECT_ID` 时：`PRD_PATH="$(pwd)/tasks/${PROJECT_ID}/prd.json"`
+- 无 `PROJECT_ID`（单项目兼容）时：`PRD_PATH="$(pwd)/prd.json"`
 
 后续所有对 prd.json 的引用均使用 `$PRD_PATH`。
 
@@ -77,13 +92,18 @@ grep -o '"branchName": "[^"]*"' "$PRD_PATH" | cut -d'"' -f4
 ```
 Then stop here.
 
-### 1c. 确保在正确的分支上
+### 1c. 分支检查（区分 worktree 模式和单项目模式）
 
 ```bash
 git branch --show-current
 ```
 
-**如果当前分支不是 branchName：**
+**如果有 PROJECT_ID（worktree 模式）：**
+- **不要 checkout 分支**。BotoolAgent.sh 会自动创建 worktree 并在 worktree 中管理分支。
+- 主仓库应保持在 `main`（或其他稳定分支），以便多个项目并行使用各自的 worktree。
+- 仅提示用户当前主仓库分支状态即可。
+
+**如果没有 PROJECT_ID（单项目兼容模式）且当前分支不是 branchName：**
 ```bash
 git checkout <branchName> 2>/dev/null || git checkout -b <branchName>
 ```
@@ -155,7 +175,7 @@ Then stop here.
 **后台启动（抗父进程崩溃）：**
 
 ```bash
-# 构建参数
+# 构建参数（PRD_PATH 必须是绝对路径，worktree 中相对路径会失效）
 BOTOOL_ARGS="$AGENT_DIR/scripts/BotoolAgent.sh"
 if [ -n "$PROJECT_ID" ]; then
   BOTOOL_ARGS="$BOTOOL_ARGS --project-id $PROJECT_ID --prd-path $PRD_PATH"
@@ -167,7 +187,7 @@ BOTOOL_PID=$!
 echo "BotoolAgent 已后台启动 (PID: $BOTOOL_PID)"
 ```
 
-其中 `$PROJECT_ID` 和 `$PRD_PATH` 来自 Step 0 的项目选择结果。如果是单项目模式（无 registry），则不传 `--project-id` 和 `--prd-path`。
+其中 `$PROJECT_ID` 和 `$PRD_PATH` 来自参数解析/Step 0。`PRD_PATH` 必须是绝对路径（在 Step 0 中已通过 `$(pwd)` 前缀处理）。如果是单项目模式（无 PROJECT_ID），则不传 `--project-id` 和 `--prd-path`。
 
 ### 等待完成
 
