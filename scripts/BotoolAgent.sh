@@ -358,13 +358,23 @@ start_session() {
           # 已有分支可能不在 main 上，但保持其现有历史
           echo ">>> Worktree 复用已有分支成功"
         else
-          echo ">>> 警告: worktree 创建失败，回退到主项目目录"
-          WORKTREE_PATH="$PROJECT_DIR"
+          echo ">>> 错误: worktree 创建失败，拒绝在主仓库中运行"
+          echo ">>> 可能原因: 分支 $WORKTREE_BRANCH 已在主仓库中 checkout"
+          echo ">>> 修复方法: git checkout main && git branch -D $WORKTREE_BRANCH"
+          update_status "error" "Worktree 创建失败，拒绝 fallback 到主仓库"
+          exit 1
         fi
       fi
     fi
 
     WORK_DIR="$WORKTREE_PATH"
+
+    # 安全验证：确保 WORK_DIR 确实是 worktree，而非主仓库
+    if [ "$WORK_DIR" = "$PROJECT_DIR" ]; then
+      echo ">>> 错误: WORK_DIR 等于 PROJECT_DIR，worktree 未正确创建"
+      update_status "error" "Worktree 安全检查失败"
+      exit 1
+    fi
 
     # Worktree 依赖 symlink（node_modules 不在 git 中，需手动链接）
     if [ "$WORK_DIR" != "$PROJECT_DIR" ]; then
