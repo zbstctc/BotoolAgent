@@ -138,27 +138,54 @@ Then stop here.
 
 ### 启动 Agent Teams
 
-```bash
-bash "$AGENT_DIR/scripts/BotoolAgent.sh"
-```
-
-**注意：** BotoolAgent 通过 tmux 启动交互式 Agent Teams 会话，包含自动重试的 Ralph 外循环。此命令会长时间运行。使用 `run_in_background` 参数在后台运行，定期检查 `.state/agent-status` 文件了解进度：
+**后台启动（抗父进程崩溃）：**
 
 ```bash
-cat .state/agent-status 2>/dev/null
+# 构建参数
+BOTOOL_ARGS="$AGENT_DIR/scripts/BotoolAgent.sh"
+if [ -n "$PROJECT_ID" ]; then
+  BOTOOL_ARGS="$BOTOOL_ARGS --project-id $PROJECT_ID --prd-path $PRD_PATH"
+fi
+
+# 后台启动（抗父进程崩溃）
+nohup bash $BOTOOL_ARGS > /tmp/botool-agent-${PROJECT_ID:-default}.log 2>&1 & disown
+BOTOOL_PID=$!
+echo "BotoolAgent 已后台启动 (PID: $BOTOOL_PID)"
 ```
+
+其中 `$PROJECT_ID` 和 `$PRD_PATH` 来自 Step 0 的项目选择结果。如果是单项目模式（无 registry），则不传 `--project-id` 和 `--prd-path`。
 
 ### 等待完成
 
-**等待脚本完成。** 检查退出码：
+**定期轮询 agent-status 文件** 确认执行状态（每 30 秒检查一次，最多等待 60 分钟）：
 
-**如果退出码非零：**
+```bash
+# 确定 status 文件路径
+if [ -n "$PROJECT_ID" ]; then
+  STATUS_PATH="$AGENT_DIR/tasks/${PROJECT_ID}/agent-status"
+else
+  STATUS_PATH="$AGENT_DIR/.state/agent-status"
+fi
+
+# 轮询等待完成
+for i in $(seq 1 120); do
+  sleep 30
+  STATUS=$(grep -o '"status": "[^"]*"' "$STATUS_PATH" 2>/dev/null | head -1 | cut -d'"' -f4)
+  echo "[$i/120] Agent status: $STATUS"
+  if [ "$STATUS" = "complete" ] || [ "$STATUS" = "max_rounds" ] || [ "$STATUS" = "stopped" ]; then
+    break
+  fi
+done
 ```
-错误：自动开发执行异常（退出码: <code>）
+
+**如果最终状态不是 `complete`：**
+```
+错误：自动开发未正常完成（状态: <status>）
 
 恢复建议：
 - 查看 progress.txt 了解最后完成到哪个任务
-- 查看 .state/agent-status 了解失败原因
+- 查看 agent-status 了解失败原因
+- 查看日志：cat /tmp/botool-agent-<projectId>.log
 - 修复问题后重新运行 /botoolagent-coding
 ```
 Then stop here.
@@ -193,7 +220,7 @@ BotoolAgent 自动开发完成！
 | branchName 缺失 | 在 prd.json 中添加 branchName 字段 |
 | 进程重复运行 | `kill <pid>` 终止后重试 |
 | tmux 未安装 | `brew install tmux` |
-| 自动开发执行异常 | 查看 progress.txt 和 .state/agent-status，修复后重试 |
+| 自动开发未正常完成 | 查看 progress.txt、agent-status 和 `/tmp/botool-agent-*.log`，修复后重试 |
 
 ---
 

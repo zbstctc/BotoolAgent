@@ -185,6 +185,17 @@ export function getProjectSessionPath(projectId?: string | null): string {
   return path.join(getTasksDir(), safeProjectId, 'prd-session.json');
 }
 
+/**
+ * Get the path to a project's teammates.json.
+ * New format: tasks/{projectId}/teammates.json
+ * Backward compat (no projectId): .state/teammates.json
+ */
+export function getProjectTeammatesPath(projectId?: string | null): string {
+  const safeProjectId = normalizeProjectId(projectId);
+  if (!safeProjectId) return path.join(getBotoolRoot(), '.state', 'teammates.json');
+  return path.join(getTasksDir(), safeProjectId, 'teammates.json');
+}
+
 export function getPrdJsonPath(): string {
   return path.join(getProjectRoot(), 'prd.json');
 }

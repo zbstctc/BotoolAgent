@@ -3,14 +3,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 interface WatchEvent {
-  type: 'initial' | 'prd-update' | 'progress-update';
-  data: string | { prd: string | null; progress: string | null } | null;
+  type: 'initial' | 'prd-update' | 'progress-update' | 'teammates-update';
+  data: string | { prd: string | null; progress: string | null; teammates: string | null } | null;
   timestamp: number;
 }
 
 interface FileWatcherState {
   prd: string | null;
   progress: string | null;
+  teammates: string | null;
   isConnected: boolean;
   lastUpdated: number | null;
   error: string | null;
@@ -21,14 +22,16 @@ interface UseFileWatcherOptions {
   enabled?: boolean;
   onPrdUpdate?: (content: string | null) => void;
   onProgressUpdate?: (content: string | null) => void;
+  onTeammatesUpdate?: (content: string | null) => void;
 }
 
 export function useFileWatcher(options: UseFileWatcherOptions = {}) {
-  const { projectId, enabled = true, onPrdUpdate, onProgressUpdate } = options;
+  const { projectId, enabled = true, onPrdUpdate, onProgressUpdate, onTeammatesUpdate } = options;
 
   const [state, setState] = useState<FileWatcherState>({
     prd: null,
     progress: null,
+    teammates: null,
     isConnected: false,
     lastUpdated: null,
     error: null,
@@ -41,11 +44,13 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
   // Store callbacks in refs to avoid dependency issues
   const onPrdUpdateRef = useRef(onPrdUpdate);
   const onProgressUpdateRef = useRef(onProgressUpdate);
+  const onTeammatesUpdateRef = useRef(onTeammatesUpdate);
 
   useEffect(() => {
     onPrdUpdateRef.current = onPrdUpdate;
     onProgressUpdateRef.current = onProgressUpdate;
-  }, [onPrdUpdate, onProgressUpdate]);
+    onTeammatesUpdateRef.current = onTeammatesUpdate;
+  }, [onPrdUpdate, onProgressUpdate, onTeammatesUpdate]);
 
   const scheduleReconnect = useCallback(() => {
     if (!shouldReconnectRef.current) return;
@@ -97,11 +102,12 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
 
         switch (parsed.type) {
           case 'initial': {
-            const data = parsed.data as { prd: string | null; progress: string | null };
+            const data = parsed.data as { prd: string | null; progress: string | null; teammates: string | null };
             setState(prev => ({
               ...prev,
               prd: data.prd,
               progress: data.progress,
+              teammates: data.teammates,
               lastUpdated: parsed.timestamp,
             }));
             break;
@@ -124,6 +130,16 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
               lastUpdated: parsed.timestamp,
             }));
             onProgressUpdateRef.current?.(content);
+            break;
+          }
+          case 'teammates-update': {
+            const content = parsed.data as string | null;
+            setState(prev => ({
+              ...prev,
+              teammates: content,
+              lastUpdated: parsed.timestamp,
+            }));
+            onTeammatesUpdateRef.current?.(content);
             break;
           }
         }

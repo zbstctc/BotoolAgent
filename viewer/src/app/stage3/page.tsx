@@ -1,18 +1,22 @@
 'use client';
 
-import { Suspense, useState, useEffect, useRef, useCallback, Fragment } from 'react';
+import { Suspense, useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator, StageTransitionModal } from '@/components';
-import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
+import { useFileWatcher, parsePrdJson, useProjectValidation, useTeammates, useTaskTimings } from '@/hooks';
 import type { DevTask, PrdData } from '@/hooks';
 import { FlowChart, type AgentPhase } from '@/components/FlowChart';
 import { useProject } from '@/contexts/ProjectContext';
 import { useRequirement } from '@/contexts/RequirementContext';
 import { useAgentStatus } from '@/hooks/useAgentStatus';
 import AgentDataPanel from '@/components/AgentDataPanel/AgentDataPanel';
+import type { GitStats } from '@/components/AgentDataPanel/AgentDataPanel';
+import { ProgressStrip } from '@/components/ProgressStrip';
+import BatchPanel from '@/components/BatchPanel';
+import BatchTimeline from '@/components/BatchTimeline';
 
 type TaskStatus = 'pending' | 'in-progress' | 'completed' | 'failed';
-type RightPanelTab = 'flowchart' | 'log' | 'changes' | 'commits';
+type RightPanelTab = 'changes' | 'commits' | 'flowchart';
 
 interface FileChange {
   path: string;
@@ -104,13 +108,11 @@ function Stage3PageContent() {
   const [progressLog, setProgressLog] = useState<string>('');
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<RightPanelTab>('flowchart');
+  const [activeTab, setActiveTab] = useState<RightPanelTab>('changes');
   const [gitChanges, setGitChanges] = useState<GitChangesData | null>(null);
   const [gitChangesLoading, setGitChangesLoading] = useState(false);
   const [gitCommits, setGitCommits] = useState<GitCommitsData | null>(null);
   const [gitCommitsLoading, setGitCommitsLoading] = useState(false);
-  const logEndRef = useRef<HTMLDivElement>(null);
-
   // Stage transition modal state
   const [showTransitionModal, setShowTransitionModal] = useState(false);
   // Track if we've already shown the modal for this completion
@@ -157,8 +159,19 @@ function Stage3PageContent() {
     }
   }, [agentStatus]);
 
+  // Track agent start time for ProgressStrip and useTaskTimings
+  const agentStartTimeRef = useRef<number>(0);
+  useEffect(() => {
+    if (agentStatus.isRunning && agentStartTimeRef.current === 0) {
+      agentStartTimeRef.current = Date.now();
+    }
+    if (!agentStatus.isRunning && !agentStatus.isComplete) {
+      agentStartTimeRef.current = 0;
+    }
+  }, [agentStatus.isRunning, agentStatus.isComplete]);
+
   // Use file watcher to get real-time updates
-  const { prd, progress, isConnected, lastUpdated } = useFileWatcher({
+  const { prd, progress, teammates: teammatesFile, isConnected, lastUpdated } = useFileWatcher({
     projectId,
     enabled: true,
     onPrdUpdate: (content) => {
@@ -196,19 +209,26 @@ function Stage3PageContent() {
     }
   }, [progress]);
 
+  // Teammate state from file or inferred from PRD
+  const teammatesData = useTeammates(teammatesFile, prdData, agentStatus.status);
+
+  // Task timings for BatchPanel + BatchTimeline
+  const agentStartIso = agentStartTimeRef.current > 0
+    ? new Date(agentStartTimeRef.current).toISOString()
+    : undefined;
+  const taskTimings = useTaskTimings(
+    progressLog,
+    teammatesData,
+    currentTaskId,
+    agentStartIso,
+  );
+
   // Auto-expand current task when currentTaskId changes
   useEffect(() => {
     if (currentTaskId) {
       setExpandedTaskId(currentTaskId);
     }
   }, [currentTaskId]);
-
-  // Auto-scroll log to bottom
-  useEffect(() => {
-    if (logEndRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [progressLog]);
 
   // Fetch git changes
   const fetchGitChanges = useCallback(async () => {
@@ -226,20 +246,19 @@ function Stage3PageContent() {
     }
   }, []);
 
-  // Fetch git changes on mount and when tab is switched to changes
+  // Fetch git changes on mount
   useEffect(() => {
-    if (activeTab === 'changes' && !gitChanges) {
+    if (!gitChanges) {
       fetchGitChanges();
     }
-  }, [activeTab, gitChanges, fetchGitChanges]);
+  }, [gitChanges, fetchGitChanges]);
 
-  // Refresh git changes periodically when on changes tab
+  // Refresh git changes periodically only while agent is running
   useEffect(() => {
-    if (activeTab === 'changes') {
-      const interval = setInterval(fetchGitChanges, 10000); // Refresh every 10 seconds
-      return () => clearInterval(interval);
-    }
-  }, [activeTab, fetchGitChanges]);
+    if (!agentStatus.isRunning) return;
+    const interval = setInterval(fetchGitChanges, 10000);
+    return () => clearInterval(interval);
+  }, [agentStatus.isRunning, fetchGitChanges]);
 
   // Fetch git commits
   const fetchGitCommits = useCallback(async () => {
@@ -257,20 +276,19 @@ function Stage3PageContent() {
     }
   }, []);
 
-  // Fetch commits when tab is switched to commits
+  // Fetch commits on mount
   useEffect(() => {
-    if (activeTab === 'commits' && !gitCommits) {
+    if (!gitCommits) {
       fetchGitCommits();
     }
-  }, [activeTab, gitCommits, fetchGitCommits]);
+  }, [gitCommits, fetchGitCommits]);
 
-  // Refresh commits periodically when on commits tab
+  // Refresh commits periodically only while agent is running
   useEffect(() => {
-    if (activeTab === 'commits') {
-      const interval = setInterval(fetchGitCommits, 10000);
-      return () => clearInterval(interval);
-    }
-  }, [activeTab, fetchGitCommits]);
+    if (!agentStatus.isRunning) return;
+    const interval = setInterval(fetchGitCommits, 10000);
+    return () => clearInterval(interval);
+  }, [agentStatus.isRunning, fetchGitCommits]);
 
   // Task statistics
   const completedTasks = prdData?.devTasks.filter((t) => t.passes).length || 0;
@@ -296,6 +314,22 @@ function Stage3PageContent() {
     : completedTasks === totalTasks && totalTasks > 0
     ? 'done'
     : 'idle';
+
+  // Compute git stats for AgentDataPanel
+  const gitStatsData: GitStats | undefined = gitChanges || gitCommits
+    ? {
+        additions: gitChanges?.totals.additions ?? 0,
+        deletions: gitChanges?.totals.deletions ?? 0,
+        files: gitChanges?.totals.files ?? 0,
+        commits: gitCommits?.count ?? 0,
+      }
+    : undefined;
+
+  // ETA: avg time * remaining tasks
+  const remainingTasks = totalTasks - completedTasks;
+  const etaSeconds = taskTimings.avgTime > 0 && remainingTasks > 0
+    ? taskTimings.avgTime * remainingTasks
+    : 0;
 
   // All tasks completed check
   const allTasksCompleted = totalTasks > 0 && completedTasks === totalTasks;
@@ -616,30 +650,40 @@ function Stage3PageContent() {
           </div>
         </div>
 
-        {/* Right: Flowchart and Logs */}
+        {/* Center: ProgressStrip + BatchPanel + BatchTimeline + Tabs */}
         <div className="flex-1 flex flex-col overflow-hidden">
+          {/* ProgressStrip - fixed height at top */}
+          <ProgressStrip
+            completed={completedTasks}
+            total={totalTasks}
+            isRunning={agentStatus.isRunning}
+            agentStartTimestamp={agentStartTimeRef.current || undefined}
+          />
+
+          {/* BatchPanel - auto height */}
+          <div className="shrink-0 px-3 pt-2">
+            <BatchPanel
+              teammates={teammatesData}
+              timings={taskTimings}
+              tasks={prdData?.devTasks ?? []}
+              currentTaskId={currentTaskId}
+              isRunning={agentStatus.isRunning}
+              isComplete={allTasksCompleted}
+            />
+          </div>
+
+          {/* BatchTimeline - scrollable, constrained height */}
+          <div className="shrink-0 px-3 py-2 overflow-y-auto" style={{ maxHeight: '200px' }}>
+            <BatchTimeline
+              batches={taskTimings.batches}
+              tasks={prdData?.devTasks ?? []}
+              maxDuration={taskTimings.maxDuration}
+              currentBatchIndex={teammatesData.batchIndex}
+            />
+          </div>
+
           {/* Tabs */}
-          <div className="flex items-center gap-1 p-2 border-b border-neutral-200 bg-white">
-            <button
-              onClick={() => setActiveTab('flowchart')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'flowchart'
-                  ? 'bg-neutral-900 text-white'
-                  : 'text-neutral-600 hover:bg-neutral-100'
-              }`}
-            >
-              流程图
-            </button>
-            <button
-              onClick={() => setActiveTab('log')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'log'
-                  ? 'bg-neutral-900 text-white'
-                  : 'text-neutral-600 hover:bg-neutral-100'
-              }`}
-            >
-              进度日志
-            </button>
+          <div className="flex items-center gap-1 p-2 border-t border-neutral-200 bg-white">
             <button
               onClick={() => setActiveTab('changes')}
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
@@ -670,6 +714,16 @@ function Stage3PageContent() {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setActiveTab('flowchart')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'flowchart'
+                  ? 'bg-neutral-900 text-white'
+                  : 'text-neutral-600 hover:bg-neutral-100'
+              }`}
+            >
+              流程图
+            </button>
             {lastUpdated && (
               <span className="ml-auto text-xs text-neutral-400">
                 最近更新: {new Date(lastUpdated).toLocaleTimeString()}
@@ -681,20 +735,6 @@ function Stage3PageContent() {
           {activeTab === 'flowchart' && (
             <div className="flex-1 overflow-hidden">
               <FlowChart agentPhase={agentPhase as AgentPhase} agentStatus={agentStatus.status} currentIteration={iterationCount} />
-            </div>
-          )}
-          {activeTab === 'log' && (
-            <div className="flex-1 overflow-auto p-4 bg-neutral-900">
-              {progressLog ? (
-                <pre className="font-mono text-sm text-neutral-200 whitespace-pre-wrap">
-                  {progressLog}
-                  <div ref={logEndRef} />
-                </pre>
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-neutral-500 text-sm">暂无进度日志...</p>
-                </div>
-              )}
             </div>
           )}
           {activeTab === 'changes' && (
@@ -843,6 +883,10 @@ function Stage3PageContent() {
             hasError={agentStatus.hasError}
             progressPercent={agentStatus.progressPercent}
             totalTasks={totalTasks}
+            elapsedSeconds={taskTimings.totalElapsed}
+            gitStats={gitStatsData}
+            avgTaskTime={taskTimings.avgTime}
+            eta={etaSeconds}
           />
         </div>
       </div>

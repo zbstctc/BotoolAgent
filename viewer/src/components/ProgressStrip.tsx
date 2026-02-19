@@ -38,23 +38,29 @@ export function ProgressStrip({
 
   useEffect(() => {
     if (!isRunning || !agentStartTimestamp) {
-      setElapsed(0);
       return;
     }
 
-    setElapsed(computeElapsed());
+    // Use async callback to avoid synchronous setState in effect body
+    const timeout = setTimeout(() => setElapsed(computeElapsed()), 0);
 
     const interval = setInterval(() => {
       setElapsed(computeElapsed());
     }, 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
   }, [isRunning, agentStartTimestamp, computeElapsed]);
+
+  // Derive display elapsed: 0 when not running, actual elapsed when running
+  const displayElapsed = !isRunning || !agentStartTimestamp ? 0 : elapsed;
 
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
   const isComplete = completed >= total && total > 0;
 
-  const avgTime = completed > 0 ? elapsed / completed : 0;
+  const avgTime = completed > 0 ? displayElapsed / completed : 0;
   const eta = completed > 0 ? avgTime * (total - completed) : 0;
 
   return (
@@ -74,7 +80,7 @@ export function ProgressStrip({
           {completed}/{total} 任务 · {percent}%
           {isComplete && (
             <span className="text-neutral-500 font-normal">
-              {' '}· 总耗时 {formatTime(elapsed)}
+              {' '}· 总耗时 {formatTime(displayElapsed)}
             </span>
           )}
         </span>
@@ -85,7 +91,7 @@ export function ProgressStrip({
         <div className="text-xs text-neutral-500 flex items-center gap-1">
           <span>⏱</span>
           <span>
-            已运行 {formatTime(elapsed)}
+            已运行 {formatTime(displayElapsed)}
             {' · '}
             {completed > 0 ? (
               <>
