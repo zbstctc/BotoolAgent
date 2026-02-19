@@ -17,6 +17,20 @@
       "lastUpdated": "2026-02-19T17:10:28.000Z"
     },
     {
+      "id": "botool/prd-adversarial-review",
+      "name": "PRD 对抗性审查 (PRD Adversarial Review)",
+      "description": "在 Stage 2 的两个关键节点（PRD 文档 + Enrich 产出）用 Codex CLI 做对抗性审查，通过 Codex↔Claude 全自动对抗循环（最多 3 轮）收敛，确保进入自动开发的输入质量",
+      "branchName": "botool/prd-adversarial-review",
+      "status": "running",
+      "stage": 4,
+      "tasksCompleted": 8,
+      "tasksTotal": 8,
+      "startTime": "2026-02-19T12:50:25.450Z",
+      "endTime": "2026-02-19T12:30:32.532Z",
+      "isMerged": false,
+      "lastUpdated": "2026-02-19T12:50:25.450Z"
+    },
+    {
       "id": "botool/performance-update",
       "name": "BotoolAgent Performance Update",
       "description": "Constitution 瘦身（272KB→<30KB）+ 执行质量提升（验证铁律+双阶段 Review）+ 规范融合（PRD.md 成为唯一真理源）",

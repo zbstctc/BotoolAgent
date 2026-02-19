@@ -39,7 +39,7 @@
       "branch": "botool/prd-adversarial-review",
       "status": "coding",
       "createdAt": "2026-02-19T12:00:00.000Z",
-      "updatedAt": "2026-02-19T18:00:00.000Z"
+      "updatedAt": "2026-02-19T21:00:00.000Z"
     },
     "remote-mobile-pwa": {
       "name": "BotoolAgent Remote Access + Mobile PWA",
@@ -50,7 +50,27 @@
       "status": "prd",
       "createdAt": "2026-02-19T20:00:00.000Z",
       "updatedAt": "2026-02-19T20:00:00.000Z"
+    },
+    "viewer-tab-enhancement": {
+      "name": "Viewer Tab 优化",
+      "prdMd": "viewer-tab-enhancement/prd.md",
+      "prdJson": "viewer-tab-enhancement/prd.json",
+      "progress": "viewer-tab-enhancement/progress.txt",
+      "branch": "botool/viewer-tab-enhancement",
+      "status": "coding",
+      "createdAt": "2026-02-19T22:00:00.000Z",
+      "updatedAt": "2026-02-19T22:30:00.000Z"
+    },
+    "stage3-activity-feed": {
+      "name": "Stage 3 实时代理活动流",
+      "prdMd": "stage3-activity-feed/prd.md",
+      "prdJson": "stage3-activity-feed/prd.json",
+      "progress": "stage3-activity-feed/progress.txt",
+      "branch": "botool/stage3-activity-feed",
+      "status": "prd",
+      "createdAt": "2026-02-19T22:00:00.000Z",
+      "updatedAt": "2026-02-19T22:00:00.000Z"
     }
   },
-  "activeProject": "remote-mobile-pwa"
+  "activeProject": "viewer-tab-enhancement"
 }

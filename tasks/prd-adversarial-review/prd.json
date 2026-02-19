@@ -140,7 +140,7 @@
       "title": "创建 /api/prd/fix API 路由",
       "prdSection": "7.1 (L413-447)",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [],
       "evals": [
         {
@@ -174,7 +174,7 @@
       "title": "创建 AdversarialReviewStep 组件",
       "prdSection": "7.2 (L448-487)",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependsOn": ["DT-001", "DT-002"],
       "evals": [
         {
@@ -208,7 +208,7 @@
       "title": "重构 Stage 2 页面步骤编排",
       "prdSection": "7.2 (L448-487)",
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "dependsOn": ["DT-003"],
       "evals": [
         {
@@ -235,7 +235,7 @@
       "title": "实现对抗循环编排逻辑",
       "prdSection": "7.3 (L488-519)",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "dependsOn": ["DT-001", "DT-002"],
       "evals": [
         {
@@ -271,7 +271,7 @@
       "title": "实现审查结果持久化",
       "prdSection": "7.3 (L488-519)",
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "dependsOn": ["DT-005"],
       "evals": [
         {
@@ -306,7 +306,7 @@
       "title": "创建 botoolagent-prdreview CLI Skill",
       "prdSection": "7.4 (L520-547)",
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "dependsOn": ["DT-001"],
       "evals": [
         {
@@ -333,7 +333,7 @@
       "title": "修复 Enrich codeExamples 全局分配 Bug",
       "prdSection": "7.4 (L520-547)",
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "dependsOn": [],
       "evals": [
         {

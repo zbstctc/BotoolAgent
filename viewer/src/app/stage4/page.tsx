@@ -251,17 +251,23 @@ function Stage4PageContent() {
     fetch(`/api/agent/status?${params.toString()}`)
       .then(r => r.json())
       .then((status) => {
+        // Coding agent sets currentTask to "DT-XXX" format; testing agent uses layer IDs.
+        // Don't restore "complete"/"failed" from coding agent's status.
+        const isCodingStatus = /^DT-\d+/i.test(status.currentTask || '');
+
         if (status.status === 'running' || status.status === 'starting' || status.status === 'iteration_complete') {
-          setTestingStatus('running');
-          setStatusMessage(status.message || 'Testing in progress...');
-          setAgentLog([]);
-          startStatusPolling();
-          startLogPolling();
-        } else if (status.status === 'complete') {
+          if (!isCodingStatus) {
+            setTestingStatus('running');
+            setStatusMessage(status.message || 'Testing in progress...');
+            setAgentLog([]);
+            startStatusPolling();
+            startLogPolling();
+          }
+        } else if (status.status === 'complete' && !isCodingStatus) {
           setTestingStatus('complete');
           setStatusMessage(status.message || 'Testing completed');
           setLayers(prev => prev.map(l => ({ ...l, status: 'pass' as const })));
-        } else if (status.status === 'error' || status.status === 'failed') {
+        } else if ((status.status === 'error' || status.status === 'failed') && !isCodingStatus) {
           setTestingStatus('failed');
           setStatusMessage(status.message || 'Testing failed');
         }
