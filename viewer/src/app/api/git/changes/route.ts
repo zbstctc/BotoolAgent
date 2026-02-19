@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { getProjectRoot } from '@/lib/project-root';
+import fs from 'fs/promises';
+import { getProjectRoot, getProjectPrdJsonPath, normalizeProjectId } from '@/lib/project-root';
 
 const execAsync = promisify(exec);
 
@@ -23,13 +24,44 @@ function isSafeGitRef(ref: string): boolean {
   );
 }
 
-export async function GET() {
+/**
+ * Resolve the feature branch name for a project.
+ * Reads branchName from prd.json when projectId is given; falls back to git branch --show-current.
+ */
+async function resolveBranch(projectId?: string | null): Promise<string | null> {
+  const safeId = normalizeProjectId(projectId);
+  if (safeId) {
+    try {
+      const prdPath = getProjectPrdJsonPath(safeId);
+      const content = await fs.readFile(prdPath, 'utf-8');
+      const prd = JSON.parse(content);
+      if (prd.branchName && isSafeGitRef(prd.branchName)) {
+        return prd.branchName;
+      }
+    } catch {
+      // fall through
+    }
+  }
   try {
-    // Get the current branch name
-    const { stdout: branchStdout } = await execAsync('git branch --show-current', {
-      cwd: PROJECT_ROOT,
-    });
-    const currentBranch = branchStdout.trim();
+    const { stdout } = await execAsync('git branch --show-current', { cwd: PROJECT_ROOT });
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const projectId = request.nextUrl.searchParams.get('projectId') || undefined;
+
+    // Resolve branch: projectId → prd.json → branchName, or fall back to git
+    const currentBranch = await resolveBranch(projectId);
+    if (!currentBranch) {
+      return NextResponse.json(
+        { error: 'Could not determine branch name' },
+        { status: 400 }
+      );
+    }
 
     if (!isSafeGitRef(currentBranch)) {
       return NextResponse.json(

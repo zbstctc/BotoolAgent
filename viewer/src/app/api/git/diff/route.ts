@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { getProjectRoot } from '@/lib/project-root';
+import fsPromises from 'fs/promises';
+import { getProjectRoot, getProjectPrdJsonPath, normalizeProjectId } from '@/lib/project-root';
 
 const execAsync = promisify(exec);
 
@@ -146,16 +147,44 @@ function parseDiff(diffOutput: string): DiffHunk[] {
 }
 
 /**
+ * Resolve the feature branch name for a project.
+ * Reads branchName from prd.json when projectId is given; falls back to git branch --show-current.
+ */
+async function resolveBranch(projectId?: string | null): Promise<string | null> {
+  const safeId = normalizeProjectId(projectId);
+  if (safeId) {
+    try {
+      const prdPath = getProjectPrdJsonPath(safeId);
+      const content = await fsPromises.readFile(prdPath, 'utf-8');
+      const prd = JSON.parse(content);
+      if (prd.branchName && isSafeGitRef(prd.branchName)) {
+        return prd.branchName;
+      }
+    } catch {
+      // fall through
+    }
+  }
+  try {
+    const { stdout } = await execAsync('git branch --show-current', { cwd: PROJECT_ROOT });
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * GET /api/git/diff
  * Returns all file diffs between current branch and main
  *
  * Query params:
+ * - projectId: (optional) project ID to resolve branch from prd.json
  * - file: (optional) specific file path to get diff for
  * - baseBranch: (optional) base branch to compare against (default: main)
  */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
+    const projectId = searchParams.get('projectId') || undefined;
     const specificFile = searchParams.get('file');
     const baseBranch = searchParams.get('baseBranch') || 'main';
 
@@ -172,11 +201,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get the current branch name
-    const { stdout: branchStdout } = await execAsync('git branch --show-current', {
-      cwd: PROJECT_ROOT,
-    });
-    const currentBranch = branchStdout.trim();
+    // Resolve branch: projectId → prd.json → branchName, or fall back to git
+    const currentBranch = await resolveBranch(projectId);
+    if (!currentBranch) {
+      return NextResponse.json(
+        { error: 'Could not determine branch name' },
+        { status: 400 }
+      );
+    }
 
     if (!isSafeGitRef(currentBranch)) {
       return NextResponse.json(

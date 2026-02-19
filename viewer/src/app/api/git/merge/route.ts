@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
+import fsPromises from 'fs/promises';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
 import { getProjectRoot, getProjectPrdJsonPath, getBotoolRoot, normalizeProjectId, getTasksDir } from '@/lib/project-root';
 import path from 'path';
@@ -9,6 +10,33 @@ import path from 'path';
 const execAsync = promisify(exec);
 
 const PROJECT_ROOT = getProjectRoot();
+
+/**
+ * Resolve the feature branch name for a project.
+ * If projectId is given, reads branchName from tasks/{projectId}/prd.json.
+ * Falls back to git branch --show-current (for non-worktree usage).
+ */
+async function resolveBranch(projectId?: string | null): Promise<string | null> {
+  const safeId = normalizeProjectId(projectId);
+  if (safeId) {
+    try {
+      const prdPath = getProjectPrdJsonPath(safeId);
+      const content = await fsPromises.readFile(prdPath, 'utf-8');
+      const prd = JSON.parse(content);
+      if (prd.branchName && isSafeGitRef(prd.branchName)) {
+        return prd.branchName;
+      }
+    } catch {
+      // prd.json not found or invalid — fall through to git fallback
+    }
+  }
+  try {
+    const { stdout } = await execAsync('git branch --show-current', { cwd: PROJECT_ROOT });
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
 
 interface PRDJson {
   project?: string;
@@ -79,10 +107,28 @@ async function checkGhAuth(): Promise<boolean> {
 }
 
 /**
- * Get PR info for current branch
+ * Get PR info for a specific branch (by --head filter).
+ * Falls back to gh pr view (current branch) when no branch is given.
  */
-async function getPRInfo(): Promise<{ number: number; url: string; state: string } | null> {
+async function getPRInfo(branch?: string): Promise<{ number: number; url: string; state: string } | null> {
   try {
+    if (branch) {
+      // Find PR by branch name (works from any branch, including main)
+      const { stdout: listJson } = await execAsync(
+        `gh pr list --head ${shellQuote(branch)} --json number --state all`,
+        { cwd: PROJECT_ROOT }
+      );
+      const prList = JSON.parse(listJson);
+      if (prList.length === 0) return null;
+
+      const prNumber = prList[0].number;
+      const { stdout } = await execAsync(
+        `gh pr view ${prNumber} --json number,url,state`,
+        { cwd: PROJECT_ROOT }
+      );
+      return JSON.parse(stdout);
+    }
+    // Fallback: gh pr view for current branch
     const { stdout } = await execAsync(
       `gh pr view --json number,url,state`,
       { cwd: PROJECT_ROOT }
@@ -142,11 +188,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get current branch
-    const { stdout: branchStdout } = await execAsync('git branch --show-current', {
-      cwd: PROJECT_ROOT,
-    });
-    const currentBranch = branchStdout.trim();
+    // Resolve branch: use projectId → prd.json → branchName, or fall back to git
+    const currentBranch = await resolveBranch(projectId);
+    if (!currentBranch) {
+      return NextResponse.json(
+        { error: 'Could not determine branch name' },
+        { status: 400 }
+      );
+    }
 
     if (!isSafeGitRef(currentBranch)) {
       return NextResponse.json(
@@ -163,8 +212,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get PR info
-    const prInfo = await getPRInfo();
+    // Get PR info by branch (works from any branch, including main)
+    const prInfo = await getPRInfo(currentBranch);
 
     if (!prInfo) {
       return NextResponse.json(
@@ -321,10 +370,11 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET /api/git/merge
- * Returns information about whether the current branch's PR can be merged
+ * GET /api/git/merge?projectId=xxx
+ * Returns information about whether the project's feature branch PR can be merged.
+ * In worktree model, resolves the branch from prd.json rather than git branch --show-current.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     // Check gh CLI
     if (!await checkGhCli()) {
@@ -341,11 +391,16 @@ export async function GET() {
       );
     }
 
-    // Get current branch
-    const { stdout: branchStdout } = await execAsync('git branch --show-current', {
-      cwd: PROJECT_ROOT,
-    });
-    const currentBranch = branchStdout.trim();
+    const url = new URL(request.url);
+    const projectId = url.searchParams.get('projectId') || undefined;
+
+    const currentBranch = await resolveBranch(projectId);
+    if (!currentBranch) {
+      return NextResponse.json(
+        { error: 'Could not determine branch name' },
+        { status: 400 }
+      );
+    }
 
     if (!isSafeGitRef(currentBranch)) {
       return NextResponse.json(
@@ -354,10 +409,26 @@ export async function GET() {
       );
     }
 
-    // Get PR info with merge status
+    // Find PR by branch using gh pr list --head (works from any branch, including main)
     try {
+      const { stdout: listJson } = await execAsync(
+        `gh pr list --head ${shellQuote(currentBranch)} --json number --state all`,
+        { cwd: PROJECT_ROOT }
+      );
+      const prList = JSON.parse(listJson);
+
+      if (prList.length === 0) {
+        return NextResponse.json({
+          branch: currentBranch,
+          hasPR: false,
+          canMerge: false,
+          message: 'No PR found for this branch',
+        });
+      }
+
+      const prNumber = prList[0].number;
       const { stdout: prJson } = await execAsync(
-        `gh pr view --json number,title,url,state,mergeable,mergeStateStatus,reviewDecision`,
+        `gh pr view ${prNumber} --json number,title,url,state,mergeable,mergeStateStatus,reviewDecision`,
         { cwd: PROJECT_ROOT }
       );
 

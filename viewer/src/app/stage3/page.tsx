@@ -249,7 +249,8 @@ function Stage3PageContent() {
   const fetchGitChanges = useCallback(async () => {
     setGitChangesLoading(true);
     try {
-      const response = await fetch('/api/git/changes');
+      const params = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+      const response = await fetch(`/api/git/changes${params}`);
       if (response.ok) {
         const data = await response.json();
         setGitChanges(data);
@@ -259,7 +260,7 @@ function Stage3PageContent() {
     } finally {
       setGitChangesLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   // Fetch git changes on mount
   useEffect(() => {
@@ -279,7 +280,8 @@ function Stage3PageContent() {
   const fetchGitCommits = useCallback(async () => {
     setGitCommitsLoading(true);
     try {
-      const response = await fetch('/api/git/commits');
+      const params = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+      const response = await fetch(`/api/git/commits${params}`);
       if (response.ok) {
         const data = await response.json();
         setGitCommits(data);
@@ -289,7 +291,7 @@ function Stage3PageContent() {
     } finally {
       setGitCommitsLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   // Fetch commits on mount
   useEffect(() => {
