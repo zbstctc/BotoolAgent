@@ -831,11 +831,11 @@ Layer 5 Codex 红队审查 通过
 
 ---
 
-## Layer 6 — PR 创建 + Push
+## Layer 6 — PR 创建 + PR-Agent 守门
 
 **跳过条件：** `startLayer > 6` 时跳过此层。
 
-Layer 6 将审查通过的代码推送到远程并自动创建 PR，从而将 PR 创建职责从 Finalize 移至 Testing。
+Layer 6 将审查通过的代码推送到远程并自动创建 PR，然后等待 PR-Agent SaaS 自动审查。PR 创建职责从 Finalize 移至 Testing。
 
 ### 6a. 确保所有修复已提交
 
@@ -878,7 +878,7 @@ gh pr list --head "$BRANCH_NAME" --json number,title,url,state --jq '.[0]'
 
 **如果已有 OPEN PR：**
 - 记录 PR 信息（编号、标题、URL）
-- 跳到 6e（更新 agent-status）
+- 跳到 6e（PR-Agent 守门）
 
 ### 6d. 创建 PR
 
@@ -932,7 +932,139 @@ AskUserQuestion 让用户选择：手动创建后继续 / 跳过 PR 创建 / 终
 
 **创建成功后：** 记录 PR 编号、标题和 URL。
 
-### 6e. 更新 agent-status 为 testing_complete
+### 6e. PR-Agent 守门 — 等待自动审查评论
+
+PR 创建后，等待 PR-Agent SaaS 自动触发 `/review` 和 `/improve` 评论。
+
+**PR-Agent 是可选层** — 如果仓库未配置 PR-Agent，超时后自动跳过。
+
+```bash
+# 获取 PR 编号
+PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number')
+
+# Polling: 等待 PR-Agent bot 评论（最多 60 秒）
+MAX_WAIT=60
+INTERVAL=10
+ELAPSED=0
+
+while [ $ELAPSED -lt $MAX_WAIT ]; do
+  # 获取 PR 评论，过滤 PR-Agent bot 评论
+  AGENT_COMMENTS=$(gh api repos/{owner}/{repo}/pulls/$PR_NUMBER/comments \
+    --jq '[.[] | select(.user.login | test("pr-agent|codiumai"; "i"))] | length')
+
+  if [ "$AGENT_COMMENTS" -gt 0 ]; then
+    echo "PR-Agent 评论已到达: $AGENT_COMMENTS 条"
+    break
+  fi
+
+  echo "等待 PR-Agent 评论... ($ELAPSED/$MAX_WAIT 秒)"
+  sleep $INTERVAL
+  ELAPSED=$((ELAPSED + INTERVAL))
+done
+
+if [ $ELAPSED -ge $MAX_WAIT ]; then
+  echo "PR-Agent 超时（${MAX_WAIT}秒未收到评论）。跳过 PR-Agent 守门。"
+fi
+```
+
+**超时处理：**
+```
+Layer 6: PR-Agent 未在 60 秒内响应。
+跳过 PR-Agent 守门，继续生成质检报告。
+（提示：若需配置 PR-Agent，参见 docs/pr-agent-setup.md）
+```
+记录为 warning，不阻塞流水线。跳到 6g。
+
+**收到评论后：** 读取并解析 PR-Agent 评论内容。
+
+```bash
+# 读取 PR-Agent 评论内容
+gh api repos/{owner}/{repo}/pulls/$PR_NUMBER/comments \
+  --jq '[.[] | select(.user.login | test("pr-agent|codiumai"; "i"))] | .[].body'
+```
+
+### 6f. PR-Agent 修复循环（最多 2 轮）
+
+解析 PR-Agent 评论中的 HIGH severity 问题：
+
+**解析逻辑：**
+1. 正则匹配评论中的 severity 标记（如 `severity: high`、`🔴`、`Critical`）
+2. 提取问题描述、涉及文件、建议修复
+3. 如果无法解析格式（PR-Agent 版本变化等）→ 将评论内容作为参考，记录 warning 跳过
+
+**修复循环（最多 2 轮）：**
+
+对于每一轮 (round = 1, 2):
+
+#### Step 1: 分析 HIGH 问题
+
+筛选 PR-Agent 评论中标记为 HIGH/Critical 的问题。
+
+- **如果没有 HIGH 问题** → PR-Agent 守门通过，跳到 6g
+- **如果有 HIGH 问题** → 进入修复
+
+#### Step 2: 自动修复
+
+逐个修复 PR-Agent 指出的 HIGH 问题：
+- 读取涉及文件
+- 按照 PR-Agent 的建议修改代码
+- 修复后提交：
+
+```bash
+git add <修改的文件>
+git commit -m "fix(testing): PR-Agent round $ROUND fixes"
+```
+
+#### Step 3: 重新推送
+
+```bash
+git push origin "$BRANCH_NAME"
+```
+
+推送后 PR-Agent SaaS 会自动重新审查。
+
+#### Step 4: 等待 PR-Agent 重审
+
+```bash
+# 等待新一轮 PR-Agent 评论（最多 60 秒）
+# 同 6e 的 polling 逻辑，但只关注推送后的新评论
+LAST_PUSH_TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+MAX_WAIT=60
+INTERVAL=10
+ELAPSED=0
+
+while [ $ELAPSED -lt $MAX_WAIT ]; do
+  NEW_COMMENTS=$(gh api repos/{owner}/{repo}/pulls/$PR_NUMBER/comments \
+    --jq "[.[] | select(.user.login | test(\"pr-agent|codiumai\"; \"i\")) | select(.created_at > \"$LAST_PUSH_TIME\")] | length")
+
+  if [ "$NEW_COMMENTS" -gt 0 ]; then
+    echo "PR-Agent 重审评论已到达"
+    break
+  fi
+
+  sleep $INTERVAL
+  ELAPSED=$((ELAPSED + INTERVAL))
+done
+```
+
+#### Step 5: 收敛判断
+
+```
+检查重审评论：
+  无新 HIGH 问题 → PR-Agent 守门通过，继续 6g
+  仍有 HIGH 且 round < 2 → 继续下一轮
+  仍有 HIGH 且 round = 2 → 记录未解决问题，继续 6g
+```
+
+**2 轮后仍有 HIGH 问题：**
+```
+PR-Agent 修复循环 2 轮后仍有 HIGH 问题未解决。
+将未解决问题记录到 testing-report.json，继续生成报告。
+```
+记录 warning，不阻塞（PR-Agent 为增强层，不是强制门控）。
+
+### 6g. 更新 agent-status 为 testing_complete
 
 ```bash
 # 获取 PR URL
@@ -955,7 +1087,7 @@ STATUSEOF
 
 **重要：** `status` 必须为 `testing_complete`，这是 Finalize Skill 的前置检查条件。
 
-### 6f. 写入 testing-report.json
+### 6h. 写入 testing-report.json
 
 将 6 层完整测试报告写入 `tasks/{projectId}/testing-report.json`，供 Viewer 和 Finalize 读取：
 
@@ -1024,7 +1156,7 @@ REPORT_PATH="tasks/${PROJECT_ID}/testing-report.json"
 **生成逻辑：**
 1. 遍历 L1-L6 每层的执行记录，填充 status/fixCount/rounds
 2. L5 数据从 `adversarial-state.json` 读取（如果存在）
-3. L6 数据从当前步骤的 PR 信息填充
+3. L6 数据从当前步骤的 PR 信息 + PR-Agent 修复记录填充
 4. `verdict` 判断：全部 pass → `all_pass`；有 fail → `has_failures`；有 circuit_breaker → `circuit_breaker`
 5. `prReady` = verdict === "all_pass" && prUrl 存在
 
@@ -1032,9 +1164,10 @@ REPORT_PATH="tasks/${PROJECT_ID}/testing-report.json"
 
 **Layer 6 通过后，告知用户：**
 ```
-Layer 6 PR 创建 通过
+Layer 6 PR 创建 + PR-Agent 守门 通过
   PR: #<number> — <title>
   URL: <pr-url>
+  PR-Agent: {agent_comments} 条评论, {fix_rounds} 轮修复 / 超时跳过
   agent-status: testing_complete
   testing-report.json: 已生成
 ```
@@ -1096,6 +1229,9 @@ BotoolAgent 6 层自动化测试 — 全部通过!
 | Layer 6 | 推送失败 | 检查 git status 和 git remote -v，解决冲突后重试 |
 | Layer 6 | PR 创建失败 | 检查 gh auth status，手动 gh pr create |
 | Layer 6 | gh 未认证 | 运行 gh auth login |
+| Layer 6 | PR-Agent 超时 | PR-Agent 为可选层，超时自动跳过，参见 docs/pr-agent-setup.md |
+| Layer 6 | PR-Agent 评论无法解析 | 记录 warning，跳过 PR-Agent 守门 |
+| Layer 6 | PR-Agent 修复循环未收敛 | 2 轮后记录未解决问题，不阻塞 |
 
 ---
 
