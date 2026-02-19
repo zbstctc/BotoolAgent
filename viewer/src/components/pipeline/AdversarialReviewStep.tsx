@@ -313,8 +313,8 @@ export function AdversarialReviewStep({
 
       if (!reviewResult) continue;
 
-      allFindings = reviewResult.findings;
-      setFindings(reviewResult.findings);
+      allFindings = [...allFindings, ...reviewResult.findings];
+      setFindings([...allFindings]);
 
       const highCount = reviewResult.findings.filter(f => f.severity === 'HIGH').length;
       const mediumCount = reviewResult.findings.filter(f => f.severity === 'MEDIUM').length;
