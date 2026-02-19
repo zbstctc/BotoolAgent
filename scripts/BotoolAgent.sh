@@ -316,6 +316,16 @@ start_session() {
   # -----------------------------------------------------------------------
   # Worktree 自动创建/复用逻辑（仅当 PROJECT_ID 非空时启用）
   # -----------------------------------------------------------------------
+
+  # 检测 main 分支名称（兼容 main/master）
+  if git -C "$PROJECT_DIR" rev-parse --verify main >/dev/null 2>&1; then
+    MAIN_BRANCH="main"
+  elif git -C "$PROJECT_DIR" rev-parse --verify master >/dev/null 2>&1; then
+    MAIN_BRANCH="master"
+  else
+    MAIN_BRANCH="HEAD"
+  fi
+
   if [ -n "$PROJECT_ID" ]; then
     WORKTREE_PATH="$PROJECT_DIR/.worktrees/${PROJECT_ID}"
     WORKTREE_BRANCH="botool/${PROJECT_ID}"
@@ -334,12 +344,13 @@ start_session() {
       # Worktree 不存在：创建新 worktree
       echo ">>> 创建 worktree: $WORKTREE_PATH (分支: $WORKTREE_BRANCH)"
       mkdir -p "$PROJECT_DIR/.worktrees"
-      if git -C "$PROJECT_DIR" worktree add "$WORKTREE_PATH" -b "$WORKTREE_BRANCH" 2>/dev/null; then
+      if git -C "$PROJECT_DIR" worktree add "$WORKTREE_PATH" -b "$WORKTREE_BRANCH" "$MAIN_BRANCH" 2>/dev/null; then
         echo ">>> Worktree 创建成功"
       else
         # 分支可能已存在（上次运行后被 prune 了 worktree 但分支保留）
         echo ">>> 分支已存在，尝试 checkout..."
         if git -C "$PROJECT_DIR" worktree add "$WORKTREE_PATH" "$WORKTREE_BRANCH" 2>/dev/null; then
+          # 已有分支可能不在 main 上，但保持其现有历史
           echo ">>> Worktree 复用已有分支成功"
         else
           echo ">>> 警告: worktree 创建失败，回退到主项目目录"
@@ -349,6 +360,18 @@ start_session() {
     fi
 
     WORK_DIR="$WORKTREE_PATH"
+
+    # Worktree 依赖 symlink（node_modules 不在 git 中，需手动链接）
+    if [ "$WORK_DIR" != "$PROJECT_DIR" ]; then
+      for nm_dir in "node_modules" "viewer/node_modules"; do
+        SRC="$PROJECT_DIR/$nm_dir"
+        DST="$WORK_DIR/$nm_dir"
+        if [ -d "$SRC" ] && [ ! -e "$DST" ]; then
+          ln -s "$SRC" "$DST"
+          echo ">>> Symlinked $nm_dir → worktree"
+        fi
+      done
+    fi
   else
     # 无 PROJECT_ID：保持原有行为
     WORK_DIR="$PROJECT_DIR"
