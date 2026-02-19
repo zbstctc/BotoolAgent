@@ -50,7 +50,7 @@ brainstorm (Stage 0)     PyramidPRD [模式:导入]     prd2json        coding
 3. **探索方向与约束** — 用 2-3 个问题明确方向、用户、边界
 4. **提出 2-3 种方案** — 带权衡和推荐
 5. **逐段呈现设计** — 按复杂度缩放每段篇幅，每段确认后再继续
-6. **生成 Draft 文档** — 写入 `$TASKS_DIR/DRAFT-<topic>-YYYYMMDD.md`
+6. **生成 Draft 文档** — 写入 `$TASKS_DIR/<projectId>/DRAFT.md`
 7. **衔接 PyramidPRD** — 引导用户进入导入模式
 
 ---
@@ -256,10 +256,13 @@ brainstorm (Stage 0)     PyramidPRD [模式:导入]     prd2json        coding
 
 所有段落确认后，生成 Draft 文档。
 
-**输出路径：**
+**输出路径（per-project 子目录）：**
 ```bash
 TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"
-# 写入: $TASKS_DIR/DRAFT-<topic>-YYYYMMDD.md
+# projectId 从功能名称派生（kebab-case，如 "adversarial-review"）
+PROJECT_DIR="$TASKS_DIR/<projectId>"
+mkdir -p "$PROJECT_DIR"
+# 写入: $PROJECT_DIR/DRAFT.md
 ```
 
 **Draft 模板：**
@@ -331,17 +334,17 @@ TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"
 Draft 生成后，告诉用户：
 
 ```
-Draft 已生成: $TASKS_DIR/DRAFT-<topic>-YYYYMMDD.md
+Draft 已生成: $TASKS_DIR/<projectId>/DRAFT.md
 
 下一步选择:
 1. 运行 `/botoolagent-pyramidprd` → 选择「PRD 导入」模式
-   → 系统会读取 Draft，补充细节，生成完整 PRD
+   → 系统会读取 Draft，补充细节，生成完整 PRD 到同一目录
 2. 如果 Draft 已经够详细，也可以直接手动编写 PRD
 
 推荐走 PyramidPRD 导入模式，它会自动：
 - 分析 Draft 覆盖度
 - 针对缺失部分提问（最多 2 轮）
-- 生成标准格式 PRD + prd.json
+- 生成标准格式 PRD 到 $TASKS_DIR/<projectId>/prd.md + 更新 registry.json
 ```
 
 ---

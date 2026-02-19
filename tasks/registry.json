@@ -20,7 +20,17 @@
       "status": "coding",
       "createdAt": "2026-02-18T18:00:00.000Z",
       "updatedAt": "2026-02-18T18:00:00.000Z"
+    },
+    "adversarial-review": {
+      "name": "对抗式双模型审查管道 (Adversarial Review Pipeline)",
+      "prdMd": "adversarial-review/prd.md",
+      "prdJson": "adversarial-review/prd.json",
+      "progress": "adversarial-review/progress.txt",
+      "branch": "botool/adversarial-review",
+      "status": "prd",
+      "createdAt": "2026-02-19T04:00:00.000Z",
+      "updatedAt": "2026-02-19T04:00:00.000Z"
     }
   },
-  "activeProject": "dashboard-worktree-unified"
+  "activeProject": "adversarial-review"
 }
