@@ -1,5 +1,9 @@
 import { defineConfig } from '@playwright/test';
 
+// TEST_PORT: dynamically assigned by BotoolAgent testing pipeline (3200+)
+// Never use 3100 (main Viewer) for testing
+const testPort = parseInt(process.env.TEST_PORT ?? '3200');
+
 export default defineConfig({
   testDir: './tests',
   timeout: 30 * 1000,
@@ -12,12 +16,13 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:3100',
+    baseURL: `http://localhost:${testPort}`,
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3100',
-    reuseExistingServer: !process.env.CI,
+    // --webpack: use webpack instead of Turbopack (default in Next.js 16) to avoid symlinked node_modules issues in worktrees
+    command: `npm run dev -- --port ${testPort} --webpack`,
+    url: `http://localhost:${testPort}`,
+    reuseExistingServer: false,
   },
 });
