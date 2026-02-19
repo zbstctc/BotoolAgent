@@ -8,6 +8,7 @@ import type { DevTask, PrdData } from '@/hooks';
 import { FlowChart, type AgentPhase } from '@/components/FlowChart';
 import { useProject } from '@/contexts/ProjectContext';
 import { useRequirement } from '@/contexts/RequirementContext';
+import { useTab } from '@/contexts/TabContext';
 import { useAgentStatus } from '@/hooks/useAgentStatus';
 import AgentDataPanel from '@/components/AgentDataPanel/AgentDataPanel';
 import type { GitStats } from '@/components/AgentDataPanel/AgentDataPanel';
@@ -103,6 +104,19 @@ function Stage3PageContent() {
 
   // Agent status via SSE
   const agentStatus = useAgentStatus({ stream: true, projectId });
+
+  // Sync agent status to TabContext
+  const { updateTabStatus } = useTab();
+  useEffect(() => {
+    if (!reqId || !agentStatus.status) return;
+    updateTabStatus(
+      reqId,
+      agentStatus.status.status,
+      agentStatus.status.total > 0
+        ? { completed: agentStatus.status.completed, total: agentStatus.status.total }
+        : undefined
+    );
+  }, [reqId, agentStatus.status?.status, agentStatus.status?.completed, agentStatus.status?.total, updateTabStatus]);
 
   const [prdData, setPrdData] = useState<PrdData | null>(null);
   const [progressLog, setProgressLog] = useState<string>('');

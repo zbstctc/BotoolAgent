@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
 import { useProject } from '@/contexts/ProjectContext';
 import { useRequirement } from '@/contexts/RequirementContext';
+import { useTab } from '@/contexts/TabContext';
 
 type TestingStatus = 'idle' | 'running' | 'complete' | 'failed' | 'error';
 
@@ -38,6 +39,9 @@ function Stage4PageContent() {
 
   // Skip validation when navigated via RequirementContext (req param)
   useProjectValidation({ currentStage: 4, skipValidation: Boolean(reqId) });
+
+  // Sync agent status to TabContext
+  const { updateTabStatus } = useTab();
 
   const [testingStatus, setTestingStatus] = useState<TestingStatus>('idle');
   const [statusMessage, setStatusMessage] = useState('');
@@ -95,6 +99,11 @@ function Stage4PageContent() {
       try {
         const parsed = JSON.parse(event.data);
         const status: AgentStatus = parsed.data || parsed;
+
+        // Sync to TabContext
+        if (reqId) {
+          updateTabStatus(reqId, status.status, status.total > 0 ? { completed: status.completed, total: status.total } : undefined);
+        }
 
         setStatusMessage(status.message || '');
 
@@ -178,7 +187,7 @@ function Stage4PageContent() {
     return () => {
       es.close();
     };
-  }, [projectId]);
+  }, [projectId, reqId, updateTabStatus]);
 
   // Cleanup on unmount
   useEffect(() => {
