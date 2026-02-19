@@ -15,6 +15,7 @@ interface AuthStatus {
 }
 
 interface WindowUsage {
+  costWeightedTokens: number; // cost-weighted "output token equivalents"
   outputTokens: number;
   inputTokens: number;
   cacheReadTokens: number;
@@ -23,8 +24,8 @@ interface WindowUsage {
 
 interface RateLimitWindow {
   label: string;
-  used: number;      // output tokens used
-  limit: number;     // estimated output token limit
+  used: number;      // cost-weighted token equivalents
+  limit: number;     // estimated cost-weighted limit
   percent: number;   // 0-100
   resetInfo: string;  // human-readable reset description
 }
@@ -37,27 +38,29 @@ interface CredentialData {
   };
 }
 
-// Approximate output token limits per plan per window.
-// These are community-estimated values — Anthropic does not publish exact numbers.
-// The /status percentages from Anthropic's internal API would be more accurate.
+// Cost-weighted "output token equivalent" (OTE) limits per plan per window.
+// Rate limits are cost-based: each token type is weighted by its relative price.
+// Weight formula (same ratio for all Claude models):
+//   OTE = output_tokens + input_tokens * 0.2 + cache_read * 0.02 + cache_create * 0.25
+// These limits are community-estimated — Anthropic does not publish exact numbers.
 const RATE_LIMITS: Record<string, { fiveHour: number; sevenDay: number; sevenDaySonnet: number }> = {
   // Max 20x ($200/month)
   default_claude_max_20x: {
-    fiveHour: 4_000_000,
-    sevenDay: 80_000_000,
-    sevenDaySonnet: 160_000_000,
+    fiveHour: 11_000_000,
+    sevenDay: 220_000_000,
+    sevenDaySonnet: 440_000_000,
   },
   // Max 5x ($100/month)
   default_claude_max_5x: {
-    fiveHour: 1_000_000,
-    sevenDay: 20_000_000,
-    sevenDaySonnet: 40_000_000,
+    fiveHour: 2_750_000,
+    sevenDay: 55_000_000,
+    sevenDaySonnet: 110_000_000,
   },
   // Pro ($20/month)
   default_claude_pro: {
-    fiveHour: 200_000,
-    sevenDay: 4_000_000,
-    sevenDaySonnet: 8_000_000,
+    fiveHour: 550_000,
+    sevenDay: 11_000_000,
+    sevenDaySonnet: 22_000_000,
   },
 };
 
@@ -75,11 +78,39 @@ function getRateLimitTier(): string | null {
 }
 
 /**
+ * Parse a timestamp from JSONL entries.
+ * Handles: ISO 8601 strings, epoch seconds, epoch milliseconds.
+ * Returns milliseconds or null.
+ */
+function parseTimestampMs(ts: unknown): number | null {
+  if (typeof ts === 'number') {
+    return ts < 1e12 ? ts * 1000 : ts;
+  }
+  if (typeof ts === 'string') {
+    const ms = new Date(ts).getTime();
+    return Number.isNaN(ms) ? null : ms;
+  }
+  return null;
+}
+
+/**
+ * Compute cost-weighted "output token equivalents" (OTE).
+ * Weight ratios are identical across Claude model families:
+ *   output: 1.0, input: 0.2, cache_read: 0.02, cache_create: 0.25
+ */
+function costWeightedOTE(
+  output: number, input: number, cacheRead: number, cacheCreate: number
+): number {
+  return output + input * 0.2 + cacheRead * 0.02 + cacheCreate * 0.25;
+}
+
+/**
  * Scan ALL project JSONL files for usage within a time window.
- * Returns output tokens used in the window.
+ * Returns cost-weighted token usage within the window.
  */
 function getWindowUsage(windowMs: number): WindowUsage {
   const result: WindowUsage = {
+    costWeightedTokens: 0,
     outputTokens: 0,
     inputTokens: 0,
     cacheReadTokens: 0,
@@ -112,16 +143,22 @@ function getWindowUsage(windowMs: number): WindowUsage {
             const obj = JSON.parse(line);
             if (obj.type !== 'assistant' || !obj.message?.usage) continue;
 
-            // Check timestamp — use obj.timestamp if available, otherwise include all
-            // (JSONL lines don't always have timestamps, but the file mtime filter helps)
+            // Parse timestamp — supports ISO strings, epoch seconds/ms
             const ts = obj.timestamp ?? obj.message?.created_at;
-            if (ts && typeof ts === 'number' && ts < cutoff) continue;
+            const tsMs = parseTimestampMs(ts);
+            if (tsMs !== null && tsMs < cutoff) continue;
 
             const u = obj.message.usage;
-            result.outputTokens += u.output_tokens ?? 0;
-            result.inputTokens += u.input_tokens ?? 0;
-            result.cacheReadTokens += u.cache_read_input_tokens ?? 0;
-            result.cacheCreateTokens += u.cache_creation_input_tokens ?? 0;
+            const out = u.output_tokens ?? 0;
+            const inp = u.input_tokens ?? 0;
+            const cacheRead = u.cache_read_input_tokens ?? 0;
+            const cacheCreate = u.cache_creation_input_tokens ?? 0;
+
+            result.outputTokens += out;
+            result.inputTokens += inp;
+            result.cacheReadTokens += cacheRead;
+            result.cacheCreateTokens += cacheCreate;
+            result.costWeightedTokens += costWeightedOTE(out, inp, cacheRead, cacheCreate);
           } catch {
             // skip malformed lines
           }
@@ -136,7 +173,7 @@ function getWindowUsage(windowMs: number): WindowUsage {
 }
 
 /**
- * Get Sonnet-only output tokens from the 7-day window
+ * Get Sonnet-only cost-weighted OTE from the 7-day window.
  */
 function getSevenDaySonnetUsage(): number {
   let total = 0;
@@ -167,8 +204,17 @@ function getSevenDaySonnetUsage(): number {
             const model: string = obj.message?.model ?? '';
             if (!model.includes('sonnet')) continue;
 
+            const ts = obj.timestamp ?? obj.message?.created_at;
+            const tsMs = parseTimestampMs(ts);
+            if (tsMs !== null && tsMs < cutoff) continue;
+
             const u = obj.message.usage;
-            total += u.output_tokens ?? 0;
+            total += costWeightedOTE(
+              u.output_tokens ?? 0,
+              u.input_tokens ?? 0,
+              u.cache_read_input_tokens ?? 0,
+              u.cache_creation_input_tokens ?? 0,
+            );
           } catch {
             // skip
           }
@@ -257,28 +303,28 @@ export async function GET() {
   const sevenDayUsage = getWindowUsage(SEVEN_DAYS);
   const sonnetUsage = getSevenDaySonnetUsage();
 
-  const fiveHourPct = Math.min(100, Math.round((fiveHourUsage.outputTokens / limits.fiveHour) * 100));
-  const sevenDayPct = Math.min(100, Math.round((sevenDayUsage.outputTokens / limits.sevenDay) * 100));
+  const fiveHourPct = Math.min(100, Math.round((fiveHourUsage.costWeightedTokens / limits.fiveHour) * 100));
+  const sevenDayPct = Math.min(100, Math.round((sevenDayUsage.costWeightedTokens / limits.sevenDay) * 100));
   const sonnetPct = Math.min(100, Math.round((sonnetUsage / limits.sevenDaySonnet) * 100));
 
   const windows: RateLimitWindow[] = [
     {
       label: 'Current session',
-      used: fiveHourUsage.outputTokens,
+      used: Math.round(fiveHourUsage.costWeightedTokens),
       limit: limits.fiveHour,
       percent: fiveHourPct,
       resetInfo: 'Rolling 5-hour window',
     },
     {
       label: 'Current week (all models)',
-      used: sevenDayUsage.outputTokens,
+      used: Math.round(sevenDayUsage.costWeightedTokens),
       limit: limits.sevenDay,
       percent: sevenDayPct,
       resetInfo: 'Rolling 7-day window',
     },
     {
       label: 'Current week (Sonnet only)',
-      used: sonnetUsage,
+      used: Math.round(sonnetUsage),
       limit: limits.sevenDaySonnet,
       percent: sonnetPct,
       resetInfo: 'Rolling 7-day window',

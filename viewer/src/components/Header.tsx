@@ -1,5 +1,6 @@
 import * as path from "path";
 import { Suspense } from "react";
+import { ClaudeProcesses } from "./ClaudeProcesses";
 import { ClaudeStatus } from "./ClaudeStatus";
 import { TabBar } from "./TabBar";
 import { getProjectRoot } from "@/lib/project-root";
@@ -49,6 +50,7 @@ export function Header() {
               {repoName}
             </span>
           )}
+          <ClaudeProcesses />
           <ClaudeStatus />
         </div>
       </div>
