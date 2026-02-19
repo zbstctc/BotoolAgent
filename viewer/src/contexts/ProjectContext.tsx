@@ -40,6 +40,8 @@ export interface ProjectState {
   createdAt: number;
   /** Timestamp when project was last updated */
   updatedAt: number;
+  /** Auto mode toggle — when true, Stage 2-5 run automatically */
+  autoMode?: boolean;
 }
 
 /**
@@ -128,6 +130,7 @@ export function ProjectProvider({ workspaceId, children }: { workspaceId?: strin
       status: 'active',
       createdAt: now,
       updatedAt: now,
+      autoMode: false,
     };
 
     setProjects((prev) => ({ ...prev, [id]: newProject }));
