@@ -4,7 +4,16 @@ import * as fs from "fs";
 import * as path from "path";
 
 function getVersion(): string {
-  // 1. .botoolagent-version file is the source of truth for installed version
+  // 1. Git tags are the source of truth (dev repo / git clone users)
+  try {
+    return execSync("git describe --tags --abbrev=0", {
+      encoding: "utf-8",
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+  } catch {
+    // no .git or no tags — fall through
+  }
+  // 2. Fallback to .botoolagent-version file (tar.gz distribution users)
   try {
     const versionFile = path.resolve(__dirname, '..', '.botoolagent-version');
     const version = fs.readFileSync(versionFile, 'utf-8').trim();
@@ -12,12 +21,7 @@ function getVersion(): string {
   } catch {
     // ignore
   }
-  // 2. Fallback to git tags (dev repo convenience)
-  try {
-    return execSync("git describe --tags --abbrev=0", { encoding: "utf-8" }).trim();
-  } catch {
-    return "dev";
-  }
+  return "dev";
 }
 
 const nextConfig: NextConfig = {

@@ -58,7 +58,11 @@ mkdir -p "$PACKAGE_DIR/archive"
 cp "$SCRIPT_DIR/.gitignore" "$PACKAGE_DIR/.gitignore"
 
 # Copy version and manifest for self-update support
-cp "$SCRIPT_DIR/.botoolagent-version" "$PACKAGE_DIR/" 2>/dev/null || true
+if [ -f "$SCRIPT_DIR/.botoolagent-version" ]; then
+  cp "$SCRIPT_DIR/.botoolagent-version" "$PACKAGE_DIR/"
+else
+  git describe --tags --abbrev=0 > "$PACKAGE_DIR/.botoolagent-version" 2>/dev/null || echo "dev" > "$PACKAGE_DIR/.botoolagent-version"
+fi
 cp "$SCRIPT_DIR/.botoolagent-manifest.json" "$PACKAGE_DIR/" 2>/dev/null || true
 
 # Copy plugin config

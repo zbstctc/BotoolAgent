@@ -61,6 +61,7 @@ viewer/.turbo/
 # ===== Distribution Packages =====
 *.tar.gz
 *.zip
+.botoolagent-version
 
 # ===== Runtime State =====
 # (all runtime state now in .state/ directory)
