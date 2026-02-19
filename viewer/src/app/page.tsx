@@ -135,32 +135,14 @@ function DashboardContent() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Page header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 bg-white flex-shrink-0">
-        <h1 className="text-lg font-semibold text-neutral-900">我的需求</h1>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => openTab({ id: 'rules', name: '规范管理', stage: 0, url: '/rules' }, '/rules')}
-          >
-            <Settings className="h-3.5 w-3.5" />
-            规范
-          </Button>
-          <Button
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setDialogOpen(true)}
-          >
-            <Plus className="h-4 w-4" />
-            新需求
-          </Button>
-        </div>
-      </div>
+      {/* Toolbar: 我的需求 | filters | spacer | refresh | search | 规范 | + 新需求 */}
+      <div className="flex items-center gap-3 px-6 py-2.5 border-b border-neutral-200 bg-white flex-shrink-0">
+        {/* Title */}
+        <h1 className="text-sm font-semibold text-neutral-900 flex-shrink-0">我的需求</h1>
 
-      {/* Filter + search bar */}
-      <div className="flex items-center gap-4 px-6 py-3 border-b border-neutral-100 bg-white flex-shrink-0">
+        {/* Divider */}
+        <div className="w-px h-4 bg-neutral-200 flex-shrink-0" />
+
         {/* Filter tabs */}
         <div className="flex items-center gap-1">
           {filterOptions.map(({ key, label, count }) => (
@@ -185,15 +167,20 @@ function DashboardContent() {
           ))}
         </div>
 
-        {/* Refresh + Search */}
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Refresh */}
         <button
           onClick={() => refreshRequirements()}
-          className="ml-auto p-1.5 rounded-md text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
+          className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
           title="刷新"
         >
           <RefreshCw className="h-3.5 w-3.5" />
         </button>
-        <div className="relative flex-1 max-w-xs">
+
+        {/* Search */}
+        <div className="relative w-48">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 pointer-events-none" />
           <input
             type="text"
@@ -203,6 +190,28 @@ function DashboardContent() {
             className="w-full pl-8 pr-3 py-1.5 text-sm border border-neutral-200 rounded-md bg-white placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
           />
         </div>
+
+        {/* Divider */}
+        <div className="w-px h-4 bg-neutral-200 flex-shrink-0" />
+
+        {/* 规范 + 新需求 */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => openTab({ id: 'rules', name: '规范管理', stage: 0, url: '/rules' }, '/rules')}
+        >
+          <Settings className="h-3.5 w-3.5" />
+          规范
+        </Button>
+        <Button
+          size="sm"
+          className="gap-1.5"
+          onClick={() => setDialogOpen(true)}
+        >
+          <Plus className="h-4 w-4" />
+          新需求
+        </Button>
       </div>
 
       {/* Card list */}
