@@ -50,7 +50,7 @@ function Stage1PageContent() {
   const searchParams = useSearchParams();
 
   // Requirement context - resolve `req` param first
-  const { requirements } = useRequirement();
+  const { requirements, updateRequirement } = useRequirement();
   const reqId = searchParams.get('req') || undefined;
   const activeRequirement = reqId ? requirements.find(r => r.id === reqId) : undefined;
 
@@ -124,8 +124,15 @@ function Stage1PageContent() {
   const selectedModeRef = useRef(selectedMode);
   selectedModeRef.current = selectedMode;
 
-  // Storage key for this project's pyramid state
-  const storageKey = sessionId ? `botool-pyramid-state-${sessionId}` : null;
+  // Sync cliSessionId back to requirement's prdSessionId so it persists across page reloads
+  useEffect(() => {
+    if (reqId && cliSessionId && activeRequirement && activeRequirement.prdSessionId !== cliSessionId) {
+      updateRequirement(reqId, { prdSessionId: cliSessionId });
+    }
+  }, [reqId, cliSessionId, activeRequirement, updateRequirement]);
+
+  // Storage key: prefer sessionId (from requirement), fallback to cliSessionId
+  const storageKey = (sessionId || cliSessionId) ? `botool-pyramid-state-${sessionId || cliSessionId}` : null;
 
   // Load saved state from localStorage on mount (only once)
   useEffect(() => {
@@ -289,8 +296,16 @@ function Stage1PageContent() {
           }
         }
 
-        debugLog('[Stage1] Level from metadata:', metadata.level, 'inferred:', inferredLevel, 'phase:', metadata.phase);
-        setCurrentLevel(inferredLevel);
+        // Guard: only set level if it's a valid LevelId (1-5)
+        // L0 (direction exploration) and undefined/null → keep at L1
+        const validLevel = (typeof inferredLevel === 'number' && inferredLevel >= 1 && inferredLevel <= 5)
+          ? inferredLevel as LevelId
+          : undefined;
+
+        debugLog('[Stage1] Level from metadata:', metadata.level, 'inferred:', inferredLevel, 'valid:', validLevel, 'phase:', metadata.phase);
+        if (validLevel !== undefined) {
+          setCurrentLevel(validLevel);
+        }
 
         // Track codebase scan status
         if (metadata.codebaseScanned !== undefined) {
@@ -307,11 +322,13 @@ function Stage1PageContent() {
         }
 
         // Mark previous levels as completed
-        const completed: LevelId[] = [];
-        for (let i = 1; i < inferredLevel; i++) {
-          completed.push(i as LevelId);
+        if (validLevel !== undefined) {
+          const completed: LevelId[] = [];
+          for (let i = 1; i < validLevel; i++) {
+            completed.push(i as LevelId);
+          }
+          setCompletedLevels(completed);
         }
-        setCompletedLevels(completed);
       }
     }
   }, []);
