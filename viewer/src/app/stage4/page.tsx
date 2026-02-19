@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useFileWatcher, parsePrdJson, useProjectValidation } from '@/hooks';
 import { useProject } from '@/contexts/ProjectContext';
 import { useRequirement } from '@/contexts/RequirementContext';
+import { useTab } from '@/contexts/TabContext';
 
 type TestingStatus = 'idle' | 'running' | 'complete' | 'failed' | 'error';
 
@@ -39,12 +40,15 @@ function Stage4PageContent() {
   // Skip validation when navigated via RequirementContext (req param)
   useProjectValidation({ currentStage: 4, skipValidation: Boolean(reqId) });
 
+  // Sync agent status to TabContext
+  const { updateTabStatus } = useTab();
+
   const [testingStatus, setTestingStatus] = useState<TestingStatus>('idle');
   const [statusMessage, setStatusMessage] = useState('');
   const [agentLog, setAgentLog] = useState<string[]>([]);
   const [showTransitionModal, setShowTransitionModal] = useState(false);
   const [projectName, setProjectName] = useState('');
-  const logEndRef = useRef<HTMLDivElement>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   // Layer progress state (default: all pending)
@@ -74,9 +78,12 @@ function Stage4PageContent() {
     }
   }, [prd]);
 
-  // Auto-scroll log
+  // Auto-scroll log — scroll the container directly to avoid scrollIntoView
+  // crawling up the DOM and scrolling overflow-hidden ancestors out of view.
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
   }, [agentLog]);
 
   // Poll agent status via SSE
@@ -95,6 +102,11 @@ function Stage4PageContent() {
       try {
         const parsed = JSON.parse(event.data);
         const status: AgentStatus = parsed.data || parsed;
+
+        // Sync to TabContext
+        if (reqId) {
+          updateTabStatus(reqId, status.status, status.total > 0 ? { completed: status.completed, total: status.total } : undefined);
+        }
 
         setStatusMessage(status.message || '');
 
@@ -178,7 +190,7 @@ function Stage4PageContent() {
     return () => {
       es.close();
     };
-  }, [projectId]);
+  }, [projectId, reqId, updateTabStatus]);
 
   // Poll /api/agent/log for real-time log lines (reads stream-json log file)
   const logOffsetRef = useRef(0);
@@ -239,17 +251,23 @@ function Stage4PageContent() {
     fetch(`/api/agent/status?${params.toString()}`)
       .then(r => r.json())
       .then((status) => {
+        // Coding agent sets currentTask to "DT-XXX" format; testing agent uses layer IDs.
+        // Don't restore "complete"/"failed" from coding agent's status.
+        const isCodingStatus = /^DT-\d+/i.test(status.currentTask || '');
+
         if (status.status === 'running' || status.status === 'starting' || status.status === 'iteration_complete') {
-          setTestingStatus('running');
-          setStatusMessage(status.message || 'Testing in progress...');
-          setAgentLog([]);
-          startStatusPolling();
-          startLogPolling();
-        } else if (status.status === 'complete') {
+          if (!isCodingStatus) {
+            setTestingStatus('running');
+            setStatusMessage(status.message || 'Testing in progress...');
+            setAgentLog([]);
+            startStatusPolling();
+            startLogPolling();
+          }
+        } else if (status.status === 'complete' && !isCodingStatus) {
           setTestingStatus('complete');
           setStatusMessage(status.message || 'Testing completed');
           setLayers(prev => prev.map(l => ({ ...l, status: 'pass' as const })));
-        } else if (status.status === 'error' || status.status === 'failed') {
+        } else if ((status.status === 'error' || status.status === 'failed') && !isCodingStatus) {
           setTestingStatus('failed');
           setStatusMessage(status.message || 'Testing failed');
         }
@@ -400,8 +418,8 @@ function Stage4PageContent() {
             </div>
 
             {/* Tab: 测试日志 */}
-            <TabsContent value="logs" className="flex-1 min-h-0">
-              <div className="h-full rounded-lg border border-neutral-200 bg-neutral-900 overflow-auto">
+            <TabsContent value="logs" className="flex-1 min-h-0 flex flex-col">
+              <div ref={logContainerRef} className="flex-1 min-h-0 rounded-lg border border-neutral-200 bg-neutral-900 overflow-auto">
                 <div className="p-4 font-mono text-xs text-neutral-300 space-y-1">
                   {agentLog.length === 0 ? (
                     <p className="text-neutral-500 italic">等待验收启动...</p>
@@ -417,7 +435,6 @@ function Stage4PageContent() {
                       </p>
                     ))
                   )}
-                  <div ref={logEndRef} />
                 </div>
               </div>
             </TabsContent>

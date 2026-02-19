@@ -5,17 +5,19 @@ import type { RequirementStage } from '@/lib/requirement-types';
 
 interface StageProgressBarProps {
   currentStage: RequirementStage;
+  /** When true, all stages are solid (no pulse) — project is fully done */
+  allDone?: boolean;
   className?: string;
 }
 
 const STAGE_COUNT = 6;
 
-export function StageProgressBar({ currentStage, className }: StageProgressBarProps) {
+export function StageProgressBar({ currentStage, allDone, className }: StageProgressBarProps) {
   return (
     <div className={cn('flex items-center', className)}>
       {Array.from({ length: STAGE_COUNT }, (_, index) => {
-        const isCompleted = index < currentStage;
-        const isCurrent = index === currentStage;
+        const isCompleted = index < currentStage || (allDone && index === currentStage);
+        const isCurrent = index === currentStage && !allDone;
         const isLast = index === STAGE_COUNT - 1;
 
         return (

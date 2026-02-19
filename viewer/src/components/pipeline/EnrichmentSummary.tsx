@@ -15,6 +15,7 @@ interface EnrichmentSummaryProps {
   mode: PipelineMode;
   selectedRules: RuleDocument[];
   enrichResult: AutoEnrichResult | null;
+  ruleAuditSummary?: string;
   onComplete: (prdJson: EnrichedPrdJson) => void;
   onBack?: () => void;
 }
@@ -29,6 +30,7 @@ export function EnrichmentSummary({
   mode,
   selectedRules,
   enrichResult,
+  ruleAuditSummary,
   onComplete,
   onBack,
 }: EnrichmentSummaryProps) {
@@ -167,6 +169,11 @@ export function EnrichmentSummary({
 
                 const basePrdJson = parsed.prdJson;
                 const enriched = await callEnrichMerge(basePrdJson);
+
+                // Inject ruleAuditSummary from adversarial review into constitution
+                if (ruleAuditSummary && enriched.constitution) {
+                  enriched.constitution.ruleAuditSummary = ruleAuditSummary;
+                }
 
                 setPrdJson(enriched);
                 setJsonString(JSON.stringify(enriched, null, 2));

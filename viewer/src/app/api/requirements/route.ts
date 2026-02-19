@@ -11,6 +11,29 @@ interface PrdJson {
   devTasks?: Array<{ id: string; passes: boolean }>;
 }
 
+interface RegistryEntry {
+  status?: string;
+}
+
+interface Registry {
+  projects?: Record<string, RegistryEntry>;
+}
+
+/**
+ * Read registry.json and return the status for a given project.
+ */
+function getRegistryStatus(projectId: string): string | null {
+  try {
+    const tasksDir = getTasksDir();
+    const registryPath = path.join(tasksDir, 'registry.json');
+    if (!fs.existsSync(registryPath)) return null;
+    const registry = JSON.parse(fs.readFileSync(registryPath, 'utf-8')) as Registry;
+    return registry.projects?.[projectId]?.status ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Extract requirement title from markdown content (# Heading) or fall back to directory name.
  */
@@ -53,11 +76,38 @@ function hasWorktree(projectId: string): boolean {
 }
 
 /**
- * Check if testing-report.json exists for this project.
+ * Check if testing has been started (agent-testing.log exists on disk).
  */
-function hasTestingReport(projectId: string): boolean {
+function hasTestingStarted(projectId: string): boolean {
   const tasksDir = getTasksDir();
-  return fs.existsSync(path.join(tasksDir, projectId, 'testing-report.json'));
+  return fs.existsSync(path.join(tasksDir, projectId, 'agent-testing.log'));
+}
+
+/**
+ * Check if testing-report.json exists for this project,
+ * either on disk (main branch) or on the feature branch.
+ */
+function hasTestingReport(projectId: string, branchName?: string): boolean {
+  const tasksDir = getTasksDir();
+  // Check on current working tree (main)
+  if (fs.existsSync(path.join(tasksDir, projectId, 'testing-report.json'))) {
+    return true;
+  }
+  // Check on the feature branch (testing agent commits artifacts there)
+  if (branchName) {
+    try {
+      const botoolRoot = getBotoolRoot();
+      const relativePath = path.relative(botoolRoot, path.join(tasksDir, projectId, 'testing-report.json'));
+      execSync(`git cat-file -e ${branchName}:${relativePath}`, {
+        cwd: botoolRoot,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      return true;
+    } catch {
+      // Branch doesn't have the file
+    }
+  }
+  return false;
 }
 
 /**
@@ -104,23 +154,33 @@ function inferStage(
   const completedCount = devTasks.filter(t => t.passes).length;
   const allTasksDone = devTasks.length > 0 && completedCount === devTasks.length;
 
+  // Registry says "complete" → Stage 5 (authoritative after finalize)
+  const registryStatus = getRegistryStatus(projectId);
+  if (registryStatus === 'complete') {
+    return 5;
+  }
+
   // Check if branch merged into main → Stage 5
   if (branchName && isBranchMergedIntoMain(branchName)) {
     return 5;
   }
 
-  // All tasks done → need to check if testing was completed
+  // All tasks done → check testing state
   if (allTasksDone) {
-    // Testing report exists → Stage 5 (tested + ready to merge)
-    if (hasTestingReport(projectId)) {
+    // Testing report exists (on disk or on feature branch) → Stage 5
+    if (hasTestingReport(projectId, branchName)) {
       return 5;
     }
-    // No testing report → Stage 4 (development done, pending testing)
-    return 4;
+    // Testing started (log file exists) → Stage 4
+    if (hasTestingStarted(projectId)) {
+      return 4;
+    }
+    // Coding done but testing not started → Stage 3 (shows "开发完成")
+    return 3;
   }
 
-  // Testing report exists but not all tasks done (edge case) → Stage 4
-  if (hasTestingReport(projectId)) {
+  // Testing in progress but not all tasks done (edge case) → Stage 4
+  if (hasTestingReport(projectId, branchName) || hasTestingStarted(projectId)) {
     return 4;
   }
 
@@ -133,10 +193,14 @@ function inferStage(
 }
 
 /**
- * Derive RequirementStatus from stage and task completion.
+ * Derive RequirementStatus from stage and project state.
+ * Stage 5 can be either "completed" (merged) or "active" (tested, pending merge).
  */
-function inferStatus(stage: RequirementStage, prdJson: PrdJson | null): RequirementStatus {
-  if (stage === 5) return 'completed';
+function inferStatus(stage: RequirementStage, projectId: string, branchName?: string): RequirementStatus {
+  if (stage !== 5) return 'active';
+  // Stage 5: check if actually merged or just testing-complete
+  if (getRegistryStatus(projectId) === 'complete') return 'completed';
+  if (branchName && isBranchMergedIntoMain(branchName)) return 'completed';
   return 'active';
 }
 
@@ -231,7 +295,7 @@ export async function GET() {
       }
 
       const stage = inferStage(dirName, hasDraftMd, hasPrdMd, hasPrdJson, prdJson);
-      const status = inferStatus(stage, prdJson);
+      const status = inferStatus(stage, dirName, prdJson?.branchName);
 
       const requirement: Requirement = {
         id: dirName,
@@ -283,6 +347,61 @@ export async function GET() {
       }
 
       requirements.push(requirement);
+    }
+
+    // Also scan tasks/archives/ for archived requirements
+    const archivesDir = path.join(tasksDir, 'archives');
+    if (fs.existsSync(archivesDir)) {
+      let archiveEntries: fs.Dirent[] = [];
+      try {
+        archiveEntries = fs.readdirSync(archivesDir, { withFileTypes: true });
+      } catch {
+        // non-fatal
+      }
+
+      // Deduplicate: "foo-{timestamp}" is a duplicate of "foo"; keep latest by mtime
+      const seen = new Map<string, { dirName: string; mtime: number }>();
+      for (const e of archiveEntries.filter(e => e.isDirectory())) {
+        const canonical = e.name.replace(/-\d{10,}$/, '');
+        let mtime = 0;
+        try { mtime = fs.statSync(path.join(archivesDir, e.name)).mtimeMs; } catch {}
+        const prev = seen.get(canonical);
+        if (!prev || mtime > prev.mtime) {
+          seen.set(canonical, { dirName: e.name, mtime });
+        }
+      }
+
+      for (const [canonical, { dirName }] of seen) {
+        const dirPath = path.join(archivesDir, dirName);
+        const draftMdPath = path.join(dirPath, 'DRAFT.md');
+        const prdMdPath = path.join(dirPath, 'prd.md');
+        const hasDraftMd = fs.existsSync(draftMdPath);
+        const hasPrdMd = fs.existsSync(prdMdPath);
+        if (!hasDraftMd && !hasPrdMd) continue;
+
+        let name = canonical;
+        try {
+          const content = fs.readFileSync(hasPrdMd ? prdMdPath : draftMdPath, 'utf-8');
+          name = extractTitle(content, canonical);
+        } catch {}
+
+        let createdAt = Date.now();
+        let updatedAt = Date.now();
+        try {
+          const stats = fs.statSync(hasPrdMd ? prdMdPath : draftMdPath);
+          createdAt = stats.birthtimeMs || stats.ctimeMs;
+          updatedAt = stats.mtimeMs;
+        } catch {}
+
+        requirements.push({
+          id: canonical,
+          name,
+          stage: 0,
+          status: 'archived',
+          createdAt,
+          updatedAt,
+        });
+      }
     }
 
     // Sort by updatedAt descending (most recently modified first)

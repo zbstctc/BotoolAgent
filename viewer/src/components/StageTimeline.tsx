@@ -52,13 +52,18 @@ type StageState = 'completed' | 'current' | 'upcoming';
 
 function getStageState(requirement: Requirement, stageIndex: number): StageState {
   if (stageIndex < requirement.stage) return 'completed';
-  if (stageIndex === requirement.stage) return 'current';
+  if (stageIndex === requirement.stage) {
+    // Stage 5 + status completed = fully done (merged)
+    if (requirement.status === 'completed') return 'completed';
+    return 'current';
+  }
   return 'upcoming';
 }
 
-function getStageLabelText(stageIndex: number, state: StageState): string {
+function getStageLabelText(stageIndex: number, state: StageState, allTasksDone?: boolean): string {
   const meta = STAGE_META[stageIndex];
-  if (state === 'completed' && meta.labelCompleted) {
+  // Show completed label for past stages, or current stage when all tasks done
+  if (meta.labelCompleted && (state === 'completed' || (state === 'current' && allTasksDone))) {
     return meta.labelCompleted;
   }
   return meta.label;
@@ -88,12 +93,14 @@ function StageIcon({ state }: { state: StageState }) {
 
 export function StageTimeline({ requirement, onStageAction }: StageTimelineProps) {
   const stages: RequirementStage[] = [0, 1, 2, 3, 4, 5];
+  const allTasksDone = (requirement.taskCount ?? 0) > 0
+    && requirement.tasksCompleted === requirement.taskCount;
 
   return (
     <div className="flex flex-col">
       {stages.map((stageIndex) => {
         const state = getStageState(requirement, stageIndex);
-        const label = getStageLabelText(stageIndex, state);
+        const label = getStageLabelText(stageIndex, state, allTasksDone);
         const subtitle = getStageSubtitle(requirement, stageIndex);
         const isCurrent = state === 'current';
         const isLast = stageIndex === 5;
@@ -145,13 +152,11 @@ export function StageTimeline({ requirement, onStageAction }: StageTimelineProps
                 )}
               </div>
 
-              {subtitle && (
+              {state !== 'upcoming' && subtitle && (
                 <span
                   className={cn(
                     'text-xs truncate',
-                    state === 'completed' && 'text-neutral-400',
-                    state === 'current' && 'text-neutral-500',
-                    state === 'upcoming' && 'text-neutral-300'
+                    state === 'completed' ? 'text-neutral-400' : 'text-neutral-500',
                   )}
                 >
                   {subtitle}

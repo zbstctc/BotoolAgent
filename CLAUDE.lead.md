@@ -52,7 +52,11 @@
 
 按下方「单任务执行协议」处理。
 
-### 多任务批次 → 用 Agent Teams
+### 多任务批次 → 用 Agent Teams（强制）
+
+**⚠ 多任务批次必须 spawn teammates，禁止 Lead 自己实现 DT 代码。**
+Lead 的职责是编排（Explore → 编写 prompt → spawn → 验收），不是写代码。
+Explore 结果用于编写高质量的 teammate prompt，不要用于自己写代码。
 
 1. 为每个任务 spawn 一个 teammate（使用 Task 工具）
 2. Teammate prompt 模板（根据任务字段选择模式）：

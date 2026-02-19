@@ -10,3 +10,4 @@ export type { TeammateInfo, UseTeammatesReturn } from './useTeammates';
 export { useTaskTimings } from './useTaskTimings';
 export type { TaskTiming, UseTaskTimingsReturn } from './useTaskTimings';
 export { useAgentLogs } from './useAgentLogs';
+export { useTabNotification, TabNotificationMount } from './useTabNotification';

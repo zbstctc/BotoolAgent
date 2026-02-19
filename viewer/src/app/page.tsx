@@ -25,9 +25,10 @@ function filterRequirements(
   filter: RequirementFilter,
   search: string
 ): Requirement[] {
-  let result = requirements.filter((r) => r.status !== 'archived');
-  if (filter === 'active') result = result.filter((r) => r.status === 'active');
-  if (filter === 'completed') result = result.filter((r) => r.status === 'completed');
+  let result =
+    filter === 'archived'
+      ? requirements.filter((r) => r.status === 'archived')
+      : requirements.filter((r) => r.status !== 'archived');
   if (search.trim()) {
     const q = search.toLowerCase();
     result = result.filter((r) => r.name.toLowerCase().includes(q));
@@ -47,7 +48,7 @@ function DashboardContent() {
     refreshRequirements,
   } = useRequirement();
 
-  const [filter, setFilter] = useState<RequirementFilter>('all');
+  const [filter, setFilter] = useState<RequirementFilter>('active');
   const [search, setSearch] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -64,14 +65,13 @@ function DashboardContent() {
 
   // Counts for filter badges
   const activeCount = useMemo(
-    () => requirements.filter((r) => r.status === 'active').length,
+    () => requirements.filter((r) => r.status !== 'archived').length,
     [requirements]
   );
-  const completedCount = useMemo(
-    () => requirements.filter((r) => r.status === 'completed').length,
+  const archivedCount = useMemo(
+    () => requirements.filter((r) => r.status === 'archived').length,
     [requirements]
   );
-  const totalCount = activeCount + completedCount;
 
   function handleCardClick(id: string) {
     setSelectedId(id);
@@ -128,39 +128,20 @@ function DashboardContent() {
   }
 
   const filterOptions: { key: RequirementFilter; label: string; count: number }[] = [
-    { key: 'all', label: '全部', count: totalCount },
     { key: 'active', label: '进行中', count: activeCount },
-    { key: 'completed', label: '已完成', count: completedCount },
+    { key: 'archived', label: '已归档', count: archivedCount },
   ];
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Page header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 bg-white flex-shrink-0">
-        <h1 className="text-lg font-semibold text-neutral-900">我的需求</h1>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => openTab({ id: 'rules', name: '规范管理', stage: 0, url: '/rules' }, '/rules')}
-          >
-            <Settings className="h-3.5 w-3.5" />
-            规范
-          </Button>
-          <Button
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setDialogOpen(true)}
-          >
-            <Plus className="h-4 w-4" />
-            新需求
-          </Button>
-        </div>
-      </div>
+      {/* Toolbar: 我的需求 | filters | spacer | refresh | search | 规范 | + 新需求 */}
+      <div className="flex items-center gap-3 px-6 py-2.5 border-b border-neutral-200 bg-white flex-shrink-0">
+        {/* Title */}
+        <h1 className="text-sm font-semibold text-neutral-900 flex-shrink-0">我的需求</h1>
 
-      {/* Filter + search bar */}
-      <div className="flex items-center gap-4 px-6 py-3 border-b border-neutral-100 bg-white flex-shrink-0">
+        {/* Divider */}
+        <div className="w-px h-4 bg-neutral-200 flex-shrink-0" />
+
         {/* Filter tabs */}
         <div className="flex items-center gap-1">
           {filterOptions.map(({ key, label, count }) => (
@@ -185,15 +166,20 @@ function DashboardContent() {
           ))}
         </div>
 
-        {/* Refresh + Search */}
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Refresh */}
         <button
           onClick={() => refreshRequirements()}
-          className="ml-auto p-1.5 rounded-md text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
+          className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
           title="刷新"
         >
           <RefreshCw className="h-3.5 w-3.5" />
         </button>
-        <div className="relative flex-1 max-w-xs">
+
+        {/* Search */}
+        <div className="relative w-48">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 pointer-events-none" />
           <input
             type="text"
@@ -203,6 +189,28 @@ function DashboardContent() {
             className="w-full pl-8 pr-3 py-1.5 text-sm border border-neutral-200 rounded-md bg-white placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
           />
         </div>
+
+        {/* Divider */}
+        <div className="w-px h-4 bg-neutral-200 flex-shrink-0" />
+
+        {/* 规范 + 新需求 */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => openTab({ id: 'rules', name: '规范管理', stage: 0, url: '/rules' }, '/rules')}
+        >
+          <Settings className="h-3.5 w-3.5" />
+          规范
+        </Button>
+        <Button
+          size="sm"
+          className="gap-1.5"
+          onClick={() => setDialogOpen(true)}
+        >
+          <Plus className="h-4 w-4" />
+          新需求
+        </Button>
       </div>
 
       {/* Card list */}
@@ -231,7 +239,6 @@ function DashboardContent() {
             </div>
           ) : (
             <EmptyState
-              hasRequirements={requirements.filter((r) => r.status !== 'archived').length > 0}
               filter={filter}
               search={search}
               onCreateNew={() => setDialogOpen(true)}
@@ -260,12 +267,10 @@ function DashboardContent() {
 }
 
 function EmptyState({
-  hasRequirements,
   filter,
   search,
   onCreateNew,
 }: {
-  hasRequirements: boolean;
   filter: RequirementFilter;
   search: string;
   onCreateNew: () => void;
@@ -281,12 +286,10 @@ function EmptyState({
     );
   }
 
-  if (hasRequirements && filter !== 'all') {
+  if (filter === 'archived') {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <p className="text-sm font-medium text-neutral-700">
-          暂无{filter === 'active' ? '进行中' : '已完成'}的需求
-        </p>
+        <p className="text-sm font-medium text-neutral-700">暂无已归档的需求</p>
       </div>
     );
   }

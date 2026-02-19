@@ -200,10 +200,20 @@ export function RequirementProvider({ children }: { children: React.ReactNode })
   );
 
   /**
-   * Delete a requirement from local storage.
-   * Note: API-sourced requirements will reappear on next refresh unless deleted server-side.
+   * Permanently delete a requirement: calls server API to remove the folder,
+   * then removes from local state and refreshes.
    */
-  const deleteRequirement = useCallback((id: string) => {
+  const deleteRequirement = useCallback(async (id: string) => {
+    try {
+      await fetch('/api/requirements/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+    } catch (e) {
+      console.error('[RequirementContext] Delete request failed:', e);
+    }
+
     setLocalRequirements((prev) => {
       const next = { ...prev };
       delete next[id];
@@ -211,7 +221,8 @@ export function RequirementProvider({ children }: { children: React.ReactNode })
     });
 
     setSelectedId((prev) => (prev === id ? null : prev));
-  }, []);
+    await refreshRequirements();
+  }, [refreshRequirements]);
 
   /**
    * Archive a requirement: physically move its folder to /tasks/archives/

@@ -141,7 +141,7 @@ Viewer 前端
     │
     ├── POST /api/prd/review ──────▶ 两步法（Codex 不支持 --base + 自定义 prompt 同时使用）
     │   请求: { content, reviewTarget,        Step 1: codex exec --full-auto "[审查prompt]"
-    │           rules?: RuleSelection[] }            → Codex 自由文本输出
+    │           rules?: string[] (ruleIds) }         → Codex 自由文本输出
     │   响应: SSE stream                       Step 2: 服务端解析自由文本 → ReviewFinding[]
     │         { type: progress|complete|error }
     │   当 reviewTarget='prd' 且 rules 非空时，
@@ -192,6 +192,7 @@ interface ReviewResult {
   highCount: number;
   mediumCount: number;
   lowCount: number;
+  backupPath?: string;          // 仅 reviewTarget='prd' 时，备份文件路径
 }
 
 interface ReviewFinding {
@@ -263,7 +264,7 @@ Codex 以自由文本方式列出问题，不要求 JSON 格式。
 
 | 组件 | Props 接口 | 复用位置 | 状态 |
 |------|-----------|---------|------|
-| `AdversarialReviewStep` | `{ reviewTarget, content, selectedRules?, onComplete, onBack? }` | Step 2 + Step 4 | 新建 |
+| `AdversarialReviewStep` | `{ reviewTarget, content, selectedRuleIds?, projectId?, onComplete, onBack? }` | Step 2 + Step 4 | 新建 |
 | `PipelineProgress` | 无变化，仅增加步骤数（3→5） | Stage 2 顶部 | 修改 |
 
 ### 5.3 AdversarialReviewStep 组件布局
@@ -306,7 +307,7 @@ Codex 以自由文本方式列出问题，不要求 JSON 格式。
 - 审查过程中显示进度条 + 终端日志
 - 完成后显示 findings 统计摘要（简洁模式）
 - 自动等待 1s 后进入下一步（或用户提前点击"继续"）
-- 状态颜色：PASSED=绿色 Badge, ACKNOWLEDGED=琥珀色 Badge, SKIPPED=灰色 Badge
+- 状态颜色：PASSED=绿色 Badge, ACKNOWLEDGED=琥珀色 Badge, SKIPPED=灰色 Badge + 醒目琥珀色警告 Banner（"⚠ 审查已跳过：Codex 服务不可用，PRD 未经对抗审查"）
 
 ### 5.4 Props 接口
 
@@ -314,19 +315,25 @@ Codex 以自由文本方式列出问题，不要求 JSON 格式。
 interface AdversarialReviewStepProps {
   reviewTarget: 'prd' | 'enrich';
   content: string;                    // PRD markdown 或 Enrich result JSON
-  selectedRules?: RuleSelection[];    // Step 1 选定的规范（仅 reviewTarget='prd' 时传入）
+  selectedRuleIds?: string[];         // Step 1 选定的规范 ruleId 数组（仅 reviewTarget='prd' 时传入，如 ["rule-001", "rule-003"]）
   projectId?: string;                 // 用于持久化路径
   onComplete: (result: ReviewStepResult) => void;
   onBack?: () => void;
 }
 
+// RuleSelection 完整定义（仅服务端内部使用）
 interface RuleSelection {
   id: string;                   // 如 "rule-001"
   name: string;                 // 如 "API设计规范"
   category: string;             // 如 "backend"
-  file: string;                 // 规范文件路径
+  file: string;                 // 规范文件路径（仅服务端从固定映射表解析，禁止客户端传入）
   checklist: string[];          // 检查项列表
 }
+
+// API 请求中客户端只传 ruleId 数组（BR-010）
+// POST /api/prd/review 的 rules 参数类型:
+type RuleIdList = string[];     // 如 ["rule-001", "rule-003"]
+// 服务端通过 ruleId 从固定映射表解析完整 RuleSelection（含 file 路径）
 
 interface ReviewStepResult {
   status: 'passed' | 'acknowledged' | 'skipped';
@@ -344,11 +351,11 @@ interface ReviewStepResult {
 |----|------|------|---------|
 | BR-001 | 收敛条件 = HIGH=0 且 MEDIUM=0 | 只有满足此条件才算 PASSED | DT-005 |
 | BR-002 | 最多 3 轮循环 | 未收敛则自动放行，剩余 findings 标记 acknowledged | DT-005 |
-| BR-003 | Codex 失败重试 1 次 | 连续 2 次失败则跳过（skipped），不阻断流程 | DT-005 |
+| BR-003 | Codex 失败重试 1 次 | 连续 2 次失败则跳过（skipped），不阻断流程；**但 UI 必须显示醒目的琥珀色警告 Banner**（"⚠ 审查已跳过：Codex 服务不可用，PRD 未经对抗审查"），确保用户知晓此次 PRD 未被审查 | DT-005, DT-003 |
 | BR-004 | PRD 和 Enrich 审查同等优先级 | 两者使用相同的收敛条件和容错策略 | DT-003, DT-004 |
 | BR-005 | 审查全自动 | 进入 Step 后自动开始，无用户交互 | DT-003 |
-| BR-006 | 修正后 PRD 覆盖原文件 | `prd.md` 被修正版覆盖，Enrich 结果原地更新 | DT-006 |
-| BR-009 | 解析 fail-closed | Codex 自由文本解析失败（提取不出任何 finding）= 本轮调用失败，走 retry/skipped，禁止返回空 findings（与 Testing SKILL 的两步法对齐） | DT-001, DT-005 |
+| BR-006 | 修正后 PRD 先备份再覆盖 | 覆盖 `prd.md` 前先备份为 `prd.md.bak`（带时间戳 `prd-{yyyyMMddHHmmss}.md.bak`）；写入使用临时文件 + `fs.rename` 原子替换；`reviewResult` 中记录 `backupPath` | DT-006 |
+| BR-009 | 解析 fail-closed（区分解析失败与合法空结果） | Codex 自由文本输出的解析分两种情况：**a) 解析失败**（Codex 返回空文本、乱码、或无法提取任何结构化段落）= 本轮调用失败，走 retry/skipped；**b) 解析成功但 0 findings**（Codex 明确表示"no issues found"或输出可解析但 findings 为空数组）= 合法结果，视为收敛成功（PASSED）。判断方法：解析器返回 `{ success: boolean, findings: ReviewFinding[] }`，`success=false` 走失败路径，`success=true && findings.length===0` 走 PASSED。 | DT-001, DT-005 |
 | BR-010 | 路径安全 | `rules` 参数仅接收 `ruleId`，服务端固定映射解析文件路径；`projectId` 白名单 `/^[a-zA-Z0-9_-]+$/`；所有文件操作前 realpath 校验边界 | DT-001, DT-006 |
 | BR-011 | spawn 安全 | `child_process.spawn` 必须 `shell: false`，使用固定 argv 数组，禁止拼接用户输入 | DT-001 |
 | BR-012 | findings 累计 | 对抗循环维护所有轮次累计的 findings 列表（含 fixed/acknowledged 状态），不仅保存最终轮 | DT-005 |
@@ -412,14 +419,15 @@ Phase 4 仅依赖 Phase 1，可与 Phase 2/3 并行
 > **规范要点**: route.ts 在 api/{feature}/ 下; handler 用 try/catch; SSE 正确 headers; spawn 移除 CLAUDECODE
 
 - [ ] DT-001: 创建 `/api/prd/review` API 路由 (`文件: viewer/src/app/api/prd/review/route.ts`)
-  - 接收 `{ content: string, reviewTarget: 'prd' | 'enrich', rules?: RuleSelection[] }` POST 请求
+  - 接收 `{ content: string, reviewTarget: 'prd' | 'enrich', rules?: string[] }` POST 请求（`rules` 为 ruleId 数组，如 `["rule-001", "rule-003"]`，服务端从固定映射表解析完整 RuleSelection）
   - **两步法调用 Codex**（已验证: `codex exec review --base` 与自定义 prompt 互斥）：
     - Step 1: 将 PRD/Enrich 内容写入临时文件，通过 `child_process.spawn` 调用 `codex exec --full-auto "[审查 prompt，引用临时文件]"`（**必须 `shell: false`，使用固定 argv 数组，禁止拼接用户输入到命令行参数**）
     - Step 2: Codex 以自由文本输出审查结果，服务端解析自由文本为 `ReviewFinding[]`
   - 构建 PRD 审查 prompt（5 维度）和 Enrich 审查 prompt（5 维度），根据 `reviewTarget` 选择
   - **规范审查合并**: 当 `reviewTarget='prd'` 且 `rules` 非空时，**服务端通过 `ruleId` 从固定映射表解析文件路径**（禁止直接接收客户端传入的 file path），读取前用 `fs.realpathSync` 校验在 `rules/` 根目录下，将规范全文作为 Codex prompt 附加审查上下文，要求 Codex 同时列出规范违规项
   - SSE 流式返回进度 `{ type: 'progress' | 'complete' | 'error' }`
-  - **fail-closed**: 自由文本解析失败（提取不出任何 finding）视为本轮 Codex 调用失败，走 retry/skipped 路径（不能返回空 findings，否则会误触收敛条件 HIGH=0 MEDIUM=0 导致门控绕过）
+  - **fail-closed（BR-009）**: 解析器返回 `{ success, findings }`；`success=false`（空文本/乱码/无法提取结构化段落）= 本轮调用失败，走 retry/skipped；`success=true && findings.length===0`（Codex 明确无问题）= 合法 PASSED
+  - **临时文件清理**: 所有 `mktemp` 创建的临时文件必须在 `finally` 块中删除（`fs.unlink`），无论成功或失败。若条件允许优先使用内存 pipe（stdin）代替临时文件
   - 60s 超时保护
   - [规范] route.ts 放在 api/prd/review/ 下
   - [规范] handler 用 try/catch 包裹
@@ -446,8 +454,8 @@ Phase 4 仅依赖 Phase 1，可与 Phase 2/3 并行
 > **规范要点**: 组件 PascalCase; 按钮黑底白字; 状态色仅用于 Badge; shadcn 组件优先; 'use client' 标记
 
 - [ ] DT-003: 创建 `AdversarialReviewStep` 组件 (`文件: viewer/src/components/pipeline/AdversarialReviewStep.tsx`)
-  - Props: `{ reviewTarget, content, selectedRules?, projectId?, onComplete, onBack? }`
-  - 进入组件自动触发 `/api/prd/review`（当 `reviewTarget='prd'` 且有 `selectedRules` 时，传入 rules）
+  - Props: `{ reviewTarget, content, selectedRuleIds?, projectId?, onComplete, onBack? }`
+  - 进入组件自动触发 `/api/prd/review`（当 `reviewTarget='prd'` 且有 `selectedRuleIds` 时，传入 ruleId 数组）
   - 显示进度条（`useSimulatedProgress` hook 复用）+ `TerminalActivityFeed`
   - 解析 SSE 响应，展示每轮 findings 数量变化
   - 完成后显示简洁统计：HIGH/MEDIUM/LOW Badge 计数 + 状态 Badge
@@ -464,13 +472,13 @@ Phase 4 仅依赖 Phase 1，可与 Phase 2/3 并行
 - [ ] DT-004: 重构 Stage 2 页面步骤编排 (`文件: viewer/src/app/stage2/page.tsx`)
   - 步骤重新编号为 5 步（规则选择提前，规范审查合并进 PRD 审查）：
   - Step 0: `RuleCheckStep` (不变) — 规则选择（移到最前）
-  - Step 1: `AdversarialReviewStep` (reviewTarget='prd', content=prdContent, selectedRules) — PRD 审查（含规范）
+  - Step 1: `AdversarialReviewStep` (reviewTarget='prd', content=prdContent, selectedRuleIds) — PRD 审查（含规范）
   - Step 2: `AutoEnrichStep` (不变，但输入为修正后的 PRD) — Auto Enrich
   - Step 3: `AdversarialReviewStep` (reviewTarget='enrich', content=enrichResult JSON) — Enrich 审查
   - Step 4: `EnrichmentSummary` (不变，额外接收 ruleAuditSummary) — 汇总
   - 更新 `currentStep` 状态管理（0-4，5 步）
   - 更新 `PipelineProgress` 步骤标签（5 步）
-  - 数据传递链：Step 0 selectedRules → Step 1 (fixedPrd + ruleAuditSummary) → Step 2 → Step 3 → Step 4
+  - 数据传递链：Step 0 selectedRuleIds → Step 1 (fixedPrd + ruleAuditSummary) → Step 2 → Step 3 → Step 4
   - Step 1 的 `ruleAuditSummary` 传递给 Step 4 写入 prd.json
   - [规范] 页面级状态用组件 state 管理
   - [规范] 流式数据使用 SSE 模式
@@ -503,7 +511,7 @@ Phase 4 仅依赖 Phase 1，可与 Phase 2/3 并行
   - **`projectId` 白名单校验**: 严格正则 `/^[a-zA-Z0-9_-]+$/`，拒绝含 `/`、`..`、空格等字符
   - **路径越界校验**: 写入前用 `path.resolve` + `realpath` 确认目标路径在 `tasks/` 根目录下
   - 将 `reviewResult` 写入 `tasks/{projectId}/prd-review.json` 或 `enrich-review.json`
-  - 如果 `reviewTarget='prd'` 且有 `fixedContent`，覆盖 `tasks/{projectId}/prd.md`
+  - 如果 `reviewTarget='prd'` 且有 `fixedContent`：先备份 `prd.md` 为 `prd-{yyyyMMddHHmmss}.md.bak`，再用临时文件 + `fs.rename` 原子替换覆盖 `prd.md`，在 `reviewResult` 中记录 `backupPath`
   - 兼容 portable 模式（`BotoolAgent/tasks/` 路径检测）
   - [规范] 写入文件前确保目录存在
   - [规范] 错误响应不泄露内部路径
@@ -527,7 +535,7 @@ Phase 4 仅依赖 Phase 1，可与 Phase 2/3 并行
   - 支持 `--target enrich` 选项审查 Enrich 结果
   - **创建后必须注册 symlink**: `mkdir -p ~/.claude/skills/botoolagent-prdreview && ln -sf "$(pwd)/skills/BotoolAgent/PRDReview/SKILL.md" ~/.claude/skills/botoolagent-prdreview/SKILL.md`
   - 注意：`setup.sh` 和 `pack.sh` 通过 glob `skills/BotoolAgent/*/SKILL.md` 自动发现，无需额外注册，但开发期间必须手动创建 symlink 才能在当前会话使用
-  - Typecheck passes (SKILL.md 格式校验)
+  - SKILL.md frontmatter 格式校验（包含必需字段: name, description, user-invocable）+ symlink 存在性检查 + 触发词列表完整
 
 - [ ] DT-008: 修复 Enrich `codeExamples` 全局分配 Bug (`文件: viewer/src/app/api/prd/merge/route.ts`)
   - 当前问题：`mergeEnrichedPrdJson()` 中所有 `codeExamples` 挂载到每个 task 的 `spec.codeExamples`
@@ -557,7 +565,7 @@ Phase 4 仅依赖 Phase 1，可与 Phase 2/3 并行
 
 #### MEDIUM
 - **Codex exec 响应时间不确定**: Codex 模型推理时间可能超过 60s → **缓解**: 60s 超时 + 自动重试 1 次 + 失败后跳过
-- **Codex 自由文本解析不稳定**: 两步法中 Codex 输出自由文本，服务端需解析为结构化 findings → **缓解**: 按段落提取（每个提到文件+问题的段落=一个 finding）；**解析失败 = 调用失败**（fail-closed, BR-009），走 retry/skipped 路径，绝不返回空 findings
+- **Codex 自由文本解析不稳定**: 两步法中 Codex 输出自由文本，服务端需解析为结构化 findings → **缓解**: 按段落提取（每个提到文件+问题的段落=一个 finding）；解析器返回 `{ success, findings }`：`success=false`（空文本/乱码）= 调用失败走 retry/skipped（BR-009）；`success=true && findings=[]`（Codex 明确无问题）= 合法 PASSED
 
 #### LOW
 - **Claude 修正可能改变 PRD 结构**: 修正时可能重写段落 → **缓解**: prompt 明确约束"保持原结构，仅修正问题"
@@ -567,7 +575,7 @@ Phase 4 仅依赖 Phase 1，可与 Phase 2/3 并行
 
 #### 单元测试
 - 对抗循环状态机：测试所有状态转换路径（passed, acknowledged, skipped）
-- 自由文本解析 fail-closed：测试 Codex 返回空输出或无法解析时走 retry 而非 passed
+- 自由文本解析 fail-closed：测试 Codex 返回空/乱码时 `success=false` 走 retry；测试 Codex 返回"no issues"时 `success=true, findings=[]` 走 PASSED
 - findings 累计：测试多轮 rule-violation findings 正确累计（不丢失前轮已修正的违规）
 - findings 统计：测试 severity 计数逻辑
 
@@ -575,7 +583,7 @@ Phase 4 仅依赖 Phase 1，可与 Phase 2/3 并行
 - **路径穿越 — rules**: 传入 `ruleId` 不存在时返回 400，禁止接受裸 file path
 - **路径穿越 — projectId**: 传入 `../etc/passwd`、`foo/../../bar` 等路径时返回 400
 - **命令注入**: 传入含 shell 特殊字符的 content 时 spawn 不执行注入
-- **解析失败不绕门控**: mock Codex 返回空文本或无法解析的内容，验证最终状态为 skipped 而非 passed
+- **解析失败不绕门控**: mock Codex 返回空文本或乱码，验证最终状态为 skipped 而非 passed；同时 mock Codex 返回"no issues found"明确文本，验证解析为 `success=true, findings=[]` 且状态为 passed
 
 #### 集成测试
 - API 端点：测试 `/api/prd/review` 和 `/api/prd/fix` 的 SSE 流式响应

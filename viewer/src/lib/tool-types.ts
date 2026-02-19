@@ -120,6 +120,7 @@ export interface SpecCodeExample {
   language: string;
   description: string;
   code: string;
+  taskId?: string;
 }
 
 export interface SpecTestCase {

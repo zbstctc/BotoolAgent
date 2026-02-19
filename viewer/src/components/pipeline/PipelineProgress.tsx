@@ -15,7 +15,9 @@ interface PipelineProgressProps {
 
 const DEFAULT_STEPS: PipelineStep[] = [
   { id: 'rule-check', name: '规范选择', description: '选择要应用的编码规范', status: 'pending' },
+  { id: 'prd-review', name: 'PRD 审查', description: '对抗性审查 PRD 文档', status: 'pending' },
   { id: 'auto-enrich', name: '自动生成', description: '生成代码示例和测试用例', status: 'pending' },
+  { id: 'enrich-review', name: 'Enrich 审查', description: '对抗性审查生成结果', status: 'pending' },
   { id: 'enrichment-summary', name: '确认', description: '确认并生成 prd.json', status: 'pending' },
 ];
 

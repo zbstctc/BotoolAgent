@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, startTransition } from "react";
 import { Terminal, X } from "lucide-react";
 import {
   Popover,
@@ -55,7 +55,8 @@ export function ClaudeProcesses() {
     try {
       const res = await fetch("/api/claude-processes");
       if (res.ok) {
-        setData(await res.json());
+        const result = await res.json();
+        startTransition(() => setData(result));
       }
     } catch {
       // keep previous data on error
@@ -63,12 +64,14 @@ export function ClaudeProcesses() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchProcesses();
     const interval = setInterval(fetchProcesses, 10_000);
     return () => clearInterval(interval);
   }, [fetchProcesses]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) fetchProcesses();
   }, [open, fetchProcesses]);
 

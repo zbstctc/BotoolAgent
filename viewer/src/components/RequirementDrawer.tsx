@@ -9,6 +9,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import {
   Popover,
@@ -93,33 +100,27 @@ function GitSection({ requirement }: { requirement: Requirement }) {
 
 function MoreActionsMenu({
   requirement,
-  onDelete,
   onArchive,
+  onDeleteRequest,
 }: {
   requirement: Requirement;
-  onDelete?: (id: string) => void;
   onArchive?: (id: string) => void;
+  onDeleteRequest?: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleArchive = () => {
     setOpen(false);
     onArchive?.(requirement.id);
   };
 
-  const handleDelete = () => {
-    if (confirmDelete) {
-      setOpen(false);
-      setConfirmDelete(false);
-      onDelete?.(requirement.id);
-    } else {
-      setConfirmDelete(true);
-    }
+  const handleDeleteClick = () => {
+    setOpen(false);
+    onDeleteRequest?.();
   };
 
   return (
-    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setConfirmDelete(false); }}>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
@@ -144,17 +145,13 @@ function MoreActionsMenu({
             归档
           </button>
         )}
-        {onDelete && (
+        {onDeleteRequest && (
           <button
-            onClick={handleDelete}
-            className={`flex w-full items-center gap-2 rounded px-3 py-2 text-sm transition-colors ${
-              confirmDelete
-                ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                : 'text-neutral-700 hover:bg-neutral-50'
-            }`}
+            onClick={handleDeleteClick}
+            className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors"
           >
-            <Trash2 className="h-3.5 w-3.5" />
-            {confirmDelete ? '确认删除？' : '删除'}
+            <Trash2 className="h-3.5 w-3.5 text-neutral-400" />
+            删除
           </button>
         )}
       </PopoverContent>
@@ -170,62 +167,91 @@ export function RequirementDrawer({
   onDelete,
   onArchive,
 }: RequirementDrawerProps) {
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
   if (!requirement) return null;
 
   const hasTaskInfo = requirement.taskCount != null && requirement.stage >= 2;
   const hasGitInfo = requirement.branchName != null && requirement.stage >= 3;
 
+  const handleConfirmDelete = () => {
+    setDeleteDialogOpen(false);
+    onDelete?.(requirement.id);
+  };
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        showCloseButton={false}
-        className="flex flex-col bg-white p-0 sm:max-w-[420px]"
-      >
-        {/* Header */}
-        <SheetHeader className="flex flex-row items-center justify-between border-b border-neutral-100 px-5 py-4 gap-2">
-          <SheetTitle className="truncate text-base font-semibold text-neutral-900">
-            {requirement.name}
-          </SheetTitle>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <MoreActionsMenu
-              requirement={requirement}
-              onDelete={onDelete}
-              onArchive={onArchive}
-            />
-            <SheetClose asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-neutral-500 hover:text-neutral-900">
-                <X className="h-4 w-4" />
-              </Button>
-            </SheetClose>
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent
+          side="right"
+          showCloseButton={false}
+          className="flex flex-col bg-white p-0 sm:max-w-[420px]"
+        >
+          {/* Header */}
+          <SheetHeader className="flex flex-row items-center justify-between border-b border-neutral-100 px-5 py-4 gap-2">
+            <SheetTitle className="truncate text-base font-semibold text-neutral-900">
+              {requirement.name}
+            </SheetTitle>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <MoreActionsMenu
+                requirement={requirement}
+                onArchive={onArchive}
+                onDeleteRequest={onDelete ? () => setDeleteDialogOpen(true) : undefined}
+              />
+              <SheetClose asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-neutral-500 hover:text-neutral-900">
+                  <X className="h-4 w-4" />
+                </Button>
+              </SheetClose>
+            </div>
+          </SheetHeader>
+
+          {/* Scrollable body */}
+          <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
+            {/* Stage Timeline section */}
+            <div className="flex flex-col gap-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                阶段进度
+              </h3>
+              <StageTimeline
+                requirement={requirement}
+                onStageAction={onNavigate}
+              />
+            </div>
+
+            {/* Divider before optional sections */}
+            {(hasTaskInfo || hasGitInfo) && (
+              <div className="border-t border-neutral-100" />
+            )}
+
+            {/* Task details (Stage 2+) */}
+            {hasTaskInfo && <TaskSection requirement={requirement} />}
+
+            {/* Git info (Stage 3+) */}
+            {hasGitInfo && <GitSection requirement={requirement} />}
           </div>
-        </SheetHeader>
+        </SheetContent>
+      </Sheet>
 
-        {/* Scrollable body */}
-        <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
-          {/* Stage Timeline section */}
-          <div className="flex flex-col gap-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-              阶段进度
-            </h3>
-            <StageTimeline
-              requirement={requirement}
-              onStageAction={onNavigate}
-            />
-          </div>
-
-          {/* Divider before optional sections */}
-          {(hasTaskInfo || hasGitInfo) && (
-            <div className="border-t border-neutral-100" />
-          )}
-
-          {/* Task details (Stage 2+) */}
-          {hasTaskInfo && <TaskSection requirement={requirement} />}
-
-          {/* Git info (Stage 3+) */}
-          {hasGitInfo && <GitSection requirement={requirement} />}
-        </div>
-      </SheetContent>
-    </Sheet>
+      {/* Delete confirmation dialog — outside Sheet to avoid focus conflicts */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-sm bg-white">
+          <DialogHeader>
+            <DialogTitle>确认删除</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-neutral-600">
+            删除后不可恢复，确认删除「{requirement.name}」？
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={handleConfirmDelete}>
+              删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

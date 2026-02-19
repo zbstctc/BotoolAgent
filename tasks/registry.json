@@ -7,19 +7,19 @@
       "prdJson": "performance-update/prd.json",
       "progress": "performance-update/progress.txt",
       "branch": "botool/performance-update",
-      "status": "coding",
+      "status": "complete",
       "createdAt": "2026-02-18T12:00:00.000Z",
-      "updatedAt": "2026-02-18T12:00:00.000Z"
+      "updatedAt": "2026-02-20T01:00:00.000Z"
     },
     "dashboard-worktree-unified": {
-      "name": "BotoolAgent Dashboard \u91cd\u6784 + Worktree \u5e76\u53d1\u6267\u884c",
+      "name": "BotoolAgent Dashboard 重构 + Worktree 并发执行",
       "prdMd": "dashboard-worktree-unified/prd.md",
       "prdJson": "dashboard-worktree-unified/prd.json",
       "progress": "dashboard-worktree-unified/progress.txt",
       "branch": "botool/dashboard-worktree-unified",
-      "status": "coding",
+      "status": "complete",
       "createdAt": "2026-02-18T18:00:00.000Z",
-      "updatedAt": "2026-02-18T18:00:00.000Z"
+      "updatedAt": "2026-02-20T01:00:00.000Z"
     },
     "adversarial-review": {
       "name": "对抗式双模型审查管道 (Adversarial Review Pipeline)",
@@ -27,9 +27,9 @@
       "prdJson": "adversarial-review/prd.json",
       "progress": "adversarial-review/progress.txt",
       "branch": "botool/adversarial-review",
-      "status": "prd",
+      "status": "complete",
       "createdAt": "2026-02-19T04:00:00.000Z",
-      "updatedAt": "2026-02-19T04:00:00.000Z"
+      "updatedAt": "2026-02-20T01:00:00.000Z"
     },
     "prd-adversarial-review": {
       "name": "PRD 对抗性审查 (PRD Adversarial Review)",
@@ -37,9 +37,9 @@
       "prdJson": "prd-adversarial-review/prd.json",
       "progress": "prd-adversarial-review/progress.txt",
       "branch": "botool/prd-adversarial-review",
-      "status": "coding",
+      "status": "complete",
       "createdAt": "2026-02-19T12:00:00.000Z",
-      "updatedAt": "2026-02-19T18:00:00.000Z"
+      "updatedAt": "2026-02-20T01:00:00.000Z"
     },
     "remote-mobile-pwa": {
       "name": "BotoolAgent Remote Access + Mobile PWA",
@@ -50,7 +50,35 @@
       "status": "prd",
       "createdAt": "2026-02-19T20:00:00.000Z",
       "updatedAt": "2026-02-19T20:00:00.000Z"
+    },
+    "viewer-tab-enhancement": {
+      "name": "Viewer Tab 优化",
+      "prdMd": "viewer-tab-enhancement/prd.md",
+      "prdJson": "viewer-tab-enhancement/prd.json",
+      "progress": "viewer-tab-enhancement/progress.txt",
+      "branch": "botool/viewer-tab-enhancement",
+      "status": "complete",
+      "createdAt": "2026-02-19T22:00:00.000Z",
+      "updatedAt": "2026-02-20T01:00:00.000Z"
+    },
+    "stage3-activity-feed": {
+      "name": "Stage 3 实时代理活动流",
+      "prdMd": "stage3-activity-feed/prd.md",
+      "prdJson": "stage3-activity-feed/prd.json",
+      "progress": "stage3-activity-feed/progress.txt",
+      "branch": "botool/stage3-activity-feed",
+      "status": "testing",
+      "createdAt": "2026-02-19T22:00:00.000Z",
+      "updatedAt": "2026-02-19T22:00:00.000Z"
+    },
+    "stage3-cockpit": {
+      "name": "Stage 3 Cockpit 重设计",
+      "prdMd": "stage3-cockpit/prd.md",
+      "branch": "botool/stage3-cockpit",
+      "status": "complete",
+      "createdAt": "2026-02-18T00:00:00.000Z",
+      "updatedAt": "2026-02-20T01:00:00.000Z"
     }
   },
-  "activeProject": "remote-mobile-pwa"
+  "activeProject": "stage3-activity-feed"
 }

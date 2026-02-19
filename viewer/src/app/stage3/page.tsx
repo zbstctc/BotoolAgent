@@ -8,6 +8,7 @@ import type { DevTask, PrdData } from '@/hooks';
 import { FlowChart, type AgentPhase } from '@/components/FlowChart';
 import { useProject } from '@/contexts/ProjectContext';
 import { useRequirement } from '@/contexts/RequirementContext';
+import { useTab } from '@/contexts/TabContext';
 import { useAgentStatus } from '@/hooks/useAgentStatus';
 import AgentDataPanel from '@/components/AgentDataPanel/AgentDataPanel';
 import type { GitStats } from '@/components/AgentDataPanel/AgentDataPanel';
@@ -107,6 +108,19 @@ function Stage3PageContent() {
 
   // Agent logs polling (activity feed)
   const agentLogs = useAgentLogs({ projectId: projectId ?? '', enabled: agentStatus.isRunning });
+
+  // Sync agent status to TabContext
+  const { updateTabStatus } = useTab();
+  useEffect(() => {
+    if (!reqId || !agentStatus.status) return;
+    updateTabStatus(
+      reqId,
+      agentStatus.status.status,
+      agentStatus.status.total > 0
+        ? { completed: agentStatus.status.completed, total: agentStatus.status.total }
+        : undefined
+    );
+  }, [reqId, agentStatus.status?.status, agentStatus.status?.completed, agentStatus.status?.total, updateTabStatus]);
 
   const [prdData, setPrdData] = useState<PrdData | null>(null);
   const [progressLog, setProgressLog] = useState<string>('');
@@ -369,9 +383,10 @@ function Stage3PageContent() {
     if (activeProject) {
       updateProject(activeProject.id, { currentStage: 4 });
     }
-    // Navigate to Stage 4
-    router.push('/stage4');
-  }, [router, activeProject, updateProject]);
+    // Navigate to Stage 4, preserving req param
+    const params = reqId ? `?req=${reqId}` : '';
+    router.push(`/stage4${params}`);
+  }, [router, activeProject, updateProject, reqId]);
 
   // Handle transition modal later (go back to Dashboard)
   const handleTransitionLater = useCallback(() => {
