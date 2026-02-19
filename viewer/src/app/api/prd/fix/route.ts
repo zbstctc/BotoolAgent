@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
           console.error('[prd-fix] Error during fix:', error);
           sendSSE({
             type: 'error',
-            error: error instanceof Error ? error.message : 'Unknown error during fix',
+            error: 'Internal server error during fix',
           });
         } finally {
           // Stop CLI manager
