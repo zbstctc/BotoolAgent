@@ -201,7 +201,7 @@ export async function POST(request: Request) {
       if (testingUseTeams) {
         claudeArgs.push('--teammate-mode', testingTeammateMode);
       }
-      claudeArgs.push('-p', prompt);
+      claudeArgs.push('--verbose', '--output-format', 'stream-json', '-p', prompt);
 
       // Write initial status so Stage 4 UI can track progress
       writeAgentStatus({
@@ -242,8 +242,33 @@ export async function POST(request: Request) {
         }
       };
 
+      // Parse stream-json output: each line is a JSON event
+      let stdoutBuffer = '';
       child.stdout?.on('data', (data: Buffer) => {
-        appendLog(data.toString());
+        stdoutBuffer += data.toString();
+        const lines = stdoutBuffer.split('\n');
+        stdoutBuffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const evt = JSON.parse(line);
+            // Extract human-readable content from stream events
+            if (evt.type === 'assistant' && evt.message?.content) {
+              for (const block of evt.message.content) {
+                if (block.type === 'text' && block.text) {
+                  appendLog(block.text + '\n');
+                } else if (block.type === 'tool_use') {
+                  appendLog(`[tool] ${block.name}: ${JSON.stringify(block.input).slice(0, 200)}\n`);
+                }
+              }
+            } else if (evt.type === 'result') {
+              appendLog(`\n[result] cost: $${evt.cost_usd?.toFixed(4) || '?'}, duration: ${evt.duration_ms || '?'}ms\n`);
+            }
+          } catch {
+            // Not valid JSON, log raw
+            appendLog(line + '\n');
+          }
+        }
       });
 
       child.stderr?.on('data', (data: Buffer) => {
@@ -259,10 +284,10 @@ export async function POST(request: Request) {
         writeAgentStatus({
           status: code === 0 ? 'complete' : 'error',
           message: code === 0
-            ? 'Testing pipeline completed'
+            ? '验收流程已完成'
             : tailMessage
-              ? `Testing failed (exit code ${code}): ${tailMessage}`
-              : `Testing failed (exit code ${code})`,
+              ? `验收失败（退出码 ${code}）: ${tailMessage}`
+              : `验收失败（退出码 ${code}）`,
         }, statusFile);
         cleanPidFile(pidFile);
       });
@@ -295,6 +320,7 @@ export async function POST(request: Request) {
         env: {
           ...cleanEnv2,
           ...(maxIterations ? { BOTOOL_MAX_ROUNDS: String(maxIterations) } : {}),
+          BOTOOL_MODEL: process.env.BOTOOL_MODEL || 'claude-opus-4-6',
         },
       });
     }
