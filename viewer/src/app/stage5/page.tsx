@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
+import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StageIndicator, StageTransitionModal } from '@/components';
 import { TestingReportSummary } from '@/components/TestingReportSummary';
@@ -232,6 +232,50 @@ function Stage5PageContent() {
   const isMergeBlocked = isAllPass === false || isAllPass === null;
   const canMerge = pageState === 'ready' && mergeStatus?.canMerge && prInfo && !isMergeBlocked;
 
+  // --- Auto-mode logic ---
+  const autoCreatePrRef = useRef(false);
+  const autoMergeRef = useRef(false);
+
+  // Reset refs when autoMode is turned off
+  useEffect(() => {
+    if (!activeProject?.autoMode) {
+      autoCreatePrRef.current = false;
+      autoMergeRef.current = false;
+    }
+  }, [activeProject?.autoMode]);
+
+  // Auto-create PR when autoMode is on and no PR exists
+  useEffect(() => {
+    if (!activeProject?.autoMode || pageState !== 'no_pr') return;
+    if (autoCreatePrRef.current) return;
+
+    autoCreatePrRef.current = true;
+    const timer = setTimeout(() => {
+      handleCreatePR();
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [activeProject?.autoMode, pageState, handleCreatePR]);
+
+  // Auto-merge when autoMode is on and PR is mergeable
+  useEffect(() => {
+    if (!activeProject?.autoMode || !canMerge) return;
+    if (autoMergeRef.current) return;
+
+    autoMergeRef.current = true;
+    const timer = setTimeout(() => {
+      handleMerge();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [activeProject?.autoMode, canMerge, handleMerge]);
+
+  // Auto-disable autoMode on error (git ops need human intervention)
+  useEffect(() => {
+    if (!activeProject?.autoMode || pageState !== 'error') return;
+    if (activeProject) {
+      updateProject(activeProject.id, { autoMode: false });
+    }
+  }, [activeProject?.autoMode, pageState, activeProject, updateProject]);
+
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white">
       <StageIndicator
@@ -422,6 +466,7 @@ function Stage5PageContent() {
         summary={`Project "${projectName || activeProject?.name || 'Unnamed'}" completed! Code merged to main.`}
         onConfirm={handleCompletionConfirm}
         onLater={handleCompletionLater}
+        autoCountdown={activeProject?.autoMode ? 3 : undefined}
       />
     </div>
   );
