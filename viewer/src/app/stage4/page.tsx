@@ -48,7 +48,7 @@ function Stage4PageContent() {
   const [agentLog, setAgentLog] = useState<string[]>([]);
   const [showTransitionModal, setShowTransitionModal] = useState(false);
   const [projectName, setProjectName] = useState('');
-  const logEndRef = useRef<HTMLDivElement>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   // Layer progress state (default: all pending)
@@ -78,9 +78,12 @@ function Stage4PageContent() {
     }
   }, [prd]);
 
-  // Auto-scroll log
+  // Auto-scroll log — scroll the container directly to avoid scrollIntoView
+  // crawling up the DOM and scrolling overflow-hidden ancestors out of view.
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
   }, [agentLog]);
 
   // Poll agent status via SSE
@@ -409,8 +412,8 @@ function Stage4PageContent() {
             </div>
 
             {/* Tab: 测试日志 */}
-            <TabsContent value="logs" className="flex-1 min-h-0">
-              <div className="h-full rounded-lg border border-neutral-200 bg-neutral-900 overflow-auto">
+            <TabsContent value="logs" className="flex-1 min-h-0 overflow-hidden">
+              <div ref={logContainerRef} className="h-full rounded-lg border border-neutral-200 bg-neutral-900 overflow-auto">
                 <div className="p-4 font-mono text-xs text-neutral-300 space-y-1">
                   {agentLog.length === 0 ? (
                     <p className="text-neutral-500 italic">等待验收启动...</p>
@@ -426,7 +429,6 @@ function Stage4PageContent() {
                       </p>
                     ))
                   )}
-                  <div ref={logEndRef} />
                 </div>
               </div>
             </TabsContent>
