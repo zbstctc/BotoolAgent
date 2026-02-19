@@ -1,0 +1,52 @@
+{
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "category": "logic",
+      "rule": "no-issues-exact-match",
+      "file": "viewer/src/app/api/prd/review/route.ts",
+      "line": 160,
+      "message": "NO_ISSUES_FOUND matched via .includes() — could drop real findings if Codex echoes the marker while also returning findings",
+      "suggestion": "Use exact match (trimmed === 'NO_ISSUES_FOUND')",
+      "resolution": "fixed",
+      "fixCommit": "13b533b"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "error-handling",
+      "rule": "subprocess-cleanup-on-cancel",
+      "file": "viewer/src/app/api/prd/review/route.ts",
+      "line": 515,
+      "message": "Codex subprocess not killed when SSE stream is canceled — resource leak on client navigation away",
+      "suggestion": "Track spawned process reference and kill it in stream cancel() callback",
+      "resolution": "fixed",
+      "fixCommit": "13b533b"
+    },
+    {
+      "severity": "LOW",
+      "category": "logic",
+      "rule": "stale-state-cross-run",
+      "file": "viewer/src/app/stage2/page.tsx",
+      "line": 94,
+      "message": "fixedEnrichResult not cleared when new enrich result arrives — stale data can leak into Enrich review step on rerun",
+      "suggestion": "Call setFixedEnrichResult(null) in handleAutoEnrichComplete",
+      "resolution": "fixed",
+      "fixCommit": "13b533b"
+    }
+  ],
+  "adversarialState": {
+    "round": 1,
+    "maxRounds": 3,
+    "status": "converged",
+    "rounds": [
+      {
+        "round": 1,
+        "codexFindings": 3,
+        "fixed": 3,
+        "rejected": 0,
+        "remaining": 0
+      }
+    ]
+  },
+  "timestamp": "2026-02-19T00:00:00Z"
+}

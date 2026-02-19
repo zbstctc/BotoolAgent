@@ -1,0 +1,99 @@
+{
+  "findings": [
+    {
+      "severity": "HIGH",
+      "category": "logic",
+      "rule": "tmux-capture-pane-invalid-flag",
+      "file": "viewer/src/app/api/agent/logs/route.ts",
+      "line": 67,
+      "message": "capture-pane uses invalid -l flag; should be -S -40 (start from line -40)",
+      "suggestion": "Replace '-l', '40' with '-S', '-40'",
+      "resolution": "fixed",
+      "fixCommit": "d8c533c"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "logic",
+      "rule": "set-dedup-causes-silent-filtering",
+      "file": "viewer/src/hooks/useAgentLogs.ts",
+      "line": 20,
+      "message": "Set deduplication by content silently drops legitimate repeated lines",
+      "suggestion": "Use snapshot overlap detection instead of content-based Set",
+      "resolution": "fixed",
+      "rejectionReason": "Codex rejected the initial argument; fixed with overlap-based deduplication",
+      "codexAccepted": false,
+      "fixCommit": "dd0f6f3"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "logic",
+      "rule": "auto-switch-effect-dep-loop",
+      "file": "viewer/src/app/stage3/page.tsx",
+      "line": 241,
+      "message": "Auto-switch useEffect with activeTab in deps locks user on activity tab",
+      "suggestion": "Use a one-shot ref guard; remove activeTab from deps",
+      "resolution": "fixed",
+      "fixCommit": "d8c533c"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "logic",
+      "rule": "out-of-order-snapshot-merging",
+      "file": "viewer/src/hooks/useAgentLogs.ts",
+      "line": 47,
+      "message": "Polling without ordering guarantee; slow requests can corrupt snapshot state",
+      "suggestion": "Add request sequence number to discard stale responses",
+      "resolution": "fixed",
+      "fixCommit": "f41a7c6"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "logic",
+      "rule": "request-id-reset-bypass",
+      "file": "viewer/src/hooks/useAgentLogs.ts",
+      "line": 34,
+      "message": "Resetting pendingReqIdRef to 0 lets pre-reset in-flight requests bypass stale guard",
+      "suggestion": "Keep pendingReqIdRef monotonic; never reset it to 0",
+      "resolution": "fixed",
+      "fixCommit": "aba3d45"
+    }
+  ],
+  "adversarialState": {
+    "round": 3,
+    "maxRounds": 3,
+    "status": "converged",
+    "rounds": [
+      {
+        "round": 1,
+        "codexFindings": 3,
+        "fixed": 2,
+        "rejected": 0,
+        "rejectionReasons": [
+          {
+            "finding": "Set deduplication causes silent filtering",
+            "reason": "Claimed intentional design for snapshot polling",
+            "codexAccepted": false
+          }
+        ],
+        "remaining": 1
+      },
+      {
+        "round": 2,
+        "codexFindings": 1,
+        "fixed": 1,
+        "rejected": 0,
+        "rejectionReasons": [],
+        "remaining": 0
+      },
+      {
+        "round": 3,
+        "codexFindings": 1,
+        "fixed": 1,
+        "rejected": 0,
+        "rejectionReasons": [],
+        "remaining": 0
+      }
+    ]
+  },
+  "timestamp": "2026-02-20T00:00:00Z"
+}

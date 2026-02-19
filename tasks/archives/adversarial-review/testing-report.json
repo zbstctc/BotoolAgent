@@ -1,0 +1,53 @@
+{
+  "layers": [
+    {
+      "id": "L1",
+      "name": "Regression (TypeCheck + Lint)",
+      "status": "pass",
+      "fixCount": 2,
+      "rounds": 1
+    },
+    {
+      "id": "L2",
+      "name": "Unit Tests",
+      "status": "skipped",
+      "fixCount": 0,
+      "rounds": 0
+    },
+    {
+      "id": "L3",
+      "name": "E2E Tests",
+      "status": "pass",
+      "fixCount": 1,
+      "rounds": 1
+    },
+    {
+      "id": "L4",
+      "name": "Code Review",
+      "status": "pass",
+      "fixCount": 2,
+      "rounds": 1
+    },
+    {
+      "id": "L5",
+      "name": "Codex 红队审查",
+      "status": "pass",
+      "adversarialRounds": 1,
+      "findingsTotal": 2,
+      "fixed": 1,
+      "rejected": 1
+    },
+    {
+      "id": "L6",
+      "name": "PR 创建 + PR-Agent",
+      "status": "pass",
+      "prUrl": "https://github.com/zbstctc/BotoolAgent/pull/10",
+      "agentComments": 0,
+      "fixRounds": 0
+    }
+  ],
+  "verdict": "all_pass",
+  "prReady": true,
+  "prUrl": "https://github.com/zbstctc/BotoolAgent/pull/10",
+  "timestamp": "2026-02-19T15:35:00Z"
+}

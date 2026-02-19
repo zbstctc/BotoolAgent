@@ -1,0 +1,15 @@
+{
+  "round": 1,
+  "maxRounds": 3,
+  "status": "converged",
+  "rounds": [
+    {
+      "round": 1,
+      "codexFindings": 3,
+      "fixed": 3,
+      "rejected": 0,
+      "rejectionReasons": [],
+      "remaining": 0
+    }
+  ]
+}

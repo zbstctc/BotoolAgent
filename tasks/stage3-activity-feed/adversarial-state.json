@@ -1,0 +1,37 @@
+{
+  "round": 3,
+  "maxRounds": 3,
+  "status": "converged",
+  "rounds": [
+    {
+      "round": 1,
+      "codexFindings": 3,
+      "fixed": 2,
+      "rejected": 0,
+      "rejectionReasons": [
+        {
+          "finding": "Set deduplication causes silent filtering",
+          "reason": "Claimed intentional design for snapshot polling",
+          "codexAccepted": false
+        }
+      ],
+      "remaining": 1
+    },
+    {
+      "round": 2,
+      "codexFindings": 1,
+      "fixed": 1,
+      "rejected": 0,
+      "rejectionReasons": [],
+      "remaining": 0
+    },
+    {
+      "round": 3,
+      "codexFindings": 1,
+      "fixed": 1,
+      "rejected": 0,
+      "rejectionReasons": [],
+      "remaining": 0
+    }
+  ]
+}

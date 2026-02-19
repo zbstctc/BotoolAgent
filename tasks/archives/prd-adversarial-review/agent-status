@@ -1,0 +1,11 @@
+{
+  "status": "complete",
+  "message": "验收流程已完成",
+  "timestamp": "2026-02-19T13:16:25.798Z",
+  "iteration": 0,
+  "maxIterations": 0,
+  "completed": 0,
+  "total": 0,
+  "currentTask": "none",
+  "retryCount": 0
+}
