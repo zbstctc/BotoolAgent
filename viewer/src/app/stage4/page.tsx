@@ -36,7 +36,8 @@ function Stage4PageContent() {
   const rawProjectId = searchParams.get('projectId') || undefined;
   const projectId = rawProjectId ?? (activeRequirement?.id);
 
-  useProjectValidation({ currentStage: 4 });
+  // Skip validation when navigated via RequirementContext (req param)
+  useProjectValidation({ currentStage: 4, skipValidation: Boolean(reqId) });
 
   const [testingStatus, setTestingStatus] = useState<TestingStatus>('idle');
   const [statusMessage, setStatusMessage] = useState('');

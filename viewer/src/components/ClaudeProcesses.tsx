@@ -109,7 +109,7 @@ export function ClaudeProcesses() {
   }, [confirmTarget, killProcess]);
 
   const count = data?.totalCount ?? 0;
-  const unresponsiveCount = data?.processes.filter((p) => p.isUnresponsive).length ?? 0;
+  const unresponsiveCount = data?.processes?.filter((p) => p.isUnresponsive).length ?? 0;
 
   return (
     <>

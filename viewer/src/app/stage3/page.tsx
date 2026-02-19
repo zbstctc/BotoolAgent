@@ -98,8 +98,8 @@ function Stage3PageContent() {
   // Project context
   const { activeProject, updateProject } = useProject();
 
-  // Project validation
-  useProjectValidation({ currentStage: 3 });
+  // Project validation — skip when navigated via RequirementContext (req param)
+  useProjectValidation({ currentStage: 3, skipValidation: Boolean(reqId) });
 
   // Agent status via SSE
   const agentStatus = useAgentStatus({ stream: true, projectId });

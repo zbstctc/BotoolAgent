@@ -46,7 +46,8 @@ function Stage5PageContent() {
   const rawProjectId = searchParams.get('projectId') || undefined;
   const projectId = rawProjectId ?? (activeRequirement?.id);
 
-  useProjectValidation({ currentStage: 5 });
+  // Skip validation when navigated via RequirementContext (req param)
+  useProjectValidation({ currentStage: 5, skipValidation: Boolean(reqId) });
 
   // Data states
   const [prInfo, setPrInfo] = useState<PRInfo | null>(null);
