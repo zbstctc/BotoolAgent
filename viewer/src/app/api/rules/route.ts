@@ -86,6 +86,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Ensure rules directory exists before path validation
+    await ensureRulesDir();
+
     // 验证 category 路径安全
     try {
       ensureContainedPath(RULES_DIR, category);
@@ -139,6 +142,9 @@ export async function DELETE(request: NextRequest) {
         headers: { 'Content-Type': 'application/json' },
       });
     }
+
+    // Ensure rules directory exists before path validation
+    await ensureRulesDir();
 
     // 验证路径安全
     try {

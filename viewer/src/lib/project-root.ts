@@ -49,11 +49,14 @@ export function normalizeProjectId(projectId?: string | null): string | null {
 
 /**
  * Validate a git reference (branch name, tag, etc.) is safe.
- * Enforces git check-ref-format rules plus additional safety.
+ * Follows git check-ref-format rules: blocks control chars, space,
+ * ~, ^, :, ?, *, [, \, DEL while allowing Unicode and +.
  */
 export function isSafeGitRef(ref: string): boolean {
   if (!ref || ref.length > 255) return false;
-  if (!/^[a-zA-Z0-9._\/-]+$/.test(ref)) return false;
+  // Block control chars (0x00-0x1F), DEL (0x7F), space, and git-forbidden chars
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f\x7f ~^:?*[\\\x20]/.test(ref)) return false;
   if (ref.includes('..')) return false;
   if (ref.startsWith('-')) return false;
   if (ref.includes('@{')) return false;
