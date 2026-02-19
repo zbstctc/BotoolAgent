@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createSession } from '@/lib/prd-session-storage';
 import { useProject } from '@/contexts/ProjectContext';
 import { useRequirement } from '@/contexts/RequirementContext';
+import { useTab } from '@/contexts/TabContext';
 import {
   Dialog,
   DialogContent,
@@ -66,6 +67,7 @@ interface NewTabProps {
 
 function NewTab({ isActive, onSuccess }: NewTabProps) {
   const router = useRouter();
+  const { openTab } = useTab();
   const { createProject } = useProject();
   const { createRequirement } = useRequirement();
   const [description, setDescription] = useState('');
@@ -190,7 +192,10 @@ function NewTab({ isActive, onSuccess }: NewTabProps) {
         });
 
         // Navigate to Stage 1 with both req and session params
-        router.push(`/stage1?req=${newReq.id}&session=${sessionId}`);
+        openTab(
+          { id: newReq.id, name: projectName, stage: 1 },
+          `/stage1?req=${newReq.id}&session=${sessionId}`
+        );
         onSuccess();
       } catch (error) {
         console.error('Failed to create requirement:', error);
@@ -202,7 +207,7 @@ function NewTab({ isActive, onSuccess }: NewTabProps) {
       generatedTitle,
       requirementType,
       customType,
-      router,
+      openTab,
       onSuccess,
       createProject,
       createRequirement,
@@ -328,6 +333,7 @@ interface ImportTabProps {
 
 function ImportTab({ isActive, onSuccess }: ImportTabProps) {
   const router = useRouter();
+  const { openTab } = useTab();
   const { createProject } = useProject();
   const { createRequirement } = useRequirement();
   const [files, setFiles] = useState<MdFileInfo[]>([]);
@@ -418,12 +424,13 @@ function ImportTab({ isActive, onSuccess }: ImportTabProps) {
         sourceFile: file.path,
       });
 
-      router.push(
+      openTab(
+        { id: newReq.id, name: projectName, stage: 1 },
         `/stage1?req=${newReq.id}&session=${sessionId}&mode=transform&file=${encodeURIComponent(file.path)}`
       );
       onSuccess();
     },
-    [router, onSuccess, createProject, createRequirement]
+    [openTab, onSuccess, createProject, createRequirement]
   );
 
   const handleImport = useCallback(async () => {
@@ -455,12 +462,14 @@ function ImportTab({ isActive, onSuccess }: ImportTabProps) {
   }, [selectedFile, isImporting, startImportFlow]);
 
   const handleContinuePrevious = useCallback(() => {
-    if (!duplicateMarker) return;
-    router.push(
-      `/stage1?session=${duplicateMarker.sessionId}&mode=transform&file=${encodeURIComponent(selectedFile?.path || '')}`
+    if (!duplicateMarker || !selectedFile) return;
+    const projectName = selectedFile.name.replace(/\.md$/, '');
+    openTab(
+      { id: duplicateMarker.id, name: projectName, stage: 1 },
+      `/stage1?session=${duplicateMarker.sessionId}&mode=transform&file=${encodeURIComponent(selectedFile.path)}`
     );
     onSuccess();
-  }, [duplicateMarker, selectedFile, router, onSuccess]);
+  }, [duplicateMarker, selectedFile, openTab, onSuccess]);
 
   const handleRestartImport = useCallback(async () => {
     if (!selectedFile || !duplicateMarker) return;
