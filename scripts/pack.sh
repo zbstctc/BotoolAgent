@@ -28,6 +28,7 @@ mkdir -p "$PACKAGE_DIR/scripts"
 cp "$SCRIPT_DIR/scripts/BotoolAgent.sh" "$PACKAGE_DIR/scripts/"
 cp "$SCRIPT_DIR/CLAUDE.md" "$PACKAGE_DIR/"
 cp "$SCRIPT_DIR/CLAUDE.lead.md" "$PACKAGE_DIR/"
+cp "$SCRIPT_DIR/AGENTS.md" "$PACKAGE_DIR/"
 cp "$SCRIPT_DIR/README.md" "$PACKAGE_DIR/"
 cp "$SCRIPT_DIR/LICENSE" "$PACKAGE_DIR/" 2>/dev/null || true
 cp "$SCRIPT_DIR/docs/examples/prd.json.example" "$PACKAGE_DIR/" 2>/dev/null || true
@@ -153,6 +154,15 @@ else
   echo "  ⚠️  Codex CLI: not installed"
   echo "     Adversarial review (Testing L5) will be skipped."
   echo "     Install: npm install -g @openai/codex"
+fi
+
+# Check for optional codex-mcp-server
+if command -v npx >/dev/null 2>&1 && npx --yes @anthropic-ai/codex-mcp-server --help >/dev/null 2>&1; then
+  echo "  ✅ codex-mcp-server: available"
+else
+  echo "  ℹ️  codex-mcp-server: not detected (optional)"
+  echo "     Enables Codex as MCP tool inside Claude Code."
+  echo "     Install: npm install -g @anthropic-ai/codex-mcp-server"
 fi
 echo ""
 
