@@ -4,7 +4,7 @@ import { promisify } from 'util';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
 import { updateTaskHistoryEntry } from '@/lib/task-history';
-import { getProjectRoot, getProjectPrdJsonPath, getBotoolRoot, normalizeProjectId, getTasksDir } from '@/lib/project-root';
+import { getProjectRoot, getProjectPrdJsonPath, getBotoolRoot, normalizeProjectId, getTasksDir, isSafeGitRef } from '@/lib/project-root';
 import path from 'path';
 
 const execAsync = promisify(exec);
@@ -67,15 +67,6 @@ interface MergeResult {
   deletedBranch: boolean;
   commitSha?: string;
   message: string;
-}
-
-function isSafeGitRef(ref: string): boolean {
-  return (
-    /^[A-Za-z0-9._/-]+$/.test(ref) &&
-    !ref.startsWith('-') &&
-    !ref.includes('..') &&
-    !ref.includes('//')
-  );
 }
 
 function shellQuote(value: string): string {
