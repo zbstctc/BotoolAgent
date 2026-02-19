@@ -42,6 +42,12 @@ function playTone(type: 'complete' | 'error'): void {
   }
 }
 
+/** Headless client component that mounts the notification hook at layout level. */
+export function TabNotificationMount() {
+  useTabNotification();
+  return null;
+}
+
 export function useTabNotification(): void {
   const { tabs, activeTabId, setNeedsAttention } = useTab();
 
