@@ -149,8 +149,9 @@ function Stage3PageContent() {
   // Agent start error state
   const [agentStartError, setAgentStartError] = useState<string | null>(null);
 
-  // Auto-mode: retry count and guard ref
+  // Auto-mode: separate retry counters for agent errors vs startup errors
   const [autoRetryCount, setAutoRetryCount] = useState(0);
+  const [startupRetryCount, setStartupRetryCount] = useState(0);
   const autoStartedRef = useRef(false);
 
   // Handle start agent
@@ -186,10 +187,11 @@ function Stage3PageContent() {
 
   // --- Auto-mode effects ---
 
-  // Reset retry count & guard when autoMode is toggled off
+  // Reset retry counts & guard when autoMode is toggled off
   useEffect(() => {
     if (!activeProject?.autoMode) {
       setAutoRetryCount(0);
+      setStartupRetryCount(0);
       autoStartedRef.current = false;
     }
   }, [activeProject?.autoMode]);
@@ -227,13 +229,13 @@ function Stage3PageContent() {
   }, [activeProject?.autoMode, agentStatus.hasError, autoRetryCount, handleStartAgent, activeProject, updateProject]);
 
   // Auto-mode: handle API startup failure (agentStartError set but agentStatus not in error)
-  // Without this, autoStartedRef stays true and auto-mode gets stuck
+  // Uses separate startupRetryCount to avoid sharing retry slots with agentStatus.hasError handler
   useEffect(() => {
     if (!activeProject?.autoMode || !agentStartError) return;
     if (agentStatus.hasError) return; // Already handled by the effect above
 
-    if (autoRetryCount < 1) {
-      setAutoRetryCount(prev => prev + 1);
+    if (startupRetryCount < 1) {
+      setStartupRetryCount(prev => prev + 1);
       autoStartedRef.current = false; // Allow re-start
       setAgentStartError(null);
     } else {
@@ -241,7 +243,7 @@ function Stage3PageContent() {
         updateProject(activeProject.id, { autoMode: false });
       }
     }
-  }, [activeProject?.autoMode, agentStartError, agentStatus.hasError, autoRetryCount, activeProject, updateProject]);
+  }, [activeProject?.autoMode, agentStartError, agentStatus.hasError, startupRetryCount, activeProject, updateProject]);
 
   // Track agent start time for ProgressStrip and useTaskTimings
   const agentStartTimeRef = useRef<number>(0);
