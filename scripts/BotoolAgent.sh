@@ -163,9 +163,16 @@ load_config
 # 工具函数
 # ============================================================================
 check_all_tasks_complete() {
-  local remaining=$(grep -c '"passes": false' "$PRD_FILE" 2>/dev/null | tr -d '[:space:]')
-  [ -z "$remaining" ] && remaining=0
-  [ "$remaining" -eq 0 ]
+  # Count total DT tasks
+  local total=$(grep -c '"id": "DT-' "$PRD_FILE" 2>/dev/null | tr -d '[:space:]')
+  [ -z "$total" ] && total=0
+  # If no tasks exist, not complete
+  [ "$total" -eq 0 ] && return 1
+  # Count tasks explicitly marked as passed
+  local passed=$(grep -c '"passes": true' "$PRD_FILE" 2>/dev/null | tr -d '[:space:]')
+  [ -z "$passed" ] && passed=0
+  # All tasks complete only if every task has passes: true
+  [ "$passed" -ge "$total" ]
 }
 
 update_status() {
