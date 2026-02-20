@@ -1,0 +1,72 @@
+{
+  "findings": [
+    {
+      "severity": "HIGH",
+      "category": "logic",
+      "rule": "stale-closure",
+      "file": "viewer/src/components/pipeline/RuleCheckStep.tsx",
+      "line": 408,
+      "message": "autoMode auto-select calls setSelectedRules then handleConfirm from same render — stale closure reads empty selectedRules, silently skipping rule adaptation",
+      "suggestion": "Split into two effects: one to select rules, one to trigger confirm after state commits",
+      "resolution": "fixed",
+      "fixCommit": "45dd8bb"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "logic",
+      "rule": "infinite-retry",
+      "file": "viewer/src/components/pipeline/EnrichmentSummary.tsx",
+      "line": 307,
+      "message": "Auto-save effect retriggers when isSaving flips back to false on failure, creating unbounded retry loop hitting API every 2s",
+      "suggestion": "Guard effect with saveError check",
+      "resolution": "fixed",
+      "fixCommit": "45dd8bb"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "logic",
+      "rule": "deadlock",
+      "file": "viewer/src/app/stage3/page.tsx",
+      "line": 203,
+      "message": "autoStartedRef set to true before startAgent call — if API fails with status still idle, retry effect never runs and autoMode is permanently stuck",
+      "suggestion": "Add separate effect watching agentStartError to reset guard",
+      "resolution": "fixed",
+      "fixCommit": "45dd8bb"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "logic",
+      "rule": "shared-retry-counter",
+      "file": "viewer/src/app/stage3/page.tsx",
+      "line": 235,
+      "message": "Startup error handler shares autoRetryCount with agent error handler — single failed start can consume both retry paths",
+      "suggestion": "Use separate startupRetryCount counter",
+      "resolution": "fixed",
+      "fixCommit": "2a23abe"
+    }
+  ],
+  "adversarialState": {
+    "round": 2,
+    "maxRounds": 3,
+    "status": "converged",
+    "rounds": [
+      {
+        "round": 1,
+        "codexFindings": 3,
+        "fixed": 3,
+        "rejected": 0,
+        "rejectionReasons": [],
+        "remaining": 0
+      },
+      {
+        "round": 2,
+        "codexFindings": 1,
+        "fixed": 1,
+        "rejected": 0,
+        "rejectionReasons": [],
+        "remaining": 0
+      }
+    ]
+  },
+  "timestamp": "2026-02-20T05:30:00Z"
+}

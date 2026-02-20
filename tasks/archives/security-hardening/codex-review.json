@@ -1,0 +1,32 @@
+{
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "category": "logic",
+      "rule": "overly-strict-validation",
+      "file": "viewer/src/lib/project-root.ts",
+      "line": 56,
+      "message": "isSafeGitRef uses ASCII-only whitelist that rejects valid Unicode branch names and + character",
+      "suggestion": "Replace whitelist with Git check-ref-format compatible blocklist",
+      "resolution": "fixed",
+      "fixCommit": "210462d"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "error-handling",
+      "rule": "missing-precondition",
+      "file": "viewer/src/app/api/rules/route.ts",
+      "line": 91,
+      "message": "ensureContainedPath calls realpathSync on RULES_DIR which throws if directory does not exist",
+      "suggestion": "Call ensureRulesDir() before ensureContainedPath",
+      "resolution": "fixed",
+      "fixCommit": "210462d"
+    }
+  ],
+  "adversarialState": {
+    "round": 1,
+    "maxRounds": 3,
+    "status": "converged"
+  },
+  "timestamp": "2026-02-20T10:30:00Z"
+}

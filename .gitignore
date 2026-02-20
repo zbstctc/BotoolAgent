@@ -75,3 +75,4 @@ viewer/.turbo/
 
 # ===== Test Coverage =====
 coverage/
+test-results/

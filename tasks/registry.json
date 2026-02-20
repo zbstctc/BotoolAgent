@@ -78,7 +78,37 @@
       "status": "complete",
       "createdAt": "2026-02-18T00:00:00.000Z",
       "updatedAt": "2026-02-20T01:00:00.000Z"
+    },
+    "dashboard-clock-widget": {
+      "name": "Dashboard 当前时间小组件",
+      "prdMd": "dashboard-clock-widget/prd.md",
+      "prdJson": "dashboard-clock-widget/prd.json",
+      "progress": "dashboard-clock-widget/progress.txt",
+      "branch": "botool/dashboard-clock-widget",
+      "status": "prd",
+      "createdAt": "2026-02-20T12:00:00.000Z",
+      "updatedAt": "2026-02-20T12:00:00.000Z"
+    },
+    "security-hardening": {
+      "name": "BotoolAgent Viewer 安全加固",
+      "prdMd": "security-hardening/prd.md",
+      "prdJson": "security-hardening/prd.json",
+      "progress": "security-hardening/progress.txt",
+      "branch": "botool/security-hardening",
+      "status": "complete",
+      "createdAt": "2026-02-20T14:00:00.000Z",
+      "updatedAt": "2026-02-19T21:50:47.207Z"
+    },
+    "auto-mode": {
+      "name": "全自动模式 (Auto Mode)",
+      "prdMd": "auto-mode/prd.md",
+      "prdJson": "auto-mode/prd.json",
+      "progress": "auto-mode/progress.txt",
+      "branch": "botool/auto-mode",
+      "status": "complete",
+      "createdAt": "2026-02-20T16:00:00.000Z",
+      "updatedAt": "2026-02-20T18:00:00.000Z"
     }
   },
-  "activeProject": "stage3-activity-feed"
+  "activeProject": "auto-mode"
 }

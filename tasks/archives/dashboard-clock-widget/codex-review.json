@@ -1,0 +1,31 @@
+{
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "category": "logic",
+      "rule": "hydration-mismatch",
+      "file": "viewer/src/components/CurrentTime.tsx",
+      "line": 14,
+      "message": "useState(() => formatTime(new Date())) causes SSR/client hydration mismatch because server and client times differ",
+      "suggestion": "Add suppressHydrationWarning to the outer element, or initialize with empty string and set real time in useEffect",
+      "resolution": "fixed",
+      "fixCommit": "ade2d9c"
+    }
+  ],
+  "adversarialState": {
+    "round": 1,
+    "maxRounds": 3,
+    "status": "converged",
+    "rounds": [
+      {
+        "round": 1,
+        "codexFindings": 1,
+        "fixed": 1,
+        "rejected": 0,
+        "rejectionReasons": [],
+        "remaining": 0
+      }
+    ]
+  },
+  "timestamp": "2026-02-20T00:00:00Z"
+}

@@ -2,6 +2,53 @@
   "version": 1,
   "entries": [
     {
+      "id": "botool/dashboard-clock-widget",
+      "name": "Unknown Task",
+      "branchName": "botool/dashboard-clock-widget",
+      "status": "completed",
+      "stage": 5,
+      "tasksCompleted": 1,
+      "tasksTotal": 1,
+      "startTime": "2026-02-19T20:06:12.961Z",
+      "endTime": "2026-02-19T20:08:15.389Z",
+      "isMerged": true,
+      "prUrl": "https://github.com/zbstctc/BotoolAgent/pull/14",
+      "lastUpdated": "2026-02-19T20:08:15.389Z"
+    },
+    {
+      "id": "task-1771530880476",
+      "name": "Unknown Task",
+      "status": "running",
+      "stage": 4,
+      "tasksCompleted": 1,
+      "tasksTotal": 1,
+      "startTime": "2026-02-19T19:54:40.476Z",
+      "isMerged": false,
+      "lastUpdated": "2026-02-19T19:54:40.476Z"
+    },
+    {
+      "id": "task-1771530707474",
+      "name": "Unknown Task",
+      "status": "running",
+      "stage": 3,
+      "tasksCompleted": 0,
+      "tasksTotal": 1,
+      "startTime": "2026-02-19T19:51:47.474Z",
+      "isMerged": false,
+      "lastUpdated": "2026-02-19T19:51:47.474Z"
+    },
+    {
+      "id": "task-1771530492991",
+      "name": "Unknown Task",
+      "status": "running",
+      "stage": 3,
+      "tasksCompleted": 0,
+      "tasksTotal": 1,
+      "startTime": "2026-02-19T19:48:12.991Z",
+      "isMerged": false,
+      "lastUpdated": "2026-02-19T19:48:12.992Z"
+    },
+    {
       "id": "botool/stage3-activity-feed",
       "name": "BotoolAgent Viewer",
       "description": "Stage 3 实时代理活动流 — 通过捕获 tmux 会话输出，在 Stage 3 新增活动 Tab 中实时展示代理工作进展，填补启动后 2-4 分钟的空白期",
