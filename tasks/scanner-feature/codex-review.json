@@ -1,0 +1,58 @@
+{
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "category": "security",
+      "rule": "process-leak",
+      "file": "viewer/src/app/api/scanner/analyze/route.ts",
+      "line": 350,
+      "message": "SSE stream cancel() did not kill the spawned codex subprocess, leaving it running until timeout",
+      "suggestion": "Track active child process and kill it in cancel()",
+      "resolution": "fixed",
+      "fixCommit": "e0bb795"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "logic",
+      "rule": "stale-state",
+      "file": "viewer/src/components/Scanner/ScannerFlowChart.tsx",
+      "line": 107,
+      "message": "useNodesState/useEdgesState only apply initial values on mount; after re-analysis, graph shows stale data",
+      "suggestion": "Use key={scanResult.analyzedAt} to force remount on new results",
+      "resolution": "fixed",
+      "fixCommit": "e0bb795"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "logic",
+      "rule": "route-regression",
+      "file": "viewer/src/components/TabPanelManager.tsx",
+      "line": 127,
+      "message": "Direct navigation to /scanner shows dashboard when dashboard tab is active",
+      "suggestion": "Add isOnStandaloneUtilityUrl check to exclude /scanner from managed routes",
+      "resolution": "fixed",
+      "fixCommit": "e0bb795"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "logic",
+      "rule": "process-pointer-race",
+      "file": "viewer/src/app/api/scanner/analyze/route.ts",
+      "line": 299,
+      "message": "close/error handlers unconditionally clear activeCodexProcess, breaking tracking after cancel+restart sequence",
+      "suggestion": "Guard with identity check: if (activeCodexProcess === codex) activeCodexProcess = null",
+      "resolution": "fixed",
+      "fixCommit": "2cbdf3a"
+    }
+  ],
+  "adversarialState": {
+    "round": 2,
+    "maxRounds": 3,
+    "status": "converged",
+    "rounds": [
+      { "round": 1, "codexFindings": 4, "fixed": 3, "rejected": 0, "remaining": 1 },
+      { "round": 2, "codexFindings": 1, "fixed": 1, "rejected": 0, "remaining": 0 }
+    ]
+  },
+  "timestamp": "2026-02-21T00:00:00Z"
+}
