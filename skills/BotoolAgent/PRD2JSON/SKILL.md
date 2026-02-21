@@ -200,7 +200,13 @@ JSON_FILE="$TASKS_DIR/${PRD_BASENAME}.json"
 
 1. **Parse PRD § 7 (开发计划)** — extract all DT entries from each Phase
 2. **Map each DT to its PRD section with line numbers** — 使用 Grep 或 Read 获取 `### 7.X` 标题的行号，计算 Phase 的行号范围，生成 `"7.X (LSTART-LEND)"` 格式的 `prdSection`
-3. **Extract automation-only fields** — evals, testCases, dependsOn
+3. **For each DT, read PRD content then generate fields:**
+   - 用 `prdSection` 行号跳读 PRD 该段内容（Read 工具的 `offset` + `limit`）
+   - 读取该 DT 的描述、验收标准、涉及文件/组件/API 路由
+   - 根据读到的具体内容生成 `testCases`（参见 testCases Generation Rules）
+   - 根据涉及文件类型生成 `evals`（参见 Eval Generation Rules）
+   - 根据 DT 间依赖关系填写 `dependsOn`
+   - **禁止不读 PRD 内容直接推断 testCases，禁止留空 `[]`**
 4. **Group tasks into sessions** — based on dependencies and file overlap
 5. **Embed constitution** — selected rule files as `constitution.rules`
 6. **Set `prdFile`** — use `$TASKS_DIR/prd-[feature-name].md`（相对于项目根目录）
@@ -399,15 +405,27 @@ Additional evals based on task content:
 
 ## testCases Generation Rules
 
-Every task gets:
+**生成流程：先读 PRD，再写 testCases。**
+
+对每个 DT，必须先读取 PRD 中该 DT 的描述和验收标准（通过 `prdSection` 行号跳读），然后根据具体功能推导 testCases。**禁止不读 PRD 就直接生成，禁止留空数组。**
+
+每个 DT 必须有：
 ```json
 { "type": "typecheck", "desc": "TypeScript 编译通过" }
 ```
 
-Additional testCases based on task content:
-- Tasks with transformation logic → `{ "type": "unit", "desc": "...", "tdd": true }`
-- UI/page rendering tasks → `{ "type": "e2e", "desc": "..." }`
-- Visual/animation tasks → `{ "type": "manual", "desc": "..." }`
+根据 DT 的**具体功能**追加（desc 必须描述该 DT 的实际行为，不能写泛泛的"UI 渲染"）：
+
+| 任务类型 | 触发条件 | 生成 testCase 示例 |
+|---------|---------|-------------------|
+| E2E | 涉及用户可见的交互：页面、弹窗、按钮、表单、数据展示、API 端点 | `{ "type": "e2e", "desc": "点击导入按钮，弹窗正确打开并显示文件选择器" }` |
+| Unit | 涉及纯逻辑：数据转换、计算、schema 验证、工具函数 | `{ "type": "unit", "desc": "convertStatus() 正确映射所有状态枚举", "tdd": true }` |
+| Manual | 涉及视觉/动画效果无法自动验证 | `{ "type": "manual", "desc": "拖拽元素时动画流畅无卡顿" }` |
+
+**强制规则：**
+- `desc` 必须具体描述该 DT 的行为，不得写"测试功能正常"、"页面渲染正确"等无意义描述
+- 一个 DT 可同时有多种 type（如既有 unit 又有 e2e）
+- 任何 UI 交互、API 端点相关的 DT 必须至少有一条 e2e testCase
 
 ---
 
