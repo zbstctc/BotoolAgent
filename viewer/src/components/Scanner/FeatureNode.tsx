@@ -35,6 +35,15 @@ function isFeatureNew(
   return relatedFiles.some((f) => changedSet.has(f));
 }
 
+// --- Group accent colors ---
+
+const GROUP_ACCENT: Record<string, string> = {
+  frontend: '#93c5fd', // blue-300
+  backend:  '#c4b5fd', // violet-300
+  agent:    '#fdba74', // orange-300
+  infra:    '#86efac', // green-300
+};
+
 // --- Component ---
 
 function FeatureNodeInner({ data }: NodeProps<FeatureNodeType>) {
@@ -51,6 +60,12 @@ function FeatureNodeInner({ data }: NodeProps<FeatureNodeType>) {
   // Border: green when changedInPR (but not for root nodes)
   const showGreenBorder = !isRoot && data.changedInPR === true;
 
+  // Group accent: colored left border strip
+  const groupColor =
+    !isRoot && !showGreenBorder && typeof data.group === 'string'
+      ? GROUP_ACCENT[data.group]
+      : undefined;
+
   return (
     <div
       className={cn(
@@ -62,6 +77,7 @@ function FeatureNodeInner({ data }: NodeProps<FeatureNodeType>) {
           ? 'border-2 border-green-400'
           : !isRoot && 'border-neutral-200'
       )}
+      style={groupColor ? { borderLeftColor: groupColor, borderLeftWidth: 3 } : undefined}
     >
       <Handle type="target" position={Position.Top} className="!bg-neutral-400" />
 

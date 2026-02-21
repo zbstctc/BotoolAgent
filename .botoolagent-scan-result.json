@@ -3,12 +3,19 @@
   "analyzedAt": "2026-02-21T13:03:19Z",
   "prNumber": null,
   "changedFiles": [],
+  "groups": [
+    { "id": "frontend", "label": "前端界面层", "description": "Next.js 页面、组件与客户端状态管理" },
+    { "id": "backend",  "label": "服务 & API 层", "description": "Next.js API 路由、扫描器与测试套件" },
+    { "id": "agent",    "label": "Agent 执行层", "description": "Bash 编排器与 Claude Skill 定义" },
+    { "id": "infra",    "label": "基础设施层", "description": "文件系统存储、规范管理与共享工具" }
+  ],
   "nodes": [
     {
       "id": "root",
       "label": "BotoolAgent 主项目",
       "path": ".",
       "type": "root",
+      "layer": 1,
       "description": "自主 AI 开发代理工具集，融合 Web Viewer、CLI Skill、tmux 编排与文件系统迭代记忆。",
       "techStack": ["Bash", "Next.js", "TypeScript", "tmux", "Claude Code"],
       "features": [
@@ -29,6 +36,8 @@
       "label": "Viewer Web 应用",
       "path": "viewer/src/app",
       "type": "module",
+      "layer": 2,
+      "group": "frontend",
       "description": "基于 Next.js App Router 的前端，包含 Dashboard、阶段页面、规范管理和架构扫描入口。",
       "techStack": ["Next.js 16", "React 19", "TypeScript", "Tailwind CSS", "shadcn/ui"],
       "features": [
@@ -49,6 +58,8 @@
       "label": "客户端状态层",
       "path": "viewer/src/contexts",
       "type": "component",
+      "layer": 3,
+      "group": "frontend",
       "description": "React Context 层，管理项目列表、需求数据、标签/会话状态，并持久化到 localStorage。",
       "techStack": ["React Context", "TypeScript", "localStorage"],
       "features": [
@@ -74,6 +85,8 @@
       "label": "API 接口层",
       "path": "viewer/src/app/api",
       "type": "module",
+      "layer": 2,
+      "group": "backend",
       "description": "46 个 Next.js Route Handler，覆盖 Agent 控制、CLI 流式传输、PRD 转换、规范管理、架构扫描等全部后端操作。",
       "techStack": ["Next.js Route Handlers", "TypeScript", "Node.js fs", "child_process", "SSE"],
       "features": [
@@ -95,27 +108,46 @@
       ]
     },
     {
-      "id": "core-utils",
-      "label": "核心工具层",
-      "path": "viewer/src/lib",
-      "type": "utility",
-      "description": "共享工具库：项目根目录检测、路径安全防护、CSRF 校验、注册表锁和任务历史持久化。",
-      "techStack": ["TypeScript", "Node.js fs/path", "crypto"],
+      "id": "scanner-module",
+      "label": "架构扫描器",
+      "path": "viewer/src/components/Scanner",
+      "type": "module",
+      "layer": 3,
+      "group": "backend",
+      "description": "基于 Codex 的架构扫描子系统，含 SSE 进度推送、Zod Schema 验证和 ReactFlow 流程图可视化。",
+      "techStack": ["React", "SSE", "Codex CLI", "Zod", "ReactFlow", "dagre"],
       "features": [
         {
-          "name": "可移植根目录与路径安全",
-          "description": "检测 BotoolAgent/项目根目录，防止路径穿越攻击。",
-          "relatedFiles": ["viewer/src/lib/project-root.ts"]
+          "name": "扫描器 UI 工作区",
+          "description": "在专属工具面板中展示扫描状态、错误和可交互的架构模块图。",
+          "relatedFiles": ["viewer/src/components/Scanner/ScannerPanel.tsx", "viewer/src/components/Scanner/ScannerFlowChart.tsx", "viewer/src/components/Scanner/ScannerToolbar.tsx"]
         },
         {
-          "name": "请求与输入安全防护",
-          "description": "实施 CSRF 检查和输入规范化，保护 API 安全边界。",
-          "relatedFiles": ["viewer/src/lib/api-guard.ts"]
+          "name": "Codex 执行流水线",
+          "description": "构建项目上下文 Prompt（含模块清单），运行 Codex，验证 Schema，存储扫描结果。",
+          "relatedFiles": ["viewer/src/app/api/scanner/analyze/route.ts", "viewer/src/app/api/scanner/status/route.ts", "viewer/src/types/scanner.ts"]
+        }
+      ]
+    },
+    {
+      "id": "e2e-tests",
+      "label": "E2E 测试套件",
+      "path": "viewer/tests",
+      "type": "module",
+      "layer": 3,
+      "group": "backend",
+      "description": "Playwright 测试套件，覆盖阶段路由、API 契约、多标签隔离和压力测试场景。",
+      "techStack": ["Playwright", "TypeScript", "Next.js Dev Server"],
+      "features": [
+        {
+          "name": "阶段与 API 回归覆盖",
+          "description": "验证 Stage1-Stage5 页面渲染和关键 API 端点的预期响应。",
+          "relatedFiles": ["viewer/tests/stages.spec.ts", "viewer/tests/stage34-agent.spec.ts", "viewer/playwright.config.ts"]
         },
         {
-          "name": "原子化注册表/历史管理",
-          "description": "提供原子性注册表写入和任务历史生命周期管理。",
-          "relatedFiles": ["viewer/src/lib/registry-lock.ts", "viewer/src/lib/task-history.ts"]
+          "name": "并发与压力场景",
+          "description": "测试多标签状态隔离和阶段压力行为。",
+          "relatedFiles": ["viewer/tests/multi-tab-stress.spec.ts", "viewer/tests/stage1-stress.spec.ts"]
         }
       ]
     },
@@ -124,6 +156,8 @@
       "label": "Agent 运行时",
       "path": "scripts/BotoolAgent.sh",
       "type": "module",
+      "layer": 2,
+      "group": "agent",
       "description": "Bash 编排器，驱动基于 tmux 的 Claude Agent Teams 迭代执行开发任务，并写入运行时状态文件。",
       "techStack": ["Bash", "tmux", "Claude CLI", "Git"],
       "features": [
@@ -144,6 +178,8 @@
       "label": "Claude Skill 库",
       "path": "skills/BotoolAgent",
       "type": "module",
+      "layer": 3,
+      "group": "agent",
       "description": "10 个 Skill 定义文件，将 BotoolAgent 完整工作流以斜杠命令形式暴露给 Claude Code 用户。",
       "techStack": ["Markdown", "YAML frontmatter", "Claude Skills"],
       "features": [
@@ -164,6 +200,8 @@
       "label": "规范管理系统",
       "path": "rules",
       "type": "module",
+      "layer": 2,
+      "group": "infra",
       "description": "规范文档仓库与管理 API，维护编码规范并将规则一键导出为 Claude Skill。",
       "techStack": ["Markdown", "TypeScript API", "Filesystem"],
       "features": [
@@ -180,30 +218,12 @@
       ]
     },
     {
-      "id": "scanner-module",
-      "label": "架构扫描器",
-      "path": "viewer/src/components/Scanner",
-      "type": "module",
-      "description": "基于 Codex 的架构扫描子系统，含 SSE 进度推送、Zod Schema 验证和 ReactFlow 流程图可视化。",
-      "techStack": ["React", "SSE", "Codex CLI", "Zod", "ReactFlow", "dagre"],
-      "features": [
-        {
-          "name": "扫描器 UI 工作区",
-          "description": "在专属工具面板中展示扫描状态、错误和可交互的架构模块图。",
-          "relatedFiles": ["viewer/src/components/Scanner/ScannerPanel.tsx", "viewer/src/components/Scanner/ScannerFlowChart.tsx", "viewer/src/components/Scanner/ScannerToolbar.tsx"]
-        },
-        {
-          "name": "Codex 执行流水线",
-          "description": "构建项目上下文 Prompt（含模块清单），运行 Codex，验证 Schema，存储扫描结果。",
-          "relatedFiles": ["viewer/src/app/api/scanner/analyze/route.ts", "viewer/src/app/api/scanner/status/route.ts", "viewer/src/types/scanner.ts"]
-        }
-      ]
-    },
-    {
       "id": "task-store",
       "label": "任务数据存储",
       "path": "tasks",
       "type": "config",
+      "layer": 2,
+      "group": "infra",
       "description": "文件系统数据存储，持有各项目的需求文档、PRD/进度工件、快照归档和任务注册表。",
       "techStack": ["JSON", "Markdown", "Text files", "Directory conventions"],
       "features": [
@@ -220,22 +240,29 @@
       ]
     },
     {
-      "id": "e2e-tests",
-      "label": "E2E 测试套件",
-      "path": "viewer/tests",
-      "type": "module",
-      "description": "Playwright 测试套件，覆盖阶段路由、API 契约、多标签隔离和压力测试场景。",
-      "techStack": ["Playwright", "TypeScript", "Next.js Dev Server"],
+      "id": "core-utils",
+      "label": "核心工具层",
+      "path": "viewer/src/lib",
+      "type": "utility",
+      "layer": 3,
+      "group": "infra",
+      "description": "共享工具库：项目根目录检测、路径安全防护、CSRF 校验、注册表锁和任务历史持久化。",
+      "techStack": ["TypeScript", "Node.js fs/path", "crypto"],
       "features": [
         {
-          "name": "阶段与 API 回归覆盖",
-          "description": "验证 Stage1-Stage5 页面渲染和关键 API 端点的预期响应。",
-          "relatedFiles": ["viewer/tests/stages.spec.ts", "viewer/tests/stage34-agent.spec.ts", "viewer/playwright.config.ts"]
+          "name": "可移植根目录与路径安全",
+          "description": "检测 BotoolAgent/项目根目录，防止路径穿越攻击。",
+          "relatedFiles": ["viewer/src/lib/project-root.ts"]
         },
         {
-          "name": "并发与压力场景",
-          "description": "测试多标签状态隔离和阶段压力行为。",
-          "relatedFiles": ["viewer/tests/multi-tab-stress.spec.ts", "viewer/tests/stage1-stress.spec.ts"]
+          "name": "请求与输入安全防护",
+          "description": "实施 CSRF 检查和输入规范化，保护 API 安全边界。",
+          "relatedFiles": ["viewer/src/lib/api-guard.ts"]
+        },
+        {
+          "name": "原子化注册表/历史管理",
+          "description": "提供原子性注册表写入和任务历史生命周期管理。",
+          "relatedFiles": ["viewer/src/lib/registry-lock.ts", "viewer/src/lib/task-history.ts"]
         }
       ]
     }

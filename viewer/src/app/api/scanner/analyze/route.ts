@@ -293,7 +293,7 @@ function buildAnalysisPrompt(
     ? `\n## Detailed Module Inventory\n${moduleDetails}\n`
     : '';
 
-  return `Analyze this project and output a JSON object describing its architecture.
+  return `Analyze this project and output a JSON object describing its architecture as a layered diagram.
 
 ## File Tree
 ${fileTree}
@@ -310,36 +310,48 @@ You MUST output ONLY a valid JSON object (no markdown fences, no explanation) wi
   "analyzedAt": "string - ISO 8601 timestamp",
   "prNumber": ${prNumber ?? 'null'},
   "changedFiles": ${JSON.stringify(changedFiles)},
+  "groups": [
+    { "id": "frontend",  "label": "前端界面层",  "description": "用户界面与状态管理" },
+    { "id": "backend",   "label": "服务 & API 层", "description": "API 路由与后端服务" },
+    { "id": "agent",     "label": "Agent 执行层", "description": "自主执行与工具链" },
+    { "id": "infra",     "label": "基础设施层",  "description": "数据存储与规范管理" }
+  ],
   "nodes": [
     {
       "id": "unique-id",
-      "label": "Human readable label",
+      "label": "中文标签",
       "path": "relative/path",
       "type": "root | module | component | utility | config",
-      "description": "Brief description",
+      "layer": 1,
+      "group": "frontend | backend | agent | infra",
+      "description": "简短的中文描述",
       "techStack": ["tech1", "tech2"],
       "features": [
-        { "name": "Feature name", "description": "Brief desc", "relatedFiles": ["file1.ts"] }
+        { "name": "功能名称（中文）", "description": "简短中文说明", "relatedFiles": ["file1.ts"] }
       ]
     }
   ],
   "edges": [
-    { "source": "node-id-1", "target": "node-id-2", "label": "relationship" }
+    { "source": "node-id-1", "target": "node-id-2", "label": "中文关系说明" }
   ]
 }
 
 Rules:
-- Include the most important modules/components (aim for 5-15 nodes)
-- Connect nodes with edges that describe real dependencies or data flows
-- Use the file tree and context files to determine the project structure
-- The root node should represent the overall project
+- Include the most important modules/components (aim for 8-15 nodes)
+- The root node (type: "root") has no group field
+- Assign every non-root node to exactly one group: frontend | backend | agent | infra
+  * frontend: UI pages, components, client-side state/context
+  * backend: API routes, server logic, test suites
+  * agent: CLI scripts, skill definitions, automation runners
+  * infra: file-system stores, config files, shared utilities
+- Assign layer: 1=root, 2=primary system, 3=subsystem, 4=utility/leaf
 - If a "Detailed Module Inventory" section is provided:
-  * Use the ACTUAL API endpoint paths as features in the API/backend layer node (list every endpoint)
+  * Use the ACTUAL API endpoint paths as features in the API/backend layer node
   * Use the ACTUAL skill directory names as features in the skills node
   * Use the ACTUAL component file names to enumerate components — do NOT use generic placeholders
-  * Be specific: use real names from the inventory, not vague descriptions like "various components"
-- LANGUAGE: All text fields (label, description, features[].name, features[].description, edges[].label)
-  MUST be written in Simplified Chinese (简体中文). Tech stack names and file paths stay in English.
+- LANGUAGE: All text fields (label, description, features[].name, features[].description,
+  edges[].label, groups[].label, groups[].description) MUST be in Simplified Chinese (简体中文).
+  Tech stack names and file paths stay in English.
 - EDGES — keep the graph clean and readable:
   * Only add edges for DIRECT dependencies (A imports B directly)
   * If A→B and B→C already exist, do NOT add A→C (no transitive edges)
