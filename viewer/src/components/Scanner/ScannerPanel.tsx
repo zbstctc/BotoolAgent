@@ -174,7 +174,7 @@ export function ScannerPanel() {
         </span>
       </div>
       <div className="flex-1 relative">
-        <ScannerFlowChart scanResult={scanResult} />
+        <ScannerFlowChart key={scanResult.analyzedAt} scanResult={scanResult} />
         <ScannerToolbar
           scanResult={scanResult}
           currentPrNumber={currentPrNumber}

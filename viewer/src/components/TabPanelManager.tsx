@@ -123,8 +123,12 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
   // use pathname === '/' because history.replaceState doesn't update usePathname().
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const isOnStandaloneStageUrl = /^\/stage\d+/.test(pathname);
+  // Utility routes that Next.js should render as standalone pages when dashboard is active.
+  // Scanner has its own Next.js page (/scanner) which should show via children when navigated
+  // directly (e.g., bookmark) even if the dashboard tab is currently active.
+  const isOnStandaloneUtilityUrl = /^\/(scanner)/.test(pathname);
   const isManagedRoute =
-    (activeTabId === 'dashboard' && !isOnStandaloneStageUrl) ||
+    (activeTabId === 'dashboard' && !isOnStandaloneStageUrl && !isOnStandaloneUtilityUrl) ||
     activeTabId === 'rules' ||
     (activeTab != null && !activeTab.url && activeTabId !== 'dashboard');
 

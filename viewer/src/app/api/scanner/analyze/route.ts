@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { spawn, execFile } from 'child_process';
+import type { ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getProjectRoot, ensureContainedPath } from '@/lib/project-root';
@@ -9,6 +10,8 @@ import type { ScanResult } from '@/types/scanner';
 
 // --- Concurrency guard ---
 let isAnalyzing = false;
+// Active codex subprocess (so we can kill it on stream cancel)
+let activeCodexProcess: ChildProcess | null = null;
 
 // --- Constants ---
 const STDERR_MAX_LENGTH = 2000;
@@ -262,6 +265,9 @@ function spawnCodexAnalysis(
       }
     );
 
+    // Track active process for cancellation
+    activeCodexProcess = codex;
+
     // Kill codex if it doesn't finish within the timeout
     const killTimer = setTimeout(() => {
       codex.kill('SIGTERM');
@@ -286,11 +292,13 @@ function spawnCodexAnalysis(
 
     codex.on('error', (err) => {
       clearTimeout(killTimer);
+      activeCodexProcess = null;
       reject(new Error(`Failed to spawn codex: ${sanitizeStderr(err.message)}`));
     });
 
     codex.on('close', (code) => {
       clearTimeout(killTimer);
+      activeCodexProcess = null;
       if (code !== 0) {
         const sanitized = sanitizeStderr(stderr || `codex exited with code ${code}`);
         sendSSE(controller, encoder, 'error', {
@@ -348,6 +356,11 @@ export async function POST(request: Request) {
       streamController = controller;
     },
     cancel() {
+      // Kill the codex subprocess if client disconnects
+      if (activeCodexProcess) {
+        activeCodexProcess.kill('SIGTERM');
+        activeCodexProcess = null;
+      }
       isAnalyzing = false;
     },
   });
