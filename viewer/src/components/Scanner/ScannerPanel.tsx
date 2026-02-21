@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Scan, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScannerErrorView, type ScannerErrorType } from '@/components/Scanner/ScannerErrorView';
+import { ScannerFlowChart } from '@/components/Scanner/ScannerFlowChart';
+import { ScannerToolbar } from '@/components/Scanner/ScannerToolbar';
 import type { ScanResult } from '@/types/scanner';
 
 interface StatusResponse {
@@ -18,6 +20,13 @@ interface FatalError {
   detail?: string;
 }
 
+/** Map SSE error types to fatal ScannerErrorType (non-fatal types return undefined) */
+const FATAL_ERROR_MAP: Record<string, ScannerErrorType | undefined> = {
+  'codex-not-installed': 'codex-not-installed',
+  'analysis-failed': 'analysis-failed',
+  'parse-error': 'json-parse-error',
+};
+
 export function ScannerPanel() {
   const [isLoading, setIsLoading] = useState(true);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
@@ -28,6 +37,19 @@ export function ScannerPanel() {
 
   const clearFatalError = useCallback(() => {
     setFatalError(null);
+  }, []);
+
+  const handleAnalysisComplete = useCallback((result: ScanResult) => {
+    setScanResult(result);
+    setNeedsUpdate(false);
+  }, []);
+
+  const handleError = useCallback((errorType: string, message: string) => {
+    const fatalType = FATAL_ERROR_MAP[errorType];
+    if (fatalType) {
+      setFatalError({ errorType: fatalType, detail: message });
+    }
+    // Non-fatal errors (e.g., 'concurrent-request') handled by ScannerToolbar
   }, []);
 
   const fetchStatus = useCallback(async () => {
@@ -115,28 +137,33 @@ export function ScannerPanel() {
           <Scan className="h-4 w-4 text-neutral-500" />
           <h1 className="text-sm font-medium text-neutral-900">Scanner</h1>
         </div>
-        <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <div className="text-4xl text-neutral-200">
-            <Scan className="h-12 w-12" />
+        <div className="flex-1 relative">
+          <div className="flex flex-col items-center justify-center h-full gap-4">
+            <div className="text-4xl text-neutral-200">
+              <Scan className="h-12 w-12" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-neutral-700">
+                尚未分析项目结构
+              </p>
+              <p className="mt-1 text-xs text-neutral-500 max-w-xs">
+                Scanner 通过 Codex CLI 分析项目结构，生成交互式架构图谱
+              </p>
+            </div>
           </div>
-          <div className="text-center">
-            <p className="text-sm font-medium text-neutral-700">
-              尚未分析项目结构
-            </p>
-            <p className="mt-1 text-xs text-neutral-500 max-w-xs">
-              Scanner 通过 Codex CLI 分析项目结构，生成交互式架构图谱
-            </p>
-          </div>
-          <Button onClick={() => { /* DT-008 will wire up analyze */ }}>
-            <Scan className="h-4 w-4 mr-1.5" />
-            开始分析
-          </Button>
+          <ScannerToolbar
+            scanResult={null}
+            currentPrNumber={currentPrNumber}
+            needsUpdate={false}
+            onAnalysisComplete={handleAnalysisComplete}
+            onError={handleError}
+          />
         </div>
       </div>
     );
   }
 
-  // Has cached result — show graph skeleton (actual graph in DT-006/007)
+  // Has cached result — show flow chart + toolbar
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 px-6 py-4 border-b border-neutral-200 bg-white">
@@ -146,18 +173,15 @@ export function ScannerPanel() {
           {scanResult.projectName}
         </span>
       </div>
-      <div className="flex-1 relative bg-neutral-50">
-        {/* Graph placeholder — ScannerFlowChart will replace this in DT-007 */}
-        <div className="flex items-center justify-center h-full">
-          <div className="text-center">
-            <p className="text-sm text-neutral-500">
-              {scanResult.nodes.length} 个模块 · {scanResult.edges.length} 个连接
-            </p>
-            <p className="text-xs text-neutral-400 mt-1">
-              图谱加载中...
-            </p>
-          </div>
-        </div>
+      <div className="flex-1 relative">
+        <ScannerFlowChart scanResult={scanResult} />
+        <ScannerToolbar
+          scanResult={scanResult}
+          currentPrNumber={currentPrNumber}
+          needsUpdate={needsUpdate}
+          onAnalysisComplete={handleAnalysisComplete}
+          onError={handleError}
+        />
       </div>
     </div>
   );
