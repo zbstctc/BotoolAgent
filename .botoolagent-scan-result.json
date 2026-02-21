@@ -1,0 +1,259 @@
+{
+  "projectName": "BotoolAgent",
+  "analyzedAt": "2026-02-21T13:03:19Z",
+  "prNumber": null,
+  "changedFiles": [],
+  "nodes": [
+    {
+      "id": "root",
+      "label": "BotoolAgent 主项目",
+      "path": ".",
+      "type": "root",
+      "description": "自主 AI 开发代理工具集，融合 Web Viewer、CLI Skill、tmux 编排与文件系统迭代记忆。",
+      "techStack": ["Bash", "Next.js", "TypeScript", "tmux", "Claude Code"],
+      "features": [
+        {
+          "name": "五阶段自主流水线",
+          "description": "定义 Stage 1-5 从 PRD 生成到合并发布的完整流程。",
+          "relatedFiles": ["README.md", "BotoolAgent.sh", "CLAUDE.lead.md"]
+        },
+        {
+          "name": "独立 / 嵌入双模式",
+          "description": "支持作为独立仓库运行，也可作为子目录嵌入到其他项目中。",
+          "relatedFiles": ["README.md", "viewer/src/lib/project-root.ts"]
+        }
+      ]
+    },
+    {
+      "id": "viewer-app",
+      "label": "Viewer Web 应用",
+      "path": "viewer/src/app",
+      "type": "module",
+      "description": "基于 Next.js App Router 的前端，包含 Dashboard、阶段页面、规范管理和架构扫描入口。",
+      "techStack": ["Next.js 16", "React 19", "TypeScript", "Tailwind CSS", "shadcn/ui"],
+      "features": [
+        {
+          "name": "阶段式路由",
+          "description": "提供 Stage1-Stage5 页面和阶段感知渲染逻辑。",
+          "relatedFiles": ["viewer/src/app/stage1/page.tsx", "viewer/src/components/panels/StageRouter.tsx"]
+        },
+        {
+          "name": "多标签工作台",
+          "description": "在单一面板管理器中渲染 Dashboard / 规范 / 项目标签页，CSS 显示切换保持挂载。",
+          "relatedFiles": ["viewer/src/app/layout.tsx", "viewer/src/components/TabPanelManager.tsx"]
+        }
+      ]
+    },
+    {
+      "id": "state-contexts",
+      "label": "客户端状态层",
+      "path": "viewer/src/contexts",
+      "type": "component",
+      "description": "React Context 层，管理项目列表、需求数据、标签/会话状态，并持久化到 localStorage。",
+      "techStack": ["React Context", "TypeScript", "localStorage"],
+      "features": [
+        {
+          "name": "工作区级项目持久化",
+          "description": "按工作区作用域存储项目列表和当前活跃项目。",
+          "relatedFiles": ["viewer/src/contexts/ProjectContext.tsx", "viewer/src/lib/project-storage.ts"]
+        },
+        {
+          "name": "需求 API + 本地草稿合并",
+          "description": "合并服务端需求与本地 Stage 0 草稿，支持归档/删除流程。",
+          "relatedFiles": ["viewer/src/contexts/RequirementContext.tsx", "viewer/src/app/api/requirements/route.ts"]
+        },
+        {
+          "name": "持久化多标签状态",
+          "description": "持久化已打开标签和活跃标签，安全同步路由变化。",
+          "relatedFiles": ["viewer/src/contexts/TabContext.tsx", "viewer/src/lib/tab-storage.ts"]
+        }
+      ]
+    },
+    {
+      "id": "api-layer",
+      "label": "API 接口层",
+      "path": "viewer/src/app/api",
+      "type": "module",
+      "description": "46 个 Next.js Route Handler，覆盖 Agent 控制、CLI 流式传输、PRD 转换、规范管理、架构扫描等全部后端操作。",
+      "techStack": ["Next.js Route Handlers", "TypeScript", "Node.js fs", "child_process", "SSE"],
+      "features": [
+        {
+          "name": "Agent 生命周期控制",
+          "description": "启动 Agent/测试运行，暴露状态查询和日志流接口。",
+          "relatedFiles": ["viewer/src/app/api/agent/start/route.ts", "viewer/src/app/api/agent/status/route.ts", "viewer/src/app/api/agent/logs/route.ts"]
+        },
+        {
+          "name": "CLI 流式传输桥接",
+          "description": "将 Claude CLI 输出/事件流式传输到 UI，支持 resume 和工具响应。",
+          "relatedFiles": ["viewer/src/app/api/cli/chat/route.ts", "viewer/src/lib/cli-manager.ts"]
+        },
+        {
+          "name": "PRD 转换与丰富化",
+          "description": "将 PRD Markdown 转换为精简 prd.json，并丰富任务/测试元数据。",
+          "relatedFiles": ["viewer/src/app/api/prd/convert/route.ts", "viewer/src/app/api/prd/enrich/route.ts"]
+        }
+      ]
+    },
+    {
+      "id": "core-utils",
+      "label": "核心工具层",
+      "path": "viewer/src/lib",
+      "type": "utility",
+      "description": "共享工具库：项目根目录检测、路径安全防护、CSRF 校验、注册表锁和任务历史持久化。",
+      "techStack": ["TypeScript", "Node.js fs/path", "crypto"],
+      "features": [
+        {
+          "name": "可移植根目录与路径安全",
+          "description": "检测 BotoolAgent/项目根目录，防止路径穿越攻击。",
+          "relatedFiles": ["viewer/src/lib/project-root.ts"]
+        },
+        {
+          "name": "请求与输入安全防护",
+          "description": "实施 CSRF 检查和输入规范化，保护 API 安全边界。",
+          "relatedFiles": ["viewer/src/lib/api-guard.ts"]
+        },
+        {
+          "name": "原子化注册表/历史管理",
+          "description": "提供原子性注册表写入和任务历史生命周期管理。",
+          "relatedFiles": ["viewer/src/lib/registry-lock.ts", "viewer/src/lib/task-history.ts"]
+        }
+      ]
+    },
+    {
+      "id": "agent-runtime",
+      "label": "Agent 运行时",
+      "path": "scripts/BotoolAgent.sh",
+      "type": "module",
+      "description": "Bash 编排器，驱动基于 tmux 的 Claude Agent Teams 迭代执行开发任务，并写入运行时状态文件。",
+      "techStack": ["Bash", "tmux", "Claude CLI", "Git"],
+      "features": [
+        {
+          "name": "轮次制自主开发循环",
+          "description": "执行有界开发轮次，带冷却时间、停滞超时检测和完成判断。",
+          "relatedFiles": ["scripts/BotoolAgent.sh"]
+        },
+        {
+          "name": "项目级运行时隔离",
+          "description": "使用项目感知的 tmux 会话名、PID/状态文件和任务目录。",
+          "relatedFiles": ["scripts/BotoolAgent.sh"]
+        }
+      ]
+    },
+    {
+      "id": "skills-library",
+      "label": "Claude Skill 库",
+      "path": "skills/BotoolAgent",
+      "type": "module",
+      "description": "10 个 Skill 定义文件，将 BotoolAgent 完整工作流以斜杠命令形式暴露给 Claude Code 用户。",
+      "techStack": ["Markdown", "YAML frontmatter", "Claude Skills"],
+      "features": [
+        {
+          "name": "工作流 Skill（6 个）",
+          "description": "PyramidPRD、PRD2JSON、Brainstorm、Coding、Testing、Finalize、PRDReview 阶段 Skill。",
+          "relatedFiles": ["skills/BotoolAgent/PyramidPRD/SKILL.md", "skills/BotoolAgent/Testing/SKILL.md", "skills/BotoolAgent/Finalize/SKILL.md"]
+        },
+        {
+          "name": "管理 Skill（4 个）",
+          "description": "提供 Main 入口、Update 升级、Restart 重启、Brainstorm 头脑风暴控制类 Skill。",
+          "relatedFiles": ["skills/BotoolAgent/Main/SKILL.md", "skills/BotoolAgent/Update/SKILL.md", "skills/BotoolAgent/Restart/SKILL.md"]
+        }
+      ]
+    },
+    {
+      "id": "rules-system",
+      "label": "规范管理系统",
+      "path": "rules",
+      "type": "module",
+      "description": "规范文档仓库与管理 API，维护编码规范并将规则一键导出为 Claude Skill。",
+      "techStack": ["Markdown", "TypeScript API", "Filesystem"],
+      "features": [
+        {
+          "name": "分类规范集合",
+          "description": "存储前端/后端/测试/应用规范，供规划和审查阶段引用。",
+          "relatedFiles": ["rules/frontend/样式规范.md", "rules/backend/API设计规范.md", "rules/testing/测试用例规范.md"]
+        },
+        {
+          "name": "规范 CRUD 与 Skill 导出",
+          "description": "支持规范增删改查 API，并将规范转换为 ~/.claude 生成的 Skill 文件。",
+          "relatedFiles": ["viewer/src/app/api/rules/route.ts", "viewer/src/lib/rules-to-skill.ts"]
+        }
+      ]
+    },
+    {
+      "id": "scanner-module",
+      "label": "架构扫描器",
+      "path": "viewer/src/components/Scanner",
+      "type": "module",
+      "description": "基于 Codex 的架构扫描子系统，含 SSE 进度推送、Zod Schema 验证和 ReactFlow 流程图可视化。",
+      "techStack": ["React", "SSE", "Codex CLI", "Zod", "ReactFlow", "dagre"],
+      "features": [
+        {
+          "name": "扫描器 UI 工作区",
+          "description": "在专属工具面板中展示扫描状态、错误和可交互的架构模块图。",
+          "relatedFiles": ["viewer/src/components/Scanner/ScannerPanel.tsx", "viewer/src/components/Scanner/ScannerFlowChart.tsx", "viewer/src/components/Scanner/ScannerToolbar.tsx"]
+        },
+        {
+          "name": "Codex 执行流水线",
+          "description": "构建项目上下文 Prompt（含模块清单），运行 Codex，验证 Schema，存储扫描结果。",
+          "relatedFiles": ["viewer/src/app/api/scanner/analyze/route.ts", "viewer/src/app/api/scanner/status/route.ts", "viewer/src/types/scanner.ts"]
+        }
+      ]
+    },
+    {
+      "id": "task-store",
+      "label": "任务数据存储",
+      "path": "tasks",
+      "type": "config",
+      "description": "文件系统数据存储，持有各项目的需求文档、PRD/进度工件、快照归档和任务注册表。",
+      "techStack": ["JSON", "Markdown", "Text files", "Directory conventions"],
+      "features": [
+        {
+          "name": "项目级工作工件",
+          "description": "每个项目子目录持有 PRD、progress.txt、agent-status 和审查/测试输出文件。",
+          "relatedFiles": ["tasks/registry.json", "tasks/scanner-feature/prd.json", "tasks/scanner-feature/progress.txt"]
+        },
+        {
+          "name": "历史记忆与跨轮次恢复",
+          "description": "存储快照/归档和任务历史，支持 Agent 跨轮次持续性。",
+          "relatedFiles": ["tasks/.task-history.json", "tasks/archives/.gitkeep"]
+        }
+      ]
+    },
+    {
+      "id": "e2e-tests",
+      "label": "E2E 测试套件",
+      "path": "viewer/tests",
+      "type": "module",
+      "description": "Playwright 测试套件，覆盖阶段路由、API 契约、多标签隔离和压力测试场景。",
+      "techStack": ["Playwright", "TypeScript", "Next.js Dev Server"],
+      "features": [
+        {
+          "name": "阶段与 API 回归覆盖",
+          "description": "验证 Stage1-Stage5 页面渲染和关键 API 端点的预期响应。",
+          "relatedFiles": ["viewer/tests/stages.spec.ts", "viewer/tests/stage34-agent.spec.ts", "viewer/playwright.config.ts"]
+        },
+        {
+          "name": "并发与压力场景",
+          "description": "测试多标签状态隔离和阶段压力行为。",
+          "relatedFiles": ["viewer/tests/multi-tab-stress.spec.ts", "viewer/tests/stage1-stress.spec.ts"]
+        }
+      ]
+    }
+  ],
+  "edges": [
+    { "source": "root", "target": "viewer-app", "label": "包含 Web Viewer 模块" },
+    { "source": "root", "target": "agent-runtime", "label": "包含编排运行时" },
+    { "source": "root", "target": "skills-library", "label": "包含 Claude Skill 定义" },
+    { "source": "root", "target": "rules-system", "label": "包含规范语料库" },
+    { "source": "root", "target": "task-store", "label": "持久化项目工件" },
+    { "source": "viewer-app", "target": "state-contexts", "label": "使用状态 Context 提供者" },
+    { "source": "viewer-app", "target": "api-layer", "label": "调用后端 API" },
+    { "source": "api-layer", "target": "core-utils", "label": "依赖安全/路径/注册表工具" },
+    { "source": "api-layer", "target": "agent-runtime", "label": "启动 Agent 执行" },
+    { "source": "api-layer", "target": "task-store", "label": "读写 PRD/进度/状态文件" },
+    { "source": "api-layer", "target": "scanner-module", "label": "通过 SSE 驱动扫描器" },
+    { "source": "skills-library", "target": "agent-runtime", "label": "触发运行时工作流" },
+    { "source": "rules-system", "target": "skills-library", "label": "导出规范为 Skill" },
+    { "source": "e2e-tests", "target": "api-layer", "label": "测试 API 契约" }
+  ]
+}

@@ -42,7 +42,7 @@ function layoutNodes(
 ): { nodes: FeatureNodeType[]; edges: Edge[] } {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: 'TB', nodesep: 40, ranksep: 60 });
+  g.setGraph({ rankdir: 'LR', nodesep: 30, ranksep: 80 });
 
   // Add nodes to dagre graph
   for (const node of scanResult.nodes) {

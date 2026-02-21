@@ -338,6 +338,13 @@ Rules:
   * Use the ACTUAL skill directory names as features in the skills node
   * Use the ACTUAL component file names to enumerate components — do NOT use generic placeholders
   * Be specific: use real names from the inventory, not vague descriptions like "various components"
+- LANGUAGE: All text fields (label, description, features[].name, features[].description, edges[].label)
+  MUST be written in Simplified Chinese (简体中文). Tech stack names and file paths stay in English.
+- EDGES — keep the graph clean and readable:
+  * Only add edges for DIRECT dependencies (A imports B directly)
+  * If A→B and B→C already exist, do NOT add A→C (no transitive edges)
+  * Root node may have up to 5 edges; all other nodes should have at most 2 outgoing edges
+  * Prefer fewer, meaningful edges over exhaustive connection lists
 - Output ONLY the JSON object, nothing else`;
 }
 
