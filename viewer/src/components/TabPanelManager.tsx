@@ -79,17 +79,20 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
   }, [pathname, isHydrated, activeTabId, tabs, switchTab, updateTabStage]);
 
   // URL-based tab creation: handle direct URL access (e.g. shared link /stage3?req=xxx)
-  // Zero setState in effect body — all UI states are derived from urlReqId/tabs/requirements.
-  // Once openTab/switchTab runs, the tab appears in `tabs` on the next render.
+  // One-time activation: after the URL tab is activated, the ref prevents re-forcing
+  // activeTabId back to urlReqId when the user switches to a different tab.
+  const urlActivatedRef = useRef(false);
   useEffect(() => {
     if (!urlReqId || !isHydrated) return;
+    if (urlActivatedRef.current) return; // Already activated, no-op
 
-    // Already in tabs → ensure it's active, nothing else to do
+    // Already in tabs → ensure it's active, then mark as done
     if (tabs.some((t) => t.id === urlReqId)) {
       if (activeTabId !== urlReqId) {
         const stageNum = STAGE_TO_PAGE[tabs.find((t) => t.id === urlReqId)!.stage] ?? 1;
         switchTab(urlReqId, `/stage${stageNum}?req=${urlReqId}`);
       }
+      urlActivatedRef.current = true;
       return;
     }
 
@@ -106,6 +109,7 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
       };
       const stageNum = STAGE_TO_PAGE[requirement.stage] ?? 1;
       openTab(newTab, `/stage${stageNum}?req=${requirement.id}`);
+      urlActivatedRef.current = true;
     }
     // "not found" case: no setState needed — urlNotFound is derived below
   }, [urlReqId, isHydrated, isRequirementsLoading, requirements, tabs, activeTabId, openTab, switchTab]);
