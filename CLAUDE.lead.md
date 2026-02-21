@@ -19,30 +19,10 @@
 4. 读取 `$BOTOOL_PROGRESS_FILE`（如不存在则回退到 `$BOTOOL_PROJECT_DIR/progress.txt`）中的 Codebase Patterns（如果存在）
 5. 确认 git 分支 = `prd.json.branchName`（不是则切换/创建）
 5.5 检查 prerequisites（如果 prd.json 有此字段）：
-   - 无 prerequisites 字段 → 跳过
-   - 全部 `resolved: true` → 用户已声明就绪，信任，静默继续
-   - 有 `resolved: false` 的项 → 用户声明未就绪，乐观尝试验证（也许已补上）：
-
-   **对每个 resolved: false 的项，尝试检测：**
-   ```bash
-   # env_var 类型：按 prerequisite name 推断变量名后检查
-   printenv INFERRED_VAR_NAME 2>/dev/null && echo "found" || echo "missing"
-
-   # api_key / service / credentials / oauth 类型：
-   # grep .env（如存在）查关键词，再 printenv 补查
-   ```
-
-   - 检测到 → 自动更新该项 `resolved: true`（用户已补上但 PRD 未更新）
-   - 检测不到 → 保持 `resolved: false`（与用户声明一致）
-
-   **检测完成后，有仍为 resolved: false 的项 → 追加 progress.txt，然后继续执行：**
-   ```
-   ## [日期] 前置依赖提示
-   ❌ 未就绪: [prereq-001] Stripe API Key — 用户声明未配置
-      → 相关 DT 若失败，根因类型为「环境类」
-   ---
-   ```
-   **始终继续执行，不等待人工**
+   - 无 prerequisites 字段 或 全部 `resolved: true` → 跳过
+   - 有 `resolved: false` 的项 → 乐观尝试验证（用户可能已补上）：
+     按 name 推断变量名，用 printenv / grep .env 检测；找到则自动更新为 `resolved: true`
+   - 仍有 `resolved: false` → 追加 progress.txt 说明哪项未就绪，**继续执行**
 6. 通过 Bash 工具更新 agent-status → `"status": "running"`（路径: `$BOTOOL_STATUS_FILE` > `$BOTOOL_SCRIPT_DIR/.state/agent-status`）
 
 ## 第二步: 构建执行计划
@@ -250,11 +230,6 @@ STATUS_PATH="${BOTOOL_STATUS_FILE:-$BOTOOL_SCRIPT_DIR/.state/agent-status}"
 - 按上表对应动作处理
 - 在 progress.txt 记录 "验证失败：{根因类型} — {具体原因}"
 
-**禁止的行为：**
-- 信任 Teammate 的口头报告而不独立验证
-- 使用 "should pass" / "looks correct" 代替实际运行
-- 跳过任何 eval
-
 ## DT 双阶段 Review
 
 每个 DT 通过验证铁律后、标记 passes: true 之前：
@@ -276,47 +251,23 @@ STATUS_PATH="${BOTOOL_STATUS_FILE:-$BOTOOL_SCRIPT_DIR/.state/agent-status}"
 
 **完整流程：** 验证铁律（evals 全过） → Stage A（Spec + Constitution） → Stage B（Quality） → passes: true
 
-## 进度报告格式
+## DT 完成记录
 
-追加到 `$BOTOOL_PROGRESS_FILE`（如不存在则回退到 `$BOTOOL_PROJECT_DIR/progress.txt`）（**永远不要替换，只能追加**）：
-
-```
-## [日期] - [任务ID]
-- 实现了什么
-- 修改了哪些文件
-- **未来迭代的经验教训：**
-  - 发现的模式
-  - 遇到的坑
-  - 有用的上下文
----
-```
-
-## DT 完成反思
-
-每个 DT 完成（passes: true）后，在写 progress.txt 时附加一条结构化反思：
+每个 DT 完成（passes: true）后，追加到 `$BOTOOL_PROGRESS_FILE`（**只追加，不替换**）：
 
 ```
-## [日期] - [DT-ID] 反思
-- 预期 vs 实际：[有无偏差，没有就写"符合预期"]
-- 新发现的 pattern：[本 DT 揭示的代码规律，影响后续 DT 的]
+## [日期] - [DT-ID]
+- 实现了什么，修改了哪些文件
+- 预期 vs 实际：[有无偏差]
+- 新发现的 pattern：[影响后续 DT 的规律，无则省略]
 - 对剩余 DT 的影响：[如有，主动更新执行计划]
 ---
 ```
 
-**如果反思中发现可复用的 pattern（不强制，只在真正发现规律时写）：**
-
-将其追加到 patterns.json：
+**发现可复用 pattern 时（不强制）**，追加到 patterns.json：
 ```json
-{
-  "id": "pattern-xxx",
-  "category": "frontend|backend|api|auth|...",
-  "description": "一句话描述该规律",
-  "confidence": 0.7,
-  "status": "active"
-}
+{ "id": "pattern-xxx", "category": "frontend|backend|api|...", "description": "一句话", "confidence": 0.7, "status": "active" }
 ```
-
-这条反思机制让每个 DT 的执行经验能被后续 session 和 Teammate 复用，而不是只记在 progress.txt 里沉默消亡。
 
 ## Codex CLI 集成（可选能力）
 
