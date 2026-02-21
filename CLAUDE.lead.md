@@ -71,6 +71,12 @@ Explore 结果用于编写高质量的 teammate prompt，不要用于自己写�
 2. 从 Phase 章节提取：适用规范、规范要点、任务描述、验收条件（含 [规范] 条目）
 3. 如有"对应设计"引用，跳读对应设计章节
 4. 读取 progress.txt 了解 Codebase Patterns
+5. 如果存在 patterns.json，筛选 category 与本 DT 匹配、confidence ≥ 0.7 且 status = "active" 的 pattern 作为实现参考；不相关的 pattern 直接忽略，不要全量注入
+
+写代码之前（禁止跳过）：
+- Grep 搜索是否已有类似实现，避免重复创建组件或函数
+- 确认本次用到的库已在 package.json 中声明，不要假设可用
+- 参照 progress.txt 中记录的代码风格约定保持一致性
 
 {如果有 steps 字段}
 按以下步骤顺序执行，不要跳步：
@@ -78,14 +84,14 @@ Explore 结果用于编写高质量的 teammate prompt，不要用于自己写�
 每完成一步后确认结果再继续。如果某步失败，停下来报告。
 
 {如果没有 steps 字段}
-实现步骤:
+实现步骤（每步完成后确认结果再继续，某步失败立即停下报告，禁止带着错误继续）:
 1. 实现功能
-2. 运行所有验证命令：
+2. 运行所有验证命令（必须读取完整输出，不能用"应该能过"代替实际运行）：
    a. npx tsc --noEmit
    b. {task.evals 中的其他命令}
 3. 逐条对照验收条件（特别注意 [规范] 前缀的条目）
    - 如果某条 [规范] 不确定如何实现 → 读取 Phase 头部的规范文件获取详细说明
-   - 修复不符合项
+   - 修复不符合项，修复后重新运行步骤 2
 4. git add <modified files> && git commit -m "feat: {id} - {title}"
 5. git push origin {branchName}
 6. 在报告中包含每个验证命令的完整输出
@@ -106,16 +112,18 @@ Explore 结果用于编写高质量的 teammate prompt，不要用于自己写�
 每完成一步后确认结果再继续。如果某步失败，停下来报告。
 
 {如果没有 steps 字段}
-步骤:
+步骤（每步完成后确认结果再继续，某步失败立即停下报告，禁止带着错误继续）:
 1. 读取 progress.txt 了解 Codebase Patterns
-2. 实现功能
-3. 运行所有验证命令：
+2. 如果存在 patterns.json，筛选与本 DT 相关且 confidence ≥ 0.7 的 active pattern 参考
+3. 写代码之前：Grep 搜索类似现有实现，确认依赖库已在 package.json 中
+4. 实现功能
+5. 运行所有验证命令（必须读取完整输出）：
    a. npx tsc --noEmit
    b. {task.evals 中的其他命令}
-4. 逐条对照验收条件自检
-5. git add <modified files> && git commit -m "feat: {id} - {title}"
-6. git push origin {branchName}
-7. 在报告中包含每个验证命令的完整输出
+6. 逐条对照验收条件自检，不符合项修复后重新运行步骤 5
+7. git add <modified files> && git commit -m "feat: {id} - {title}"
+8. git push origin {branchName}
+9. 在报告中包含每个验证命令的完整输出
 ```
 
 3. 等所有 teammate 完成
@@ -123,7 +131,7 @@ Explore 结果用于编写高质量的 teammate prompt，不要用于自己写�
    a. **独立验证**：运行该 DT 的所有 evals（验证铁律）→ 任一失败 → 修复/重派 → 重新运行
    b. **Stage A: Spec + Constitution Review**：对照 acceptanceCriteria + constitution checklist → FAIL 则修复后重新验证
    c. **Stage B: Quick Quality Check**：安全/调试遗留 → HIGH 立即修复
-   d. 全部 PASS → 更新该 DT 的 `passes: true`
+   d. 全部 PASS → 更新该 DT 的 `passes: true` → **执行 DT 完成反思（见「DT 完成反思」章节）**
 5. 更新 `$STATUS_PATH`（agent-status）
 6. 写 `progress.txt`
 7. 执行 `/compact` 释放上下文
@@ -188,7 +196,7 @@ STATUS_PATH="${BOTOOL_STATUS_FILE:-$BOTOOL_SCRIPT_DIR/.state/agent-status}"
    a. **独立验证**：运行该 DT 的所有 evals（验证铁律）→ 任一失败 → 修复 → 重新运行
    b. **Stage A: Spec + Constitution Review** → FAIL 则修复后重新验证
    c. **Stage B: Quick Quality Check** → HIGH 立即修复
-   d. 全部 PASS → 更新 `prd.json`：`passes` → `true`
+   d. 全部 PASS → 更新 `prd.json`：`passes` → `true` → **执行 DT 完成反思（见「DT 完成反思」章节）**
 8. 写 `progress.txt`
 
 ## 验证铁律
@@ -201,9 +209,21 @@ STATUS_PATH="${BOTOOL_STATUS_FILE:-$BOTOOL_SCRIPT_DIR/.state/agent-status}"
 4. 只有全部 evals 通过后才能写 passes: true
 
 如果 Teammate 报告完成但 Lead 的独立验证失败：
+
+**先诊断根因，再决定动作（禁止无脑重试）：**
+
+| 根因类型 | 判断标准 | 对应动作 |
+|----------|----------|----------|
+| 歧义类 | DT 描述不清导致实现偏差 | 修正 DT 描述，重派 Teammate |
+| 依赖类 | 缺少前置 DT 的产出 | 检查 dependsOn，确认前置任务真正 pass |
+| 实现类 | 代码 bug，逻辑错误 | Lead 接管直接修复，不重派 |
+| 规范类 | constitution checklist 不合规 | 对照 rule.file 修复后重验证 |
+| 环境类 | eval 命令配置有误 | 修正 prd.json 中的 evals |
+
+根因确认后：
 - 不标记 passes: true
-- Lead 自行修复或重新派发 Teammate
-- 在 progress.txt 记录 "验证失败：{原因}"
+- 按上表对应动作处理
+- 在 progress.txt 记录 "验证失败：{根因类型} — {具体原因}"
 
 **禁止的行为：**
 - 信任 Teammate 的口头报告而不独立验证
@@ -245,6 +265,33 @@ STATUS_PATH="${BOTOOL_STATUS_FILE:-$BOTOOL_SCRIPT_DIR/.state/agent-status}"
   - 有用的上下文
 ---
 ```
+
+## DT 完成反思
+
+每个 DT 完成（passes: true）后，在写 progress.txt 时附加一条结构化反思：
+
+```
+## [日期] - [DT-ID] 反思
+- 预期 vs 实际：[有无偏差，没有就写"符合预期"]
+- 新发现的 pattern：[本 DT 揭示的代码规律，影响后续 DT 的]
+- 对剩余 DT 的影响：[如有，主动更新执行计划]
+---
+```
+
+**如果反思中发现可复用的 pattern（不强制，只在真正发现规律时写）：**
+
+将其追加到 patterns.json：
+```json
+{
+  "id": "pattern-xxx",
+  "category": "frontend|backend|api|auth|...",
+  "description": "一句话描述该规律",
+  "confidence": 0.7,
+  "status": "active"
+}
+```
+
+这条反思机制让每个 DT 的执行经验能被后续 session 和 Teammate 复用，而不是只记在 progress.txt 里沉默消亡。
 
 ## Codex CLI 集成（可选能力）
 
