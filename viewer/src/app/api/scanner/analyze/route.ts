@@ -141,10 +141,18 @@ async function fetchPRMetadata(
   projectRoot: string
 ): Promise<{ prNumber: number | null; changedFiles: string[] }> {
   try {
+    // Get current branch name first
+    const branchOut = await runCommand('git', ['branch', '--show-current'], {
+      cwd: projectRoot,
+      timeout: 5_000,
+    });
+    const branch = branchOut.trim();
+    if (!branch) return { prNumber: null, changedFiles: [] };
+
     // Get current branch's PR number
     const prListOutput = await runCommand(
       'gh',
-      ['pr', 'list', '--head', '@', '--json', 'number', '--limit', '1'],
+      ['pr', 'list', '--head', branch, '--json', 'number', '--limit', '1'],
       { cwd: projectRoot, timeout: 15_000 }
     );
     const prList = JSON.parse(prListOutput);
@@ -230,8 +238,12 @@ Rules:
 - Output ONLY the JSON object, nothing else`;
 }
 
+// Server-side codex timeout: 5 minutes
+const CODEX_TIMEOUT_MS = 300_000;
+
 /**
  * Spawn codex and collect its stdout output.
+ * Kills the process if it exceeds CODEX_TIMEOUT_MS.
  */
 function spawnCodexAnalysis(
   prompt: string,
@@ -250,6 +262,17 @@ function spawnCodexAnalysis(
       }
     );
 
+    // Kill codex if it doesn't finish within the timeout
+    const killTimer = setTimeout(() => {
+      codex.kill('SIGTERM');
+      const msg = `Codex analysis timed out after ${CODEX_TIMEOUT_MS / 1000}s`;
+      sendSSE(controller, encoder, 'error', {
+        errorType: 'analysis-failed',
+        message: msg,
+      });
+      reject(new Error(msg));
+    }, CODEX_TIMEOUT_MS);
+
     let stdout = '';
     let stderr = '';
 
@@ -262,10 +285,12 @@ function spawnCodexAnalysis(
     });
 
     codex.on('error', (err) => {
+      clearTimeout(killTimer);
       reject(new Error(`Failed to spawn codex: ${sanitizeStderr(err.message)}`));
     });
 
     codex.on('close', (code) => {
+      clearTimeout(killTimer);
       if (code !== 0) {
         const sanitized = sanitizeStderr(stderr || `codex exited with code ${code}`);
         sendSSE(controller, encoder, 'error', {
