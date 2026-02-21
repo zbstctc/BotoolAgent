@@ -294,6 +294,12 @@ JSON_FILE="$TASKS_DIR/${PRD_BASENAME}.json"
 | `description` | string | Yes | Feature description (from PRD § 1) |
 | `prdFile` | string | Yes | **NEW** Path to the PRD markdown file |
 | `constitution` | object | No | Coding standards from `rules/` (file+checklist 模式) |
+| `prerequisites[]` | Prerequisite[] | No | 外部依赖列表，由 PyramidPRD 依赖扫描自动生成 |
+| `prerequisites[].id` | string | Yes | prereq-001, prereq-002, ... |
+| `prerequisites[].type` | string | Yes | `api_key` / `service` / `oauth` / `env_var` / `credentials` |
+| `prerequisites[].name` | string | Yes | 依赖名称（如 "Stripe API Key"） |
+| `prerequisites[].description` | string | No | 说明（如何获取） |
+| `prerequisites[].resolved` | boolean | Yes | 用户是否已准备好，初始由 PyramidPRD 扫描结果决定 |
 | `devTasks[]` | SlimDevTask[] | Yes | Development tasks (slim version) |
 | `devTasks[].id` | string | Yes | Task ID (DT-001, DT-002, ...) |
 | `devTasks[].title` | string | Yes | Task title |

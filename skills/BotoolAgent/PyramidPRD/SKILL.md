@@ -585,6 +585,55 @@ L0 上下文摘要:
 
 ---
 
+### Phase 5.5: 外部依赖扫描（L4 完成后自动执行）
+
+**目标：** 在进入 L5 前，扫描所有已收集的需求，识别开发前需要用户准备的外部依赖，写入 prd.json 的 `prerequisites` 字段，让 Lead Agent 能在开始 coding 前给用户预警。
+
+**触发条件：** L4 完成后自动执行。快速修复模式跳过。
+
+#### 扫描规则
+
+扫描 L0-L4 收集的全部需求描述，检测以下信号词：
+
+| 信号关键词 | 识别为 prerequisite |
+|-----------|-------------------|
+| 支付、Stripe、微信支付、PayPal、收款 | `{ type: "api_key", name: "支付平台 API Key" }` |
+| 邮件通知、短信、SendGrid、SMTP | `{ type: "service", name: "邮件/短信服务账号" }` |
+| OAuth、GitHub 登录、Google 登录、微信登录 | `{ type: "oauth", name: "OAuth App 凭证" }` |
+| 数据库 URL、PostgreSQL、MySQL、DATABASE_URL | `{ type: "env_var", name: "DATABASE_URL 连接字符串" }` |
+| OpenAI、AI API、大模型、GPT、Claude API | `{ type: "api_key", name: "AI 服务 API Key" }` |
+| 地图、高德、Google Maps、天气 API | `{ type: "api_key", name: "第三方地图/天气 API Key" }` |
+| S3、OSS、云存储、对象存储 | `{ type: "credentials", name: "云存储访问凭证" }` |
+
+**未检测到任何信号 → 跳过，直接进入 L5。**
+
+**检测到 1 个或以上 → 一次 AskUserQuestion 展示：**
+
+```json
+{
+  "questions": [
+    {
+      "question": "【依赖预检】检测到以下外部依赖，开发启动前需要准备好：\n\n[列出每项：类型 + 名称]\n\n你目前的准备状态？",
+      "header": "外部依赖",
+      "options": [
+        { "label": "已全部准备好", "description": "API Key / 账号 / 环境变量均已就绪" },
+        { "label": "部分准备好，继续规划", "description": "先完成 PRD，开发前补充剩余依赖" },
+        { "label": "都没有，先规划", "description": "先生成 PRD，依赖后续处理" }
+      ],
+      "multiSelect": false
+    }
+  ]
+}
+```
+
+**写入 prerequisites 字段规则：**
+- 不管用户选哪个，检测到的依赖都写入 prd.json `prerequisites`
+- "已全部准备好" → 各项 `resolved: true`
+- 其他选项 → 各项 `resolved: false`
+- Lead Agent 会在初始化时读取此字段，在 progress.txt 中给出预警提示
+
+---
+
 ### Phase 6: L5 确认门控（ASCII 多维度可视化）
 
 **目标：** L4 完成后，在生成 PRD 前，向用户展示 **ASCII 可视化的多维度确认摘要**，确保需求理解一致。

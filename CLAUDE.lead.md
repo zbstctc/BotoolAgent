@@ -18,6 +18,16 @@
 3. 读取 `$BOTOOL_PRD_FILE`（如不存在则回退到 `$BOTOOL_PROJECT_DIR/prd.json`）— 了解所有开发任务
 4. 读取 `$BOTOOL_PROGRESS_FILE`（如不存在则回退到 `$BOTOOL_PROJECT_DIR/progress.txt`）中的 Codebase Patterns（如果存在）
 5. 确认 git 分支 = `prd.json.branchName`（不是则切换/创建）
+5.5 检查 prd.json 是否有 `prerequisites` 字段：
+   - 无此字段 或 全部 `resolved: true` → 继续
+   - 有 `resolved: false` 的项 → 在 progress.txt 开头写入前置依赖警告，格式：
+     ```
+     ⚠ 前置依赖未就绪（来自 prd.json prerequisites）：
+     - [prereq-001] api_key: Stripe API Key — 如未配置，相关 DT 将在运行时失败
+     - [prereq-002] service: 邮件服务账号 — 建议先配置再运行
+     如已在 .env 中配置，请忽略此提示。
+     ```
+   - 继续执行（prerequisites 是提醒，不是硬门控）
 6. 通过 Bash 工具更新 agent-status → `"status": "running"`（路径: `$BOTOOL_STATUS_FILE` > `$BOTOOL_SCRIPT_DIR/.state/agent-status`）
 
 ## 第二步: 构建执行计划
