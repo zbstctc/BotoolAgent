@@ -9,7 +9,7 @@ export interface TabPanelManagerProps {
 }
 
 export function TabPanelManager({ children }: TabPanelManagerProps) {
-  const { tabs, activeTabId } = useTab();
+  const { tabs, activeTabId, isHydrated } = useTab();
 
   // Determine if the current route is managed by the panel system
   // Use activeTabId (not pathname) since tab switches use history.replaceState which doesn't trigger usePathname updates
@@ -18,6 +18,12 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
 
   // Project tabs: exclude dashboard (always rendered separately) and utility tabs (have url field, use Next.js routing)
   const projectTabs = tabs.filter((t) => t.id !== 'dashboard' && !t.url);
+
+  // Hydration guard: show empty placeholder until localStorage tabs are loaded
+  // Prevents flash of Dashboard before the real active tab appears on F5 refresh
+  if (!isHydrated) {
+    return <div className="h-full" />;
+  }
 
   return (
     <>

@@ -13,6 +13,7 @@ export function isValidReqId(id: string): boolean {
 interface TabContextValue {
   tabs: TabItem[];
   activeTabId: string;
+  isHydrated: boolean;
   openTab: (item: TabItem, url: string) => void;
   closeTab: (id: string) => void;
   switchTab: (id: string, url: string) => void;
@@ -28,6 +29,7 @@ const TabContext = createContext<TabContextValue | null>(null);
 export function TabProvider({ children }: { children: React.ReactNode }) {
   const [tabs, setTabs] = useState<TabItem[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>('dashboard');
+  const [isHydrated, setIsHydrated] = useState(false);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -35,6 +37,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     startTransition(() => {
       setTabs(stored.tabs);
       setActiveTabId(stored.activeTabId);
+      setIsHydrated(true);
     });
   }, []);
 
@@ -116,6 +119,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
       value={{
         tabs,
         activeTabId,
+        isHydrated,
         openTab,
         closeTab,
         switchTab,
