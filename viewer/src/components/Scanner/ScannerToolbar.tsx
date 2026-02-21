@@ -98,6 +98,9 @@ export function ScannerToolbar({
       .then(async (res) => {
         if (res.status === 409) {
           setProgressMessage('已有分析正在进行中...');
+          clearTimeoutTimer();
+          setIsAnalyzing(false);
+          setShowTimeout(false);
           return;
         }
 
