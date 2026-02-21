@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Scan, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ScannerErrorView, type ScannerErrorType } from '@/components/Scanner/ScannerErrorView';
 import type { ScanResult } from '@/types/scanner';
 
 interface StatusResponse {
@@ -12,17 +13,28 @@ interface StatusResponse {
   needsUpdate: boolean;
 }
 
+interface FatalError {
+  errorType: ScannerErrorType;
+  detail?: string;
+}
+
 export function ScannerPanel() {
   const [isLoading, setIsLoading] = useState(true);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [needsUpdate, setNeedsUpdate] = useState(false);
   const [currentPrNumber, setCurrentPrNumber] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fatalError, setFatalError] = useState<FatalError | null>(null);
+
+  const clearFatalError = useCallback(() => {
+    setFatalError(null);
+  }, []);
 
   const fetchStatus = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
+      setFatalError(null);
       const res = await fetch('/api/scanner/status');
       if (!res.ok) {
         throw new Error(`Status check failed: ${res.status}`);
@@ -53,6 +65,25 @@ export function ScannerPanel() {
         </div>
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="h-5 w-5 animate-spin text-neutral-400" />
+        </div>
+      </div>
+    );
+  }
+
+  // Fatal error state — render ScannerErrorView
+  if (fatalError) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-neutral-200 bg-white">
+          <Scan className="h-4 w-4 text-neutral-500" />
+          <h1 className="text-sm font-medium text-neutral-900">Scanner</h1>
+        </div>
+        <div className="flex-1">
+          <ScannerErrorView
+            errorType={fatalError.errorType}
+            detail={fatalError.detail}
+            onRetry={clearFatalError}
+          />
         </div>
       </div>
     );
