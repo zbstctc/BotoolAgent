@@ -97,7 +97,12 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updateTabStage = useCallback((id: string, stage: number) => {
-    setTabs((prev) => prev.map((t) => t.id === id ? { ...t, stage } : t));
+    // Clear stale agentStatus and progress when stage changes
+    setTabs((prev) => prev.map((t) => {
+      if (t.id !== id) return t;
+      const { agentStatus: _a, progress: _p, ...rest } = t;
+      return { ...rest, stage };
+    }));
   }, []);
 
   const updateTabRunning = useCallback((id: string, isRunning: boolean) => {
@@ -108,7 +113,8 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     setTabs((prev) => prev.map((t) => {
       if (t.id !== id) return t;
       const updated: TabItem = { ...t, agentStatus: status };
-      if (progress !== undefined) updated.progress = progress;
+      // Always sync progress: explicitly clear when not provided to avoid stale data
+      updated.progress = progress;
       return updated;
     }));
   }, []);

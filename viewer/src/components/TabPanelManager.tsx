@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { DashboardContent } from '@/components/panels/DashboardContent';
 import { StageRouter } from '@/components/panels/StageRouter';
+import { RulesManager } from '@/components/rules/RulesManager';
 import { useTab, isValidReqId } from '@/contexts/TabContext';
 import { useRequirement } from '@/contexts/RequirementContext';
 import { Button } from '@/components/ui/button';
@@ -114,11 +115,17 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
   }, [urlReqId, isHydrated, isRequirementsLoading, requirements, tabs, activeTabId, openTab, switchTab]);
 
   // Determine if the current route is managed by the panel system.
-  // Dashboard is managed only on '/'; stage URLs without a tab context (no ?req=)
-  // fall through to Next.js children so direct navigation still works.
+  // Dashboard and Rules are always managed (activeTabId-based, not pathname-based).
+  // Stage tabs are managed when a project tab is active.
+  // Special case: when dashboard is active but we're on a standalone /stageN URL
+  // (no ?req=), fall through to Next.js children so direct navigation works.
+  // Note: we use pathname here only to detect standalone stage URLs; we don't
+  // use pathname === '/' because history.replaceState doesn't update usePathname().
   const activeTab = tabs.find((t) => t.id === activeTabId);
+  const isOnStandaloneStageUrl = /^\/stage\d+/.test(pathname);
   const isManagedRoute =
-    (activeTabId === 'dashboard' && pathname === '/') ||
+    (activeTabId === 'dashboard' && !isOnStandaloneStageUrl) ||
+    activeTabId === 'rules' ||
     (activeTab != null && !activeTab.url && activeTabId !== 'dashboard');
 
   // Project tabs: exclude dashboard and utility tabs
@@ -169,6 +176,11 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
         {/* Dashboard panel: always rendered, CSS visibility toggle */}
         <div className={activeTabId === 'dashboard' ? 'block h-full' : 'hidden'}>
           <DashboardContent />
+        </div>
+
+        {/* Rules panel: always rendered, CSS visibility toggle */}
+        <div className={activeTabId === 'rules' ? 'block h-full' : 'hidden'}>
+          <RulesManager />
         </div>
 
         {/* Project tab panels: each rendered with CSS display switching */}
