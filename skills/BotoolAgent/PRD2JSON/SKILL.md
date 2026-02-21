@@ -67,7 +67,7 @@ Then stop here.
 ### Step 2: Try Viewer Mode First
 
 ```bash
-# Auto-detect port: BotoolAgent repo = 3000, other project = 3100
+# Auto-detect port: BotoolAgent repo = 3100, other project = 3101
 VIEWER_PORT="$([ -d BotoolAgent/viewer ] && echo 3101 || echo 3100)"
 lsof -i :"$VIEWER_PORT" | grep LISTEN
 ```
@@ -199,7 +199,7 @@ JSON_FILE="$TASKS_DIR/${PRD_BASENAME}.json"
 **Conversion process:**
 
 1. **Parse PRD § 7 (开发计划)** — extract all DT entries from each Phase
-2. **Map each DT to its PRD section with line numbers** — 使用 Grep 或 Read 获取 `### 7.X` 标题的行号，计算 Phase 的行号范围，生成 `"7.X (LSTART-LEND)"` 格式的 `prdSection`
+2. **Map each DT to its PRD section with line numbers** — 使用 Grep 或 Read 获取 `### 7.X` 标题的行号（Phase 是 § 7 的子章节，标题级别为三级 `###`），计算 Phase 的行号范围，生成 `"7.X (LSTART-LEND)"` 格式的 `prdSection`
 3. **For each DT, read PRD content then generate fields:**
    - 用 `prdSection` 行号跳读 PRD 该段内容（Read 工具的 `offset` + `limit`）
    - 读取该 DT 的描述、验收标准、涉及文件/组件/API 路由
@@ -370,7 +370,7 @@ PRD § 7.3 Phase 3 (lines 549-559) 下的 DT-006 ~ DT-008  → prdSection: "7.3 
 
 转换 PRD.md 时，PRD2JSON 必须：
 
-1. **读取 PRD.md 全文**，使用 Grep 或 Read 获取 `## 7.X` 标题的行号
+1. **读取 PRD.md 全文**，使用 Grep 或 Read 获取 `### 7.X` 标题的行号（三级标题）
 2. **计算每个 Phase 的行号范围**：从当前 `## 7.X` 标题到下一个 `## 7.Y` 标题（或文件末尾）
 3. **写入 prdSection 格式**：`"7.X (LSTART-LEND)"`
 
@@ -693,7 +693,7 @@ CREATE TABLE task_status (...)
       ],
       "testCases": [
         { "type": "typecheck", "desc": "TypeScript 编译通过" },
-        { "type": "e2e", "desc": "页面正确渲染状态标签" }
+        { "type": "e2e", "desc": "在任务列表中，StatusBadge 根据 status 值显示对应颜色的徽章" }
       ]
     }
   ],
@@ -750,6 +750,7 @@ The coding agent will:
 - [ ] **Constitution 使用 file+checklist**: 每条 rule 有 file 路径 + 3-8 条 checklist
 - [ ] **Checklist 条数 3-8**: 每条 rule 的 checklist 数量在范围内
 - [ ] **Steps 颗粒度**: 有 steps 的 DT 每步可用单条命令验证，3-6 步
+- [ ] **testCases 非空**: 每个 DT 至少有 typecheck；涉及 UI/API 的 DT 至少有一条 e2e；所有 desc 具体描述该 DT 的实际行为，不得泛泛
 - [ ] `$TASKS_DIR/prd-{feature-name}.json` written (main file)
 - [ ] `./prd.json` written (root compat copy)
 - [ ] `$TASKS_DIR/registry.json` updated with current project
