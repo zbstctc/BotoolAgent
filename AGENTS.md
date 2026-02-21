@@ -143,3 +143,5 @@ cd viewer && npm run lint
 - **禁止** `npx prisma db push`（所有数据库变更使用 SQL 脚本）
 - **禁止** `--force-reset`（会删除所有数据）
 - 所有 schema 变更必须编写迁移 SQL
+
+<!-- claude-review test Sat Feb 21 17:54:50 AEDT 2026 -->
