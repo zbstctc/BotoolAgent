@@ -253,7 +253,7 @@ export function DashboardContent() {
           variant="outline"
           size="sm"
           className="gap-1.5"
-          onClick={() => openTab({ id: 'scanner', name: 'Scanner', stage: 0, url: '/scanner', isUtility: true } as TabItem, '/scanner')}
+          onClick={() => openTab({ id: 'scanner', name: 'Scanner', stage: 0, url: '/scanner', isUtility: true }, '/scanner')}
         >
           <Scan className="h-3.5 w-3.5" />
           Scanner

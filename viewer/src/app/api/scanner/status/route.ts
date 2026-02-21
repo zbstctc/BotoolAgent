@@ -1,35 +1,10 @@
 import { NextResponse } from 'next/server';
 import * as fs from 'fs';
-import * as path from 'path';
-import { execSync } from 'child_process';
-import { getProjectRoot } from '@/lib/project-root';
+import { execFile } from 'child_process';
+import { getProjectRoot, ensureContainedPath } from '@/lib/project-root';
+import type { ScanResult } from '@/types/scanner';
 
-// ── Types (local until DT-004 creates shared types) ────────────────────────
-
-interface ScanResult {
-  projectName: string;
-  analyzedAt: string;
-  prNumber: number | null;
-  changedFiles: string[];
-  nodes: ScanNode[];
-  edges: ScanEdge[];
-}
-
-interface ScanNode {
-  id: string;
-  label: string;
-  path: string;
-  type: 'root' | 'module' | 'component' | 'utility' | 'config';
-  description?: string;
-  techStack?: string[];
-  features?: { name: string; description?: string; relatedFiles?: string[] }[];
-}
-
-interface ScanEdge {
-  source: string;
-  target: string;
-  label?: string;
-}
+// ── Types ───────────────────────────────────────────────────────────────────
 
 interface StatusResponse {
   hasResult: boolean;
@@ -44,7 +19,7 @@ const CACHE_FILENAME = '.botoolagent-scan-result.json';
 
 function readCachedScanResult(projectRoot: string): ScanResult | null {
   try {
-    const filePath = path.join(projectRoot, CACHE_FILENAME);
+    const filePath = ensureContainedPath(projectRoot, CACHE_FILENAME);
     if (!fs.existsSync(filePath)) return null;
     const content = fs.readFileSync(filePath, 'utf-8');
     return JSON.parse(content) as ScanResult;
@@ -53,22 +28,32 @@ function readCachedScanResult(projectRoot: string): ScanResult | null {
   }
 }
 
-function getCurrentPrNumber(projectRoot: string): number | null {
-  try {
-    const output = execSync(
-      'gh pr list --head $(git branch --show-current) --json number --limit 1',
-      {
+function getCurrentPrNumber(projectRoot: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    // First get current branch name
+    execFile('git', ['branch', '--show-current'], {
+      cwd: projectRoot,
+      timeout: 5000,
+    }, (gitErr, branchOut) => {
+      if (gitErr) { resolve(null); return; }
+      const branch = branchOut.trim();
+      if (!branch) { resolve(null); return; }
+
+      // Then query gh for PR number on this branch
+      execFile('gh', ['pr', 'list', '--head', branch, '--json', 'number', '--limit', '1'], {
         cwd: projectRoot,
         timeout: 10000,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      },
-    );
-    const prs = JSON.parse(output);
-    return Array.isArray(prs) && prs.length > 0 ? prs[0].number : null;
-  } catch {
-    return null; // gh not available or no PR
-  }
+      }, (ghErr, ghOut) => {
+        if (ghErr) { resolve(null); return; }
+        try {
+          const prs = JSON.parse(ghOut);
+          resolve(Array.isArray(prs) && prs.length > 0 ? prs[0].number : null);
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+  });
 }
 
 // ── Route handler ───────────────────────────────────────────────────────────
@@ -78,7 +63,7 @@ export async function GET() {
     const projectRoot = getProjectRoot();
 
     const scanResult = readCachedScanResult(projectRoot);
-    const currentPrNumber = getCurrentPrNumber(projectRoot);
+    const currentPrNumber = await getCurrentPrNumber(projectRoot);
 
     const hasResult = scanResult !== null;
 
