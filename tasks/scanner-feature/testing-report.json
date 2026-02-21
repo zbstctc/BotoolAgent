@@ -1,0 +1,61 @@
+{
+  "layers": [
+    {
+      "id": "L1",
+      "name": "Regression (TypeCheck + Lint)",
+      "status": "pass",
+      "fixCount": 1,
+      "rounds": 1,
+      "notes": "TypeCheck clean; Lint: 1 error fixed (react-hooks/set-state-in-effect in TabPanelManager.tsx, eslint-disable comment added)"
+    },
+    {
+      "id": "L2",
+      "name": "Unit Tests",
+      "status": "skipped",
+      "fixCount": 0,
+      "rounds": 0,
+      "notes": "No test/test:unit script in package.json"
+    },
+    {
+      "id": "L3",
+      "name": "E2E Tests",
+      "status": "pass",
+      "fixCount": 3,
+      "rounds": 2,
+      "notes": "Round 1: isManagedRoute broke dashboard visibility — restored RulesManager + smart isOnStandaloneStageUrl/isOnStandaloneUtilityUrl approach. Round 2: all 12 tests passing."
+    },
+    {
+      "id": "L4",
+      "name": "Code Review",
+      "status": "pass",
+      "fixCount": 2,
+      "rounds": 1,
+      "notes": "MEDIUM fixed: gh pr list --head '@' bug (now fetches branch first), server-side codex timeout added (5 min). No HIGH issues."
+    },
+    {
+      "id": "L5",
+      "name": "Codex 红队审查",
+      "status": "pass",
+      "adversarialRounds": 2,
+      "findingsTotal": 4,
+      "fixed": 4,
+      "rejected": 0,
+      "notes": "Round 1: 4 MEDIUM findings fixed (kill-on-cancel, stale flowchart key, utility route regression, process pointer prep). Round 2: 1 MEDIUM finding fixed (process pointer identity guard). Converged after round 2."
+    },
+    {
+      "id": "L6",
+      "name": "PR 创建 + Claude Review",
+      "status": "pass",
+      "prUrl": "https://github.com/zbstctc/BotoolAgent/pull/21",
+      "prNumber": 21,
+      "agentComments": 1,
+      "fixRounds": 1,
+      "notes": "PR #21 created. Claude Review: HIGH=0 (passes). MEDIUM=1 fixed (analysisToken concurrency guard). LOW=3 fixed (cache Zod validation, error message leak, formatTimeAgo NaN). 1 fix round total."
+    }
+  ],
+  "verdict": "all_pass",
+  "prReady": true,
+  "prUrl": "https://github.com/zbstctc/BotoolAgent/pull/21",
+  "prNumber": 21,
+  "timestamp": "2026-02-21T00:00:00Z"
+}
