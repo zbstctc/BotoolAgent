@@ -11,7 +11,6 @@ import {
   type NodeTypes,
 } from '@xyflow/react';
 // Use default import: dagre ESM only exports `default`, not named exports
-// eslint-disable-next-line import/no-named-as-default
 import dagre from '@dagrejs/dagre';
 import '@xyflow/react/dist/style.css';
 import FeatureNode from './FeatureNode';

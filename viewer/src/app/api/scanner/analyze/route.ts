@@ -106,6 +106,91 @@ async function generateFileTree(projectRoot: string): Promise<string> {
 }
 
 /**
+ * Recursively find files whose name ends with `suffix` up to `maxDepth` levels.
+ * Skips hidden directories and node_modules.
+ */
+function findFiles(dir: string, suffix: string, maxDepth: number, depth = 0): string[] {
+  if (depth > maxDepth) return [];
+  const results: string[] = [];
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return results;
+  }
+  for (const entry of entries) {
+    if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...findFiles(fullPath, suffix, maxDepth, depth + 1));
+    } else if (entry.name.endsWith(suffix)) {
+      results.push(fullPath);
+    }
+  }
+  return results;
+}
+
+/**
+ * Read detailed module inventory: API endpoints, Skills, React components.
+ * This gives Codex concrete names instead of forcing it to guess from the file tree.
+ */
+function readDetailedModuleContext(projectRoot: string): string {
+  const parts: string[] = [];
+
+  // 1. API endpoints — list route.ts files under viewer/src/app/api/
+  try {
+    const apiBase = path.resolve(projectRoot, 'viewer/src/app/api');
+    if (fs.existsSync(apiBase) && apiBase.startsWith(projectRoot)) {
+      const routeFiles = findFiles(apiBase, 'route.ts', 5);
+      const endpoints = routeFiles.map((p) => {
+        const rel = path.relative(apiBase, path.dirname(p)).replace(/\\/g, '/');
+        return `/api/${rel}`;
+      }).sort();
+      if (endpoints.length > 0) {
+        parts.push(`### API Endpoints (${endpoints.length} total)\n${endpoints.map((e) => `- ${e}`).join('\n')}`);
+      }
+    }
+  } catch { /* skip */ }
+
+  // 2. Skills — directory names under skills/ or skills/BotoolAgent/
+  try {
+    for (const skillRelDir of ['skills/BotoolAgent', 'skills']) {
+      const skillDir = path.resolve(projectRoot, skillRelDir);
+      if (fs.existsSync(skillDir) && skillDir.startsWith(projectRoot)) {
+        const entries = fs.readdirSync(skillDir, { withFileTypes: true });
+        const skills = entries
+          .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+          .map((e) => e.name)
+          .sort();
+        if (skills.length > 0) {
+          parts.push(`### Skills / CLI Commands (${skills.length} total)\n${skills.map((s) => `- ${s}`).join('\n')}`);
+          break;
+        }
+      }
+    }
+  } catch { /* skip */ }
+
+  // 3. React components — .tsx files under viewer/src/components/
+  try {
+    const compBase = path.resolve(projectRoot, 'viewer/src/components');
+    if (fs.existsSync(compBase) && compBase.startsWith(projectRoot)) {
+      const compFiles = findFiles(compBase, '.tsx', 4);
+      const names = compFiles
+        .map((p) => {
+          const rel = path.relative(compBase, p).replace(/\\/g, '/');
+          return rel.replace(/\.tsx$/, '');
+        })
+        .sort();
+      if (names.length > 0) {
+        parts.push(`### React Components (${names.length} total)\n${names.map((n) => `- ${n}`).join('\n')}`);
+      }
+    }
+  } catch { /* skip */ }
+
+  return parts.join('\n\n');
+}
+
+/**
  * Read README and key config files from project root.
  */
 function readProjectContext(projectRoot: string): string {
@@ -196,11 +281,16 @@ async function fetchPRMetadata(
 function buildAnalysisPrompt(
   fileTree: string,
   projectContext: string,
+  moduleDetails: string,
   prNumber: number | null,
   changedFiles: string[]
 ): string {
   const prSection = prNumber
     ? `\n## Current PR\nPR #${prNumber}\nChanged files:\n${changedFiles.map((f) => `- ${f}`).join('\n')}\n`
+    : '';
+
+  const moduleSection = moduleDetails
+    ? `\n## Detailed Module Inventory\n${moduleDetails}\n`
     : '';
 
   return `Analyze this project and output a JSON object describing its architecture.
@@ -210,7 +300,7 @@ ${fileTree}
 
 ## Project Context
 ${projectContext}
-${prSection}
+${moduleSection}${prSection}
 ## Output Format
 
 You MUST output ONLY a valid JSON object (no markdown fences, no explanation) with this exact structure:
@@ -243,6 +333,11 @@ Rules:
 - Connect nodes with edges that describe real dependencies or data flows
 - Use the file tree and context files to determine the project structure
 - The root node should represent the overall project
+- If a "Detailed Module Inventory" section is provided:
+  * Use the ACTUAL API endpoint paths as features in the API/backend layer node (list every endpoint)
+  * Use the ACTUAL skill directory names as features in the skills node
+  * Use the ACTUAL component file names to enumerate components — do NOT use generic placeholders
+  * Be specific: use real names from the inventory, not vague descriptions like "various components"
 - Output ONLY the JSON object, nothing else`;
 }
 
@@ -411,6 +506,13 @@ export async function POST(request: Request) {
       });
       const projectContext = readProjectContext(projectRoot);
 
+      // Step 3.5: Read detailed module inventory (API routes, skills, components)
+      sendSSE(ctrl, encoder, 'progress', {
+        step: 'reading-modules',
+        message: '正在扫描模块清单...',
+      });
+      const moduleDetails = readDetailedModuleContext(projectRoot);
+
       // Step 4: Fetch PR metadata
       sendSSE(ctrl, encoder, 'progress', {
         step: 'fetching-pr',
@@ -427,6 +529,7 @@ export async function POST(request: Request) {
       const prompt = buildAnalysisPrompt(
         fileTree,
         projectContext,
+        moduleDetails,
         prNumber,
         changedFiles
       );
