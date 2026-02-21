@@ -106,7 +106,9 @@ echo "项目目录: $PROJECT_DIR"
 测试计划:
   Layer 1 — Regression: TypeCheck + Lint （自动修复）
   Layer 2 — Unit Tests: npm test （自动修复）
-  Layer 3 — E2E Tests: Playwright （自动修复）
+  Layer 3 — E2E Tests: 双轨并进
+    Layer 3a — CLI Playwright: spec 文件 （自动修复）
+    Layer 3b — Playwright MCP: prd.json testCases 验收测试 （前端问题专项捕获）
   Layer 4 — Code Review: Claude 审查 git diff （自动修复 HIGH）
   Layer 5 — Codex 红队审查: Codex 对抗审查 （对抗循环 ≤ 3 轮）
   Layer 6 — PR 创建 + Claude Review 守门 （Claude Review 修复循环 ≤ 2 轮）
@@ -386,11 +388,21 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 
 ---
 
-## Layer 3 — E2E Tests
+## Layer 3 — E2E Tests（CLI Playwright + Playwright MCP 双轨）
 
-**跳过条件：** `startLayer > 3` 时跳过此层。
+**跳过条件：** `startLayer > 3` 时跳过此层（包括 3a 和 3b）。
 
-### 3a. 环境清理 + 健康检查（E2E 前置）
+Layer 3 分为两个子层，**顺序执行（3a → 3b）**：
+- **Layer 3a — CLI Playwright**：检测并运行 `.spec.ts` spec 文件（传统自动化回归测试）
+- **Layer 3b — Playwright MCP**：从 prd.json `testCases[].playwrightMcp` 读取步骤，Claude 直接操作浏览器执行验收测试（专门捕获前端渲染/交互/样式 bug）
+
+**重要：3a Circuit Breaker 跳过后，3b 仍然继续执行。**两层各自独立记录结果。
+
+---
+
+### Layer 3a — CLI Playwright
+
+#### 3a-1. 环境清理 + 健康检查（CLI E2E 前置）
 
 E2E 测试依赖 dev server，必须先确保环境干净：
 
@@ -427,7 +439,7 @@ curl -s -o /dev/null -w "%{http_code}" --max-time 3 http://localhost:$TEST_PORT
 
 - 如果所有 3200-3299 端口都被占用 → AskUserQuestion 让用户排查
 
-### 3b. 检测 E2E 配置
+#### 3a-2. 检测 E2E 配置
 
 检测是否有 Playwright 配置：
 
@@ -534,7 +546,222 @@ Ralph 修复循环（持续直到通过或断路器触发）：
    3. 终止测试
    ```
 
-**Layer 3 通过后，告知用户：** "Layer 3 E2E Tests 通过"
+**Layer 3a 通过/跳过后，告知用户当前状态，继续执行 Layer 3b。**
+
+---
+
+### Layer 3b — Playwright MCP 验收测试
+
+**前置：** Layer 3a 已执行（无论 3a 结果如何，3b 都执行）。
+
+#### 3b-1. 收集 MCP 测试用例
+
+读取 prd.json，收集所有含 `playwrightMcp` 的 e2e testCase：
+
+```bash
+node -e "
+const prd = JSON.parse(require('fs').readFileSync('$PRD_PATH', 'utf8'));
+const cases = [];
+(prd.devTasks || []).forEach(dt => {
+  (dt.testCases || []).forEach(tc => {
+    if (tc.type === 'e2e' && tc.playwrightMcp) {
+      cases.push({ dtId: dt.id, dtTitle: dt.title, ...tc });
+    }
+  });
+});
+console.log(JSON.stringify(cases, null, 2));
+"
+```
+
+**如果没有任何 playwrightMcp testCase：**
+```
+Layer 3b: 跳过（prd.json 中无 e2e testCase 含 playwrightMcp 字段）
+```
+记录跳过，继续 Layer 4。
+
+#### 3b-2. 确认 Dev Server
+
+检查 dev server 是否已在 `$TEST_PORT` 运行：
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" --max-time 3 http://localhost:$TEST_PORT
+```
+
+- **Layer 3a 已启动 server（$TEST_PORT 有响应）** → 直接复用
+- **Layer 3a 跳过/server 未运行** → 启动 dev server：
+
+```bash
+# 在后台启动 dev server
+cd "$PROJECT_DIR" && PORT=$TEST_PORT npm run dev &
+DEV_SERVER_PID=$!
+
+# 等待 server 就绪（最多 30 秒）
+MAX_WAIT=30
+ELAPSED=0
+while [ $ELAPSED -lt $MAX_WAIT ]; do
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://localhost:$TEST_PORT)
+  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "304" ]; then
+    echo "Dev server 就绪 (port $TEST_PORT)"
+    break
+  fi
+  sleep 2
+  ELAPSED=$((ELAPSED + 2))
+done
+
+if [ $ELAPSED -ge $MAX_WAIT ]; then
+  echo "Dev server 启动超时，跳过 Layer 3b"
+  kill $DEV_SERVER_PID 2>/dev/null || true
+  # 记录跳过，继续 Layer 4
+fi
+```
+
+#### 3b-3. 执行 Playwright MCP 测试
+
+对每个 `playwrightMcp` testCase（按 DT 顺序），**使用 Playwright MCP 工具逐步执行**：
+
+**执行流程：**
+
+1. 记录开始：`正在执行 MCP 测试: {dtId} — {desc}`
+2. 将 `playwrightMcp.url` 拼接为完整 URL：`http://localhost:$TEST_PORT{url}`
+3. 按 `steps` 数组顺序，逐步调用 Playwright MCP 工具：
+
+| step action | 执行方式 |
+|-------------|---------|
+| `navigate` | 调用 `browser_navigate`，url 替换 PORT |
+| `snapshot` | 调用 `browser_snapshot`，Claude 判断 accessibility tree 是否满足 `assert` 描述的条件 |
+| `click` | 先调用 `browser_snapshot` 获取 accessibility tree，找到 `element` 描述对应的 ref，再调用 `browser_click` |
+| `fill` | 先调用 `browser_snapshot` 找到 `element` 对应 ref，再调用 `browser_type` 输入 `value` |
+| `wait_for` | 调用 `browser_wait_for`，`text` 参数传入期望文字 |
+| `assert_visible` | 调用 `browser_snapshot`，检查 accessibility tree 中是否存在 `text` |
+| `assert_not_visible` | 调用 `browser_snapshot`，检查 `text` 是否不存在 |
+| `screenshot` | 调用 `browser_take_screenshot`，保存到 `tasks/{projectId}/mcp-screenshots/{filename}` |
+
+4. 每步执行后记录结果：`{ step, action, status: "pass"|"fail", reason }`
+5. 遇到 fail → **不立即中断**，继续执行剩余 steps（收集所有失败点）
+6. 所有 steps 执行完后汇总：该 testCase `pass`（所有步骤通过）或 `fail`（有步骤失败）
+
+**assert_visible / snapshot 判断规则：**
+
+使用 `browser_snapshot` 获取 accessibility tree 后，Claude 判断：
+- `assert` / `assert_visible`：检查 snapshot 的文本内容或角色名是否包含指定描述
+- 匹配时使用语义理解（如 "新建项目按钮" 匹配 `role=button name="新建项目"`）
+- 找不到 element 描述对应的 ref → 步骤失败，记录 `element not found: {element}`
+
+#### 3b-4. 汇总结果
+
+所有 testCase 执行完成后：
+
+```
+MCP 测试汇总:
+  总计: {n} 个 testCase
+  通过: {m} 个
+  失败: {f} 个
+  失败列表:
+    - DT-001 — {desc}: step {k} ({action}) 失败 — {reason}
+    - ...
+```
+
+**如果全部通过** → Layer 3b pass，继续 Layer 4。
+
+**如果有失败** → 进入 MCP 修复循环。
+
+#### 3b-5. MCP 修复循环（Ralph 迭代模式）
+
+Ralph 修复循环（持续直到通过或断路器触发）：
+
+**失败分类（先分类再修复）：**
+
+| 失败类型 | 判断依据 | 修复方向 |
+|---------|---------|---------|
+| **元素找不到** | `element not found` | 检查组件是否存在、元素描述是否准确；修源码或更新 playwrightMcp element 描述 |
+| **文字断言失败** | `assert_visible` 找不到文字 | 功能未实现或渲染 bug；修复对应组件/逻辑 |
+| **交互无响应** | `click` 后页面无变化 | 按钮事件/handler 未绑定或逻辑错误；修复 onClick/状态更新 |
+| **页面加载错误** | `navigate` 后 snapshot 显示错误页 | 路由配置问题或 server 异常 |
+| **视觉样式问题** | `snapshot` 显示 UI 状态不符合预期 | CSS/Tailwind 类名错误、条件渲染问题 |
+
+**修复执行：**
+1. 根据失败类型定位源码（读取相关组件/API 文件）
+2. 修复 bug（只修源码，**不修改 playwrightMcp steps**——steps 来自 PRD 是验收标准）
+3. 如修复涉及 > 3 个文件 → Agent Teams 并行修复：
+   - 每个 agent（`subagent_type: general-purpose`）负责一组文件
+   - prompt 包含：失败详情、截图路径（如有）、受影响文件路径
+4. 修复完成后，**重新启动 dev server**（确保代码变更生效）：
+   ```bash
+   kill $DEV_SERVER_PID 2>/dev/null || true
+   cd "$PROJECT_DIR" && PORT=$TEST_PORT npm run dev &
+   DEV_SERVER_PID=$!
+   sleep 5  # 等待 server 就绪
+   ```
+5. 重新执行失败的 testCase（不跑全部），再次 snapshot 验证
+
+**断路器：连续 2 次无进展（失败列表完全相同）→**
+
+先生成 MCP 失败报告：`tasks/{projectId}/mcp-e2e-failures.md`
+
+```markdown
+# Playwright MCP 验收测试失败报告
+
+生成时间：{ISO timestamp}
+项目：{projectId}
+
+## 失败摘要
+
+- 总失败：{n} 个 testCase
+- 修复尝试：{rounds} 轮，无进展
+
+## 失败测试列表
+
+{每条: - DT-{id}: {desc} — step {k} ({action}) — {reason}}
+
+## 失败分类分析
+
+{每类失败的根因分析}
+
+## MCP 截图路径
+
+{tasks/{projectId}/mcp-screenshots/ 下的截图列表}
+
+## 修复历史
+
+{每轮：轮次、修改文件、重跑结果}
+```
+
+**如果 `NON_INTERACTIVE=1`（Viewer 模式）：** 自动跳过 Layer 3b，继续 Layer 4。
+在 testing-report.json L3b 中记录 `status: "skipped"`, `reason: "circuit_breaker"`, `reportFile`。
+
+**否则** → AskUserQuestion：
+```
+Playwright MCP 验收测试自动修复无进展（2 轮无进展）。以下测试持续失败：
+<失败列表 + 失败类型分析>
+
+已生成失败报告：tasks/{projectId}/mcp-e2e-failures.md
+已保存截图：tasks/{projectId}/mcp-screenshots/
+
+选项：
+1. 我来手动修复，修好后继续
+2. 跳过 Layer 3b，继续 Layer 4
+3. 终止测试
+```
+
+#### 3b-6. 收尾
+
+Layer 3b 结束后（无论 pass/fail/skip）：
+
+```bash
+# 如果 3b 自己启动了 dev server，在不影响主 Viewer 的前提下关闭
+# 如果 3a 也在使用同一个 server，不关闭
+if [ "$STARTED_DEV_SERVER_IN_3B" = "true" ]; then
+  kill $DEV_SERVER_PID 2>/dev/null || true
+fi
+```
+
+**Layer 3 完成后，告知用户：**
+```
+Layer 3 E2E Tests 完成
+  Layer 3a — CLI Playwright: 通过 / 跳过（无 spec 文件）/ Circuit Breaker 跳过
+  Layer 3b — Playwright MCP: 通过（{n} 个 testCase）/ 跳过 / Circuit Breaker 跳过
+              失败: {f} 个 testCase（已生成报告: mcp-e2e-failures.md）
+```
 
 ---
 
@@ -1247,13 +1474,39 @@ REPORT_PATH="tasks/${PROJECT_ID}/testing-report.json"
     },
     {
       "id": "L3",
-      "name": "E2E Tests",
+      "name": "E2E Tests（CLI Playwright + Playwright MCP）",
       "status": "pass|fail|skipped",
-      "fixCount": 0,
-      "rounds": 0,
-      "failedTests": ["test file > test name（仅 fail/skipped 时填充）"],
-      "errorSummary": "根因分析结论（仅 fail/skipped 时填充）",
-      "reportFile": "tasks/{projectId}/e2e-failures.md（仅 Circuit Breaker 时填充）"
+      "subLayers": {
+        "L3a": {
+          "type": "playwright-cli",
+          "status": "pass|fail|skipped",
+          "fixCount": 0,
+          "rounds": 0,
+          "failedTests": ["test file > test name（仅 fail/skipped 时填充）"],
+          "errorSummary": "根因分析结论（仅 fail/skipped 时填充）",
+          "reportFile": "tasks/{projectId}/e2e-failures.md（仅 Circuit Breaker 时填充）"
+        },
+        "L3b": {
+          "type": "playwright-mcp",
+          "status": "pass|fail|skipped",
+          "totalCases": 0,
+          "passed": 0,
+          "failed": 0,
+          "fixCount": 0,
+          "rounds": 0,
+          "failedCases": [
+            {
+              "dtId": "DT-001",
+              "desc": "testCase 描述",
+              "failedSteps": [
+                { "step": 2, "action": "click", "element": "按钮描述", "reason": "element not found" }
+              ]
+            }
+          ],
+          "screenshotsDir": "tasks/{projectId}/mcp-screenshots/（如有截图）",
+          "reportFile": "tasks/{projectId}/mcp-e2e-failures.md（仅 Circuit Breaker 时填充）"
+        }
+      }
     },
     {
       "id": "L4",
@@ -1289,7 +1542,7 @@ REPORT_PATH="tasks/${PROJECT_ID}/testing-report.json"
 
 **生成逻辑：**
 1. 遍历 L1-L6 每层的执行记录，填充 status/fixCount/rounds
-2. L3 数据额外填充 failedTests（失败测试名列表）、errorSummary（根因分析结论）、reportFile（e2e-failures.md 路径，仅 Circuit Breaker 时）
+2. L3 数据填充两个子层：L3a（CLI Playwright）从 3a 执行记录填充，L3b（Playwright MCP）从 3b 执行记录填充；L3 顶层 status = max(L3a.status, L3b.status)（有 fail 则 fail，两者均 skip 才 skip）
 3. L5 数据从 `adversarial-state.json` 读取（如果存在）
 4. L6 数据从当前步骤的 PR 信息 + PR-Agent 修复记录填充
 5. `verdict` 判断：全部 pass → `all_pass`；有 fail/skipped(circuit_breaker) → `has_failures`；有 circuit_breaker → `circuit_breaker`
@@ -1321,18 +1574,21 @@ Layer 6 PR 创建 + Claude Review 守门 通过
 ```
 BotoolAgent 6 层自动化测试 — 全部通过!
 
-  Layer 1 — Regression:       通过 (TypeCheck + Lint)
-  Layer 2 — Unit Tests:       通过 / 跳过
-  Layer 3 — E2E Tests:        通过 / 跳过
-  Layer 4 — Code Review:      通过 (无 HIGH 级别问题)
-  Layer 5 — Codex 红队审查:    通过 / 跳过 (对抗轮次: N/3)
+  Layer 1 — Regression:         通过 (TypeCheck + Lint)
+  Layer 2 — Unit Tests:         通过 / 跳过
+  Layer 3 — E2E Tests:
+    Layer 3a — CLI Playwright:  通过 / 跳过（无 spec 文件）/ Circuit Breaker 跳过
+    Layer 3b — Playwright MCP:  通过（N 个 testCase）/ 跳过 / Circuit Breaker 跳过
+  Layer 4 — Code Review:        通过 (无 HIGH 级别问题)
+  Layer 5 — Codex 红队审查:      通过 / 跳过 (对抗轮次: N/3)
   Layer 6 — PR + Claude Review: 通过 / 跳过
 
   自动修复统计:
   - TypeCheck: N 轮修复 / 直接通过
   - Lint: N 轮修复 / 直接通过 / eslint --fix 一次通过
   - Unit Tests: N 轮修复 / 直接通过 / 跳过
-  - E2E Tests: N 轮修复 / 直接通过 / 跳过
+  - E2E CLI Tests: N 轮修复 / 直接通过 / 跳过
+  - E2E MCP Tests: N 个 testCase 通过，M 个修复（元素找不到/断言失败/交互无响应）/ 跳过
   - Code Review: N 轮修复 / 直接通过
   - Codex 审查: N 个问题修复, M 个论证拒绝 / 跳过
   - Claude Review: N 轮修复 / 跳过 / workflow 未配置
@@ -1361,7 +1617,11 @@ BotoolAgent 6 层自动化测试 — 全部通过!
 | Layer 1 | TypeCheck 失败 | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
 | Layer 1 | Lint 失败 | **eslint --fix → 信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
 | Layer 2 | 单元测试失败 | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
-| Layer 3 | E2E 测试失败 | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
+| Layer 3a | CLI E2E 测试失败 | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
+| Layer 3b | MCP 测试元素找不到 | 检查组件是否存在/element 描述是否准确 → 修复源码 |
+| Layer 3b | MCP 测试断言失败 | 功能未实现或渲染 bug → 读组件文件修复逻辑/样式 |
+| Layer 3b | MCP 测试 dev server 超时 | 检查 PORT=$TEST_PORT npm run dev 是否正常启动 |
+| Layer 3b | MCP 测试无进展 | 2 轮无进展 → 生成 mcp-e2e-failures.md + 截图 → 问用户 |
 | Layer 4 | Code Review 有 HIGH | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
 | Layer 5 | Codex CLI 不可用 | 跳过 Layer 5，继续 Layer 6 |
 | Layer 5 | Codex 输出无法解析 | 记录 warning，跳过对抗循环，继续 Layer 6 |
@@ -1384,7 +1644,8 @@ CLI 的 6 层自动化测试对应 Viewer Stage 4 的分层验收：
 |-----------|-------------|------|
 | Layer 1 — Regression | 全量回归 | TypeCheck + Lint |
 | Layer 2 — Unit Tests | 单元测试 | npm test / npm run test:unit |
-| Layer 3 — E2E Tests | E2E 测试 | npx playwright test |
+| Layer 3a — CLI Playwright | E2E 测试（spec 文件） | npx playwright test |
+| Layer 3b — Playwright MCP | E2E 验收测试（MCP 操作） | Claude MCP browser tools → prd.json playwrightMcp steps |
 | Layer 4 — Code Review | Code Review | git diff → Claude 审查 |
 | Layer 5 — Codex 红队审查 | Codex 审查 | codex exec → 对抗循环 |
 | Layer 6 — PR + Claude Review | PR 守门 | gh pr create → claude-pr-review workflow → 修复循环 |

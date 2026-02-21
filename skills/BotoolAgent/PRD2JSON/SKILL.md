@@ -273,6 +273,7 @@ JSON_FILE="$TASKS_DIR/${PRD_BASENAME}.json"
         { "type": "typecheck", "desc": "TypeScript 编译通过" },
         { "type": "unit", "desc": "核心逻辑单元测试", "tdd": true }
       ],
+
       "steps": [
         { "action": "create", "file": "src/db/schema.ts", "description": "创建 schema 文件" },
         { "action": "implement", "description": "定义 status 字段和迁移" },
@@ -315,6 +316,7 @@ JSON_FILE="$TASKS_DIR/${PRD_BASENAME}.json"
 | `devTasks[].dependsOn` | string[] | No | IDs of tasks this task depends on |
 | `devTasks[].evals` | DevTaskEval[] | No | Verification commands |
 | `devTasks[].testCases` | TestCase[] | No | Test case metadata with type and tdd flag |
+| `devTasks[].testCases[].playwrightMcp` | object | Yes（e2e 必填） | Playwright MCP 执行步骤：`{ url, steps[] }`，e2e type 必须包含 |
 | `devTasks[].steps` | Step[] | No | 分步执行指引（每步可单条命令验证，3-6 步） |
 | `sessions[]` | SessionGroup[] | No | Task grouping for batch execution |
 
@@ -426,6 +428,52 @@ Additional evals based on task content:
 - `desc` 必须具体描述该 DT 的行为，不得写"测试功能正常"、"页面渲染正确"等无意义描述
 - 一个 DT 可同时有多种 type（如既有 unit 又有 e2e）
 - 任何 UI 交互、API 端点相关的 DT 必须至少有一条 e2e testCase
+
+### e2e testCase 必须含 `playwrightMcp` 字段
+
+所有 `type: "e2e"` 的 testCase **必须**包含 `playwrightMcp` 字段，描述 Claude 使用 Playwright MCP 工具执行验收测试的具体操作步骤。这是捕获前端渲染/交互 bug 的核心机制。
+
+**格式：**
+
+```json
+{
+  "type": "e2e",
+  "desc": "点击新建项目按钮，弹窗正确打开并能输入名称",
+  "playwrightMcp": {
+    "url": "/stage1",
+    "steps": [
+      { "action": "navigate", "url": "/stage1" },
+      { "action": "snapshot", "assert": "页面正常加载，显示阶段一标题和新建项目按钮" },
+      { "action": "click", "element": "新建项目按钮" },
+      { "action": "wait_for", "text": "项目名称" },
+      { "action": "fill", "element": "项目名称输入框", "value": "测试项目" },
+      { "action": "click", "element": "确认按钮" },
+      { "action": "assert_visible", "text": "测试项目" }
+    ]
+  }
+}
+```
+
+**step action 类型（对应 Playwright MCP 工具）：**
+
+| action | 对应 MCP 工具 | 必含字段 | 说明 |
+|--------|-------------|---------|------|
+| `navigate` | `browser_navigate` | `url` | 跳转到页面 |
+| `snapshot` | `browser_snapshot` + Claude 判断 | `assert`（期望状态描述） | 截取 accessibility tree，Claude 验证 assert 条件 |
+| `click` | `browser_snapshot` 找 ref → `browser_click` | `element`（人类可读描述） | 先 snapshot 定位，再点击 |
+| `fill` | `browser_snapshot` 找 ref → `browser_type` | `element`、`value` | 先 snapshot 定位输入框，再输入 |
+| `wait_for` | `browser_wait_for` | `text` | 等待特定文字出现 |
+| `assert_visible` | `browser_snapshot` 分析 | `text` | 验证文字/元素存在于页面 |
+| `assert_not_visible` | `browser_snapshot` 分析 | `text` | 验证文字/元素不存在于页面 |
+| `screenshot` | `browser_take_screenshot` | `filename` | 截图留证（用描述性文件名） |
+
+**playwrightMcp 生成规则：**
+- `url` 用**相对路径**（如 `/stage1`、`/dashboard`），Testing Layer 3b 会自动拼上 `http://localhost:$TEST_PORT`
+- steps 数量：**3-8 步**，每步对应一个明确操作或验证点
+- `element` 描述必须人类可读，使用功能性描述（如 "新建项目按钮"、"名称输入框"），禁止写 CSS 选择器
+- `assert` / `assert_visible` 的 text 必须是页面中会实际出现的文字内容
+- **禁止**写通用步骤（如 "verify page works"、"check UI renders"）
+- **每条 playwrightMcp 对应该 DT 的核心验收场景**，步骤要能还原一个真实用户操作流程
 
 ---
 
@@ -693,7 +741,19 @@ CREATE TABLE task_status (...)
       ],
       "testCases": [
         { "type": "typecheck", "desc": "TypeScript 编译通过" },
-        { "type": "e2e", "desc": "在任务列表中，StatusBadge 根据 status 值显示对应颜色的徽章" }
+        {
+          "type": "e2e",
+          "desc": "在任务列表中，StatusBadge 根据 status 值显示对应颜色的徽章",
+          "playwrightMcp": {
+            "url": "/tasks",
+            "steps": [
+              { "action": "navigate", "url": "/tasks" },
+              { "action": "snapshot", "assert": "任务列表页面正常加载，可见任务条目" },
+              { "action": "assert_visible", "text": "进行中" },
+              { "action": "screenshot", "filename": "status-badge-colors.png" }
+            ]
+          }
+        }
       ]
     }
   ],
@@ -751,6 +811,7 @@ The coding agent will:
 - [ ] **Checklist 条数 3-8**: 每条 rule 的 checklist 数量在范围内
 - [ ] **Steps 颗粒度**: 有 steps 的 DT 每步可用单条命令验证，3-6 步
 - [ ] **testCases 非空**: 每个 DT 至少有 typecheck；涉及 UI/API 的 DT 至少有一条 e2e；所有 desc 具体描述该 DT 的实际行为，不得泛泛
+- [ ] **playwrightMcp 已注入**: 所有 type=e2e 的 testCase 必须含 playwrightMcp 字段；steps 3-8 步；url 用相对路径；element/assert 描述具体可操作，禁止泛泛
 - [ ] `$TASKS_DIR/prd-{feature-name}.json` written (main file)
 - [ ] `./prd.json` written (root compat copy)
 - [ ] `$TASKS_DIR/registry.json` updated with current project
