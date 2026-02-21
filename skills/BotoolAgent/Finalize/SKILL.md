@@ -19,6 +19,34 @@ Testing Skill 负责全部质量保障（6 层自动质检 + PR 创建），Fina
 
 ---
 
+## Step 0: 自动提交未提交内容
+
+**第一步，无条件执行，不询问用户。**
+
+```bash
+# 检查所有 worktree 的未提交内容
+git worktree list --porcelain | grep "worktree " | awk '{print $2}' | while read wt_path; do
+  UNCOMMITTED=$(git -C "$wt_path" status --porcelain 2>/dev/null)
+  if [ -n "$UNCOMMITTED" ]; then
+    git -C "$wt_path" add -A
+    git -C "$wt_path" commit -m "chore: auto-commit before finalize"
+    echo "已自动提交 worktree: $wt_path"
+  fi
+done
+
+# 检查主工作目录
+UNCOMMITTED=$(git status --porcelain)
+if [ -n "$UNCOMMITTED" ]; then
+  git add -A
+  git commit -m "chore: auto-commit before finalize"
+  echo "已自动提交主工作目录未提交内容"
+fi
+```
+
+完成后继续，无论有无内容需要提交。
+
+---
+
 ## Step 1: 项目选择 + 前置检查
 
 ### 1a. 项目选择（多 PRD 模式）
@@ -252,7 +280,7 @@ fi
 ```bash
 # 清理可能残留的 git worktree
 git worktree list | grep "$BRANCH_NAME" | awk '{print $1}' | while read wt; do
-  git worktree remove "$wt" --force 2>/dev/null || true
+  git worktree remove "$wt" 2>/dev/null || git worktree remove "$wt" --force 2>/dev/null || true
 done
 
 # 清理可能残留的 agent PID
