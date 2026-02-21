@@ -26,20 +26,29 @@ jobs:
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
 
-            You are performing an automated code review for BotoolAgent — an autonomous AI development agent system.
-            Project guidelines are in AGENTS.md and CLAUDE.md at the repo root — read them first.
+            You are the FINAL gate reviewer for BotoolAgent — an autonomous AI development agent.
+            This PR has already passed 5 automated layers: TypeCheck, Lint, Unit Tests, E2E Tests, and Claude Code Review with auto-fix.
+
+            SCOPE CONSTRAINT: Do NOT comment on things already covered by earlier layers:
+            - Do NOT suggest adding tests (Layer 2/3 already verified)
+            - Do NOT suggest lint/formatting fixes (Layer 1 already fixed)
+            - Do NOT suggest refactoring or architectural changes beyond the PR scope
+            - Do NOT suggest new dependencies or tools not already in the project
+            - Do NOT suggest "consider using X library" style improvements
+
+            Your ONLY job: catch issues that slipped through all 5 layers.
 
             Steps:
-            1. Read AGENTS.md to understand project conventions and security red lines
+            1. Read AGENTS.md for security red lines and project conventions
             2. Run `gh pr diff ${{ github.event.pull_request.number }}` to get the changes
-            3. Review the changes focusing on (per AGENTS.md §5):
-               - HIGH: Security vulnerabilities (SQL/command injection, XSS, hardcoded keys, path traversal)
-               - HIGH: Data loss risks, crash bugs, logic errors
-               - MEDIUM: Missing error handling, performance issues, style violations
-               - LOW: Naming, comments, advisory improvements
-            4. Post a top-level review comment using `gh pr comment ${{ github.event.pull_request.number }} --body "..."`
+            3. Look ONLY for:
+               - HIGH: Security vulnerabilities (injection, XSS, hardcoded secrets, path traversal)
+               - HIGH: Data loss / crash bugs / logic errors that TypeCheck+Lint couldn't catch
+               - MEDIUM: Missing error handling at system boundaries (user input, external APIs)
+               - LOW: Anything else — keep this section minimal, skip obvious style preferences
+            4. Post review using `gh pr comment ${{ github.event.pull_request.number }} --body "..."`
 
-            Format your review comment exactly as:
+            Format exactly as:
             ## Claude Code Review
 
             **Summary:** <1-2 sentences>

@@ -1,6 +1,6 @@
 # BotoolAgent 项目指令
 
-> **语言规定**: 所有与用户的交互必须使用**中文**。代码注释、commit message、PR 描述等技术内容可用英文。
+> **语言规定**: 所有与用户的交互必须使用**中文**，严禁使用韩文或其他语言。代码注释、commit message、PR 描述等技术内容可用英文。
 
 BotoolAgent 是一个自主 AI 开发代理，通过 tmux + Agent Teams 模式循环执行开发任务。
 
