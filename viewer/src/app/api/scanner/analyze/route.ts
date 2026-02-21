@@ -10,6 +10,11 @@ import type { ScanResult } from '@/types/scanner';
 
 // --- Concurrency guard ---
 let isAnalyzing = false;
+// Token counter to guard against cancel() vs runAnalysis.finally() race:
+// cancel() sets isAnalyzing=false synchronously, but runAnalysis is still in-flight.
+// If a new request arrives before the old finally fires, the old finally would
+// incorrectly clear the new request's guard. Comparing tokens prevents this.
+let analysisToken = 0;
 // Active codex subprocess (so we can kill it on stream cancel)
 let activeCodexProcess: ChildProcess | null = null;
 
@@ -350,6 +355,7 @@ export async function POST(request: Request) {
   }
 
   isAnalyzing = true;
+  const myToken = ++analysisToken;
 
   const encoder = new TextEncoder();
   let streamController: ReadableStreamDefaultController | null = null;
@@ -480,14 +486,15 @@ export async function POST(request: Request) {
         // Controller may already be closed
       }
     } finally {
-      isAnalyzing = false;
+      // Only clear the guard if this is still the current analysis (token match)
+      if (analysisToken === myToken) isAnalyzing = false;
     }
   };
 
   // Start the analysis without awaiting (streams response immediately)
   runAnalysis().catch((error) => {
     console.error('Unhandled scanner analysis error:', error);
-    isAnalyzing = false;
+    if (analysisToken === myToken) isAnalyzing = false;
   });
 
   return new Response(stream, {
