@@ -19,8 +19,14 @@ export interface TabPanelManagerProps {
 export function TabPanelManager({ children }: TabPanelManagerProps) {
   const { tabs, activeTabId, isHydrated, openTab, switchTab, updateTabStage } = useTab();
   const { requirements, isLoading: isRequirementsLoading } = useRequirement();
-  const [urlFallbackState, setUrlFallbackState] = useState<'idle' | 'loading' | 'not-found'>('idle');
-  const urlProcessedRef = useRef(false);
+  // Capture URL reqId once on mount (lazy initializer, no effect needed)
+  // Setter used by "返回 Dashboard" to clear the pending URL reqId
+  const [urlReqId, setUrlReqId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    const reqId = params.get('req');
+    return reqId && isValidReqId(reqId) ? reqId : null;
+  });
 
   // usePathname detects router.push() navigations from stage components.
   // Tab switches use history.replaceState which does NOT trigger usePathname, so
@@ -73,44 +79,25 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
   }, [pathname, isHydrated, activeTabId, tabs, switchTab, updateTabStage]);
 
   // URL-based tab creation: handle direct URL access (e.g. shared link /stage3?req=xxx)
+  // Zero setState in effect body — all UI states are derived from urlReqId/tabs/requirements.
+  // Once openTab/switchTab runs, the tab appears in `tabs` on the next render.
   useEffect(() => {
-    if (!isHydrated || urlProcessedRef.current) return;
+    if (!urlReqId || !isHydrated) return;
 
-    // Parse URL for reqId
-    const params = new URLSearchParams(window.location.search);
-    const reqId = params.get('req');
-
-    // No req param → not a direct URL access, nothing to do
-    if (!reqId) {
-      urlProcessedRef.current = true;
-      return;
-    }
-
-    // Invalid UUID → silently ignore, show Dashboard
-    if (!isValidReqId(reqId)) {
-      urlProcessedRef.current = true;
-      return;
-    }
-
-    // Already in tabs → activate it
-    if (tabs.some((t) => t.id === reqId)) {
-      // If not already active, switch to it
-      if (activeTabId !== reqId) {
-        const stageNum = STAGE_TO_PAGE[tabs.find((t) => t.id === reqId)!.stage] ?? 1;
-        switchTab(reqId, `/stage${stageNum}?req=${reqId}`);
+    // Already in tabs → ensure it's active, nothing else to do
+    if (tabs.some((t) => t.id === urlReqId)) {
+      if (activeTabId !== urlReqId) {
+        const stageNum = STAGE_TO_PAGE[tabs.find((t) => t.id === urlReqId)!.stage] ?? 1;
+        switchTab(urlReqId, `/stage${stageNum}?req=${urlReqId}`);
       }
-      urlProcessedRef.current = true;
       return;
     }
 
     // Wait for requirements to finish loading before looking up
-    if (isRequirementsLoading) {
-      setUrlFallbackState('loading');
-      return;
-    }
+    if (isRequirementsLoading) return;
 
-    // Look up requirement
-    const requirement = requirements.find((r) => r.id === reqId);
+    // Look up requirement and open tab (if found, tab appears in `tabs` on next render)
+    const requirement = requirements.find((r) => r.id === urlReqId);
     if (requirement) {
       const newTab: TabItem = {
         id: requirement.id,
@@ -119,14 +106,9 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
       };
       const stageNum = STAGE_TO_PAGE[requirement.stage] ?? 1;
       openTab(newTab, `/stage${stageNum}?req=${requirement.id}`);
-      urlProcessedRef.current = true;
-      setUrlFallbackState('idle');
-    } else {
-      // Requirement not found
-      urlProcessedRef.current = true;
-      setUrlFallbackState('not-found');
     }
-  }, [isHydrated, isRequirementsLoading, requirements, tabs, activeTabId, openTab, switchTab]);
+    // "not found" case: no setState needed — urlNotFound is derived below
+  }, [urlReqId, isHydrated, isRequirementsLoading, requirements, tabs, activeTabId, openTab, switchTab]);
 
   // Determine if the current route is managed by the panel system
   const activeTab = tabs.find((t) => t.id === activeTabId);
@@ -140,8 +122,14 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
     return <div className="h-full" />;
   }
 
+  // Derive URL fallback states entirely from existing data (no useState needed)
+  const urlInTabs = !!urlReqId && tabs.some((t) => t.id === urlReqId);
+  const urlNotFound = !!urlReqId && !isRequirementsLoading && !urlInTabs &&
+    !requirements.some((r) => r.id === urlReqId);
+  const isUrlLoading = !!urlReqId && !urlInTabs && !urlNotFound;
+
   // URL fallback: loading while checking requirements
-  if (urlFallbackState === 'loading') {
+  if (isUrlLoading) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-muted-foreground text-sm">加载中...</div>
@@ -150,14 +138,14 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
   }
 
   // URL fallback: project not found
-  if (urlFallbackState === 'not-found') {
+  if (urlNotFound) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4">
         <p className="text-muted-foreground text-sm">项目未找到或已被删除</p>
         <Button
           variant="outline"
           onClick={() => {
-            setUrlFallbackState('idle');
+            setUrlReqId(null);
             switchTab('dashboard', '/');
           }}
         >
