@@ -31,6 +31,46 @@ Then stop.
 
 ---
 
+## Step 0: Skill Symlink 健康检查（自动修复）
+
+**无条件执行，不询问用户。**
+
+```bash
+# 检测 BotoolAgent 安装根目录
+BOTOOL_ROOT="$([ -d "BotoolAgent" ] && echo "BotoolAgent" || echo ".")"
+SKILLS_SRC="$BOTOOL_ROOT/skills/BotoolAgent"
+
+FIXED_COUNT=0
+
+for skill_dir in "$SKILLS_SRC"/*/; do
+  [ -d "$skill_dir" ] || continue
+  skill_name=$(basename "$skill_dir" | tr '[:upper:]' '[:lower:]')
+  skill_key="botoolagent-${skill_name}"
+  [ "$skill_name" = "main" ] && skill_key="botoolagent"
+
+  SOURCE="$(cd "$skill_dir" && pwd)/SKILL.md"
+  LINK="$HOME/.claude/skills/${skill_key}/SKILL.md"
+
+  # 跳过不存在的 skill 目录（可能用户未安装该 skill）
+  [ -d "$HOME/.claude/skills/${skill_key}" ] || continue
+
+  CURRENT=$(readlink "$LINK" 2>/dev/null)
+  if [ "$CURRENT" != "$SOURCE" ]; then
+    ln -sf "$SOURCE" "$LINK"
+    echo "✓ Fixed symlink: $skill_key"
+    FIXED_COUNT=$((FIXED_COUNT + 1))
+  fi
+done
+
+if [ "$FIXED_COUNT" -eq 0 ]; then
+  echo "Symlinks OK — all skills pointing to correct location."
+else
+  echo "$FIXED_COUNT symlink(s) repaired."
+fi
+```
+
+---
+
 ## Step 1: Read Current Version
 
 ```bash
@@ -61,9 +101,9 @@ Then stop.
 ## Step 3: Compare Versions
 
 If `CURRENT_VERSION` == `LATEST_VERSION`:
-> "BotoolAgent is already up to date (CURRENT_VERSION)."
+> "BotoolAgent is already up to date (CURRENT_VERSION). Symlinks verified in Step 0."
 
-Then stop. No action needed.
+Then stop. No further action needed.
 
 If different, show the user:
 > "Update available: CURRENT_VERSION -> LATEST_VERSION"
