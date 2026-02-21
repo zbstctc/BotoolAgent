@@ -1,0 +1,133 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { Scan, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import type { ScanResult } from '@/types/scanner';
+
+interface StatusResponse {
+  hasResult: boolean;
+  scanResult?: ScanResult;
+  currentPrNumber: number | null;
+  needsUpdate: boolean;
+}
+
+export function ScannerPanel() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [needsUpdate, setNeedsUpdate] = useState(false);
+  const [currentPrNumber, setCurrentPrNumber] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const res = await fetch('/api/scanner/status');
+      if (!res.ok) {
+        throw new Error(`Status check failed: ${res.status}`);
+      }
+      const data: StatusResponse = await res.json();
+      setScanResult(data.scanResult ?? null);
+      setNeedsUpdate(data.needsUpdate);
+      setCurrentPrNumber(data.currentPrNumber);
+    } catch (err) {
+      console.error('Failed to fetch scanner status:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch status');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-neutral-200 bg-white">
+          <Scan className="h-4 w-4 text-neutral-500" />
+          <h1 className="text-sm font-medium text-neutral-900">Scanner</h1>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-neutral-400" />
+        </div>
+      </div>
+    );
+  }
+
+  // Error state (non-fatal, just retry)
+  if (error) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-neutral-200 bg-white">
+          <Scan className="h-4 w-4 text-neutral-500" />
+          <h1 className="text-sm font-medium text-neutral-900">Scanner</h1>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+          <p className="text-sm text-neutral-500">无法获取扫描状态</p>
+          <Button variant="outline" size="sm" onClick={fetchStatus}>
+            重试
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Empty state — no cached result
+  if (!scanResult) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-neutral-200 bg-white">
+          <Scan className="h-4 w-4 text-neutral-500" />
+          <h1 className="text-sm font-medium text-neutral-900">Scanner</h1>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center gap-4">
+          <div className="text-4xl text-neutral-200">
+            <Scan className="h-12 w-12" />
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-medium text-neutral-700">
+              尚未分析项目结构
+            </p>
+            <p className="mt-1 text-xs text-neutral-500 max-w-xs">
+              Scanner 通过 Codex CLI 分析项目结构，生成交互式架构图谱
+            </p>
+          </div>
+          <Button onClick={() => { /* DT-008 will wire up analyze */ }}>
+            <Scan className="h-4 w-4 mr-1.5" />
+            开始分析
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Has cached result — show graph skeleton (actual graph in DT-006/007)
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-3 px-6 py-4 border-b border-neutral-200 bg-white">
+        <Scan className="h-4 w-4 text-neutral-500" />
+        <h1 className="text-sm font-medium text-neutral-900">Scanner</h1>
+        <span className="text-xs text-neutral-400">
+          {scanResult.projectName}
+        </span>
+      </div>
+      <div className="flex-1 relative bg-neutral-50">
+        {/* Graph placeholder — ScannerFlowChart will replace this in DT-007 */}
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <p className="text-sm text-neutral-500">
+              {scanResult.nodes.length} 个模块 · {scanResult.edges.length} 个连接
+            </p>
+            <p className="text-xs text-neutral-400 mt-1">
+              图谱加载中...
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
