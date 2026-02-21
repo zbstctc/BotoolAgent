@@ -54,12 +54,6 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     };
   }, [tabs, activeTabId, isHydrated]);
 
-  // Keep a ref of activeTabId for closeTab
-  const activeTabIdRef = useRef(activeTabId);
-  useEffect(() => {
-    activeTabIdRef.current = activeTabId;
-  }, [activeTabId]);
-
   const openTab = useCallback((item: TabItem, url: string) => {
     setTabs((prev) => {
       const existing = prev.find((t) => t.id === item.id);
@@ -76,12 +70,14 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
 
   const closeTab = useCallback((id: string) => {
     if (id === 'dashboard') return; // Dashboard cannot be closed
-    const wasActive = activeTabIdRef.current === id;
     setTabs((prev) => prev.filter((t) => t.id !== id));
-    if (wasActive) {
-      setActiveTabId('dashboard');
-      history.replaceState(null, '', '/');
-    }
+    setActiveTabId((current) => {
+      if (current === id) {
+        history.replaceState(null, '', '/');
+        return 'dashboard';
+      }
+      return current;
+    });
   }, []);
 
   const switchTab = useCallback((id: string, url: string) => {

@@ -15,6 +15,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { TabItem } from '@/lib/tab-storage';
+import { STAGE_TO_PAGE } from '@/lib/tab-storage';
 
 const RUNNING_STATUSES = new Set(['running', 'starting', 'waiting_network']);
 const ERROR_STATUSES = new Set(['error', 'failed', 'stopped']);
@@ -71,9 +72,7 @@ export function TabBar({ className }: TabBarProps) {
 
   function getTabUrl(tab: TabItem): string {
     if (tab.url) return tab.url;
-    // Use the same stage→target mapping as page.tsx getStageUrl()
-    const targetMap: Record<number, number> = { 0: 1, 1: 1, 2: 3, 3: 3, 4: 4, 5: 5 };
-    const stage = targetMap[tab.stage] ?? tab.stage;
+    const stage = STAGE_TO_PAGE[tab.stage] ?? tab.stage;
     return `/stage${stage}?req=${tab.id}`;
   }
 
@@ -127,7 +126,7 @@ export function TabBar({ className }: TabBarProps) {
           const isActive = activeTabId === tab.id;
           const statusBorder = tab.url ? undefined : getStatusBorderClass(tab);
           const displayName = tab.name.replace(/^PRD:\s*/i, '');
-          const isUtility = !!tab.isUtility || !!tab.url;
+          const isUtility = !!tab.isUtility;
           const isPopoverOpen = hoveredTabId === tab.id;
 
           const tabButton = (

@@ -10,9 +10,7 @@ import { useTab, isValidReqId } from '@/contexts/TabContext';
 import { useRequirement } from '@/contexts/RequirementContext';
 import { Button } from '@/components/ui/button';
 import type { TabItem } from '@/lib/tab-storage';
-
-// Map requirement stage to target page number
-const STAGE_TO_PAGE: Record<number, number> = { 0: 1, 1: 1, 2: 3, 3: 3, 4: 4, 5: 5 };
+import { STAGE_TO_PAGE } from '@/lib/tab-storage';
 
 export interface TabPanelManagerProps {
   children: React.ReactNode;
@@ -81,7 +79,7 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
 
       if (hasStageContext && activeTabId !== 'dashboard') {
         const activeProjectTab = tabs.find((t) => t.id === activeTabId);
-        if (activeProjectTab && !activeProjectTab.url && activeProjectTab.stage !== pageNum) {
+        if (activeProjectTab && !activeProjectTab.isUtility && activeProjectTab.stage !== pageNum) {
           updateTabStage(activeTabId, pageNum);
           // Add req param if missing (preserve existing params like ?prd=, ?mode=, ?projectId=)
           if (!urlParams.has('req')) {
@@ -169,10 +167,10 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
     activeTabId === 'rules' ||
     activeTabId === 'scanner' ||
     isOnStandaloneUtilityUrl ||
-    (activeTab != null && !activeTab.url && activeTabId !== 'dashboard');
+    (activeTab != null && !activeTab.isUtility && activeTabId !== 'dashboard');
 
   // Project tabs: exclude dashboard and utility tabs
-  const projectTabs = tabs.filter((t) => t.id !== 'dashboard' && !t.url);
+  const projectTabs = tabs.filter((t) => t.id !== 'dashboard' && !t.isUtility);
 
   // Hydration guard: show empty placeholder until localStorage tabs are loaded
   if (!isHydrated) {

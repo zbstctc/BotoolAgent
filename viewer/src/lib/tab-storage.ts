@@ -17,6 +17,9 @@ export interface TabStorage {
   activeTabId: string; // 'dashboard' | requirementId
 }
 
+// Maps requirement stage to the target page number (shared by TabPanelManager and TabBar)
+export const STAGE_TO_PAGE: Record<number, number> = { 0: 1, 1: 1, 2: 3, 3: 3, 4: 4, 5: 5 };
+
 const TABS_KEY = scopedKey('tabs');
 
 const DEFAULT_STORAGE: TabStorage = { tabs: [], activeTabId: 'dashboard' };
