@@ -196,11 +196,31 @@ rm -rf "$TMPDIR"
 
 ---
 
-## Step 7: Confirm Success
+## Step 7: 自动重启 Viewer
+
+更新完成后立即重启，无需用户手动操作。
+
+```bash
+VIEWER_PORT="$([ -d BotoolAgent/viewer ] && echo 3101 || echo 3100)"
+VIEWER_DIR="$([ -d BotoolAgent/viewer ] && echo BotoolAgent/viewer || echo viewer)"
+
+# Kill existing process
+PID=$(lsof -ti :"$VIEWER_PORT")
+[ -n "$PID" ] && kill -9 $PID && sleep 1
+
+# Start fresh
+cd "$VIEWER_DIR" && npx next dev --port "$VIEWER_PORT" &
+
+# Verify
+sleep 5
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:$VIEWER_PORT)
+[ "$STATUS" = "200" ] && open http://localhost:$VIEWER_PORT
+```
+
+## Step 8: Confirm Success
 
 Tell the user:
-> "BotoolAgent updated successfully: CURRENT_VERSION -> LATEST_VERSION"
-> "Please restart the Viewer dev server to apply changes."
+> "BotoolAgent updated to LATEST_VERSION — Viewer restarted at http://localhost:VIEWER_PORT"
 
 ---
 
