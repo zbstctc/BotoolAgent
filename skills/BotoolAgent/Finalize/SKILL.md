@@ -215,7 +215,31 @@ if [ "$CURRENT_BRANCH" = "main" ]; then
 fi
 ```
 
-### 4b. 执行 Merge
+### 4b. Pre-merge 安全提交（合并前最后一次兜底）
+
+**无论 Step 0 是否已执行，合并前必须再次检查并提交所有未提交内容。**
+覆盖 Step 0 之后可能由自动化进程写入的新改动。
+
+```bash
+# 主工作目录 + 当前 branch
+if [ -n "$(git status --porcelain)" ]; then
+  git add -A
+  git commit -m "chore: pre-merge auto-commit"
+  git push origin "$BRANCH_NAME"
+fi
+
+# 所有 worktree
+git worktree list --porcelain | grep "^worktree " | awk '{print $2}' | while read wt_path; do
+  if [ -n "$(git -C "$wt_path" status --porcelain 2>/dev/null)" ]; then
+    WT_BRANCH=$(git -C "$wt_path" branch --show-current)
+    git -C "$wt_path" add -A
+    git -C "$wt_path" commit -m "chore: pre-merge auto-commit"
+    git -C "$wt_path" push origin "$WT_BRANCH" 2>/dev/null || true
+  fi
+done
+```
+
+### 4c. 执行 Merge
 
 使用普通 merge（**不使用 squash**），保留完整的提交历史。
 
@@ -238,7 +262,7 @@ Then stop here.
 
 **合并成功后告知用户：** "PR #<number> 已成功合并到 main！"
 
-### 4c. 清理远程分支
+### 4d. 清理远程分支
 
 ```bash
 git push origin --delete "$BRANCH_NAME" 2>/dev/null || echo "远程分支删除失败（可能已自动删除）"
@@ -246,14 +270,14 @@ git push origin --delete "$BRANCH_NAME" 2>/dev/null || echo "远程分支删除�
 
 如果删除失败，记录警告但不阻塞流程。
 
-### 4d. 切换到 main 并拉取最新代码
+### 4e. 切换到 main 并拉取最新代码
 
 ```bash
 git checkout main
 git pull origin main
 ```
 
-### 4e. 删除本地分支
+### 4f. 删除本地分支
 
 ```bash
 git branch -d "$BRANCH_NAME" 2>/dev/null || echo "本地分支删除失败（可能未完全合并）"
@@ -261,7 +285,7 @@ git branch -d "$BRANCH_NAME" 2>/dev/null || echo "本地分支删除失败（可
 
 如果删除失败，记录警告但不阻塞流程。
 
-### 4f. 清理 per-project 状态文件
+### 4g. 清理 per-project 状态文件
 
 ```bash
 # 清理 per-project 运行时状态文件
@@ -275,7 +299,7 @@ fi
 
 同时更新 `tasks/registry.json` 中该项目的 status 为 `"complete"`。
 
-### 4g. 清理 worktree + PID（如有残留）
+### 4h. 清理 worktree + PID（如有残留）
 
 ```bash
 # 清理可能残留的 git worktree
