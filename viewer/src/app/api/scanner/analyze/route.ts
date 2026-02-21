@@ -292,13 +292,16 @@ function spawnCodexAnalysis(
 
     codex.on('error', (err) => {
       clearTimeout(killTimer);
-      activeCodexProcess = null;
+      // Only clear the global pointer if it still points to this process instance
+      // (avoid clearing a newer process's reference after cancel+restart)
+      if (activeCodexProcess === codex) activeCodexProcess = null;
       reject(new Error(`Failed to spawn codex: ${sanitizeStderr(err.message)}`));
     });
 
     codex.on('close', (code) => {
       clearTimeout(killTimer);
-      activeCodexProcess = null;
+      // Only clear the global pointer if it still points to this process instance
+      if (activeCodexProcess === codex) activeCodexProcess = null;
       if (code !== 0) {
         const sanitized = sanitizeStderr(stderr || `codex exited with code ${code}`);
         sendSSE(controller, encoder, 'error', {
