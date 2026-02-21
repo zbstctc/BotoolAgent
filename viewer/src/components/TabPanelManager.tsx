@@ -20,6 +20,10 @@ export interface TabPanelManagerProps {
 
 export function TabPanelManager({ children }: TabPanelManagerProps) {
   const { tabs, activeTabId, isHydrated, openTab, switchTab, updateTabStage } = useTab();
+  // Lazy-mount ScannerPanel only after the Scanner tab is first activated.
+  // This ensures ReactFlow's onInit fires while the container is visible (non-zero
+  // dimensions), so fitView works correctly on first render.
+  const [scannerMounted, setScannerMounted] = useState(false);
   const { requirements, isLoading: isRequirementsLoading } = useRequirement();
   // Capture URL reqId once on mount (lazy initializer, no effect needed)
   // Setter used by "返回 Dashboard" to clear the pending URL reqId
@@ -138,6 +142,15 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
     }
   }, [urlUtility, isHydrated, tabs, activeTabId, openTab, switchTab]);
 
+  // Trigger lazy mount of ScannerPanel the first time Scanner tab becomes active.
+  // Direct-URL case (/scanner) is handled by the urlUtility bootstrap effect above,
+  // which sets activeTabId to 'scanner' before this effect fires.
+  useEffect(() => {
+    if (activeTabId === 'scanner') {
+      setScannerMounted(true);
+    }
+  }, [activeTabId]);
+
   // Determine if the current route is managed by the panel system.
   // Dashboard and Rules are always managed (activeTabId-based, not pathname-based).
   // Stage tabs are managed when a project tab is active.
@@ -213,9 +226,9 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
           <RulesManager />
         </div>
 
-        {/* Scanner utility panel: always rendered, CSS visibility toggle */}
+        {/* Scanner utility panel: lazy-mounted on first activation, CSS visibility toggle */}
         <div className={(activeTabId === 'scanner' || isOnStandaloneUtilityUrl) ? 'block h-full' : 'hidden'}>
-          <ScannerPanel />
+          {scannerMounted && <ScannerPanel />}
         </div>
 
         {/* Project tab panels: each rendered with CSS display switching */}

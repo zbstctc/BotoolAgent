@@ -5,6 +5,7 @@ import {
   ReactFlow,
   Background,
   Controls,
+  PanOnScrollMode,
   useNodesState,
   useEdgesState,
   type Edge,
@@ -126,6 +127,8 @@ export function ScannerFlowChart({ scanResult }: ScannerFlowChartProps) {
       nodesDraggable
       nodesConnectable={false}
       elementsSelectable
+      panOnScroll
+      panOnScrollMode={PanOnScrollMode.Free}
       minZoom={0.2}
       maxZoom={2}
       className="bg-neutral-50"
