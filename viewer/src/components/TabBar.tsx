@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { usePathname } from 'next/navigation';
 import { LayoutDashboard, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTab } from '@/contexts/TabContext';
@@ -53,7 +52,6 @@ interface TabBarProps {
 
 export function TabBar({ className }: TabBarProps) {
   const { tabs, activeTabId, closeTab, switchTab } = useTab();
-  const pathname = usePathname();
   const [closeConfirmId, setCloseConfirmId] = useState<string | null>(null);
   const [hoveredTabId, setHoveredTabId] = useState<string | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -85,7 +83,7 @@ export function TabBar({ className }: TabBarProps) {
   }
 
   function handleDashboardClick() {
-    if (pathname === '/') return;
+    if (activeTabId === 'dashboard') return;
     switchTab('dashboard', '/');
   }
 
@@ -115,7 +113,7 @@ export function TabBar({ className }: TabBarProps) {
           onClick={handleDashboardClick}
           className={cn(
             'flex items-center gap-1.5 px-3 h-9 text-sm font-medium rounded-t-md border border-b-0 transition-colors',
-            pathname === '/'
+            activeTabId === 'dashboard'
               ? 'bg-white border-neutral-200 text-neutral-900'
               : 'bg-neutral-100 border-transparent text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50'
           )}

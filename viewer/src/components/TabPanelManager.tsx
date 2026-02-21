@@ -1,6 +1,5 @@
 'use client';
 
-import { usePathname, useSearchParams } from 'next/navigation';
 import { DashboardContent } from '@/components/panels/DashboardContent';
 import { StageRouter } from '@/components/panels/StageRouter';
 import { useTab } from '@/contexts/TabContext';
@@ -11,14 +10,11 @@ export interface TabPanelManagerProps {
 
 export function TabPanelManager({ children }: TabPanelManagerProps) {
   const { tabs, activeTabId } = useTab();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   // Determine if the current route is managed by the panel system
-  const isStageRoute = /^\/stage[1-5]$/.test(pathname);
-  const hasValidReq = !!searchParams.get('req');
-  const isDashboard = pathname === '/';
-  const isManagedRoute = isDashboard || (isStageRoute && hasValidReq);
+  // Use activeTabId (not pathname) since tab switches use history.replaceState which doesn't trigger usePathname updates
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const isManagedRoute = activeTabId === 'dashboard' || (activeTab != null && !activeTab.url);
 
   // Project tabs: exclude dashboard (always rendered separately) and utility tabs (have url field, use Next.js routing)
   const projectTabs = tabs.filter((t) => t.id !== 'dashboard' && !t.url);
