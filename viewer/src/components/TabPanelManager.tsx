@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { DashboardContent } from '@/components/panels/DashboardContent';
 import { StageRouter } from '@/components/panels/StageRouter';
 import { RulesManager } from '@/components/rules/RulesManager';
+import { ScannerPanel } from '@/components/Scanner/ScannerPanel';
 import { useTab, isValidReqId } from '@/contexts/TabContext';
 import { useRequirement } from '@/contexts/RequirementContext';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,15 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
     const params = new URLSearchParams(window.location.search);
     const reqId = params.get('req');
     return reqId && isValidReqId(reqId) ? reqId : null;
+  });
+
+  // Detect direct URL navigation to utility pages (e.g. bookmark to /scanner).
+  // Captured once on mount using window.location (not usePathname, which doesn't update
+  // after history.replaceState tab switches).
+  const [urlUtility] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const m = window.location.pathname.match(/^\/(scanner)$/);
+    return m ? m[1] : null;
   });
 
   // usePathname detects router.push() navigations from stage components.
@@ -114,6 +124,20 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
     // "not found" case: urlReqId stays set so urlNotFound is derived below
   }, [urlReqId, isHydrated, isRequirementsLoading, requirements, tabs, activeTabId, openTab, switchTab]);
 
+  // Utility URL bootstrap: when the user navigates directly to /scanner (e.g. bookmark),
+  // create and activate the Scanner utility tab so the header tab bar is in sync.
+  useEffect(() => {
+    if (!urlUtility || !isHydrated) return;
+    if (urlUtility === 'scanner') {
+      const scannerTab: TabItem = { id: 'scanner', name: 'Scanner', stage: 0, url: '/scanner', isUtility: true };
+      if (!tabs.some((t) => t.id === 'scanner')) {
+        openTab(scannerTab, '/scanner');
+      } else if (activeTabId !== 'scanner') {
+        switchTab('scanner', '/scanner');
+      }
+    }
+  }, [urlUtility, isHydrated, tabs, activeTabId, openTab, switchTab]);
+
   // Determine if the current route is managed by the panel system.
   // Dashboard and Rules are always managed (activeTabId-based, not pathname-based).
   // Stage tabs are managed when a project tab is active.
@@ -130,6 +154,8 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
   const isManagedRoute =
     (activeTabId === 'dashboard' && !isOnStandaloneStageUrl && !isOnStandaloneUtilityUrl) ||
     activeTabId === 'rules' ||
+    activeTabId === 'scanner' ||
+    isOnStandaloneUtilityUrl ||
     (activeTab != null && !activeTab.url && activeTabId !== 'dashboard');
 
   // Project tabs: exclude dashboard and utility tabs
@@ -185,6 +211,11 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
         {/* Rules panel: always rendered, CSS visibility toggle */}
         <div className={activeTabId === 'rules' ? 'block h-full' : 'hidden'}>
           <RulesManager />
+        </div>
+
+        {/* Scanner utility panel: always rendered, CSS visibility toggle */}
+        <div className={(activeTabId === 'scanner' || isOnStandaloneUtilityUrl) ? 'block h-full' : 'hidden'}>
+          <ScannerPanel />
         </div>
 
         {/* Project tab panels: each rendered with CSS display switching */}

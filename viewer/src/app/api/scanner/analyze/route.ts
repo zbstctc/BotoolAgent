@@ -260,15 +260,20 @@ function spawnCodexAnalysis(
   encoder: TextEncoder
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    // Pass prompt via stdin ('-') instead of argv to avoid E2BIG on large repos.
+    // '-a never' has been removed: the flag was dropped in recent codex versions.
     const codex = spawn(
       'codex',
-      ['exec', '-a', 'never', '--full-auto', prompt],
+      ['exec', '--full-auto', '-'],
       {
         cwd: projectRoot,
         env: { ...process.env },
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ['pipe', 'pipe', 'pipe'],
       }
     );
+    // Write prompt to stdin then close to signal EOF
+    codex.stdin?.write(prompt, 'utf-8');
+    codex.stdin?.end();
 
     // Track active process for cancellation
     activeCodexProcess = codex;
