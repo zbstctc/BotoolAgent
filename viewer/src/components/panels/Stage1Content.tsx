@@ -120,6 +120,8 @@ export function Stage1Content({ reqId: reqIdProp }: Stage1ContentProps) {
   const [initialDescription, setInitialDescription] = useState<string>('');
   // Gate for manual start — user must click "启动" before AI begins
   const [userClickedStart, setUserClickedStart] = useState(false);
+  // Context retry: trigger a new session with Q&A history when resume fails
+  const [contextRetryTrigger, setContextRetryTrigger] = useState<string | null>(null);
   // CLI session ID for resuming conversation
   const [cliSessionId, setCliSessionId] = useState<string | undefined>(undefined);
   // Track if we've restored state (use ref to avoid re-renders)
@@ -531,6 +533,14 @@ export function Stage1Content({ reqId: reqIdProp }: Stage1ContentProps) {
       startPyramid();
     }
   }, [initialDescription, isStarted, isLoading, selectedMode, userClickedStart, startPyramid]);
+
+  // Context retry: after resetSession(), start a new session with Q&A history context
+  useEffect(() => {
+    if (!contextRetryTrigger || isLoading) return;
+    const msg = contextRetryTrigger;
+    setContextRetryTrigger(null);
+    sendMessage(msg);
+  }, [contextRetryTrigger, isLoading, sendMessage]);
 
   // Handle answer selection
   const handleAnswer = useCallback((questionIndex: number, value: string | string[]) => {
@@ -1334,9 +1344,31 @@ export function Stage1Content({ reqId: reqIdProp }: Stage1ContentProps) {
                     variant: 'primary',
                   },
                   {
-                    label: '再试一次',
+                    label: '带上下文重试',
                     onClick: () => {
-                      setHasAttemptedResume(false);
+                      // Clear the dead session and start a new one with Q&A history
+                      resetSession();
+                      setCliSessionId(undefined);
+                      setHasAttemptedResume(true); // prevent old auto-resume from re-firing
+
+                      const modeLabel = selectedModeRef.current === 'quick' ? '快速修复'
+                        : selectedModeRef.current === 'feature' ? '功能开发'
+                        : selectedModeRef.current === 'transform' ? '导入'
+                        : '完整规划';
+                      const transformExtra = selectedModeRef.current === 'transform' ? ' [请勿覆盖源文件]' : '';
+
+                      let contextMsg: string;
+                      if (qaHistory.length > 0) {
+                        const qaSummary = qaHistory
+                          .map((item, idx) => `L${item.level} Q${idx + 1}: ${item.question}\n答案: ${Array.isArray(item.answer) ? item.answer.join(', ') : item.answer}`)
+                          .join('\n\n');
+                        contextMsg = `/botoolagent-pyramidprd [模式:${modeLabel}]${transformExtra} [恢复会话] 我之前在需求整理中断了，已完成的问答记录如下：\n\n${qaSummary}\n\n请基于以上信息继续 L${currentLevel} 的问答，不要重复已经问过的问题。`;
+                      } else {
+                        // No history - fall back to starting fresh
+                        contextMsg = `/botoolagent-pyramidprd [模式:${modeLabel}]${transformExtra} ${initialDescription}`;
+                      }
+
+                      setContextRetryTrigger(contextMsg);
                     },
                     variant: 'secondary',
                   },
