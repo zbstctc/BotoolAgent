@@ -79,20 +79,18 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
   }, [pathname, isHydrated, activeTabId, tabs, switchTab, updateTabStage]);
 
   // URL-based tab creation: handle direct URL access (e.g. shared link /stage3?req=xxx)
-  // One-time activation: after the URL tab is activated, the ref prevents re-forcing
-  // activeTabId back to urlReqId when the user switches to a different tab.
-  const urlActivatedRef = useRef(false);
+  // Once the tab is activated (or created), urlReqId is cleared so the effect won't
+  // re-force activeTabId when the user switches tabs or closes the URL-activated tab.
   useEffect(() => {
     if (!urlReqId || !isHydrated) return;
-    if (urlActivatedRef.current) return; // Already activated, no-op
 
-    // Already in tabs → ensure it's active, then mark as done
+    // Already in tabs → ensure it's active, then clear URL bootstrap state
     if (tabs.some((t) => t.id === urlReqId)) {
       if (activeTabId !== urlReqId) {
         const stageNum = STAGE_TO_PAGE[tabs.find((t) => t.id === urlReqId)!.stage] ?? 1;
         switchTab(urlReqId, `/stage${stageNum}?req=${urlReqId}`);
       }
-      urlActivatedRef.current = true;
+      setUrlReqId(null);
       return;
     }
 
@@ -109,9 +107,9 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
       };
       const stageNum = STAGE_TO_PAGE[requirement.stage] ?? 1;
       openTab(newTab, `/stage${stageNum}?req=${requirement.id}`);
-      urlActivatedRef.current = true;
+      setUrlReqId(null);
     }
-    // "not found" case: no setState needed — urlNotFound is derived below
+    // "not found" case: urlReqId stays set so urlNotFound is derived below
   }, [urlReqId, isHydrated, isRequirementsLoading, requirements, tabs, activeTabId, openTab, switchTab]);
 
   // Determine if the current route is managed by the panel system.
