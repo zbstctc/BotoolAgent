@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { DashboardContent } from '@/components/panels/DashboardContent';
 import { StageRouter } from '@/components/panels/StageRouter';
 import { useTab, isValidReqId } from '@/contexts/TabContext';
@@ -16,10 +17,60 @@ export interface TabPanelManagerProps {
 }
 
 export function TabPanelManager({ children }: TabPanelManagerProps) {
-  const { tabs, activeTabId, isHydrated, openTab, switchTab } = useTab();
+  const { tabs, activeTabId, isHydrated, openTab, switchTab, updateTabStage } = useTab();
   const { requirements, isLoading: isRequirementsLoading } = useRequirement();
   const [urlFallbackState, setUrlFallbackState] = useState<'idle' | 'loading' | 'not-found'>('idle');
   const urlProcessedRef = useRef(false);
+
+  // usePathname detects router.push() navigations from stage components.
+  // Tab switches use history.replaceState which does NOT trigger usePathname, so
+  // this only fires for inter-stage transitions (Stage1→Stage2, Stage3→Stage4, etc.)
+  const pathname = usePathname();
+  const prevPathnameRef = useRef(pathname);
+
+  // Sync router.push navigation from stage components to tab state
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    const prevPathname = prevPathnameRef.current;
+    prevPathnameRef.current = pathname;
+
+    // Only react to actual changes (not initial mount)
+    if (pathname === prevPathname) return;
+
+    // router.push('/') from stage components → switch to dashboard
+    if (pathname === '/') {
+      if (activeTabId !== 'dashboard') {
+        switchTab('dashboard', '/');
+      }
+      return;
+    }
+
+    // router.push('/stageN?...') from stage components → update tab stage
+    const stageMatch = pathname.match(/^\/stage(\d+)/);
+    if (stageMatch) {
+      const pageNum = parseInt(stageMatch[1], 10);
+
+      // Only sync if this is an inter-stage transition from the active project tab.
+      // Guard: URL must have ?req=, ?prd=, or ?projectId= to prove it's a stage
+      // transition, not standalone navigation (e.g. ProjectSwitcher "New Project").
+      const urlParams = new URLSearchParams(window.location.search);
+      const hasStageContext =
+        urlParams.has('req') || urlParams.has('prd') || urlParams.has('projectId');
+
+      if (hasStageContext && activeTabId !== 'dashboard') {
+        const activeProjectTab = tabs.find((t) => t.id === activeTabId);
+        if (activeProjectTab && !activeProjectTab.url && activeProjectTab.stage !== pageNum) {
+          updateTabStage(activeTabId, pageNum);
+          // Add req param if missing (preserve existing params like ?prd=, ?mode=, ?projectId=)
+          if (!urlParams.has('req')) {
+            urlParams.set('req', activeTabId);
+            history.replaceState(null, '', `${pathname}?${urlParams.toString()}`);
+          }
+        }
+      }
+    }
+  }, [pathname, isHydrated, activeTabId, tabs, switchTab, updateTabStage]);
 
   // URL-based tab creation: handle direct URL access (e.g. shared link /stage3?req=xxx)
   useEffect(() => {
