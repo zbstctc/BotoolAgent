@@ -1,13 +1,19 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, startTransition } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
 import type { TabItem } from '@/lib/tab-storage';
 import { loadTabs, saveTabs } from '@/lib/tab-storage';
+
+// UUID format validation for reqId
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function isValidReqId(id: string): boolean {
+  return UUID_REGEX.test(id);
+}
 
 interface TabContextValue {
   tabs: TabItem[];
   activeTabId: string;
+  isHydrated: boolean;
   openTab: (item: TabItem, url: string) => void;
   closeTab: (id: string) => void;
   switchTab: (id: string, url: string) => void;
@@ -21,11 +27,9 @@ interface TabContextValue {
 const TabContext = createContext<TabContextValue | null>(null);
 
 export function TabProvider({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
-
   const [tabs, setTabs] = useState<TabItem[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>('dashboard');
+  const [isHydrated, setIsHydrated] = useState(false);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -33,12 +37,14 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     startTransition(() => {
       setTabs(stored.tabs);
       setActiveTabId(stored.activeTabId);
+      setIsHydrated(true);
     });
   }, []);
 
-  // Persist to localStorage on changes
+  // Persist to localStorage on changes (only after hydration to prevent overwriting saved data)
   const saveRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
+    if (!isHydrated) return;
     if (saveRef.current) clearTimeout(saveRef.current);
     saveRef.current = setTimeout(() => {
       saveTabs({ tabs, activeTabId });
@@ -46,47 +52,13 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     return () => {
       if (saveRef.current) clearTimeout(saveRef.current);
     };
-  }, [tabs, activeTabId]);
+  }, [tabs, activeTabId, isHydrated]);
 
-  // Keep a ref of activeTabId so the pathname effect can read it without
-  // adding it as a dependency (avoids potential update cycles).
+  // Keep a ref of activeTabId for closeTab
   const activeTabIdRef = useRef(activeTabId);
   useEffect(() => {
     activeTabIdRef.current = activeTabId;
   }, [activeTabId]);
-
-  // Keep a ref of tabs for the pathname sync effect
-  const tabsRef = useRef(tabs);
-  useEffect(() => {
-    tabsRef.current = tabs;
-  }, [tabs]);
-
-  // Sync activeTabId + tab stage from pathname changes
-  useEffect(() => {
-    if (pathname === '/') {
-      startTransition(() => setActiveTabId('dashboard'));
-      return;
-    }
-
-    // Match utility tabs by their fixed URL
-    const utilityTab = tabsRef.current.find((t) => t.url && pathname.startsWith(t.url));
-    if (utilityTab) {
-      startTransition(() => setActiveTabId(utilityTab.id));
-      return;
-    }
-
-    // Match /stage{n} pattern (e.g. /stage1, /stage2, ...)
-    const stageMatch = pathname.match(/^\/stage(\d+)/);
-    if (stageMatch) {
-      const stageNum = parseInt(stageMatch[1], 10);
-      const currentActiveId = activeTabIdRef.current;
-      if (currentActiveId && currentActiveId !== 'dashboard') {
-        startTransition(() => setTabs((prev) =>
-          prev.map((t) => t.id === currentActiveId && !t.url ? { ...t, stage: stageNum } : t)
-        ));
-      }
-    }
-  }, [pathname]);
 
   const openTab = useCallback((item: TabItem, url: string) => {
     setTabs((prev) => {
@@ -98,8 +70,9 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
       return [...prev, item];
     });
     setActiveTabId(item.id);
-    router.push(url);
-  }, [router]);
+    // Only allow relative paths to prevent javascript: URI or open redirect
+    if (url.startsWith('/')) history.replaceState(null, '', url);
+  }, []);
 
   const closeTab = useCallback((id: string) => {
     if (id === 'dashboard') return; // Dashboard cannot be closed
@@ -107,16 +80,17 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     setTabs((prev) => prev.filter((t) => t.id !== id));
     if (wasActive) {
       setActiveTabId('dashboard');
-      router.push('/');
+      history.replaceState(null, '', '/');
     }
-  }, [router]);
+  }, []);
 
   const switchTab = useCallback((id: string, url: string) => {
     setActiveTabId(id);
     // Auto clear attention when switching to a tab
     setTabs((prev) => prev.map((t) => t.id === id && t.needsAttention ? { ...t, needsAttention: false } : t));
-    router.push(url);
-  }, [router]);
+    // Only allow relative paths to prevent javascript: URI or open redirect
+    if (url.startsWith('/')) history.replaceState(null, '', url);
+  }, []);
 
   const updateTabName = useCallback((id: string, name: string) => {
     setTabs((prev) => prev.map((t) => t.id === id ? { ...t, name } : t));
@@ -148,6 +122,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
       value={{
         tabs,
         activeTabId,
+        isHydrated,
         openTab,
         closeTab,
         switchTab,

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { usePathname } from 'next/navigation';
 import { LayoutDashboard, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTab } from '@/contexts/TabContext';
@@ -53,7 +52,6 @@ interface TabBarProps {
 
 export function TabBar({ className }: TabBarProps) {
   const { tabs, activeTabId, closeTab, switchTab } = useTab();
-  const pathname = usePathname();
   const [closeConfirmId, setCloseConfirmId] = useState<string | null>(null);
   const [hoveredTabId, setHoveredTabId] = useState<string | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -85,17 +83,13 @@ export function TabBar({ className }: TabBarProps) {
   }
 
   function handleDashboardClick() {
-    if (pathname === '/') return;
+    if (activeTabId === 'dashboard') return;
     switchTab('dashboard', '/');
   }
 
   function handleClose(e: React.MouseEvent, tab: TabItem) {
     e.stopPropagation();
-    if (tab.isRunning) {
-      setCloseConfirmId(tab.id);
-    } else {
-      closeTab(tab.id);
-    }
+    setCloseConfirmId(tab.id);
   }
 
   function handleConfirmClose() {
@@ -105,9 +99,11 @@ export function TabBar({ className }: TabBarProps) {
     }
   }
 
-  const runningTabName = closeConfirmId
-    ? tabs.find((t) => t.id === closeConfirmId)?.name ?? ''
-    : '';
+  const closingTab = closeConfirmId
+    ? tabs.find((t) => t.id === closeConfirmId) ?? null
+    : null;
+  const closingTabName = closingTab?.name ?? '';
+  const closingTabIsRunning = closingTab?.isRunning ?? false;
 
   return (
     <>
@@ -117,7 +113,7 @@ export function TabBar({ className }: TabBarProps) {
           onClick={handleDashboardClick}
           className={cn(
             'flex items-center gap-1.5 px-3 h-9 text-sm font-medium rounded-t-md border border-b-0 transition-colors',
-            pathname === '/'
+            activeTabId === 'dashboard'
               ? 'bg-white border-neutral-200 text-neutral-900'
               : 'bg-neutral-100 border-transparent text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50'
           )}
@@ -227,11 +223,14 @@ export function TabBar({ className }: TabBarProps) {
       <Dialog open={!!closeConfirmId} onOpenChange={(open) => !open && setCloseConfirmId(null)}>
         <DialogContent className="sm:max-w-sm bg-white">
           <DialogHeader>
-            <DialogTitle>Agent 正在运行</DialogTitle>
+            <DialogTitle>
+              {closingTabIsRunning ? 'Agent 正在运行' : '确认关闭此标签页？'}
+            </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-neutral-600">
-            该项目「{runningTabName}」的 Agent 仍在后台运行。
-            关闭标签页不会停止 Agent，你可以稍后从 Dashboard 重新打开。
+            {closingTabIsRunning
+              ? `该项目「${closingTabName}」的 Agent 仍在后台运行。关闭标签页不会停止 Agent 进程，你可以稍后从 Dashboard 重新打开。`
+              : `确认关闭「${closingTabName}」标签页？关闭后可从 Dashboard 重新打开。`}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCloseConfirmId(null)}>
