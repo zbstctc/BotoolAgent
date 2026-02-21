@@ -18,16 +18,31 @@ export interface TabStorage {
 
 const TABS_KEY = scopedKey('tabs');
 
+const DEFAULT_STORAGE: TabStorage = { tabs: [], activeTabId: 'dashboard' };
+
 export function loadTabs(): TabStorage {
-  if (typeof window === 'undefined') {
-    return { tabs: [], activeTabId: 'dashboard' };
-  }
+  if (typeof window === 'undefined') return DEFAULT_STORAGE;
   try {
     const raw = localStorage.getItem(TABS_KEY);
-    if (!raw) return { tabs: [], activeTabId: 'dashboard' };
-    return JSON.parse(raw) as TabStorage;
+    if (!raw) return DEFAULT_STORAGE;
+    const parsed = JSON.parse(raw);
+    // Validate shape to guard against corrupt/tampered localStorage
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      !Array.isArray(parsed.tabs) ||
+      typeof parsed.activeTabId !== 'string'
+    ) {
+      return DEFAULT_STORAGE;
+    }
+    // Filter out malformed tab entries
+    const validTabs = (parsed.tabs as unknown[]).filter(
+      (t): t is TabItem =>
+        !!t && typeof t === 'object' && typeof (t as TabItem).id === 'string' && typeof (t as TabItem).stage === 'number',
+    );
+    return { tabs: validTabs, activeTabId: parsed.activeTabId };
   } catch {
-    return { tabs: [], activeTabId: 'dashboard' };
+    return DEFAULT_STORAGE;
   }
 }
 

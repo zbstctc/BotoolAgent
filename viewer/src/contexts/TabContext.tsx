@@ -41,9 +41,10 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // Persist to localStorage on changes
+  // Persist to localStorage on changes (only after hydration to prevent overwriting saved data)
   const saveRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
+    if (!isHydrated) return;
     if (saveRef.current) clearTimeout(saveRef.current);
     saveRef.current = setTimeout(() => {
       saveTabs({ tabs, activeTabId });
@@ -51,7 +52,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     return () => {
       if (saveRef.current) clearTimeout(saveRef.current);
     };
-  }, [tabs, activeTabId]);
+  }, [tabs, activeTabId, isHydrated]);
 
   // Keep a ref of activeTabId for closeTab
   const activeTabIdRef = useRef(activeTabId);
@@ -69,7 +70,8 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
       return [...prev, item];
     });
     setActiveTabId(item.id);
-    history.replaceState(null, '', url);
+    // Only allow relative paths to prevent javascript: URI or open redirect
+    if (url.startsWith('/')) history.replaceState(null, '', url);
   }, []);
 
   const closeTab = useCallback((id: string) => {
@@ -86,7 +88,8 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     setActiveTabId(id);
     // Auto clear attention when switching to a tab
     setTabs((prev) => prev.map((t) => t.id === id && t.needsAttention ? { ...t, needsAttention: false } : t));
-    history.replaceState(null, '', url);
+    // Only allow relative paths to prevent javascript: URI or open redirect
+    if (url.startsWith('/')) history.replaceState(null, '', url);
   }, []);
 
   const updateTabName = useCallback((id: string, name: string) => {
