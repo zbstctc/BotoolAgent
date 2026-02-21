@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/Header";
 import { Main } from "@/components/Main";
+import { TabPanelManager } from "@/components/TabPanelManager";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import { RequirementProvider } from "@/contexts/RequirementContext";
 import { TabProvider } from "@/contexts/TabContext";
@@ -41,7 +42,7 @@ export default function RootLayout({
             <TabProvider>
               <TabNotificationMount />
               <Header />
-              <Main>{children}</Main>
+              <Main><TabPanelManager>{children}</TabPanelManager></Main>
             </TabProvider>
           </RequirementProvider>
         </ProjectProvider>
