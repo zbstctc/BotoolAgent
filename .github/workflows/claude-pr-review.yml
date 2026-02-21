@@ -56,3 +56,4 @@ jobs:
             Only post GitHub comments — do not output review text as messages.
           claude_args: |
             --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Glob"
+# Claude PR Review test - Sat Feb 21 17:53:23 AEDT 2026
