@@ -90,6 +90,7 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
         const stageNum = STAGE_TO_PAGE[tabs.find((t) => t.id === urlReqId)!.stage] ?? 1;
         switchTab(urlReqId, `/stage${stageNum}?req=${urlReqId}`);
       }
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUrlReqId(null);
       return;
     }
