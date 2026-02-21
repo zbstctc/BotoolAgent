@@ -227,7 +227,7 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
         </div>
 
         {/* Scanner utility panel: lazy-mounted on first activation, CSS visibility toggle */}
-        <div className={(activeTabId === 'scanner' || isOnStandaloneUtilityUrl) ? 'block h-full' : 'hidden'}>
+        <div className={activeTabId === 'scanner' ? 'block h-full' : 'hidden'}>
           {scannerMounted && <ScannerPanel />}
         </div>
 
