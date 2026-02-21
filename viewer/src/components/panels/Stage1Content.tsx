@@ -617,6 +617,18 @@ export function Stage1Content({ reqId: reqIdProp }: Stage1ContentProps) {
     });
   }, [currentQuestions, currentLevel, answers, otherSelected]);
 
+  // Count how many questions have been answered
+  const answeredCount = useMemo(() => {
+    return currentQuestions.filter((_, index) => {
+      const questionId = `L${currentLevel}-Q${index + 1}`;
+      const answer = answers[questionId]?.value;
+      if (otherSelected[questionId]) {
+        return typeof answer === 'string' && answer.trim().length > 0;
+      }
+      return answer !== undefined && answer !== '';
+    }).length;
+  }, [currentQuestions, currentLevel, answers, otherSelected]);
+
   // Handle confirmation: user confirms and wants PRD generated
   const handleConfirmGenerate = useCallback(() => {
     if (!pendingToolUse) return;
@@ -1239,6 +1251,18 @@ export function Stage1Content({ reqId: reqIdProp }: Stage1ContentProps) {
 
               {/* Submit Button - fixed at bottom */}
               <div className="flex-shrink-0 px-6 py-4 border-t border-neutral-200 bg-white">
+                {/* Progress indicator */}
+                {currentQuestions.length > 0 && (
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-neutral-500">
+                      已回答 <span className={`font-semibold ${allAnswered ? 'text-green-600' : 'text-neutral-700'}`}>{answeredCount}</span>
+                      <span className="text-neutral-400"> / {currentQuestions.length}</span>
+                    </span>
+                    {!allAnswered && (
+                      <span className="text-xs text-amber-600">请完成所有问题后继续</span>
+                    )}
+                  </div>
+                )}
                 <button
                   onClick={handleSubmitAnswers}
                   disabled={!allAnswered || isLoading}
