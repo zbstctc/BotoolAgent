@@ -127,7 +127,7 @@ export function TabBar({ className }: TabBarProps) {
           const isActive = activeTabId === tab.id;
           const statusBorder = tab.url ? undefined : getStatusBorderClass(tab);
           const displayName = tab.name.replace(/^PRD:\s*/i, '');
-          const isUtility = !!tab.url;
+          const isUtility = !!tab.isUtility || !!tab.url;
           const isPopoverOpen = hoveredTabId === tab.id;
 
           const tabButton = (
