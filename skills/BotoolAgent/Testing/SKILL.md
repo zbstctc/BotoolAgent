@@ -6,7 +6,7 @@ user-invocable: true
 
 # BotoolAgent 6 层自动化测试流水线
 
-CLI 端自动化测试验收：Layer 1 Regression → Layer 2 Unit → Layer 3 E2E → Layer 4 Code Review → Layer 5 Codex 红队审查 → Layer 6 PR 创建 + PR-Agent 守门。全部自动化，通过后直接进入 finalize。
+CLI 端自动化测试验收：Layer 1 Regression → Layer 2 Unit → Layer 3 E2E → Layer 4 Code Review → Layer 5 Codex 红队审查 → Layer 6 PR 创建 + Claude Review 守门。全部自动化，通过后直接进入 finalize。
 
 **核心升级：Ralph 弹性迭代 + Agent Teams 并行修复 + Codex 红队对抗审查。** 遇到错误不停止，自动修复后重跑，直到通过或断路器触发。
 
@@ -94,7 +94,7 @@ echo "项目目录: $PROJECT_DIR"
   Layer 3 — E2E Tests: Playwright （自动修复）
   Layer 4 — Code Review: Claude 审查 git diff （自动修复 HIGH）
   Layer 5 — Codex 红队审查: Codex 对抗审查 （对抗循环 ≤ 3 轮）
-  Layer 6 — PR 创建 + PR-Agent 守门 （PR-Agent 修复循环 ≤ 2 轮）
+  Layer 6 — PR 创建 + Claude Review 守门 （Claude Review 修复循环 ≤ 2 轮）
 ```
 
 ---
@@ -867,7 +867,7 @@ Layer 5 Codex 红队审查 通过
 
 ---
 
-## Layer 6 — PR 创建 + PR-Agent 守门
+## Layer 6 — PR 创建 + Claude Review 守门
 
 **跳过条件：** `startLayer > 6` 时跳过此层。
 
@@ -914,7 +914,7 @@ gh pr list --head "$BRANCH_NAME" --json number,title,url,state --jq '.[0]'
 
 **如果已有 OPEN PR：**
 - 记录 PR 信息（编号、标题、URL）
-- 跳到 6e（PR-Agent 守门）
+- 跳到 6e（Claude Review 守门）
 
 ### 6d. 创建 PR
 
@@ -968,65 +968,87 @@ AskUserQuestion 让用户选择：手动创建后继续 / 跳过 PR 创建 / 终
 
 **创建成功后：** 记录 PR 编号、标题和 URL。
 
-### 6e. PR-Agent 守门 — 等待自动审查评论
+### 6e. Claude Review 守门 — 等待 GitHub Actions 自动审查
 
-PR 创建后，等待 PR-Agent SaaS 自动触发 `/review` 和 `/improve` 评论。
+PR 创建后，等待 `.github/workflows/claude-pr-review.yml` 自动触发并完成审查。
 
-**PR-Agent 是可选层** — 如果仓库未配置 PR-Agent，超时后自动跳过。
+**Claude Review 是可选层** — 检测到 workflow 未配置时立即跳过，不浪费等待时间。
 
 ```bash
 # 获取 PR 编号
 PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number')
 
-# Polling: 等待 PR-Agent bot 评论（最多 60 秒）
-MAX_WAIT=60
-INTERVAL=10
+# Step 1: 快速检测 claude-pr-review workflow 是否存在（立即判断，不等待）
+WORKFLOW_EXISTS=$(gh workflow list --json name \
+  --jq '[.[].name] | contains(["Claude PR Review"])')
+
+if [ "$WORKFLOW_EXISTS" != "true" ]; then
+  echo "claude-pr-review workflow 未配置，跳过 Claude Review 守门。"
+  # 跳到 6g
+fi
+```
+
+**如果 workflow 不存在：**
+```
+Layer 6: Claude PR Review workflow 未配置，立即跳过。
+（提示：若需配置，参见 .github/workflows/claude-pr-review.yml）
+```
+记录为 info，不阻塞流水线。跳到 6g。
+
+**如果 workflow 存在：** 等待本次推送触发的 run 完成（最多 5 分钟）。
+
+```bash
+# Step 2: 等待 claude-pr-review workflow 完成（最多 300 秒）
+MAX_WAIT=300
+INTERVAL=15
 ELAPSED=0
 
 while [ $ELAPSED -lt $MAX_WAIT ]; do
-  # 获取 PR 评论，过滤 PR-Agent bot 评论
-  AGENT_COMMENTS=$(gh api repos/{owner}/{repo}/pulls/$PR_NUMBER/comments \
-    --jq '[.[] | select(.user.login | test("pr-agent|codiumai"; "i"))] | length')
+  RUN_STATUS=$(gh run list --workflow=claude-pr-review.yml \
+    --branch "$BRANCH_NAME" \
+    --json status,conclusion \
+    --jq '[.[] | select(.status == "completed")] | .[0].conclusion // "pending"')
 
-  if [ "$AGENT_COMMENTS" -gt 0 ]; then
-    echo "PR-Agent 评论已到达: $AGENT_COMMENTS 条"
+  if [ "$RUN_STATUS" != "pending" ]; then
+    echo "Claude PR Review 完成: $RUN_STATUS"
     break
   fi
 
-  echo "等待 PR-Agent 评论... ($ELAPSED/$MAX_WAIT 秒)"
+  echo "等待 Claude PR Review workflow 完成... ($ELAPSED/$MAX_WAIT 秒)"
   sleep $INTERVAL
   ELAPSED=$((ELAPSED + INTERVAL))
 done
 
 if [ $ELAPSED -ge $MAX_WAIT ]; then
-  echo "PR-Agent 超时（${MAX_WAIT}秒未收到评论）。跳过 PR-Agent 守门。"
+  echo "Claude PR Review 超时（${MAX_WAIT}秒）。跳过守门。"
+  # 跳到 6g
 fi
 ```
 
 **超时处理：**
 ```
-Layer 6: PR-Agent 未在 60 秒内响应。
-跳过 PR-Agent 守门，继续生成质检报告。
-（提示：若需配置 PR-Agent，参见 docs/pr-agent-setup.md）
+Layer 6: Claude PR Review 未在 5 分钟内完成。
+跳过守门，继续生成质检报告。
 ```
 记录为 warning，不阻塞流水线。跳到 6g。
 
-**收到评论后：** 读取并解析 PR-Agent 评论内容。
+**workflow 完成后：** 读取并解析 Claude 发布的审查评论。
 
 ```bash
-# 读取 PR-Agent 评论内容
-gh api repos/{owner}/{repo}/pulls/$PR_NUMBER/comments \
-  --jq '[.[] | select(.user.login | test("pr-agent|codiumai"; "i"))] | .[].body'
+# Step 3: 读取 Claude Review 评论（gh pr comment 写入 issue comments）
+CLAUDE_REVIEW=$(gh api repos/{owner}/{repo}/issues/$PR_NUMBER/comments \
+  --jq '[.[] | select(.body | contains("## Claude Code Review"))] | .[0].body // ""')
 ```
 
-### 6f. PR-Agent 修复循环（最多 2 轮）
+### 6f. Claude Review 修复循环（最多 2 轮）
 
-解析 PR-Agent 评论中的 HIGH severity 问题：
+解析 Claude Review 评论中的 HIGH severity 问题：
 
 **解析逻辑：**
-1. 正则匹配评论中的 severity 标记（如 `severity: high`、`🔴`、`Critical`）
-2. 提取问题描述、涉及文件、建议修复
-3. 如果无法解析格式（PR-Agent 版本变化等）→ 将评论内容作为参考，记录 warning 跳过
+1. 从 `## Claude Code Review` 评论中提取 `### HIGH severity` 章节
+2. 如果该章节内容为 `_None_` 或为空 → 直接通过，跳到 6g
+3. 如果有 HIGH 问题 → 进入修复循环
+4. 如果评论内容无法识别格式 → 记录 warning 跳过（不阻塞）
 
 **修复循环（最多 2 轮）：**
 
@@ -1034,21 +1056,21 @@ gh api repos/{owner}/{repo}/pulls/$PR_NUMBER/comments \
 
 #### Step 1: 分析 HIGH 问题
 
-筛选 PR-Agent 评论中标记为 HIGH/Critical 的问题。
+从 Claude Review 评论的 `### HIGH severity` 章节提取问题列表。
 
-- **如果没有 HIGH 问题** → PR-Agent 守门通过，跳到 6g
+- **如果没有 HIGH 问题** → Claude Review 守门通过，跳到 6g
 - **如果有 HIGH 问题** → 进入修复
 
 #### Step 2: 自动修复
 
-逐个修复 PR-Agent 指出的 HIGH 问题：
+逐个修复 Claude 指出的 HIGH 问题：
 - 读取涉及文件
-- 按照 PR-Agent 的建议修改代码
+- 按照 Claude 的建议修改代码
 - 修复后提交：
 
 ```bash
 git add <修改的文件>
-git commit -m "fix(testing): PR-Agent round $ROUND fixes"
+git commit -m "fix(testing): Claude Review round $ROUND fixes"
 ```
 
 #### Step 3: 重新推送
@@ -1057,25 +1079,26 @@ git commit -m "fix(testing): PR-Agent round $ROUND fixes"
 git push origin "$BRANCH_NAME"
 ```
 
-推送后 PR-Agent SaaS 会自动重新审查。
+推送后 `claude-pr-review.yml` workflow 会自动重新触发。
 
-#### Step 4: 等待 PR-Agent 重审
+#### Step 4: 等待 Claude 重审
 
 ```bash
-# 等待新一轮 PR-Agent 评论（最多 60 秒）
-# 同 6e 的 polling 逻辑，但只关注推送后的新评论
+# 等待新一轮 workflow 完成（最多 5 分钟）
 LAST_PUSH_TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
-MAX_WAIT=60
-INTERVAL=10
+MAX_WAIT=300
+INTERVAL=15
 ELAPSED=0
 
 while [ $ELAPSED -lt $MAX_WAIT ]; do
-  NEW_COMMENTS=$(gh api repos/{owner}/{repo}/pulls/$PR_NUMBER/comments \
-    --jq "[.[] | select(.user.login | test(\"pr-agent|codiumai\"; \"i\")) | select(.created_at > \"$LAST_PUSH_TIME\")] | length")
+  NEW_RUN=$(gh run list --workflow=claude-pr-review.yml \
+    --branch "$BRANCH_NAME" \
+    --json status,conclusion,createdAt \
+    --jq "[.[] | select(.createdAt > \"$LAST_PUSH_TIME\") | select(.status == \"completed\")] | .[0].conclusion // \"pending\"")
 
-  if [ "$NEW_COMMENTS" -gt 0 ]; then
-    echo "PR-Agent 重审评论已到达"
+  if [ "$NEW_RUN" != "pending" ]; then
+    echo "Claude PR Review 重审完成: $NEW_RUN"
     break
   fi
 
@@ -1087,18 +1110,18 @@ done
 #### Step 5: 收敛判断
 
 ```
-检查重审评论：
-  无新 HIGH 问题 → PR-Agent 守门通过，继续 6g
+检查重审评论（同 6e Step 3 读取最新 ## Claude Code Review 评论）：
+  ### HIGH severity 为 _None_ → Claude Review 守门通过，继续 6g
   仍有 HIGH 且 round < 2 → 继续下一轮
   仍有 HIGH 且 round = 2 → 记录未解决问题，继续 6g
 ```
 
 **2 轮后仍有 HIGH 问题：**
 ```
-PR-Agent 修复循环 2 轮后仍有 HIGH 问题未解决。
+Claude Review 修复循环 2 轮后仍有 HIGH 问题未解决。
 将未解决问题记录到 testing-report.json，继续生成报告。
 ```
-记录 warning，不阻塞（PR-Agent 为增强层，不是强制门控）。
+记录 warning，不阻塞（Claude Review 为增强层，不是强制门控）。
 
 ### 6g. 更新 agent-status 为 testing_complete
 
@@ -1200,10 +1223,10 @@ REPORT_PATH="tasks/${PROJECT_ID}/testing-report.json"
 
 **Layer 6 通过后，告知用户：**
 ```
-Layer 6 PR 创建 + PR-Agent 守门 通过
+Layer 6 PR 创建 + Claude Review 守门 通过
   PR: #<number> — <title>
   URL: <pr-url>
-  PR-Agent: {agent_comments} 条评论, {fix_rounds} 轮修复 / 超时跳过
+  Claude Review: {fix_rounds} 轮修复 / 跳过（workflow 未配置）/ 超时跳过
   agent-status: testing_complete
   testing-report.json: 已生成
 ```
@@ -1222,7 +1245,7 @@ BotoolAgent 6 层自动化测试 — 全部通过!
   Layer 3 — E2E Tests:        通过 / 跳过
   Layer 4 — Code Review:      通过 (无 HIGH 级别问题)
   Layer 5 — Codex 红队审查:    通过 / 跳过 (对抗轮次: N/3)
-  Layer 6 — PR + PR-Agent:    通过 / 跳过
+  Layer 6 — PR + Claude Review: 通过 / 跳过
 
   自动修复统计:
   - TypeCheck: N 轮修复 / 直接通过
@@ -1231,7 +1254,7 @@ BotoolAgent 6 层自动化测试 — 全部通过!
   - E2E Tests: N 轮修复 / 直接通过 / 跳过
   - Code Review: N 轮修复 / 直接通过
   - Codex 审查: N 个问题修复, M 个论证拒绝 / 跳过
-  - PR-Agent: N 轮修复 / 跳过
+  - Claude Review: N 轮修复 / 跳过 / workflow 未配置
 
 下一步：运行 /botoolagent-finalize 完成合并流程
 ```
@@ -1266,7 +1289,8 @@ BotoolAgent 6 层自动化测试 — 全部通过!
 | Layer 6 | PR 创建失败 | 检查 gh auth status，手动 gh pr create |
 | Layer 6 | gh 未认证 | 运行 gh auth login |
 | Layer 6 | PR-Agent 超时 | PR-Agent 为可选层，超时自动跳过，参见 docs/pr-agent-setup.md |
-| Layer 6 | PR-Agent 评论无法解析 | 记录 warning，跳过 PR-Agent 守门 |
+| Layer 6 | claude-pr-review workflow 未配置 | 立即跳过，不等待 |
+| Layer 6 | Claude Review 评论格式无法解析 | 记录 warning，跳过守门 |
 | Layer 6 | PR-Agent 修复循环未收敛 | 2 轮后记录未解决问题，不阻塞 |
 
 ---
@@ -1282,7 +1306,7 @@ CLI 的 6 层自动化测试对应 Viewer Stage 4 的分层验收：
 | Layer 3 — E2E Tests | E2E 测试 | npx playwright test |
 | Layer 4 — Code Review | Code Review | git diff → Claude 审查 |
 | Layer 5 — Codex 红队审查 | Codex 审查 | codex exec → 对抗循环 |
-| Layer 6 — PR + PR-Agent | PR 守门 | gh pr create → PR-Agent 修复 |
+| Layer 6 — PR + Claude Review | PR 守门 | gh pr create → claude-pr-review workflow → 修复循环 |
 
 **手动验收（Manual Checklist）已移出 testing 流水线**，用户可在 finalize 前自行验证。
 

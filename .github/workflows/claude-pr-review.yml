@@ -1,0 +1,58 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          track_progress: true
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            You are performing an automated code review for BotoolAgent — an autonomous AI development agent system.
+            Project guidelines are in AGENTS.md and CLAUDE.md at the repo root — read them first.
+
+            Steps:
+            1. Read AGENTS.md to understand project conventions and security red lines
+            2. Run `gh pr diff ${{ github.event.pull_request.number }}` to get the changes
+            3. Review the changes focusing on (per AGENTS.md §5):
+               - HIGH: Security vulnerabilities (SQL/command injection, XSS, hardcoded keys, path traversal)
+               - HIGH: Data loss risks, crash bugs, logic errors
+               - MEDIUM: Missing error handling, performance issues, style violations
+               - LOW: Naming, comments, advisory improvements
+            4. Post a top-level review comment using `gh pr comment ${{ github.event.pull_request.number }} --body "..."`
+
+            Format your review comment exactly as:
+            ## Claude Code Review
+
+            **Summary:** <1-2 sentences>
+
+            ### HIGH severity
+            <bulleted list, or "_None_">
+
+            ### MEDIUM severity
+            <bulleted list, or "_None_">
+
+            ### LOW severity (advisory)
+            <bulleted list, or "_None_">
+
+            Only post GitHub comments — do not output review text as messages.
+          claude_args: |
+            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Glob"
