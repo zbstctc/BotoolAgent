@@ -129,16 +129,24 @@ export function Stage1Content({ reqId: reqIdProp }: Stage1ContentProps) {
   // Ref for selectedMode to avoid stale closure in handleToolUse callback
   const selectedModeRef = useRef(selectedMode);
   selectedModeRef.current = selectedMode;
+  // Track the last prdSessionId we synced to prevent infinite update loops
+  const syncedPrdSessionIdRef = useRef<string | undefined>(undefined);
 
-  // Sync cliSessionId back to requirement's prdSessionId so it persists across page reloads
+  // Sync cliSessionId back to requirement's prdSessionId so it persists across page reloads.
+  // Uses a ref instead of activeRequirement in deps to prevent infinite loop:
+  // updateRequirement → localRequirements changes → activeRequirement is new object → effect re-runs
   useEffect(() => {
-    if (reqId && cliSessionId && activeRequirement && activeRequirement.prdSessionId !== cliSessionId) {
-      updateRequirement(reqId, { prdSessionId: cliSessionId });
-    }
-  }, [reqId, cliSessionId, activeRequirement, updateRequirement]);
+    if (!reqId || !cliSessionId) return;
+    if (syncedPrdSessionIdRef.current === cliSessionId) return;
+    syncedPrdSessionIdRef.current = cliSessionId;
+    updateRequirement(reqId, { prdSessionId: cliSessionId });
+  }, [reqId, cliSessionId, updateRequirement]);
 
-  // Storage key: prefer sessionId (from requirement), fallback to cliSessionId
-  const storageKey = (sessionId || cliSessionId) ? `botool-pyramid-state-${sessionId || cliSessionId}` : null;
+  // Storage key: prefer reqId (stable, always in URL), then sessionId/cliSessionId as fallback
+  // Using reqId ensures state survives page reloads even if prdSessionId is lost from context
+  const storageKey = reqId
+    ? `botool-pyramid-state-req-${reqId}`
+    : (sessionId || cliSessionId) ? `botool-pyramid-state-${sessionId || cliSessionId}` : null;
 
   // Load saved state from localStorage on mount (only once)
   useEffect(() => {
