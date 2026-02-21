@@ -57,9 +57,19 @@ function layoutNodes(
   // Map dagre positions to React Flow nodes
   const flowNodes: FeatureNodeType[] = scanResult.nodes.map((node) => {
     const pos = g.node(node.id);
+    // segment-safe path matching: file === path || file.startsWith(path + '/')
+    // root nodes are never marked as changed
+    const changedInPR =
+      node.type !== 'root' &&
+      Array.isArray(scanResult.changedFiles) &&
+      scanResult.changedFiles.length > 0 &&
+      scanResult.changedFiles.some(
+        (file) => file === node.path || file.startsWith(node.path + '/')
+      );
+
     const data: FeatureNodeData = {
       ...node,
-      changedInPR: false,
+      changedInPR,
       changedFiles: scanResult.changedFiles,
     };
 
