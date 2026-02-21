@@ -110,9 +110,13 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
     // "not found" case: no setState needed — urlNotFound is derived below
   }, [urlReqId, isHydrated, isRequirementsLoading, requirements, tabs, activeTabId, openTab, switchTab]);
 
-  // Determine if the current route is managed by the panel system
+  // Determine if the current route is managed by the panel system.
+  // Dashboard is managed only on '/'; stage URLs without a tab context (no ?req=)
+  // fall through to Next.js children so direct navigation still works.
   const activeTab = tabs.find((t) => t.id === activeTabId);
-  const isManagedRoute = activeTabId === 'dashboard' || (activeTab != null && !activeTab.url);
+  const isManagedRoute =
+    (activeTabId === 'dashboard' && pathname === '/') ||
+    (activeTab != null && !activeTab.url && activeTabId !== 'dashboard');
 
   // Project tabs: exclude dashboard and utility tabs
   const projectTabs = tabs.filter((t) => t.id !== 'dashboard' && !t.url);
