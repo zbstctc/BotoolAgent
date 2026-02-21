@@ -26,6 +26,21 @@ CLI 端自动化测试验收：Layer 1 Regression → Layer 2 Unit → Layer 3 E
 
 ---
 
+## 运行模式检测
+
+在执行任何操作之前，检测运行环境：
+
+```bash
+NON_INTERACTIVE=${CLAUDE_CODE_NON_INTERACTIVE:-0}
+```
+
+**如果 `NON_INTERACTIVE=1`（Viewer 模式）：**
+- 所有 Circuit Breaker 触发时，**自动选择"跳过此层，继续下一层"**，不调用 AskUserQuestion
+- 将该层 status 记录为 `skipped`，reason 为 `circuit_breaker: 2 轮无进展，Viewer 自动跳过`
+- E2E / Unit / TypeCheck 等失败详情仍需完整记录到报告文件
+
+---
+
 ## Step 0: 项目选择 + 前置检查
 
 ### 项目选择（多 PRD 模式）
@@ -210,7 +225,11 @@ Ralph 修复循环（持续直到通过或断路器触发）：
    - 等待全部完成
 5. 重新运行 `cd "$PROJECT_DIR" && npx tsc --noEmit`
 6. 如果通过 → 继续 Layer 1b
-7. 如果错误没变化（连续 **2 次**无进展）→ Circuit Breaker → AskUserQuestion：
+7. 如果错误没变化（连续 **2 次**无进展）→ Circuit Breaker：
+
+   **如果 `NON_INTERACTIVE=1`（Viewer 模式）：** 自动跳过 TypeCheck，继续 Lint 检查，不调用 AskUserQuestion。将该层记录为 `skipped`，reason: `circuit_breaker`。
+
+   **否则** → AskUserQuestion：
    ```
    TypeCheck 自动修复无进展（2 轮无进展）。以下错误无法自动解决：
    <错误列表>
@@ -270,7 +289,11 @@ Ralph 修复循环（持续直到通过或断路器触发）：
      - prompt: "修复以下 ESLint 错误：\n{错误详情}\n文件路径：{path}\n根因分析：{分析结论}\n只修改这个文件。"
 4. 重新运行 `cd "$PROJECT_DIR" && npm run lint`
 5. 如果只剩 warnings → 通过（记录 warnings）
-6. 如果错误没变化（连续 **2 次**无进展）→ Circuit Breaker → AskUserQuestion：
+6. 如果错误没变化（连续 **2 次**无进展）→ Circuit Breaker：
+
+   **如果 `NON_INTERACTIVE=1`（Viewer 模式）：** 自动跳过 Lint，继续 Layer 2，不调用 AskUserQuestion。
+
+   **否则** → AskUserQuestion：
    ```
    Lint 自动修复无进展（2 轮无进展）。以下错误无法自动解决：
    <错误列表>
@@ -343,7 +366,11 @@ Ralph 修复循环（持续直到通过或断路器触发）：
    - 每个 agent（subagent_type: `general-purpose`）：
    - prompt: "修复以下单元测试失败：\n{测试名 + 错误信息}\n文件路径：{path}\n根因分析：{分析结论}\n分析根因并修复。"
 5. 重新运行 `cd "$PROJECT_DIR" && npm run <detected_script>`
-6. 如果错误没变化（连续 **2 次**无进展）→ Circuit Breaker → AskUserQuestion：
+6. 如果错误没变化（连续 **2 次**无进展）→ Circuit Breaker：
+
+   **如果 `NON_INTERACTIVE=1`（Viewer 模式）：** 自动跳过 Unit Tests，继续 Layer 3，不调用 AskUserQuestion。
+
+   **否则** → AskUserQuestion：
    ```
    单元测试自动修复无进展（2 轮无进展）。以下测试持续失败：
    <失败测试列表>
@@ -457,11 +484,49 @@ Ralph 修复循环（持续直到通过或断路器触发）：
    ```bash
    cd "$PROJECT_DIR" && npx playwright test --grep "<failed_test_name>"
    ```
-5. 如果错误没变化（连续 **2 次**无进展）→ Circuit Breaker → AskUserQuestion：
+5. 如果错误没变化（连续 **2 次**无进展）→ Circuit Breaker：
+
+   **无论何种模式，Circuit Breaker 触发后必须先生成 E2E 失败报告：**
+
+   将失败详情写入 `tasks/{projectId}/e2e-failures.md`：
+   ```markdown
+   # E2E 测试失败报告
+
+   生成时间：{ISO timestamp}
+   项目：{projectId}
+
+   ## 失败摘要
+
+   - 总失败：{n} 个测试
+   - 修复尝试：{rounds} 轮，无进展
+
+   ## 失败测试列表
+
+   {每条: - `{test file}` > `{test name}` — {error type}}
+
+   ## 根因分析
+
+   {分析结论（Phase 1-3 的结果）}
+
+   ## 错误详情
+
+   {Playwright 原始错误输出（最多 100 行）}
+
+   ## 修复历史
+
+   {每轮尝试：轮次、修改了哪些文件、重跑结果}
+   ```
+
+   **如果 `NON_INTERACTIVE=1`（Viewer 模式）：** 自动跳过 E2E Tests，继续 Layer 4，不调用 AskUserQuestion。
+   在 testing-report.json L3 中记录 `status: "skipped"`, `reason: "circuit_breaker"`, `reportFile: "tasks/{projectId}/e2e-failures.md"`。
+
+   **否则** → AskUserQuestion：
    ```
    E2E 测试自动修复无进展（2 轮无进展）。以下测试持续失败：
    <失败测试列表>
    根因分析结论：<分析结论>
+
+   已生成失败报告：tasks/{projectId}/e2e-failures.md
 
    选项：
    1. 我来手动修复，修好后继续
@@ -532,7 +597,11 @@ Ralph 修复循环（持续直到通过或断路器触发）：
    - 每个 agent（subagent_type: `general-purpose`）：
    - prompt: "修复以下 Code Review HIGH 问题：\n{问题描述}\n文件路径：{path}\n根因分析：{分析结论}\n只修改这个文件。"
 5. 修复后重新运行 Code Review（重新获取 diff 并审查）
-6. 如果错误没变化（连续 **2 次**无进展）→ Circuit Breaker → AskUserQuestion：
+6. 如果错误没变化（连续 **2 次**无进展）→ Circuit Breaker：
+
+   **如果 `NON_INTERACTIVE=1`（Viewer 模式）：** 自动跳过 Code Review，继续 Layer 5，不调用 AskUserQuestion。
+
+   **否则** → AskUserQuestion：
    ```
    Code Review HIGH 问题自动修复无进展（2 轮无进展）。以下问题无法自动解决：
    <HIGH 问题列表>
@@ -788,7 +857,8 @@ Claude 解析增量复审的自由文本输出（同 5c Step 2），提取新的
 
   仍有 HIGH/MEDIUM 且 round = 3 → Circuit Breaker
     → adversarial-state.status = "circuit_breaker"
-    → AskUserQuestion:
+    → **如果 `NON_INTERACTIVE=1`（Viewer 模式）：** 自动选择选项 2（记录为 advisory，继续 Layer 6），不调用 AskUserQuestion。
+    → **否则** → AskUserQuestion:
 ```
 
 **Circuit Breaker 触发：**
@@ -904,7 +974,8 @@ Layer 6: 推送失败。
 - 检查远程仓库连接：git remote -v
 - 如果有冲突，先 pull 再 push
 ```
-AskUserQuestion 让用户选择：手动修复后继续 / 跳过 Layer 6 / 终止测试。
+**如果 `NON_INTERACTIVE=1`（Viewer 模式）：** 自动跳过 Layer 6，继续生成报告，不调用 AskUserQuestion。
+**否则：** AskUserQuestion 让用户选择：手动修复后继续 / 跳过 Layer 6 / 终止测试。
 
 ### 6c. 检查是否已有 PR
 
@@ -964,7 +1035,8 @@ Layer 6: PR 创建失败。
 - 检查远程仓库是否有写入权限
 - 手动创建 PR：gh pr create
 ```
-AskUserQuestion 让用户选择：手动创建后继续 / 跳过 PR 创建 / 终止测试。
+**如果 `NON_INTERACTIVE=1`（Viewer 模式）：** 自动跳过 PR 创建，继续生成报告，不调用 AskUserQuestion。
+**否则：** AskUserQuestion 让用户选择：手动创建后继续 / 跳过 PR 创建 / 终止测试。
 
 **创建成功后：** 记录 PR 编号、标题和 URL。
 
@@ -1178,7 +1250,10 @@ REPORT_PATH="tasks/${PROJECT_ID}/testing-report.json"
       "name": "E2E Tests",
       "status": "pass|fail|skipped",
       "fixCount": 0,
-      "rounds": 0
+      "rounds": 0,
+      "failedTests": ["test file > test name（仅 fail/skipped 时填充）"],
+      "errorSummary": "根因分析结论（仅 fail/skipped 时填充）",
+      "reportFile": "tasks/{projectId}/e2e-failures.md（仅 Circuit Breaker 时填充）"
     },
     {
       "id": "L4",
@@ -1214,10 +1289,16 @@ REPORT_PATH="tasks/${PROJECT_ID}/testing-report.json"
 
 **生成逻辑：**
 1. 遍历 L1-L6 每层的执行记录，填充 status/fixCount/rounds
-2. L5 数据从 `adversarial-state.json` 读取（如果存在）
-3. L6 数据从当前步骤的 PR 信息 + PR-Agent 修复记录填充
-4. `verdict` 判断：全部 pass → `all_pass`；有 fail → `has_failures`；有 circuit_breaker → `circuit_breaker`
-5. `prReady` = verdict === "all_pass" && prUrl 存在
+2. L3 数据额外填充 failedTests（失败测试名列表）、errorSummary（根因分析结论）、reportFile（e2e-failures.md 路径，仅 Circuit Breaker 时）
+3. L5 数据从 `adversarial-state.json` 读取（如果存在）
+4. L6 数据从当前步骤的 PR 信息 + PR-Agent 修复记录填充
+5. `verdict` 判断：全部 pass → `all_pass`；有 fail/skipped(circuit_breaker) → `has_failures`；有 circuit_breaker → `circuit_breaker`
+6. `prReady` = verdict === "all_pass" && prUrl 存在
+
+**渐进式写入（Progressive Write）：**
+每当一层 Circuit Breaker 触发并跳过后，立即将已完成层的数据写入 `testing-report.json`（partial report），未完成的层填 `status: "pending"`。
+Layer 6 结束时用完整数据覆盖写入最终版本。
+这样即使流水线中途中断，用户也能看到已完成的层的结果。
 
 写入完成后，告知用户报告路径。
 
