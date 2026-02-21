@@ -460,7 +460,7 @@ export function Stage1Content({ reqId: reqIdProp }: Stage1ContentProps) {
     } else if (selectedMode === 'transform') {
       sendMessage(`/botoolagent-pyramidprd [模式:导入] [请勿覆盖源文件] ${initialDescription}`);
     } else {
-      sendMessage(`/botoolagent-pyramidprd ${initialDescription}`);
+      sendMessage(`/botoolagent-pyramidprd [模式:完整规划] ${initialDescription}`);
     }
   }, [initialDescription, isStarted, selectedMode, sendMessage]);
 
