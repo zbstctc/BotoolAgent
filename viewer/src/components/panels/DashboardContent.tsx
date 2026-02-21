@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Settings, Plus, Search, RefreshCw } from 'lucide-react';
+import { Settings, Plus, Search, RefreshCw, Scan } from 'lucide-react';
 import { RequirementCard } from '@/components/RequirementCard';
 import { RequirementDrawer } from '@/components/RequirementDrawer';
 import { CreateRequirementDialog } from '@/components/CreateRequirementDialog';
@@ -248,6 +248,15 @@ export function DashboardContent() {
         >
           <Settings className="h-3.5 w-3.5" />
           规范
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => openTab({ id: 'scanner', name: 'Scanner', stage: 0, url: '/scanner', isUtility: true } as TabItem, '/scanner')}
+        >
+          <Scan className="h-3.5 w-3.5" />
+          Scanner
         </Button>
         <Button
           size="sm"
