@@ -18,16 +18,36 @@
 3. 读取 `$BOTOOL_PRD_FILE`（如不存在则回退到 `$BOTOOL_PROJECT_DIR/prd.json`）— 了解所有开发任务
 4. 读取 `$BOTOOL_PROGRESS_FILE`（如不存在则回退到 `$BOTOOL_PROJECT_DIR/progress.txt`）中的 Codebase Patterns（如果存在）
 5. 确认 git 分支 = `prd.json.branchName`（不是则切换/创建）
-5.5 检查 prd.json 是否有 `prerequisites` 字段：
-   - 无此字段 或 全部 `resolved: true` → 继续
-   - 有 `resolved: false` 的项 → 在 progress.txt 开头写入前置依赖警告，格式：
+5.5 自动验证 prerequisites（如果 prd.json 有此字段）：
+   - 无 prerequisites 字段 → 跳过
+   - 有 prerequisites → 对每项执行实际检测（不依赖 PRD 里的 resolved 标注）：
+
+   **检测方法（按 type）：**
+   ```bash
+   # env_var 类型：直接检查环境变量
+   printenv VAR_NAME 2>/dev/null && echo "OK" || echo "MISSING"
+
+   # api_key / service / credentials / oauth 类型：
+   # 1. 先读 .env 文件（如存在）grep 关键词
+   # 2. 再 printenv 检查是否已导出
+   # 关键词由 prerequisite name 推断（如 "Stripe" → grep -i "stripe"）
+   ```
+
+   **根据实际检测结果自动更新 prd.json 中的 resolved 字段**（不需要人工介入）：
+   - 检测到存在 → `resolved: true`
+   - 检测不到 → `resolved: false`
+
+   **检测完成后：**
+   - 全部 resolved: true → 静默继续，不写任何日志
+   - 有 resolved: false → 在 progress.txt 追加一条环境检测报告，然后**继续执行**：
      ```
-     ⚠ 前置依赖未就绪（来自 prd.json prerequisites）：
-     - [prereq-001] api_key: Stripe API Key — 如未配置，相关 DT 将在运行时失败
-     - [prereq-002] service: 邮件服务账号 — 建议先配置再运行
-     如已在 .env 中配置，请忽略此提示。
+     ## [日期] 环境检测报告
+     ✅ 已就绪: [prereq-001] Stripe API Key
+     ❌ 未检测到: [prereq-002] 邮件服务账号 (SENDGRID_API_KEY)
+        → 相关 DT 运行时若失败，根因类型为「环境类」
+     ---
      ```
-   - 继续执行（prerequisites 是提醒，不是硬门控）
+   - 无论结果如何，**始终继续执行**（全自动流程不等待人工）
 6. 通过 Bash 工具更新 agent-status → `"status": "running"`（路径: `$BOTOOL_STATUS_FILE` > `$BOTOOL_SCRIPT_DIR/.state/agent-status`）
 
 ## 第二步: 构建执行计划
