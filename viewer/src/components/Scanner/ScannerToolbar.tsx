@@ -20,6 +20,7 @@ interface ScannerToolbarProps {
 
 function formatTimeAgo(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime();
+  if (isNaN(diff)) return '未知';
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return '刚刚';
   if (minutes < 60) return `${minutes} 分钟前`;

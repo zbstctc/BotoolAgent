@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import * as fs from 'fs';
 import { execFile } from 'child_process';
 import { getProjectRoot, ensureContainedPath } from '@/lib/project-root';
+import { ScanResultSchema } from '@/types/scanner';
 import type { ScanResult } from '@/types/scanner';
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -22,7 +23,9 @@ function readCachedScanResult(projectRoot: string): ScanResult | null {
     const filePath = ensureContainedPath(projectRoot, CACHE_FILENAME);
     if (!fs.existsSync(filePath)) return null;
     const content = fs.readFileSync(filePath, 'utf-8');
-    return JSON.parse(content) as ScanResult;
+    const parsed = JSON.parse(content);
+    const result = ScanResultSchema.safeParse(parsed);
+    return result.success ? result.data : null;
   } catch {
     return null;
   }
@@ -83,7 +86,7 @@ export async function GET() {
   } catch (error) {
     console.error('Failed to get scanner status:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to get scanner status' },
+      { error: 'Failed to get scanner status' },
       { status: 500 },
     );
   }
