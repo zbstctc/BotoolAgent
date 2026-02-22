@@ -2,6 +2,20 @@
   "version": 1,
   "entries": [
     {
+      "id": "botool/scanner-feature",
+      "name": "BotoolAgent Scanner — 项目结构智能可视化",
+      "description": "BotoolAgent 第二大功能模块：通过 Codex CLI 语义分析项目结构，以 React Flow 交互式图谱展示模块功能，与最新 PR 联动标记新增功能。",
+      "branchName": "botool/scanner-feature",
+      "status": "running",
+      "stage": 5,
+      "tasksCompleted": 11,
+      "tasksTotal": 11,
+      "startTime": "2026-02-21T11:00:13.514Z",
+      "endTime": "2026-02-21T11:32:34.441Z",
+      "isMerged": false,
+      "lastUpdated": "2026-02-21T12:47:33.418Z"
+    },
+    {
       "id": "botool/dashboard-clock-widget",
       "name": "Unknown Task",
       "branchName": "botool/dashboard-clock-widget",

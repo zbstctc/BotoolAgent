@@ -1,0 +1,57 @@
+{
+  "findings": [
+    {
+      "severity": "HIGH",
+      "category": "logic",
+      "rule": "url-deep-link-reforcing",
+      "file": "viewer/src/components/TabPanelManager.tsx",
+      "line": 88,
+      "message": "URL deep-link effect continuously forces activeTabId back to urlReqId, preventing tab switching after page load",
+      "suggestion": "Clear urlReqId after activation to make the effect one-time only",
+      "resolution": "fixed",
+      "fixCommit": "00903e8"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "logic",
+      "rule": "projectid-fallback-missing",
+      "file": "viewer/src/components/panels/Stage3Content.tsx",
+      "line": 99,
+      "message": "Stage3Content lost projectId query param fallback for direct navigation without ?req=",
+      "suggestion": "Restore useSearchParams() fallback for projectId",
+      "resolution": "rejected",
+      "rejectionReason": "In the tab-cached architecture, Stage3Content is exclusively rendered by TabPanelManager with a valid reqId prop from StageRouter. Direct navigation to /stage3?projectId=xxx falls through to Next.js page children, not Stage3Content. The searchParams fallback is unnecessary dead code.",
+      "codexAccepted": true
+    }
+  ],
+  "adversarialState": {
+    "round": 2,
+    "maxRounds": 3,
+    "status": "converged",
+    "rounds": [
+      {
+        "round": 1,
+        "codexFindings": 2,
+        "fixed": 1,
+        "rejected": 1,
+        "rejectionReasons": [
+          {
+            "finding": "Stage3Content lost projectId query param fallback",
+            "reason": "In the tab-cached architecture, Stage3Content is exclusively rendered by TabPanelManager with a valid reqId prop. Direct navigation falls through to Next.js page children.",
+            "codexAccepted": true
+          }
+        ],
+        "remaining": 0
+      },
+      {
+        "round": 2,
+        "codexFindings": 1,
+        "fixed": 1,
+        "rejected": 0,
+        "rejectionReasons": [],
+        "remaining": 0
+      }
+    ]
+  },
+  "timestamp": "2026-02-21T10:30:00Z"
+}

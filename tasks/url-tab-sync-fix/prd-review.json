@@ -1,0 +1,143 @@
+{
+  "reviewTarget": "prd",
+  "file": "tasks/url-tab-sync-fix/prd.md",
+  "fixedFile": "tasks/url-tab-sync-fix/prd-review-fixed.md",
+  "timestamp": "2026-02-22T00:00:00.000Z",
+  "rounds": 3,
+  "maxRounds": 3,
+  "status": "converged",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "HIGH",
+      "category": "ux",
+      "section": "6.BR3, 6.1 决策树, 5.UI 设计",
+      "message": "非 UUID + 不在 tabs 路径直接 setUrlReqId(null) 退出，用户没有任何反馈，仍看到旧 Tab 内容",
+      "suggestion": "保留 urlReqId（不清空），让 urlNotFound 派生状态显示项目未找到错误 UI",
+      "resolution": "fixed",
+      "fixNote": "DT-002 改为 return 而不是 setUrlReqId(null)，复用现有 urlNotFound 机制"
+    },
+    {
+      "id": "F2",
+      "severity": "MEDIUM",
+      "category": "consistency",
+      "section": "6.业务规则 BR3/6.1 决策树 vs 7.2 验证场景",
+      "message": "BR3 说放弃，7.2 同场景说显示项目内容或未找到 — 矛盾",
+      "suggestion": "统一 BR3 和 7.2 场景描述",
+      "resolution": "fixed",
+      "fixNote": "BR3 更新为显示项目未找到错误状态，7.2 验证场景明确预期结果"
+    },
+    {
+      "id": "F3",
+      "severity": "MEDIUM",
+      "category": "implementability",
+      "section": "7.2 验证场景（非 UUID reqId，Tab 不存在）",
+      "message": "预期结果写成 or 形式，不可测试",
+      "suggestion": "拆分为两条可判定用例",
+      "resolution": "fixed",
+      "fixNote": "7.2 场景拆成两条：Tab 存在 和 Tab 不存在，各有明确预期"
+    },
+    {
+      "id": "F4",
+      "severity": "MEDIUM",
+      "category": "security",
+      "section": "3.2 DT-002 代码片段, 6.BR1",
+      "message": "URL 拼接未做 encodeURIComponent",
+      "suggestion": "在所有 URL bootstrap 拼接点使用 encodeURIComponent",
+      "resolution": "fixed",
+      "fixNote": "DT-002 要求 encodeURIComponent；BR6 缩窄为本次 bootstrap 范围"
+    },
+    {
+      "id": "F5",
+      "severity": "MEDIUM",
+      "category": "completeness",
+      "section": "7.2 验证场景，3.2 DT-002",
+      "message": "缺少 URL stage 与已有 Tab stage 不一致场景",
+      "suggestion": "增加处理规则和验证用例",
+      "resolution": "rejected",
+      "rejectionReason": "tab.stage 权威性是既有架构设计，与本次修复范围无关；Codex ACCEPT",
+      "codexAccepted": true
+    },
+    {
+      "id": "F6",
+      "severity": "LOW",
+      "category": "consistency",
+      "section": "6.业务规则 BR5",
+      "message": "BR5 只运行一次语义不精确",
+      "suggestion": "明确清空和保留条件",
+      "resolution": "fixed",
+      "fixNote": "BR5 重写为：成功激活或确认放弃时清空；urlNotFound 态由用户操作触发清空"
+    },
+    {
+      "id": "R1",
+      "severity": "MEDIUM",
+      "category": "completeness",
+      "section": "3.2 DT-002, 6.1 决策树",
+      "message": "utility tab ID（scanner）可能被错误路由到 stage URL",
+      "resolution": "rejected",
+      "rejectionReason": "req=scanner 路径从未被系统生成；scanner 有独立 urlUtility 引导；Codex ACCEPT",
+      "codexAccepted": true
+    },
+    {
+      "id": "R2",
+      "severity": "MEDIUM",
+      "category": "consistency",
+      "section": "3.1 修改范围, 6.BR6, 8.C",
+      "message": "所有 URL 拼接点声明 vs 两处修改不一致",
+      "resolution": "fixed",
+      "fixNote": "BR6 缩窄为本次 bootstrap 拼接点；全仓编码记为后续任务"
+    },
+    {
+      "id": "R3",
+      "severity": "MEDIUM",
+      "category": "implementability",
+      "section": "7.1 DT-002, 7.2 验证场景",
+      "message": "缺少自动化回归测试要求",
+      "resolution": "fixed",
+      "fixNote": "新增 DT-003：Playwright 测试文件，覆盖核心回归场景（非 UUID 命中/未命中、特殊字符、返回按钮）"
+    },
+    {
+      "id": "R4",
+      "severity": "MEDIUM",
+      "category": "security",
+      "section": "6.BR1, BR6, 7.1 DT-002",
+      "message": "encodeURIComponent 未形成全链路覆盖闭环",
+      "resolution": "fixed",
+      "fixNote": "8.C 添加具体后续任务引用 req-url-encoding-audit"
+    },
+    {
+      "id": "R5",
+      "severity": "MEDIUM",
+      "category": "ux",
+      "section": "6.1 决策树, 5.UI 设计, 7.2 验证场景",
+      "message": "requirements 拉取失败未定义用户流",
+      "resolution": "rejected",
+      "rejectionReason": "需改 RequirementContext + TabPanelManager + UI，大幅超出 2-行 bug fix 范围；记录为 Known Limitations；Codex ACCEPT",
+      "codexAccepted": true
+    },
+    {
+      "id": "R6",
+      "severity": "LOW",
+      "category": "ux",
+      "section": "2.2 目标流程场景 B, 5.UI 设计",
+      "message": "urlNotFound/loading 阶段 TabBar 高亮旧 activeTabId",
+      "resolution": "rejected",
+      "rejectionReason": "既有行为，超出 bug fix 范围；记录为 Known Limitations；Codex ACCEPT（via batch)",
+      "codexAccepted": true
+    }
+  ],
+  "summary": {
+    "total": 12,
+    "high": 1,
+    "medium": 9,
+    "low": 2,
+    "fixed": 8,
+    "rejected": 4,
+    "unresolved": 0
+  },
+  "roundHistory": [
+    { "round": 1, "found": 6, "fixed": 4, "rejected": 1, "highRemaining": 0 },
+    { "round": 2, "found": 8, "fixed": 2, "rejected": 3, "highRemaining": 0 },
+    { "round": 3, "found": 1, "fixed": 1, "rejected": 0, "highRemaining": 0 }
+  ]
+}

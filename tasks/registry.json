@@ -128,6 +128,14 @@
       "status": "complete",
       "createdAt": "2026-02-21T14:00:00.000Z",
       "updatedAt": "2026-02-21T12:49:33.000Z"
+    },
+    "url-tab-sync-fix": {
+      "name": "URL → Tab 同步修复",
+      "prdMd": "url-tab-sync-fix/prd.md",
+      "branch": "botool/url-tab-sync-fix",
+      "status": "prd",
+      "createdAt": "2026-02-22T00:00:00.000Z",
+      "updatedAt": "2026-02-22T00:00:00.000Z"
     }
   },
   "activeProject": null

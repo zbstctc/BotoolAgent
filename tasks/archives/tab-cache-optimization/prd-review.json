@@ -1,0 +1,175 @@
+{
+  "reviewTarget": "prd",
+  "timestamp": "2026-02-21T13:45:00.000Z",
+  "rounds": 2,
+  "maxRounds": 3,
+  "status": "converged",
+  "findings": [
+    {
+      "severity": "HIGH",
+      "category": "completeness",
+      "section": "1. 项目概述（目标 3） + 7.3 DT-012",
+      "message": "目标要求"F5 刷新后恢复各页面滚动位置和表单状态"过于宽泛，验收仅覆盖 Stage 1 模式选择状态",
+      "suggestion": "明确状态恢复范围，区分可恢复（RequirementContext 持久化数据）和不可恢复（滚动位置、临时 useState）",
+      "resolution": "fixed",
+      "round": 1
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "consistency",
+      "section": "5. UI 设计（TabPanelManager Props） vs 7.2 DT-007",
+      "message": "TabPanelManager 接口定义冲突：UI 设计声明 props 传入，DT-007 要求从 context 读取",
+      "suggestion": "统一单一数据来源",
+      "resolution": "fixed",
+      "round": 1
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "consistency",
+      "section": "8.D 非目标 vs 7.1 DT-002~DT-005",
+      "message": "非目标写 Stage 页面内部逻辑修改不在范围内，但 DT 需要修改参数传递方式",
+      "suggestion": "调整非目标描述为仅允许最小必要重构",
+      "resolution": "fixed",
+      "round": 1
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "implementability",
+      "section": "7.2 DT-009",
+      "message": "history.replaceState 不生成历史记录，但验收要求浏览器前进/后退行为合理",
+      "suggestion": "明确历史策略和测试用例",
+      "resolution": "fixed",
+      "round": 1
+    },
+    {
+      "severity": "HIGH",
+      "category": "security",
+      "section": "7.3 DT-013 + 7.2 DT-009",
+      "message": "URL req 参数缺乏格式校验",
+      "suggestion": "实施 UUID 格式白名单校验",
+      "resolution": "fixed",
+      "round": 1
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "security",
+      "section": "1. 项目概述（目标 2） + 8.B 风险",
+      "message": "后台轮询无防护措施",
+      "suggestion": "纳入本期必选验收项",
+      "resolution": "fixed",
+      "round": 1,
+      "note": "Round 2 identified consistency conflict with Goal #2; resolved by simplifying to advisory-only mitigation"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "ux",
+      "section": "7.3 DT-013",
+      "message": "直接 URL 异常处理缺失（无效 req、项目不存在）",
+      "suggestion": "补充 loading/error/empty 状态",
+      "resolution": "fixed",
+      "round": 1
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "ux",
+      "section": "7.2 DT-008 + 7.3 DT-012",
+      "message": "首屏 hydration 闪烁：localStorage 恢复期间可能先渲染 Dashboard 再切到活跃 Tab",
+      "suggestion": "增加 hydration 占位/骨架屏",
+      "resolution": "fixed",
+      "round": 1
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "consistency",
+      "section": "7.1 DT-006 + 7.3 DT-014",
+      "message": "Stage 2 覆盖口径不一致：映射跳过 Stage 2，但声称验证所有 5 个 Stage",
+      "suggestion": "明确 Stage 2 处理策略",
+      "resolution": "fixed",
+      "round": 1,
+      "note": "Round 2 confirmed Stage 2 has real page; added Stage2Content extraction (DT-005a)"
+    },
+    {
+      "severity": "LOW",
+      "category": "completeness",
+      "section": "文档结构（章节编号）",
+      "message": "主章节编号从 1 跳到 3、再到 7",
+      "suggestion": "补齐或标注预留编号",
+      "resolution": "fixed",
+      "round": 1
+    },
+    {
+      "severity": "LOW",
+      "category": "implementability",
+      "section": "1. 项目概述（目标 1） + 7.3 DT-014",
+      "message": "性能目标 <200ms 缺少测量方法",
+      "suggestion": "增加性能验收协议",
+      "resolution": "advisory"
+    },
+    {
+      "severity": "HIGH",
+      "category": "implementability",
+      "section": "7.2 DT-007 / DT-008",
+      "message": "children fallback 路径不可达：activeTabId 始终匹配面板，非托管路由无法显示",
+      "suggestion": "定义显式路由判断逻辑区分托管/非托管路由",
+      "resolution": "fixed",
+      "round": 2
+    },
+    {
+      "severity": "HIGH",
+      "category": "completeness",
+      "section": "5 UI 设计 / 7.1 DT-006",
+      "message": "Stage 2 被排除但实际存在独立页面，无迁移/兼容策略",
+      "suggestion": "添加 Stage2Content 提取或定义重定向",
+      "resolution": "fixed",
+      "round": 2
+    },
+    {
+      "severity": "HIGH",
+      "category": "security",
+      "section": "7.2 DT-009 / 7.3 DT-013",
+      "message": "安全控制仅在客户端，未要求服务端验证",
+      "suggestion": "添加后端 reqId 校验",
+      "resolution": "rejected",
+      "rejectionReason": "本 PRD 专注于客户端 Tab 缓存优化，后端 API 变更明确列为非目标。代码分析确认所有 API 端点已使用 normalizeProjectId() 进行服务端校验，state-changing 端点已有 CSRF 保护。此发现为误报。",
+      "codexAccepted": true,
+      "round": 2
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "consistency",
+      "section": "1 项目概述（目标 2） / 8.B 风险",
+      "message": "目标要求完全活跃但风险要求节流，行为矛盾",
+      "suggestion": "选择单一策略并对齐所有描述",
+      "resolution": "fixed",
+      "round": 2
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "completeness",
+      "section": "8.B 风险 / 7 开发计划",
+      "message": "节流标记为本期必做但无对应 DT",
+      "suggestion": "添加专门 DT 或降级为 advisory",
+      "resolution": "fixed",
+      "round": 2,
+      "note": "Simplified: removed 本期必做, kept as advisory-only mitigation to resolve consistency conflict"
+    },
+    {
+      "severity": "LOW",
+      "category": "ux",
+      "section": "7.3 DT-013",
+      "message": "无效 reqId 静默忽略，用户无反馈",
+      "suggestion": "添加轻量通知/toast",
+      "resolution": "advisory"
+    }
+  ],
+  "summary": {
+    "total": 17,
+    "high": 5,
+    "medium": 9,
+    "low": 3,
+    "fixed": 13,
+    "rejected": 1,
+    "unresolved": 0,
+    "advisory": 3
+  }
+}
