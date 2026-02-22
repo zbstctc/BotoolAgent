@@ -71,14 +71,13 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
   const closeTab = useCallback((id: string) => {
     if (id === 'dashboard') return; // Dashboard cannot be closed
     setTabs((prev) => prev.filter((t) => t.id !== id));
-    setActiveTabId((current) => {
-      if (current === id) {
-        history.replaceState(null, '', '/');
-        return 'dashboard';
-      }
-      return current;
-    });
-  }, []);
+    // Read activeTabId directly (not via updater) so history.replaceState
+    // runs outside the React render cycle, avoiding "update Router while rendering" error
+    if (activeTabId === id) {
+      history.replaceState(null, '', '/');
+      setActiveTabId('dashboard');
+    }
+  }, [activeTabId]);
 
   const switchTab = useCallback((id: string, url: string) => {
     setActiveTabId(id);

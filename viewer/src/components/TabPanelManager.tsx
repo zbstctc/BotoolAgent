@@ -236,7 +236,7 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
         {/* Project tab panels: each rendered with CSS display switching */}
         {projectTabs.map((tab) => (
           <div
-            key={tab.id + '-' + tab.stage}
+            key={tab.id}
             className={tab.id === activeTabId ? 'block h-full' : 'hidden'}
           >
             <StageRouter reqId={tab.id} stage={tab.stage} />

@@ -100,6 +100,10 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
     lastUpdated: null,
     error: null,
   });
+  // Incrementing this counter triggers the streaming effect to re-run and reconnect.
+  // Using a dedicated counter avoids putting state.error in the effect's dep array,
+  // which caused an extra connect/disconnect cycle every time error cleared to null.
+  const [reconnectCount, setReconnectCount] = useState(0);
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -147,6 +151,7 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
     }
     reconnectTimeoutRef.current = setTimeout(() => {
       setState(prev => ({ ...prev, error: 'reconnecting' }));
+      setReconnectCount(c => c + 1);
     }, 5000);
   }, []);
 
@@ -221,7 +226,7 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [enabled, stream, projectId, scheduleReconnect, state.error]);
+  }, [enabled, stream, projectId, scheduleReconnect, reconnectCount]);
 
   // Polling mode effect
   useEffect(() => {
@@ -249,6 +254,7 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
   const reconnect = useCallback(() => {
     shouldReconnectRef.current = true;
     setState(prev => ({ ...prev, error: 'manual-reconnect' }));
+    setReconnectCount(c => c + 1);
   }, []);
 
   // Start agent
@@ -305,12 +311,13 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}) {
     }
   }, [fetchStatus, projectId]);
 
-  // Helper to check if agent is actively running
+  // Helper to check if agent is actively running.
+  // Note: session_done / iteration_complete are transient terminal states —
+  // they are treated as "complete" by useTabNotification, so we do NOT include
+  // them here to keep the two files consistent.
   const isRunning = state.status?.status === 'running' ||
     state.status?.status === 'starting' ||
-    state.status?.status === 'waiting_network' ||
-    state.status?.status === 'iteration_complete' ||
-    state.status?.status === 'session_done';
+    state.status?.status === 'waiting_network';
 
   // Helper to check if agent completed
   const isComplete = state.status?.status === 'complete';

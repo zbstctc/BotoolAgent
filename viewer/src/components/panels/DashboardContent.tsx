@@ -244,7 +244,7 @@ export function DashboardContent() {
           variant="outline"
           size="sm"
           className="gap-1.5"
-          onClick={() => openTab({ id: 'rules', name: '规范管理', stage: 0, url: '/rules' }, '/rules')}
+          onClick={() => openTab({ id: 'rules', name: 'Rules', stage: 0, url: '/rules' }, '/rules')}
         >
           <Settings className="h-3.5 w-3.5" />
           规范

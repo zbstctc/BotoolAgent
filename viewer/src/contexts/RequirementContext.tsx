@@ -26,9 +26,9 @@ interface RequirementContextValue {
   /** Update an existing requirement */
   updateRequirement: (id: string, data: Partial<Requirement>) => void;
   /** Delete a requirement */
-  deleteRequirement: (id: string) => void;
+  deleteRequirement: (id: string) => Promise<void>;
   /** Archive a requirement (moves folder to /tasks/archives/) */
-  archiveRequirement: (id: string) => void;
+  archiveRequirement: (id: string) => Promise<void>;
   /** Re-fetch requirements from the API and merge with local */
   refreshRequirements: () => Promise<void>;
   /** Loading state */
