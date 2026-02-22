@@ -8,6 +8,7 @@ import {
   PanOnScrollMode,
   useNodesState,
   useEdgesState,
+  MarkerType,
   type Edge,
   type NodeTypes,
   type Node,
@@ -216,8 +217,12 @@ function layoutNodes(scanResult: ScanResult): { nodes: FlowNode[]; edges: Edge[]
     id: `e-${edge.source}-${edge.target}-${idx}`,
     source: edge.source,
     target: edge.target,
-    label: edge.label,
-    style: { stroke: '#a3a3a3', strokeWidth: 1.5 },
+    type: 'smoothstep',
+    // Labels removed — they clutter the swim-lane view; the diagram structure
+    // conveys the relationships. Store label in data for future tooltip support.
+    data: { label: edge.label },
+    style: { stroke: '#d4d4d4', strokeWidth: 1.5 },
+    markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: '#d4d4d4' },
     animated: false,
   }));
 

@@ -79,7 +79,7 @@ function FeatureNodeInner({ data }: NodeProps<FeatureNodeType>) {
       )}
       style={groupColor ? { borderLeftColor: groupColor, borderLeftWidth: 3 } : undefined}
     >
-      <Handle type="target" position={Position.Top} className="!bg-neutral-400" />
+      <Handle type="target" position={Position.Top} className="!opacity-0 !pointer-events-none" />
 
       {/* Header: label + description */}
       <div className="mb-2">
@@ -147,7 +147,7 @@ function FeatureNodeInner({ data }: NodeProps<FeatureNodeType>) {
         <span className="truncate">{data.path}</span>
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="!bg-neutral-400" />
+      <Handle type="source" position={Position.Bottom} className="!opacity-0 !pointer-events-none" />
     </div>
   );
 }
