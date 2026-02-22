@@ -81,17 +81,23 @@ async function fetchApiRequirements(): Promise<Requirement[]> {
 
 /**
  * Merge local and API requirements.
- * API data takes priority: if a requirement exists in both, the API version wins.
+ * API data takes priority for server-owned fields.
+ * Local-only fields (like prdSessionId) are preserved from the local entry.
  * Local-only requirements (Stage 0 drafts) are included as-is.
  */
 function mergeRequirements(
   local: Record<string, Requirement>,
   apiData: Requirement[]
 ): Requirement[] {
-  // Build merged map: start with local, then overwrite with API
+  // Build merged map: start with local, then overwrite with API (preserving local-only fields)
   const merged: Record<string, Requirement> = { ...local };
   for (const req of apiData) {
-    merged[req.id] = req;
+    const existing = merged[req.id];
+    merged[req.id] = {
+      ...req,
+      // Preserve local-only fields that the server doesn't store
+      ...(existing?.prdSessionId && { prdSessionId: existing.prdSessionId }),
+    };
   }
   return Object.values(merged).sort((a, b) => b.updatedAt - a.updatedAt);
 }
