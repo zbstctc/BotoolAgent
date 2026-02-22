@@ -28,8 +28,7 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
   const [urlReqId, setUrlReqId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
-    const reqId = params.get('req');
-    return reqId && isValidReqId(reqId) ? reqId : null;
+    return params.get('req') || null;
   });
 
   // Detect direct URL navigation to utility pages (e.g. bookmark to /scanner).
@@ -98,10 +97,11 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
     if (!urlReqId || !isHydrated) return;
 
     // Already in tabs → ensure it's active, then clear URL bootstrap state
+    // Applies to all reqId formats (UUID and non-UUID alike)
     if (tabs.some((t) => t.id === urlReqId)) {
       if (activeTabId !== urlReqId) {
         const stageNum = STAGE_TO_PAGE[tabs.find((t) => t.id === urlReqId)!.stage] ?? 1;
-        switchTab(urlReqId, `/stage${stageNum}?req=${urlReqId}`);
+        switchTab(urlReqId, `/stage${stageNum}?req=${encodeURIComponent(urlReqId)}`);
       }
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setUrlReqId(null);
@@ -111,7 +111,11 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
     // Wait for requirements to finish loading before looking up
     if (isRequirementsLoading) return;
 
-    // Look up requirement and open tab (if found, tab appears in `tabs` on next render)
+    // Non-UUID reqId not in tabs → keep urlReqId set so urlNotFound shows "项目未找到"
+    // Note: do NOT call setUrlReqId(null) here — clearing it would suppress the error UI
+    if (!isValidReqId(urlReqId)) return;
+
+    // UUID reqId → look up requirement and open tab (if found, tab appears in `tabs` on next render)
     const requirement = requirements.find((r) => r.id === urlReqId);
     if (requirement) {
       const newTab: TabItem = {
@@ -120,7 +124,7 @@ export function TabPanelManager({ children }: TabPanelManagerProps) {
         stage: requirement.stage,
       };
       const stageNum = STAGE_TO_PAGE[requirement.stage] ?? 1;
-      openTab(newTab, `/stage${stageNum}?req=${requirement.id}`);
+      openTab(newTab, `/stage${stageNum}?req=${encodeURIComponent(requirement.id)}`);
       setUrlReqId(null);
     }
     // "not found" case: urlReqId stays set so urlNotFound is derived below
