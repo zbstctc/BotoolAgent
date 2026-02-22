@@ -190,6 +190,14 @@ STATUS_PATH="${BOTOOL_STATUS_FILE:-$BOTOOL_SCRIPT_DIR/.state/agent-status}"
 2. **跳读流程**（slim prd.json）：
    a. 读取 prd.json 中任务的 `prdFile` 和 `prdSection`
    b. 使用 Read 工具的 offset/limit 跳读 PRD.md 对应 Phase 章节
+      **← 跳读失败处理 →**
+      若 Read 返回内容不含该 Phase 的关键词（DT 标题、"Phase X"、"7.X"）：
+      → 停止执行，报告：
+        "⚠️ prdSection 行号无效：{prdSection} 位置的内容与 DT-{id} 不匹配
+         acceptanceCriteria 无法从 PRD 提取，禁止标记 passes: true
+         请重新运行 /botoolagent-prd2json 更新 prdSection 行号后再继续"
+      → 将该 DT 标记为 blocked（不是 passes: true，也不是 passes: false）
+      → 等待 Lead Agent 处理
    c. 从 Phase 章节提取：前置条件、产出描述、对应设计引用、任务清单
    d. 根据"对应设计"引用，跳读 PRD 相关设计章节（如 Section 3-6）获取 SQL/UI/规则等上下文
 

@@ -126,6 +126,28 @@ Found the following coding standards in rules/:
 All rules are selected by default.
 ```
 
+**若 rules/ 目录为空或不存在：**
+> ⚠️ WARNING: 未发现任何规范文件（rules/ 目录为空）
+>
+> 以下规范检查将被完全跳过：
+>   - API 设计规范合规检查
+>   - 数据库操作规范合规检查
+>   - 前端代码规范检查
+>   - Lead Agent 的 Stage A Constitution Review（将形同虚设）
+>
+> 建议：在 rules/ 目录中添加规范文件后重新运行 /botoolagent-prd2json
+> （你也可以继续，但 Lead Agent 将没有规范依据）
+
+在 prd.json 中记录：
+```json
+"constitution": {
+  "rules": [],
+  "hasConstitution": false,
+  "warningIssued": true,
+  "ruleAuditSummary": "⚠️ rules/ 目录为空，规范检查全部跳过"
+}
+```
+
 ### Step 2: Confirm Rule Selection (AskUserQuestion)
 
 Use `AskUserQuestion` to confirm with the user:
@@ -174,6 +196,16 @@ After confirmation, **read the content of each selected rule file** to embed as 
 - 每条 rule 生成 3-8 条 checklist（少于 3 条说明规范太简单可合并，多于 8 条说明需拆分）
 - checklist 用于 Lead Agent 快速校验，不替代完整规范文件
 - 格式：简短动宾结构（如 "请求带 apikey header"、"查询附带 is_deleted 过滤"）
+
+**融合完成后必须重新扫描行号：**
+规范融合向 PRD.md § 7 注入内容导致行数增加，原有 prdSection 行号失效。
+融合完成后，在生成 prd.json 之前，重新执行 prdSection Mapping Rules 中的行号生成流程，
+用最新行号更新所有 DT 的 prdSection。
+
+在 prd.json 中记录融合时间戳：
+```json
+"constitutionFusedAt": "ISO timestamp"
+```
 
 ### Step 4: Slim Conversion
 
@@ -375,6 +407,11 @@ PRD § 7.3 Phase 3 (lines 549-559) 下的 DT-006 ~ DT-008  → prdSection: "7.3 
 1. **读取 PRD.md 全文**，使用 Grep 或 Read 获取 `### 7.X` 标题的行号（三级标题）
 2. **计算每个 Phase 的行号范围**：从当前 `## 7.X` 标题到下一个 `## 7.Y` 标题（或文件末尾）
 3. **写入 prdSection 格式**：`"7.X (LSTART-LEND)"`
+4. **prdSection 验证（必须执行，禁止跳过）：**
+   对每个生成的 prdSection，用 `Read(prdFile, offset: LSTART-1, limit: 3)` 验证：
+   - 返回内容包含 "7.X" 或 "Phase X" 或该 Phase 的标题关键词 → 验证通过
+   - 不包含 → 重新 Grep 该 Phase 的正确行号，更新 prdSection
+   - 禁止保存未验证或验证失败的行号（宁可保留 "7.X" 无行号也不保存错误行号）
 
 ### Coding Agent 如何使用 prdSection
 
@@ -428,6 +465,11 @@ Additional evals based on task content:
 - `desc` 必须具体描述该 DT 的行为，不得写"测试功能正常"、"页面渲染正确"等无意义描述
 - 一个 DT 可同时有多种 type（如既有 unit 又有 e2e）
 - 任何 UI 交互、API 端点相关的 DT 必须至少有一条 e2e testCase
+
+**拦截门（prd.json 保存前）：**
+若任意 DT 的 testCases 为空数组 `[]` → 拒绝保存 prd.json，报错：
+> "❌ DT-{id} testCases 为空，请先读取该 DT 的 prdSection 内容并生成对应 testCases"
+修复所有 DT 的 testCases 后才能继续。
 
 ### e2e testCase 必须含 `playwrightMcp` 字段
 
@@ -514,11 +556,18 @@ Additional evals based on task content:
 }
 ```
 
-### 何时生成 Steps
+### 何时必须生成 Steps（强制）
 
-- **生成**: PRD § 7 中明确列出了实现步骤或文件路径的 DT
-- **不生成**: 简单的配置修改、文档更新、单文件编辑等（PRD 上下文已足够）
-- **判断标准**: 如果 DT 涉及 ≥ 2 个文件或有明确的顺序约束，则生成 steps
+满足以下任一条件时，**必须**生成 steps（不可省略）：
+- DT 标题含「迁移」「重构」「多文件」「架构」「替换」等关键词
+- DT 涉及 ≥ 2 个不同目录的文件修改
+- DT 的 acceptanceCriteria ≥ 5 条
+- DT filesToModify ≥ 3 个文件
+
+以下情况**不生成** steps（通常太简单）：
+- 纯配置修改（单文件，1-2 行）
+- 文档更新
+- 单函数 bug fix
 
 ---
 
@@ -796,6 +845,145 @@ The coding agent will:
 
 ---
 
+## Step 6: PRD 完整性比对（源文件存在时自动执行）
+
+**目标：** 确认生成的 prd.md + prd.json 完整呈现了原版 PRD/草案的所有需求。
+功能只能多（PyramidPRD 的增强），不能少（遗漏 = 硬失败）。
+
+### 6.1 确定源文件
+
+```bash
+# 优先级：Transform 模式源文件 > Brainstorm 草案
+TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"
+PROJECT_DIR="$TASKS_DIR/<projectId>"
+
+if [ -f "$PROJECT_DIR/SOURCE_PRD.ref" ]; then
+  SOURCE_FILE=$(cat "$PROJECT_DIR/SOURCE_PRD.ref")
+  SOURCE_TYPE="transform"
+elif [ -f "$PROJECT_DIR/DRAFT.md" ]; then
+  SOURCE_FILE="$PROJECT_DIR/DRAFT.md"
+  SOURCE_TYPE="brainstorm"
+else
+  echo "ℹ️ 无源文件可比对（非 Transform/Brainstorm 模式），跳过 Step 6"
+  # 直接进入 Checklist
+fi
+```
+
+### 6.2 提取源文件关键结构
+
+从源文件中提取：
+- **数据表清单**：Grep `CREATE TABLE` → 表名列表
+- **功能点清单**：提取 Phase/功能章节标题（`## ` 或 `### ` 一级）→ 功能列表
+- **API 端点清单**：Grep `GET /|POST /|PUT /|DELETE /|PATCH /` → 端点列表
+- **业务规则清单**：提取规则表格标题或编号（BR-xxx、规则 N）
+
+### 6.3 提取生成 PRD 的相同结构
+
+从 `$PROJECT_DIR/prd.md` 中提取相同四类结构。
+
+### 6.4 对比差异，分类输出
+
+```
+缺失项（源文件有，生成 PRD 无）→ 标记为 ❌ MISSING — 必须修复
+新增项（生成 PRD 有，源文件无）→ 标记为 ✅ ADDED   — PyramidPRD 增强，可接受
+保留项（两者都有）              → 标记为 ✅ COVERED
+```
+
+### 6.5 生成报告文件
+
+将报告写入 `$PROJECT_DIR/prd-completeness-report.md`：
+
+````markdown
+# PRD 完整性对比报告
+
+**生成时间：** {ISO 时间戳}
+**源文件：** {SOURCE_FILE}（{SOURCE_TYPE} 模式）
+**生成 PRD：** tasks/{projectId}/prd.md
+**生成 JSON：** tasks/{projectId}/prd.json
+
+## 总体结论
+
+| 指标 | 结果 |
+|------|------|
+| 总体状态 | ✅ PASS / ❌ FAIL |
+| 数据表覆盖 | X / Y（源文件 Y 张表，生成 PRD 覆盖 X 张）|
+| 功能点覆盖 | X / Y |
+| 缺失项数量 | N 项（0 = PASS）|
+| 新增项数量 | M 项（PyramidPRD 增强）|
+
+## ❌ 缺失项（必须修复）
+
+| 类别 | 缺失内容 | 源文件位置 | 建议处置 |
+|------|---------|---------|---------|
+| 数据表 | present_collaborators | §4.3 | 补充到生成 PRD §4 |
+
+（若无缺失项，此节显示：✅ 无缺失，所有源文件需求已完整覆盖）
+
+## ✅ 新增项（PyramidPRD 增强，可接受）
+
+| 类别 | 新增内容 | 来源 |
+|------|---------|------|
+| 功能 | 批量操作 UI | PyramidPRD L3 分析 |
+
+## 维度详情
+
+### 数据表对比
+...
+
+### 功能点对比
+...
+
+### API 端点对比
+...
+
+### 业务规则对比
+...
+````
+
+### 6.6 结论处理
+
+**若报告结论为 PASS（缺失项 = 0）：**
+> "✅ PRD 完整性比对通过。生成 PRD 完整覆盖源文件所有需求，新增 M 项 PyramidPRD 增强功能。"
+> 继续进入 Checklist Before Saving。
+
+**若报告结论为 FAIL（有缺失项）：**
+使用 AskUserQuestion 向用户展示缺失项，要求决策：
+
+```json
+{
+  "questions": [
+    {
+      "question": "❌ PRD 完整性比对失败：发现 N 项缺失（详见 prd-completeness-report.md）\n\n缺失示例：\n- 数据表 present_collaborators 未在生成 PRD 中找到\n- 功能 parent_id 多层分类结构 未覆盖\n\n请选择处置方式：",
+      "header": "完整性比对",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "自动补充缺失项",
+          "description": "BotoolAgent 读取源文件缺失章节，补充到生成 PRD 对应位置后重新生成 prd.json"
+        },
+        {
+          "label": "我手动修复后重跑",
+          "description": "先手动编辑 prd.md 补充缺失内容，再重新运行 /botoolagent-prd2json"
+        },
+        {
+          "label": "确认接受（记录为已知缺失）",
+          "description": "将缺失项记录为 Known Gaps，继续生成。不建议，可能导致实现偏差。"
+        }
+      ]
+    }
+  ]
+}
+```
+
+若选择"自动补充"：读取源文件对应章节 → 将缺失内容追加到生成 PRD 的对应 § → 重新执行 Step 6 比对 → 直到 PASS。
+
+若选择"确认接受"：在 prd.json 中记录：
+```json
+"knownGaps": ["present_collaborators 表未覆盖", "parent_id 多层分类结构未覆盖"]
+```
+
+---
+
 ## Checklist Before Saving
 
 - [ ] Previous run archived (if prd.json exists with different branchName)
@@ -812,6 +1000,7 @@ The coding agent will:
 - [ ] **Steps 颗粒度**: 有 steps 的 DT 每步可用单条命令验证，3-6 步
 - [ ] **testCases 非空**: 每个 DT 至少有 typecheck；涉及 UI/API 的 DT 至少有一条 e2e；所有 desc 具体描述该 DT 的实际行为，不得泛泛
 - [ ] **playwrightMcp 已注入**: 所有 type=e2e 的 testCase 必须含 playwrightMcp 字段；steps 3-8 步；url 用相对路径；element/assert 描述具体可操作，禁止泛泛
+- [ ] **Step 6 完整性比对**: 若源文件存在，prd-completeness-report.md 已生成且结论为 PASS（或 knownGaps 已记录）
 - [ ] `$TASKS_DIR/prd-{feature-name}.json` written (main file)
 - [ ] `./prd.json` written (root compat copy)
 - [ ] `$TASKS_DIR/registry.json` updated with current project
