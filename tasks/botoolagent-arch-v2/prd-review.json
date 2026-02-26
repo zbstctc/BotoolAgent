@@ -1,0 +1,168 @@
+{
+  "reviewTarget": "prd",
+  "timestamp": "2026-02-26T21:15:00+08:00",
+  "rounds": 3,
+  "maxRounds": 3,
+  "status": "converged",
+  "mode": "full",
+  "findings": [
+    {
+      "severity": "LOW",
+      "category": "consistency",
+      "section": "4A.4 双写策略 + 15 项 Checklist",
+      "message": "标题写 '15 项 Checklist'，正文和 BR-031 都写 17 项",
+      "suggestion": "统一标题为 '17 项 Checklist'",
+      "resolution": "fixed",
+      "round": 1
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "consistency",
+      "section": "4B.1 文件主权矩阵 vs 4B.2 PRD2JSON",
+      "message": "4B.1 将 progress.txt 写入方定义为 Lead Agent only，但 PRD2JSON 也会重置",
+      "suggestion": "在矩阵中补充 PRD2JSON 重置和 BotoolAgent.sh append",
+      "resolution": "fixed",
+      "round": 1
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "consistency",
+      "section": "4C.2 Subagent 管线架构（完整规划/功能开发）",
+      "message": "完整/功能流程 G1/W1 → A1 → A2 缺少 Tf 完整性门控",
+      "suggestion": "在 4C.2 完整/功能 流程中加入 Tf",
+      "resolution": "fixed",
+      "round": 1
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "consistency",
+      "section": "13 已决策 #5",
+      "message": "prd-dev-consistency 写为 '可选扩展'，但 ADR-8/5.2/11 都当必选",
+      "suggestion": "改为 '必选'",
+      "resolution": "fixed",
+      "round": 1
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "implementability",
+      "section": "4C.1 Q&A Journal 格式 + BR-035",
+      "message": "模板标题带冒号 (R1: 规范确认)，BR-035 要求不带冒号 (R1 规范确认)",
+      "suggestion": "统一为不带冒号格式",
+      "resolution": "fixed",
+      "round": 1
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "implementability",
+      "section": "4A.3 规范融合流程",
+      "message": "关键词匹配规范缺少可执行细则（字典、优先级、fallback）",
+      "suggestion": "增加映射表+优先级+边界样例",
+      "resolution": "rejected",
+      "rejectionReason": "Stage 0 架构 PRD 级别，关键词匹配的详细映射规则属于实现细节，将在 DT-006 编码时具体定义。PRD 已给出足够方向（关键词→规则类别映射）",
+      "codexAccepted": true,
+      "round": 1
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "implementability",
+      "section": "4E.6（A2 行） vs 4A.4",
+      "message": "A2 写 'auto-fix' 但 4A.4 写 'Checklist 失败→拒绝保存'，策略冲突",
+      "suggestion": "统一为 Checklist FAIL → 拒绝保存",
+      "resolution": "fixed",
+      "round": 1
+    },
+    {
+      "severity": "HIGH",
+      "category": "security",
+      "section": "ADR-8 / 4B.3 / 5.1 / 12",
+      "message": "Codex exec --full-auto 自动覆盖 prd.md，缺少安全边界定义",
+      "suggestion": "添加 BR 明确 Codex 沙箱边界和可写路径限制",
+      "resolution": "fixed",
+      "round": 1,
+      "fixDetail": "添加 BR-040 明确 Codex 内置沙箱 workspace-write 权限限制"
+    },
+    {
+      "severity": "HIGH",
+      "category": "security",
+      "section": "4A.1 dev.json Schema + 4A.4 Checklist",
+      "message": "evals[].command 是自由文本，无安全约束，存在命令注入风险",
+      "suggestion": "限制为安全模板，拒绝 shell 元字符",
+      "resolution": "fixed",
+      "round": 1,
+      "fixDetail": "添加 BR-038 限制 eval 命令为已知安全模板"
+    },
+    {
+      "severity": "HIGH",
+      "category": "security",
+      "section": "4C.2 Transform Ti + 6.2 SOURCE_PRD.ref",
+      "message": "源 PRD 路径缺少 realpath 校验，存在路径穿越风险",
+      "suggestion": "强制 realpath 归一化 + 根目录校验",
+      "resolution": "fixed",
+      "round": 1,
+      "fixDetail": "添加 BR-039 强制路径安全校验"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "ux",
+      "section": "4E.2 / 4E.4 / 4E.6 / 5.1",
+      "message": "方案卡缺少中间状态定义（解析失败重试、后台进度、取消控制）",
+      "suggestion": "补充 UX 状态机",
+      "resolution": "rejected",
+      "rejectionReason": "Stage 0 PRD 已充分定义主路径+逃生口+重试上限(2次后切逐题)。中间状态的详细 UX 设计属于实现阶段任务，不影响架构决策",
+      "codexAccepted": true,
+      "round": 1
+    },
+    {
+      "severity": "LOW",
+      "category": "completeness",
+      "section": "11 成功标准（问答加速）",
+      "message": "'全部接受是最常用路径'不可量化验收",
+      "suggestion": "改为可测 KPI + 数据采集定义",
+      "resolution": "unresolved",
+      "round": 1,
+      "note": "advisory — Stage 0 PRD 中定性描述可接受"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "completeness",
+      "section": "4B.3 非阻塞执行 + 11 成功标准",
+      "message": "后台 A1/A2 与手动命令缺乏并发互斥",
+      "suggestion": "增加项目级锁",
+      "resolution": "fixed",
+      "round": 2,
+      "fixDetail": "添加 BR-041 pipeline.lock + 手动命令流程前置检查 + 成功标准 + stale lock 清理"
+    }
+  ],
+  "summary": {
+    "total": 13,
+    "high": 3,
+    "medium": 8,
+    "low": 2,
+    "fixed": 10,
+    "rejected": 2,
+    "unresolved": 1
+  },
+  "roundHistory": [
+    {
+      "round": 1,
+      "found": 13,
+      "fixed": 8,
+      "rejected": 3,
+      "remaining": 4
+    },
+    {
+      "round": 2,
+      "found": 4,
+      "fixed": 4,
+      "rejected": 0,
+      "remaining": 1
+    },
+    {
+      "round": 3,
+      "found": 1,
+      "fixed": 1,
+      "rejected": 0,
+      "remaining": 0
+    }
+  ]
+}
