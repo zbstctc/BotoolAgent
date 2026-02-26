@@ -601,7 +601,7 @@ L0 上下文摘要:
 
 ### Phase 5.5: 外部依赖扫描（L4 完成后自动执行）
 
-**目标：** 在进入 L5 前，扫描所有已收集的需求，识别开发前需要用户准备的外部依赖，写入 prd.json 的 `prerequisites` 字段，让 Lead Agent 能在开始 coding 前给用户预警。
+**目标：** 在进入 L5 前，扫描所有已收集的需求，识别开发前需要用户准备的外部依赖，写入 dev.json 的 `prerequisites` 字段，让 Lead Agent 能在开始 coding 前给用户预警。
 
 **触发条件：** L4 完成后自动执行（功能开发 + 完整规划模式）。Transform 模式在 PRD 生成后执行。
 
@@ -641,7 +641,7 @@ L0 上下文摘要:
 ```
 
 **写入 prerequisites 字段规则：**
-- 不管用户选哪个，检测到的依赖都写入 prd.json `prerequisites`
+- 不管用户选哪个，检测到的依赖都写入 dev.json `prerequisites`
 - "已全部准备好" → 各项 `resolved: true`
 - 其他选项 → 各项 `resolved: false`
 - Lead Agent 会在初始化时读取此字段，在 progress.txt 中给出预警提示
@@ -1011,7 +1011,7 @@ TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"
 PROJECT_DIR="$TASKS_DIR/<projectId>"
 mkdir -p "$PROJECT_DIR"
 # PRD 写入: $PROJECT_DIR/prd.md
-# (prd.json / dev.json 和 registry 由 PRDing Ralph 管线中的 A2:prd2json 自动生成)
+# (dev.json 和 registry 由 PRDing Ralph 管线中的 A2:prd2json 自动生成)
 ```
 
 #### 复杂度裁剪规则
@@ -1324,7 +1324,7 @@ Phase T1 ──→ S1 ──→ R1 ──→ T2 ──→ T2.5 ──→ T3 ─�
 
 - **T1 → S1（代码扫描）：** T1 获取源文件后，执行 S1 代码库感知扫描（复用 Phase 2.5 的逻辑）。扫描当前项目的技术栈、目录结构、已有组件和数据模型，为后续 T2 结构发现和 PRD 生成提供代码库上下文。
 - **S1 → R1（规范确认）：** S1 完成后执行 R1 规范确认（复用 Phase 2.6 的逻辑）。扫描 `rules/` 目录，让用户确认适用规范，结果写入 qa-journal.md。
-- **生成PRD → Phase 5.5（外部依赖扫描）：** PRD 生成后执行 Phase 5.5 外部依赖扫描（复用已有的 Phase 5.5 逻辑）。扫描生成 PRD 中的外部依赖信号，写入 prd.json 的 `prerequisites` 字段。
+- **生成PRD → Phase 5.5（外部依赖扫描）：** PRD 生成后执行 Phase 5.5 外部依赖扫描（复用已有的 Phase 5.5 逻辑）。扫描生成 PRD 中的外部依赖信号，写入 dev.json 的 `prerequisites` 字段。
 
 ---
 
@@ -1453,16 +1453,27 @@ Phase T1 ──→ S1 ──→ R1 ──→ T2 ──→ T2.5 ──→ T3 ─�
 **强制记录（大文件模式，不可跳过）：**
 
 每读完一张 CREATE TABLE（§4 数据设计维度），立即在工作笔记中记录：
-  ✅ table: categories → 字段: [id, name, slug, parent_id(自引用外键!), icon, color, ...]
+  ✅ table: categories → 字段数: 8 → 字段: [id, name, slug, parent_id(自引用外键!), icon, color, ...]
   ⚠️  关键字段标注：parent_id → 两层分类结构核心，生成 PRD 时必须保留
+  📊 字段数统计：每张表必须记录准确的字段数（用于 Tv 字段数校验）
 
 每读完一个开发计划 Phase（§7 开发计划维度，即 T1 步骤 3d 识别的源 PRD 章节），立即在工作笔记中记录：
   ✅ phase: [源PRD编号] [Phase名称] → 任务数: X，涉及文件/组件: [关键列表]
   ⚠️  关键依赖标注：[依赖前一 Phase 的任务，生成 DT 时必须标注 dependsOn]
 
 每个维度桶读取完成后，在工作笔记中标注：
-  [完成] §4 数据设计 — 共读取 X 个表，关键字段已标注 Y 个
+  [完成] §4 数据设计 — 共读取 X 个表，总字段数 F 个，关键字段已标注 Y 个
   [完成] §7 开发计划 — 共读取 Z 个 Phase（源PRD编号：9.0-9.8 等），任务条目总计 N 条
+
+**字段数汇总表（§4 维度完成后必填，供 Tv 校验使用）：**
+```
+源 PRD 字段数汇总:
+  categories:           8 个字段
+  documents:           12 个字段
+  present_elements:    15 个字段
+  ...
+  总计: X 张表, Y 个字段
+```
 
 在 metadata 中设置 `transformPhase: 'extraction'`
 
@@ -1482,6 +1493,26 @@ Phase T1 ──→ S1 ──→ R1 ──→ T2 ──→ T2.5 ──→ T3 ─�
    - 未记录 → 立即返回 T2 补充读取该表（不得跳过、不得"假设已读"）
 3. 对照「关键字段清单」，确认 parent_id、source_type 等已被捕获
 
+**A2. Tv 字段数校验（不可跳过）**
+
+对「字段数汇总表」中的每张表，逐一校验字段数完整性：
+
+1. 从工作笔记读取每张表的「已记录字段数」
+2. 与 T1 步骤 3a 中 Grep 提取的 CREATE TABLE 原文逐表比对：
+   - 重新 Grep 源 PRD 中该表的 CREATE TABLE 块，统计「源字段数」
+   - 已记录字段数 ≥ 源字段数 → ✅ 通过
+   - 已记录字段数 < 源字段数 → ⚠️ 字段数不足，返回 T2 补充读取该表
+3. 输出 Tv 字段数比对结果：
+   ```
+   Tv 字段数校验:
+     categories:    8/8   ✅
+     documents:    10/12  ⚠️ 差 2 个字段 → 返回补充读取
+     elements:     15/15  ✅
+     总计: X/Y 表通过 (字段覆盖率 Z%)
+   ```
+4. 存在 ⚠️ 的表 → 返回 T2 使用 Read 重新读取该表的完整 CREATE TABLE 块，补充遗漏字段后更新工作笔记中的字段数
+5. 补充完成后重新执行 Tv 校验（最多循环 2 次，防止无限循环）
+
 **B. 开发计划 Phase 完整性校验（新增）**
 
 4. 从工作笔记列出已记录的所有开发计划 Phase（含源 PRD 编号）
@@ -1495,15 +1526,16 @@ Phase T1 ──→ S1 ──→ R1 ──→ T2 ──→ T2.5 ──→ T3 ─�
 **C. 输出校验结果**（纯文本输出，不使用 AskUserQuestion）
 
 若全部通过：
-> "✅ T2.5 校验通过：SQL 表 X/Y（关键字段均已捕获），开发计划 Phase Z/Z（任务条目 N 条，覆盖率 ≥ 80%），进入覆盖度分析。"
+> "✅ T2.5 校验通过：SQL 表 X/Y（关键字段均已捕获），Tv 字段数 F1/F2（覆盖率 Z%），开发计划 Phase Z/Z（任务条目 N 条，覆盖率 ≥ 80%），进入覆盖度分析。"
 
 若有缺失：
 > "⚠️ T2.5 发现缺失：
 >    - [SQL 表] present_collaborators（整表缺失）→ 正在补充读取...
+>    - [Tv 字段数] documents 10/12 字段（差 2 个）→ 正在补充读取...
 >    - [SQL 字段] categories.parent_id（字段未标注）→ 正在补充标注...
 >    - [开发Phase] Phase 9.3（整节缺失）→ 正在补充读取...
 >    - [任务条目] 已记录 45 条，基准 120 条（覆盖率 37%）→ 正在补充读取 Phase 9.4-9.8..."
-> 补充完成后，重新执行步骤 A-C 直至全部通过。
+> 补充完成后，重新执行步骤 A-C（含 Tv）直至全部通过。
 
 **D. 源章节覆盖完整性校验（新增，不可跳过）**
 
@@ -1770,7 +1802,7 @@ $TASKS_DIR/
     DRAFT.md                 ← 用户原始 Draft（如从 brainstorm 导入）
     prd_original.md          ← 源 PRD 备份（Ti 阶段创建，Tf 字段级比对基准）
     prd.md                   ← 生成的 BotoolAgent PRD（标准格式）
-    prd.json                 ← 自动化执行用 JSON
+    dev.json                 ← 自动化执行用 JSON
   registry.json              ← 项目注册表
 ```
 
