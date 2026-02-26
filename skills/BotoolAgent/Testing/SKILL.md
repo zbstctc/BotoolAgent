@@ -47,23 +47,23 @@ NON_INTERACTIVE=${CLAUDE_CODE_NON_INTERACTIVE:-0}
 
 检查 `tasks/registry.json`（或 `BotoolAgent/tasks/registry.json`）是否存在：
 - 如果存在且有多个项目 → 用 AskUserQuestion 列出项目让用户选择
-- 选择后，设置 `PRD_PATH="tasks/${PROJECT_ID}/prd.json"`
-- 如果不存在 registry 或只有一个项目 → 设置 `PRD_PATH="prd.json"`（向后兼容）
+- 选择后，设置 `PRD_PATH="tasks/${PROJECT_ID}/dev.json"`
+- 如果不存在 registry 或只有一个项目 → 设置 `PRD_PATH="dev.json"`（向后兼容）
 
 ### 前置检查
 
 依次执行以下检查，任一失败则**停止并告知用户**。
 
-### 0a. 检查 prd.json
+### 0a. 检查 dev.json
 
 ```bash
 # 使用 Step 0 确定的 PRD_PATH（per-project 或根目录）
 ls "$PRD_PATH" 2>/dev/null
 ```
 
-**如果 prd.json 不存在：**
+**如果 dev.json 不存在：**
 ```
-错误：未找到 prd.json。
+错误：未找到 dev.json。
 
 恢复建议：
 - 运行 /botoolagent-prd2json 从 PRD 文档生成
@@ -79,9 +79,9 @@ grep -o '"branchName": "[^"]*"' "$PRD_PATH" | cut -d'"' -f4
 
 **如果 branchName 为空：**
 ```
-错误：prd.json 中缺少 branchName 字段。
+错误：dev.json 中缺少 branchName 字段。
 
-恢复建议：在 prd.json 顶层添加 "branchName": "your-branch-name"
+恢复建议：在 dev.json 顶层添加 "branchName": "your-branch-name"
 ```
 Then stop here.
 
@@ -108,7 +108,7 @@ echo "项目目录: $PROJECT_DIR"
   Layer 2 — Unit Tests: npm test （自动修复）
   Layer 3 — E2E Tests: 双轨并进
     Layer 3a — CLI Playwright: spec 文件 （自动修复）
-    Layer 3b — Playwright MCP: prd.json testCases 验收测试 （前端问题专项捕获）
+    Layer 3b — Playwright MCP: dev.json testCases 验收测试 （前端问题专项捕获）
   Layer 4 — Code Review: Claude 审查 git diff （自动修复 HIGH）
   Layer 5 — Codex 红队审查: Codex 对抗审查 （对抗循环 ≤ 3 轮）
   Layer 6 — PR 创建 + Claude Review 守门 （Claude Review 修复循环 ≤ 2 轮）
@@ -394,7 +394,7 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 
 Layer 3 分为两个子层，**顺序执行（3a → 3b）**：
 - **Layer 3a — CLI Playwright**：检测并运行 `.spec.ts` spec 文件（传统自动化回归测试）
-- **Layer 3b — Playwright MCP**：从 prd.json `testCases[].playwrightMcp` 读取步骤，Claude 直接操作浏览器执行验收测试（专门捕获前端渲染/交互/样式 bug）
+- **Layer 3b — Playwright MCP**：从 dev.json `testCases[].playwrightMcp` 读取步骤，Claude 直接操作浏览器执行验收测试（专门捕获前端渲染/交互/样式 bug）
 
 **重要：3a Circuit Breaker 跳过后，3b 仍然继续执行。**两层各自独立记录结果。
 
@@ -556,7 +556,7 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 
 #### 3b-1. 收集 MCP 测试用例
 
-读取 prd.json，收集所有含 `playwrightMcp` 的 e2e testCase：
+读取 dev.json，收集所有含 `playwrightMcp` 的 e2e testCase：
 
 ```bash
 node -e "
@@ -575,7 +575,7 @@ console.log(JSON.stringify(cases, null, 2));
 
 **如果没有任何 playwrightMcp testCase：**
 ```
-Layer 3b: 跳过（prd.json 中无 e2e testCase 含 playwrightMcp 字段）
+Layer 3b: 跳过（dev.json 中无 e2e testCase 含 playwrightMcp 字段）
 ```
 记录跳过，继续 Layer 4。
 
@@ -1186,7 +1186,7 @@ git commit -m "fix(testing): commit remaining auto-fixes before PR creation"
 ### 6b. 推送代码到远程
 
 ```bash
-# 从 prd.json 读取 branchName
+# 从 dev.json 读取 branchName
 BRANCH_NAME=$(grep -o '"branchName": "[^"]*"' "$PRD_PATH" | cut -d'"' -f4)
 
 git push origin "$BRANCH_NAME"
@@ -1216,7 +1216,7 @@ gh pr list --head "$BRANCH_NAME" --json number,title,url,state --jq '.[0]'
 
 ### 6d. 创建 PR
 
-读取 prd.json 中的 `project`（项目名称）和 `description`（项目描述）。
+读取 dev.json 中的 `project`（项目名称）和 `description`（项目描述）。
 读取 progress.txt 的最近内容作为变更摘要。
 收集 Layer 5 的 LOW findings 列表，写入 PR body 的 Advisory 章节。
 
@@ -1612,7 +1612,7 @@ BotoolAgent 6 层自动化测试 — 全部通过!
 
 | 层级 | 错误 | 处理方式 |
 |------|------|----------|
-| 前置 | prd.json 不存在 | 停止，提示运行 `/botoolagent-prd2json` |
+| 前置 | dev.json 不存在 | 停止，提示运行 `/botoolagent-prd2json` |
 | 前置 | branchName 缺失 | 停止，提示添加字段 |
 | Layer 1 | TypeCheck 失败 | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
 | Layer 1 | Lint 失败 | **eslint --fix → 信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
@@ -1645,7 +1645,7 @@ CLI 的 6 层自动化测试对应 Viewer Stage 4 的分层验收：
 | Layer 1 — Regression | 全量回归 | TypeCheck + Lint |
 | Layer 2 — Unit Tests | 单元测试 | npm test / npm run test:unit |
 | Layer 3a — CLI Playwright | E2E 测试（spec 文件） | npx playwright test |
-| Layer 3b — Playwright MCP | E2E 验收测试（MCP 操作） | Claude MCP browser tools → prd.json playwrightMcp steps |
+| Layer 3b — Playwright MCP | E2E 验收测试（MCP 操作） | Claude MCP browser tools → dev.json playwrightMcp steps |
 | Layer 4 — Code Review | Code Review | git diff → Claude 审查 |
 | Layer 5 — Codex 红队审查 | Codex 审查 | codex exec → 对抗循环 |
 | Layer 6 — PR + Claude Review | PR 守门 | gh pr create → claude-pr-review workflow → 修复循环 |
@@ -1653,7 +1653,7 @@ CLI 的 6 层自动化测试对应 Viewer Stage 4 的分层验收：
 **手动验收（Manual Checklist）已移出 testing 流水线**，用户可在 finalize 前自行验证。
 
 **行为一致性：**
-- 两端都从 prd.json 读取 testCases
+- 两端都从 dev.json 读取 testCases
 - CLI 6 层全自动（Ralph 自动修复 + Codex 对抗审查）：失败不停止，自动修 → 重跑 → 超限才问用户
 - Layer 2/3 在没有对应 testCases 或脚本时自动跳过
 - Layer 5 在 codex CLI 不可用时自动跳过

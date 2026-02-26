@@ -1,6 +1,6 @@
 ---
 name: botoolagent-coding
-description: "Start and monitor autonomous development with BotoolAgent. Use when you have a prd.json ready and want to start coding. Triggers on: start coding, run botool, start development, begin implementing."
+description: "Start and monitor autonomous development with BotoolAgent. Use when you have a dev.json ready and want to start coding. Triggers on: start coding, run botool, start development, begin implementing."
 user-invocable: true
 ---
 
@@ -41,13 +41,13 @@ PROJECT_ID="$ARG"
 1. **如果参数已提供 PROJECT_ID** → 跳过选择，直接使用
 2. **否则**检查 `tasks/registry.json`（或 `BotoolAgent/tasks/registry.json`）：
    - 如果存在且有多个项目 → 用 AskUserQuestion 列出项目让用户选择
-   - 如果不存在 registry 或只有一个项目 → 直接读根目录 `prd.json`（向后兼容）
+   - 如果不存在 registry 或只有一个项目 → 直接读根目录 `dev.json`（向后兼容）
 
 选定后，设置 `PRD_PATH`（**必须为绝对路径**，因为 BotoolAgent.sh 在 worktree 中运行时相对路径会失效）：
-- 有 `PROJECT_ID` 时：`PRD_PATH="$(pwd)/tasks/${PROJECT_ID}/prd.json"`
-- 无 `PROJECT_ID`（单项目兼容）时：`PRD_PATH="$(pwd)/prd.json"`
+- 有 `PROJECT_ID` 时：`PRD_PATH="$(pwd)/tasks/${PROJECT_ID}/dev.json"`
+- 无 `PROJECT_ID`（单项目兼容）时：`PRD_PATH="$(pwd)/dev.json"`
 
-后续所有对 prd.json 的引用均使用 `$PRD_PATH`。
+后续所有对 dev.json 的引用均使用 `$PRD_PATH`。
 
 ---
 
@@ -55,21 +55,21 @@ PROJECT_ID="$ARG"
 
 依次执行以下 4 项检查，任一失败则**停止并告知用户**。
 
-### 1a. 检查 prd.json
+### 1a. 检查 dev.json
 
 ```bash
-# 如果 Step 0 选定了 projectId，检查 per-project prd.json
-# 否则检查根目录 prd.json（向后兼容）
+# 如果 Step 0 选定了 projectId，检查 per-project dev.json
+# 否则检查根目录 dev.json（向后兼容）
 if [ -n "$PROJECT_ID" ]; then
-  ls tasks/${PROJECT_ID}/prd.json 2>/dev/null
+  ls tasks/${PROJECT_ID}/dev.json 2>/dev/null
 else
-  ls prd.json 2>/dev/null
+  ls dev.json 2>/dev/null
 fi
 ```
 
-**如果 prd.json 不存在：**
+**如果 dev.json 不存在：**
 ```
-错误：未找到 prd.json。
+错误：未找到 dev.json。
 
 恢复建议：
 - 运行 /botoolagent-prd2json 从 PRD 文档生成
@@ -86,9 +86,9 @@ grep -o '"branchName": "[^"]*"' "$PRD_PATH" | cut -d'"' -f4
 
 **如果 branchName 为空：**
 ```
-错误：prd.json 中缺少 branchName 字段。
+错误：dev.json 中缺少 branchName 字段。
 
-恢复建议：在 prd.json 顶层添加 "branchName": "your-branch-name"
+恢复建议：在 dev.json 顶层添加 "branchName": "your-branch-name"
 ```
 Then stop here.
 
@@ -250,8 +250,8 @@ BotoolAgent 自动开发完成！
 
 | 错误 | 恢复建议 |
 |------|----------|
-| prd.json 不存在 | 运行 `/botoolagent-prd2json` 先生成 |
-| branchName 缺失 | 在 prd.json 中添加 branchName 字段 |
+| dev.json 不存在 | 运行 `/botoolagent-prd2json` 先生成 |
+| branchName 缺失 | 在 dev.json 中添加 branchName 字段 |
 | 进程重复运行 | `kill <pid>` 终止后重试 |
 | tmux 未安装 | `brew install tmux` |
 | 自动开发未正常完成 | 查看 progress.txt、agent-status 和 `/tmp/botool-agent-*.log`，修复后重试 |
