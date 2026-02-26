@@ -999,8 +999,7 @@ TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"
 PROJECT_DIR="$TASKS_DIR/<projectId>"
 mkdir -p "$PROJECT_DIR"
 # PRD 写入: $PROJECT_DIR/prd.md
-# prd.json 写入: $PROJECT_DIR/prd.json
-# registry 更新: $TASKS_DIR/registry.json（路径格式: "<projectId>/prd.md"）
+# (prd.json / dev.json 和 registry 由 PRDing Ralph 管线中的 A2:prd2json 自动生成)
 ```
 
 #### 复杂度裁剪规则
@@ -1871,13 +1870,133 @@ $TASKS_DIR/
 
 ---
 
-## 完成后
+## 完成后 — PRDing Ralph 编排器
 
-生成 PRD 后，告诉用户：
+PRD 生成（Phase 7 写入 prd.md）完成后，**自动启动 PRDing Ralph 后台编排器**执行 A1(PRDReview) + A2(PRD2JSON) 管线。用户无需手动运行这两个 skill。
 
-"PRD 已生成。下一步：
-1. 查看并确认 PRD 内容
-2. 使用 `/botoolagent-prd2json` 转换为 JSON（精简版，只包含自动化必需字段）
-3. 运行 `/botoolagent-coding` 开始自动开发
+### 流程概要
 
-Coding agent 会读取 prd.json 找到下一个任务，然后跳读 PRD.md 中对应的设计章节获取完整上下文。"
+```
+PyramidPRD 主对话 → Phase 7 生成 prd.md
+  ├─ 1. pipeline.lock 检查 + 创建
+  ├─ 2. Task(run_in_background) 启动 PRDing Ralph
+  ├─ 3. 告知用户 "后台自动执行中，可继续其他工作"
+  └─ PyramidPRD 返回，主对话结束
+
+PRDing Ralph（Background Agent）:
+  ├─ A1: Skill("botoolagent-prdreview") → 对抗审查
+  ├─ A2: Skill("botoolagent-prd2json") → 生成 dev.json + registry
+  ├─ 成功 → 删除 pipeline.lock → 通知用户
+  └─ 失败 → 删除 pipeline.lock → 通知用户 + 打印恢复指令
+```
+
+### Step 1: pipeline.lock 检查与创建
+
+在启动编排器之前，必须检查并创建 pipeline.lock 防止并发执行。
+
+```bash
+LOCK_FILE="$PROJECT_DIR/pipeline.lock"
+```
+
+**检查逻辑：**
+1. 如果 `$LOCK_FILE` 存在：
+   - 读取其中的 PID 和时间戳
+   - 如果 PID 进程仍存活 **且** 时间戳距今 < 30 分钟 → 告知用户 "管线正在运行中，请稍候" 并**跳过**编排器启动
+   - 如果 PID 进程已死 **或** 时间戳距今 >= 30 分钟（TTL 过期）→ 视为过期，删除旧 lock 继续
+2. 如果 `$LOCK_FILE` 不存在 → 继续
+
+**创建 lock 文件：**
+写入以下 JSON 内容到 `$LOCK_FILE`：
+```json
+{
+  "pid": "<当前进程 PID>",
+  "startedAt": "<ISO 8601 时间戳>",
+  "projectId": "<projectId>",
+  "ttlMinutes": 30
+}
+```
+
+### Step 2: 启动 PRDing Ralph 后台编排器
+
+使用 Task 工具启动后台编排器：
+
+```
+Task(
+  run_in_background: true,
+  subagent_type: "general-purpose",
+  prompt: 见下方编排器 prompt
+)
+```
+
+**编排器 prompt 模板：**
+
+```
+你是 PRDing Ralph — BotoolAgent PRD 后处理编排器。
+你的任务是依次执行 A1(PRDReview) 和 A2(PRD2JSON) 管线。
+
+项目信息:
+- projectId: <projectId>
+- PROJECT_DIR: <PROJECT_DIR 的绝对路径>
+- TASKS_DIR: <TASKS_DIR 的绝对路径>
+- prd.md 路径: <PROJECT_DIR>/prd.md
+
+## 执行步骤
+
+### A1: PRD 审查
+执行: Skill("botoolagent-prdreview", args: "<projectId>")
+- 如果审查通过或仅有 advisory → 继续 A2
+- 如果审查发现 HIGH severity 问题 → 记录问题，仍继续 A2（审查结果供用户参考）
+
+### A2: PRD 转 JSON
+执行: Skill("botoolagent-prd2json", args: "<projectId>")
+- 此步骤会生成 dev.json 和更新 registry.json
+
+## 完成处理
+
+### 成功时:
+1. 删除 pipeline.lock: 使用 Bash 执行 rm -f <PROJECT_DIR>/pipeline.lock
+2. 输出完成消息:
+   "✅ PRDing Ralph 完成:
+   - A1 PRDReview: [通过/有发现(N条)]
+   - A2 PRD2JSON: dev.json 已生成
+   用户可运行 /botoolagent-coding 开始自动开发。"
+
+### 失败时:
+1. 删除 pipeline.lock: 使用 Bash 执行 rm -f <PROJECT_DIR>/pipeline.lock
+2. 输出错误消息和恢复指令:
+   "❌ PRDing Ralph 失败于 [A1/A2]:
+   错误: <错误信息>
+
+   手动恢复指令:
+   /botoolagent-prdreview <projectId>
+   /botoolagent-prd2json <projectId>"
+```
+
+### Step 3: 告知用户
+
+编排器启动后，**立即**向用户输出以下消息（不等待编排器完成）：
+
+```
+"PRD 已生成并保存到 <PROJECT_DIR>/prd.md。
+
+后台已自动启动 PRDing Ralph 编排器，正在执行：
+1. PRD 对抗审查 (PRDReview)
+2. PRD 转 JSON (PRD2JSON → dev.json + registry)
+
+你可以继续其他工作，编排器完成后会自动通知你结果。
+完成后运行 /botoolagent-coding 即可开始自动开发。"
+```
+
+### 降级处理
+
+如果 Task 工具调用本身失败（例如工具不可用）：
+
+1. 删除已创建的 pipeline.lock
+2. 告知用户并提供手动恢复指令：
+
+```
+"PRD 已生成，但后台编排器启动失败。请手动执行以下步骤：
+1. /botoolagent-prdreview <projectId>
+2. /botoolagent-prd2json <projectId>
+3. /botoolagent-coding 开始自动开发"
+```
