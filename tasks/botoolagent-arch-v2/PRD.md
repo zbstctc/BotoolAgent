@@ -321,35 +321,29 @@ v2 (保留覆盖，优先 UX):
   > 5000 行 → Master Context + Phase Bundle（C1，自包含分包 + 并行处理）
 ```
 
-### ADR-8: PRDReview 覆盖保留 + Enrich 升级
+### ADR-8: PRDReview 精简 + A2 Checklist 扩展
 
 ```
-决策: PRDReview 保留 review-save API 覆盖 prd.md 的能力（优先 UX）
-修复内容同时写入 prd-review-fixed.md（修复 diff 记录）
-覆盖后提示用户: 如 PRD2JSON 已运行，需重跑 /prd2json 同步 dev.json
-Enrich 审查目标从 prd.json → dev.json，新增 3 个审查维度
-PRDReview 内部审查逻辑（Codex 敌对循环、降级模式、Circuit Breaker）保持不变
+决策:
+1. PRDReview 精简为双模式（A1 自动 + Standalone），删除独立项目审查模式
+2. PRDReview A1 保留 review-save 覆盖 prd.md 能力（auto-chain 内自动覆盖）
+3. Standalone 模式备份 {stem}_original.md → 覆盖原文件 → 产出 {stem}_review.json
+4. 原 Enrich 审查维度移入 A2 Checklist: 17→18 项（+prd-dev-consistency）
+5. PRDReview 内部审查逻辑（Codex 敌对循环、降级模式、Circuit Breaker）保持不变
 ```
 
 **理由**:
 
-1. **优先 UX**: 用户发现审查问题后应能一键修复，而非手动 copy-paste
-2. **v1 行为保留**: 不引入 UX 退化，降低用户迁移成本
-3. **下游同步提示**: 覆盖 prd.md 后如果 dev.json 已存在，提示重跑 /prd2json
-4. **Enrich 模式现有 5 维度不足**: 缺少 dev.json 新字段的完整性检查
+1. **PRDing 全自动化**: Ralph 编排器执行 A1→A2，用户无需手动 /prdreview
+2. **A2 Checklist 已覆盖**: field-completeness(#16) + designRef-validity(#17) 已在 A2 内
+3. **prd-dev-consistency 归属 A2**: prd.md §7 vs dev.json 一致性校验在 A2 生成 dev.json 时自然检查
+4. **Standalone 独立价值**: 支持任意 .md 审查，不依赖项目上下文
 
-**Enrich 审查维度更新**:
+**A2 Checklist 新增维度（第 18 项）**:
 
-| 维度 | v1 (prd.json) | v2 (dev.json) | 变化 |
-|------|-------------|-------------|------|
-| syntax | 代码示例语法 | 不变 | — |
-| dependency | dependsOn 无环 | 不变 | — |
-| filepath | filesToModify 路径 | `files[]` 字段 | 字段改名 |
-| eval | shell 命令有效 | 不变 | — |
-| session | ≤ 8 DT/session | 不变 | — |
-| **field-completeness** | — | 🆕 每个 DT 有 description(≥2句), AC[](≥3条), designRefs[](≥1条) | 新增 |
-| **designRef-validity** | — | 🆕 designRefs "§X.Y 名称" 在 prd.md 中实际存在 | 新增 |
-| **prd-dev-consistency** | — | 🆕 prd.md §7 DT 数量/Phase 结构与 dev.json 一致 | 新增（第 8 维度） |
+| 维度 | 描述 |
+|------|------|
+| **prd-dev-consistency** | prd.md §7 DT 数量/Phase 结构与 dev.json 一致 |
 
 **PRDReview 内部保留不变的功能**:
 - Codex `exec --full-auto` 敌对审查引擎
@@ -499,7 +493,7 @@ Step C: 生成 dev.json 时融合规范
   → 全程零用户交互（规范已在 R1 确认）
 ```
 
-#### 4A.4 双写策略 + 17 项 Checklist
+#### 4A.4 双写策略 + 18 项 Checklist
 
 **双写目标**:
 ```
@@ -507,7 +501,7 @@ Step C: 生成 dev.json 时融合规范
 兼容副本: ./dev.json (根目录, BotoolAgent.sh / Lead Agent 读取)
 ```
 
-**Checklist Before Saving（17 项，任一失败 → 拒绝保存）:**
+**Checklist Before Saving（18 项，任一失败 → 拒绝保存）:**
 
 1. Previous run archived（旧 prd.json/dev.json 且 branchName 不同 → archive/）
 2. prdFile 指向正确 PRD 路径
@@ -526,6 +520,7 @@ Step C: 生成 dev.json 时融合规范
 15. registry.json 已更新（devJson 字段）
 16. **field-completeness**: 每个 DT 的 description(≥2句), AC[](≥3条), designRefs[](≥1条) 均达标
 17. **designRef-validity**: 每个 designRefs "§X.Y 名称" 在 prd.md 中实际存在
+18. **prd-dev-consistency**: prd.md §7 vs dev.json DT 数量/Phase 结构一致性
 
 #### 4A.5 testCases + playwrightMcp 规则（保留不变）
 
@@ -563,7 +558,7 @@ playwrightMcp 8 种 action: navigate / snapshot / click / fill / wait_for / asse
 | 文件 | 写入方 | 只读消费方 | v1 对比 |
 |------|-------|-----------|---------|
 | `prd.md` | PyramidPRD(主), PRDReview(受控覆盖) | PRD2JSON, Lead(designRefs), 人类 | v1: 三方可写 → v2: 两方分级写(PRD2JSON 只读化) |
-| `dev.json` | PRD2JSON | Lead, Testing, Coding, Finalize, BotoolAgent.sh, PRDReview(Enrich审查) | v1: prd.json 两方写 → v2: 一方写 |
+| `dev.json` | PRD2JSON | Lead, Testing, Coding, Finalize, BotoolAgent.sh | v1: prd.json 两方写 → v2: 一方写 |
 | `registry.json` | PRD2JSON(初始化), Finalize(status更新) | Coding, BotoolAgent.sh, Viewer | v1: 两方写 → v2: 两方分字段写(不重叠) |
 | `prd-review.json` | PRDReview | 人类, Viewer UI | 不变 |
 | `prd-review-fixed.md` | PRDReview | 人类 | 修复 diff 记录（覆盖 prd.md 时同步产出） |
@@ -590,18 +585,23 @@ AUTO-CHAIN → Task(run_in_background) → 编排器 Agent [A1 PRDReview → A2 
   PyramidPRD 主对话在 Tf 后立即返回，A1+A2 在独立 context 中执行
 ```
 
-**PRDReview（改后 — A1 自动审查）**:
+**PRDReview（改后 — 两种运行模式）**:
 ```
-READ:  prd.md (PRD 审查模式)
-       dev.json (Enrich 审查模式, 只读) ← 仅独立运行时
-       rules/*.md (规范审查)
-WRITE: prd-review.json (审查报告)
-       prd-review-fixed.md (修复 diff 记录)
-       prd.md (受控覆盖: 审查修复后覆盖，标记为 reviewed 版本)
-⛔ 不写: dev.json (审查不修改, 只报告)
-AUTO-CHAIN 模式: Circuit Breaker 默认 accept + advisory（不阻塞管线）
-独立运行模式: 保留完整用户交互 + Codex 敌对循环
-保留: Codex 敌对循环、降级模式、Circuit Breaker、fail-closed 原则
+模式 1: AUTO-CHAIN（A1 自动审查）
+  READ:  prd.md (PRD 审查模式)
+  WRITE: prd-review.json, prd-review-fixed.md, prd.md (覆盖为 reviewed)
+  行为:  Circuit Breaker 默认 accept + advisory（不阻塞管线）
+
+模式 2: STANDALONE（任意 .md 审查）
+  触发:  /botoolagent-prdreview /path/to/any-file.md
+  READ:  目标 .md 文件
+  BACKUP: {stem}_original.md (原文件备份，同目录)
+  WRITE: {stem}.md (修复后覆盖原文件)
+         {stem}_review.json (审查报告，同目录)
+  行为:  完整 Codex 敌对循环 + 5 维度审查
+
+共用: Codex 敌对循环、降级模式、Circuit Breaker、fail-closed 原则
+⛔ 不写: dev.json
 ```
 
 **PRD2JSON（改后 — A2 自动转换）**:
@@ -645,7 +645,7 @@ WRITE: dev.json (双写: tasks/<id>/ + 根目录)
 │  A2: PRD2JSON (自动转换)                          │
 │    → 读 prd.md(reviewed) + journal(R1规范)       │
 │    → 生成 dev.json (fat) + registry.json          │
-│    → 17 项 Checklist 校验（含 designRef-validity）│
+│    → 18 项 Checklist 校验（含 prd-dev-consistency）│
 │                                                 │
 │  完成 → 通知用户 "PRD 审查+转换完成"               │
 │  失败 → 通知用户 + 打印恢复指令                     │
@@ -661,12 +661,16 @@ WRITE: dev.json (双写: tasks/<id>/ + 根目录)
 - 与 Coding Ralph（BotoolAgent.sh）、Testing Ralph 模式一致："确认后自主执行"
 - 失败降级: 编排器打印 `请运行 /prdreview 然后 /prd2json` 恢复指令
 
-**独立运行 PRDReview（auto-chain 外）**:
+**Standalone 任意文件审查**:
 ```
-用户手动 /prdreview → 完整用户交互 + Codex 敌对循环
-  ├─ PRD 审查: 检查 prd.md 质量（可覆盖 prd.md）
-  ├─ Enrich 审查: 检查 dev.json 完整性（8 维度）
-  └─ 覆盖 prd.md 后提示: 重跑 /prd2json 同步 dev.json
+用户手动 /prdreview /path/to/doc.md → 完整 Codex 敌对循环
+  ├─ 检测: 参数含 / 或以 .md 结尾 → standalone 模式
+  ├─ READ: /path/to/doc.md (不做 registry 查找)
+  ├─ BACKUP: /path/to/doc_original.md (原文件备份)
+  ├─ Codex 敌对审查 (5 维度: completeness/consistency/implementability/security/ux)
+  ├─ 敌对循环 max 3 轮 (Fix/Argue Rejection)
+  ├─ WRITE: /path/to/doc.md (修复后覆盖原文件)
+  └─ WRITE: /path/to/doc_review.json (审查报告)
 ```
 
 **Viewer 链路（Stage 2，本 PRD 范围外）**:
@@ -1085,7 +1089,7 @@ AI: "收到修改：Q3 → B(Session认证), Q4 → C(MongoDB)，其余保持 AI
 │    GENERATE: dev.json (fat, 含 [规范] AC)                │
 │    WRITE: dev.json (双写: tasks/<id>/ + 根目录)           │
 │    WRITE: registry.json (devJson 字段)                   │
-│    17 项 Checklist 校验（含 designRef-validity）          │
+│    18 项 Checklist 校验（含 prd-dev-consistency）          │
 │    ⛔ 不做源文件比对（已由 Tf 完成）                        │
 │                                                      │
 │  完成 → 通知用户 "PRD 审查+转换完成"                      │
@@ -1104,15 +1108,15 @@ Lead Agent
   └─ BotoolAgent.sh: READ dev.json (branchName, passes 统计)
 ```
 
-**独立运行 PRDReview（auto-chain 外）**:
+**Standalone 任意文件审查**:
 ```
-用户手动 /prdreview
-  ├─ CHECK: pipeline.lock 存在? → 拒绝执行 + 提示"后台管线运行中"
-  ├─ READ: prd.md — PRD 审查 (5 维度)
-  ├─ READ: dev.json (只读) — Enrich 审查 (8 维度)
-  ├─ Codex 敌对循环 (max 3 轮, 完整用户交互)
-  ├─ WRITE: prd-review.json + prd-review-fixed.md
-  └─ WRITE: prd.md (受控覆盖 → 提示重跑 /prd2json)
+用户手动 /prdreview /path/to/doc.md
+  ├─ READ: /path/to/doc.md
+  ├─ BACKUP: /path/to/doc_original.md (原文件备份)
+  ├─ Codex 敌对审查 (5 维度) → max 3 轮
+  ├─ WRITE: /path/to/doc.md (修复后覆盖原文件)
+  ├─ WRITE: /path/to/doc_review.json (审查报告)
+  └─ 不查 registry
 ```
 
 ### 5.2 关键变化汇总
@@ -1129,11 +1133,12 @@ Lead Agent
 | 8 | 方案卡批量确认 | 交互 23-44 次 → ~9 次 |
 | 9 | R1 规范确认前置 | 从 PRD2JSON 移到 PyramidPRD，PRD2JSON 零交互 |
 | 10 | 模式精简 4→3 | 删除快速修复模式（完整规划 / 功能开发 / Transform） |
-| 11 | PRDReview Enrich 新增 3 维度 | field-completeness + designRef-validity + prd-dev-consistency |
-| 12 | 17 项 Checklist | 原 15 项 + field-completeness + designRef-validity |
+| 11 | A2 Checklist 17→18 项 | 原 15 + field-completeness + designRef-validity + prd-dev-consistency |
+| 12 | 18 项 Checklist | 原 15 + field-completeness + designRef-validity + prd-dev-consistency |
 | 13 | 三模式统一共享阶段 | S1+R1+Phase 5.5+L5+A1+A2 全模式共享，Transform 补齐 GAP |
 | 14 | 完整性比对移至 PyramidPRD Tf | PRD2JSON 不再做源文件比对；Tf 在 PRD 生成后立即执行，FAIL → 自动补充 prd.md；职责清晰：PyramidPRD 管质量，PRD2JSON 管转换 |
 | 15 | PRDing Ralph 模型 | A1+A2 由 Background Agent 编排器执行，PyramidPRD 主对话 Tf 后立即返回；context 隔离（~50KB vs ~245KB）；与 Coding/Testing Ralph 一致 |
+| 16 | PRDReview 精简为双模式（A1 自动 + Standalone） | 删除独立项目审查模式（PRDing 全自动化后不再需要）；新增 Standalone 任意 .md 审查，备份原文件为 `{stem}_original.md` → 修复后覆盖原文件 → 产出 `{stem}_review.json` |
 
 ---
 
@@ -1144,7 +1149,7 @@ Lead Agent
 | 文件 | 唯一写入方 | 消费方 | 说明 |
 |------|-----------|-------|------|
 | `tasks/<id>/prd.md` | PyramidPRD(主), PRDReview(受控覆盖) | PRD2JSON(只读), Lead(designRefs), 人类 | §1-§8 完整设计+计划 |
-| `tasks/<id>/dev.json` | PRD2JSON | Lead, Testing, Coding, Finalize, BotoolAgent.sh, PRDReview(Enrich只读) | 胖格式机读 DT |
+| `tasks/<id>/dev.json` | PRD2JSON | Lead, Testing, Coding, Finalize, BotoolAgent.sh | 胖格式机读 DT |
 | `./dev.json` | PRD2JSON | BotoolAgent.sh, Lead | 根目录兼容副本 |
 | `tasks/registry.json` | PRD2JSON | Coding, BotoolAgent.sh, Viewer, Finalize | 项目注册表 |
 | `tasks/<id>/prd-completeness-report.md` | PyramidPRD(Tf) | 人类 | Transform 完整性比对（v2 移至 Tf） |
@@ -1187,8 +1192,7 @@ Lead Agent
 | Coding SKILL | prd.json 路径 + branchName | dev.json | 路径替换 |
 | Finalize SKILL | prd.json branchName | dev.json | 路径替换 |
 | BotoolAgent.sh | prd.json (6 处硬编码) | dev.json | 全局替换 basename + PRD_FILE 变量 |
-| PRDReview (PRD审查) | prd.md + 可覆盖 | prd.md (保留覆盖) | 覆盖后新增下游同步提示(重跑 /prd2json) |
-| PRDReview (Enrich审查) | prd.json (5 维度) | dev.json (8 维度) | 路径替换 + 新增 3 维度 |
+| PRDReview | prd.md + 可覆盖 | prd.md (A1 自动覆盖) + Standalone 任意 .md | A1 auto-chain 自动覆盖；Standalone 备份原文件后覆盖 + `_review.json`；删除独立项目审查模式 |
 
 ### Viewer 层（不在本 PRD 范围，单独 PRD）
 
@@ -1242,7 +1246,7 @@ Phase 6 依赖 Stream 1 Phase 1-3 + Stream 2 Phase 4（至少 Journal）
 | DT-005 | 输出从 slim prd.json → fat dev.json | Schema 变更：移除 prdSection → 新增 description(必填), AC[](必填), designRefs[](必填), files[](可选)；删除 constitutionFusedAt/knownGaps |
 | DT-006 | 规范融合全自动化 | 从 qa-journal.md 读取 R1 规范确认结果（无 journal → 自动保留全部）；[规范] 条目直接生成到 dev.json AC[]；**删除** Step 3 修改 prd.md 的全部逻辑；**删除**用户确认 AskUserQuestion |
 | DT-007 | testCases/evals/steps/playwrightMcp/sessions 保留 | 验证现有逻辑在 dev.json 格式下正常工作；testCases 生成仍须先读 PRD 内容（通过 designRefs 替代 prdSection） |
-| DT-008 | 双写 + Archiving + Checklist | prd.json → dev.json 双写；Archiving 检查旧 prd.json 和 dev.json；17 项 Checklist（完整性比对已移至 PyramidPRD DT-003 Tf） |
+| DT-008 | 双写 + Archiving + Checklist | prd.json → dev.json 双写；Archiving 检查旧 prd.json 和 dev.json；18 项 Checklist（含 prd-dev-consistency；完整性比对已移至 PyramidPRD DT-003 Tf） |
 | DT-009 | registry.json 字段更新 | 新增 devJson，移除 prdJson，保留 prdMd |
 | DT-010 | Viewer Mode 文字更新 | 提示文字 prd.json → dev.json；Viewer 模式检测 + dev server 启动逻辑保留 |
 
@@ -1250,7 +1254,7 @@ Phase 6 依赖 Stream 1 Phase 1-3 + Stream 2 Phase 4（至少 Journal）
 
 > 改动文件: Lead, Testing, Coding, Finalize, BotoolAgent.sh, PRDReview
 > 前置: Phase 2
-> 产出: 完整 CLI 链路读取 dev.json + PRDReview A1 自动模式 + Enrich 升级
+> 产出: 完整 CLI 链路读取 dev.json + PRDReview 双模式（A1 自动 + Standalone）+ A2 Checklist 18 项
 
 | DT | 标题 | 核心改动 |
 |----|------|---------|
@@ -1259,8 +1263,8 @@ Phase 6 依赖 Stream 1 Phase 1-3 + Stream 2 Phase 4（至少 Journal）
 | DT-013 | Coding SKILL — dev.json 路径 | 全局替换 prd.json → dev.json |
 | DT-014 | Finalize SKILL — dev.json 路径 | 全局替换 |
 | DT-015 | BotoolAgent.sh — 路径更新 | basename "prd.json" → "dev.json"；PRD_FILE 指向 dev.json（6 处） |
-| DT-016 | PRDReview — A1 自动模式 + 独立运行模式 | auto-chain 中: Circuit Breaker 默认 accept + advisory；独立运行时: 保留完整用户交互 + 覆盖 prd.md + 下游同步提示；两种模式共用: Codex 敌对循环 / 降级模式 / fail-closed |
-| DT-017 | PRDReview — Enrich 审查升级 | enrich 目标从 prd.json → dev.json；新增 field-completeness 维度（description≥2句/AC≥3条/designRefs≥1条）；新增 designRef-validity 维度（校验 §X.Y 在 prd.md 中存在）；新增 prd-dev-consistency 维度（prd.md §7 vs dev.json DT/Phase 一致性） |
+| DT-016 | PRDReview — 双模式（A1 自动 + Standalone） | auto-chain 中: Circuit Breaker 默认 accept + advisory；**Standalone**: 参数为文件路径时跳过 registry 查找，备份原文件为 `{stem}_original.md` → 修复后覆盖原文件 → 产出 `{stem}_review.json`；两种模式共用: Codex 敌对循环 / 降级模式 / fail-closed；**删除**独立项目审查模式（PRDing 自动化后不再需要） |
+| DT-017 | A2 Checklist 扩展 17→18 项 | 新增 prd-dev-consistency 维度（prd.md §7 vs dev.json DT/Phase 一致性）；原 Enrich 审查 field-completeness + designRef-validity 已在 17 项 Checklist 中 |
 
 ### Phase 4: 执行引擎 + 问答加速（P1, 5 DT）
 
@@ -1296,7 +1300,7 @@ Phase 6 依赖 Stream 1 Phase 1-3 + Stream 2 Phase 4（至少 Journal）
 
 | DT | 标题 | 核心改动 |
 |----|------|---------|
-| DT-027 | 重新转换 botool-present-v16 | 验证: CREATE TABLE 字段 ≥ 95%，规则覆盖 ≥ 40%，dev.json fat 完整，T7 无假阳性，BotoolAgent.sh 启动正确，PRDReview Enrich 8 维度通过，方案卡交互 ≤ 10 次，Ralph 自动管线端到端通过 |
+| DT-027 | 重新转换 botool-present-v16 | 验证: CREATE TABLE 字段 ≥ 95%，规则覆盖 ≥ 40%，dev.json fat 完整，T7 无假阳性，BotoolAgent.sh 启动正确，A2 Checklist 18 项通过（含 prd-dev-consistency），方案卡交互 ≤ 10 次，Ralph 自动管线端到端通过 |
 
 ### DT 统计
 
@@ -1330,10 +1334,10 @@ Phase 6 依赖 Stream 1 Phase 1-3 + Stream 2 Phase 4（至少 Journal）
 | BR-012 | e2e 必含 playwrightMcp | steps 3-8，url 相对路径 | DT-007 |
 | BR-013 | 双写策略 | tasks/<id>/ + 根目录 | DT-008 |
 | BR-014 | 旧特征归档 | branchName 不同 → archive/ | DT-008 |
-| BR-015 | 17 项 Checklist 全通过 | 任一失败 → 拒绝保存（原 15 + field-completeness + designRef-validity） | DT-008 |
+| BR-015 | 18 项 Checklist 全通过 | 任一失败 → 拒绝保存（原 15 + field-completeness + designRef-validity + prd-dev-consistency） | DT-008, DT-017 |
 | BR-016 | 完整性比对（Tf 执行） | Transform: SOURCE_PRD.ref；DRAFT: DRAFT.md；PRD 生成后立即执行，FAIL → 自动补充 prd.md | DT-003 |
-| BR-017 | PRDReview 保留覆盖 + 下游同步 | 覆盖 prd.md 后检测 dev.json → 提示重跑 /prd2json；同步产出 prd-review-fixed.md | DT-016 |
-| BR-018 | PRDReview Enrich 审查 8 维度 | 原 5 + field-completeness + designRef-validity + prd-dev-consistency | DT-017 |
+| BR-017 | PRDReview 统一覆盖策略 | A1 auto-chain: 自动覆盖 prd.md + 产出 prd-review-fixed.md；Standalone: 备份 `{stem}_original.md` → 覆盖原文件 + 产出 `{stem}_review.json` | DT-016 |
+| BR-018 | **A2 Checklist 18 项** | 原 17 项 + prd-dev-consistency（prd.md §7 vs dev.json DT/Phase 一致性） | DT-008, DT-017 |
 | BR-019 | Journal 每层必写 | 每个 L 层结束写入 qa-journal.md（含方案卡选择记录） | DT-018 |
 | BR-020 | 大文件阈值 | > 5000 行 C1，2000-5000 C2，< 2000 当前流程 | DT-023 |
 | BR-021 | **方案卡每题必有 AI 推荐** | 推荐优先级: 代码扫描 > 前序答案 > 最佳实践 > 最安全 | DT-021 |
@@ -1346,17 +1350,18 @@ Phase 6 依赖 Stream 1 Phase 1-3 + Stream 2 Phase 4（至少 Journal）
 | BR-028 | **PRD2JSON 零交互** | R1 结果从 journal 读取；不做源文件比对（已由 Tf 完成） | DT-006, DT-008 |
 | BR-029 | **PRDReview auto-chain 默认行为** | Circuit Breaker 默认 accept + advisory（不阻塞管线） | DT-016 |
 | BR-030 | **模式精简 4→3** | 删除快速修复模式，保留: 完整规划/功能开发/Transform | DT-002 |
-| BR-031 | **17 项 Checklist** | 原 15 项 + field-completeness + designRef-validity | DT-008 |
+| BR-031 | **18 项 Checklist** | 原 15 + field-completeness + designRef-validity + prd-dev-consistency | DT-008, DT-017 |
 | BR-032 | **S1 代码扫描全模式共享** | Transform 也执行 S1，Tg DT 分解参考目标项目代码库 | DT-002, DT-019 |
 | BR-033 | **Phase 5.5 外部依赖全模式共享** | Transform 也执行 Phase 5.5 prerequisites 检测 | DT-002 |
-| BR-034 | **PRDReview Enrich 第 8 维度** | prd.md §7 vs dev.json 一致性审查（DT 数量/Phase 结构匹配） | DT-017 |
+| BR-034 | **A2 Checklist 第 18 项** | prd-dev-consistency: prd.md §7 vs dev.json DT 数量/Phase 结构一致性校验 | DT-008, DT-017 |
 | BR-035 | **Journal 纯 Markdown 格式** | 固定标题锚点（`## R1 规范确认`、`## L1 方案卡`）；Grep+Read 定位；不用 YAML | DT-018 |
 | BR-036 | **大文件并行 Subagent ≤ 4** | > 4 个 Phase Bundle 时分批执行（先 4 个完成后再下一批） | DT-023 |
 | BR-037 | **方案卡 2-4 选项 + 逃生口** | 每题 2-4 个预设选项 + "其他（自行输入）"；> 4 选项 → 拆分问题 | DT-021 |
 | BR-038 | **eval 命令安全约束** | `evals[].command` 限制为已知安全模板（`npx tsc --noEmit`、`npm test`、`npm run lint` 等）；拒绝管道符(`\|`)、链式执行(`&&`/`\|\|`/`;`)、重定向(`>`)等 shell 元字符；Checklist 项 8 校验时强制验证 | DT-008 |
 | BR-039 | **Transform 源路径安全校验** | SOURCE_PRD.ref 存储的路径必须经 realpath 归一化，校验在项目根目录或用户指定允许根内；拒绝含 `..` 或符号链接逃逸的路径；Ti 阶段写入前校验 | DT-003 |
 | BR-040 | **Codex auto-chain 沙箱边界** | PRDReview A1 的 Codex `exec --full-auto` 运行在 Codex 内置沙箱（workspace-write 权限，限项目目录 + /tmp）；auto-chain 中 prd.md 覆盖仅限 `tasks/<id>/prd.md`，不写项目根外文件 | DT-016 |
-| BR-041 | **管线并发保护** | PRDing Ralph 后台执行期间，手动 `/prdreview` 或 `/prd2json` 应检查 `tasks/<id>/pipeline.lock`（编排器启动时创建，完成/失败时删除）；锁存在时拒绝手动执行并提示"后台管线运行中，请等待完成或先取消"；Stale lock 清理: PID 不存在或 TTL > 30min 时自动清除 | DT-001, DT-016 |
+| BR-041 | **管线并发保护** | PRDing Ralph 后台执行期间，手动 `/prd2json` 应检查 `tasks/<id>/pipeline.lock`（编排器启动时创建，完成/失败时删除）；锁存在时拒绝手动执行并提示"后台管线运行中，请等待完成或先取消"；Standalone PRDReview 不检查 lock（不涉及项目管线）；Stale lock 清理: PID 不存在或 TTL > 30min 时自动清除 | DT-001 |
+| BR-042 | **PRDReview Standalone 模式** | 参数为文件路径（含 `/` 或以 `.md` 结尾）时进入 standalone 模式；跳过 registry 查找和项目选择；备份原文件为 `{stem}_original.md` → 修复后覆盖原文件 → 产出 `{stem}_review.json`；Codex 5 维度敌对循环完整保留；安全规则 2 放宽：standalone 允许写入源文件所在目录 | DT-016 |
 
 ---
 
@@ -1381,15 +1386,15 @@ Phase 6 依赖 Stream 1 Phase 1-3 + Stream 2 Phase 4（至少 Journal）
 - 输出从 slim prd.json → fat dev.json
 - 规范融合全自动化（从 journal 读取 R1 结果，删除用户确认 AskUserQuestion）
 - PRD2JSON 变为 prd.md 只读 + 零用户交互
-- 双写 + Archiving + 17 项 Checklist + registry 更新
+- 双写 + Archiving + 18 项 Checklist（含 prd-dev-consistency）+ registry 更新
 - ~~完整性比对~~ → 已移至 PyramidPRD Tf（PRD2JSON 不再做源文件比对）
 - Viewer 模式检测和 dev server 启动保留（文字更新）
 
-**PRDReview SKILL.md + Viewer API:**
-- A1 自动模式: auto-chain 中 Circuit Breaker 默认 accept + advisory
-- 独立运行模式: 保留完整用户交互 + 覆盖 prd.md + 下游同步提示
-- Enrich 审查模式: 目标从 prd.json → dev.json，新增 3 个审查维度（含 prd-dev-consistency）
-- 覆盖 prd.md 时同步产出 prd-review-fixed.md（修复 diff 记录）
+**PRDReview SKILL.md:**
+- A1 自动模式: auto-chain 中 Circuit Breaker 默认 accept + advisory，自动覆盖 prd.md + 产出 prd-review-fixed.md
+- **Standalone 模式**: 参数为文件路径时跳过 registry，审查任意 .md 文件，备份原文件为 `{stem}_original.md` → 修复后覆盖原文件 → 产出 `{stem}_review.json`
+- ~~独立项目审查模式~~: **已删除**（PRDing 全自动化后不再需要手动 /prdreview 项目审查）
+- ~~Enrich 审查~~: **已删除**（prd-dev-consistency 移至 A2 Checklist 第 18 项）
 
 **消费方:**
 - CLAUDE.lead.md: fat-only 模式，删 slim + prdSection
@@ -1427,10 +1432,10 @@ Phase 6 依赖 Stream 1 Phase 1-3 + Stream 2 Phase 4（至少 Journal）
 - [ ] PRD2JSON 对 prd.md 零写入（Grep 验证无 Write/Edit prd.md 指令）
 - [ ] PRD2JSON 零用户交互（无 AskUserQuestion 调用，规范从 journal 读取）
 - [ ] PRDReview auto-chain 模式 Circuit Breaker 默认 accept + advisory
-- [ ] PRDReview 独立运行时覆盖 prd.md 后正确提示用户重跑 /prd2json
-- [ ] PRDReview Enrich 审查通过 8 维度（原 5 + field-completeness + designRef-validity + prd-dev-consistency）
+- [ ] PRDReview Standalone: `/prdreview /path/to/test.md` 备份 `test_original.md` → 覆盖修复 `test.md` → 产出 `test_review.json`
+- [ ] A2 Checklist 18 项全通过（原 17 + prd-dev-consistency）
 - [ ] R1 规范确认结果正确写入 journal 并被 PRD2JSON 读取
-- [ ] pipeline.lock: 编排器启动时创建，完成/失败时删除；手动 /prdreview /prd2json 检查锁后拒绝并发执行
+- [ ] pipeline.lock: 编排器启动时创建，完成/失败时删除；手动 /prd2json 检查锁后拒绝并发执行
 - [ ] pipeline.lock stale 清理: 锁文件存在但对应后台进程已不存在时自动清除（基于 PID 或 TTL ≤ 30min）
 
 ### 三模式统一
@@ -1507,7 +1512,10 @@ Phase 6 依赖 Stream 1 Phase 1-3 + Stream 2 Phase 4（至少 Journal）
 | Codex 不可用降级（Claude-only） | ✅ 不变 |
 | fail-closed 原则 | ✅ 不变 |
 | PRD 审查 5 维度（完整性/一致性/可实现性/安全性/UX） | ✅ 不变 |
-| **review-save 覆盖 prd.md** | ✅ **保留**（auto-chain 中自动覆盖；独立运行时用户确认后覆盖 + 下游同步提示） |
+| **review-save 覆盖 prd.md** | ✅ **保留**（仅 A1 auto-chain 自动覆盖；standalone 不覆盖） |
+| 🆕 **Standalone 任意 .md 审查** | 🆕 新增第二运行模式（参数为文件路径时进入），备份原文件后覆盖 + `_review.json` |
+| ~~独立项目审查（手动 /prdreview）~~ | ⛔ **已删除**（PRDing 全自动化后不再需要） |
+| ~~Enrich 审查（dev.json 审查）~~ | ⛔ **已删除**（prd-dev-consistency 移至 A2 Checklist 第 18 项） |
 | 临时文件清理 | ✅ 不变 |
 | prd-review.json 报告格式（含 findings/轮次/状态） | ✅ 不变 |
 | 多项目选择（AskUserQuestion） | ✅ 不变 |
@@ -1523,7 +1531,7 @@ Phase 6 依赖 Stream 1 Phase 1-3 + Stream 2 Phase 4（至少 Journal）
 | 1a | auto-chain 机制 | **PRDing Ralph（Background Agent 编排器）** | Tf 后 Task(run_in_background) → A1+A2；spike 已验证 subagent 可调 Skill |
 | 1b | Subagent 在 Skill 中的调用 | **安全可用** | spike 测试: 主对话保留所有工具(含 Task/Skill)；Task subagent 有 Skill 但无嵌套 Task |
 | 4 | Phase 4-5 是否拆为独立 PRD | **不拆，27 DT 保持一个 PRD** | 统一管理，避免两份文档同步负担 |
-| 7 | PRDReview 修复采纳流程 | **保留覆盖能力** | auto-chain 中自动覆盖；独立运行时用户确认覆盖 |
+| 7 | PRDReview 修复采纳流程 | **A1 自动覆盖；独立项目审查已删除** | auto-chain 中自动覆盖 prd.md；PRDing 全自动化后不再需要手动项目审查 |
 | 9 | 功能开发模式方案卡 | **YES，L1+L4 仍用方案卡** | 即使只有 2 卡也比逐题快 |
 | — | L1 是否用方案卡 | **YES，L1 也用方案卡** | 统一体验 + 逃生口缓解风险 |
 | 10 | PRDReview 位置 | **A1: PRD2JSON 之前** | 先修复 prd.md → PRD2JSON 转换最优版本 |
@@ -1533,7 +1541,7 @@ Phase 6 依赖 Stream 1 Phase 1-3 + Stream 2 Phase 4（至少 Journal）
 | 14 | 完整性比对位置 | **移至 PyramidPRD Tf** | PRD2JSON 只读原则（ADR-4）；Tf 有写 prd.md 权限，可自动补充 |
 | 2 | Q&A Journal 格式 | **纯 Markdown** | 用固定标题锚点（`## R1 规范确认`、`## L1 方案卡`）；Grep+Read 即可定位；YAML frontmatter 增加写入复杂度但收益不大 |
 | 3 | 大文件并行 Subagent 上限 | **≤ 4 并行** | > 4 时分批：先 4 个完成后再 4 个；减少 API 配额压力；实现细节不影响架构 |
-| 5 | PRDReview Enrich 第 8 维度 | **YES，新增 prd.md§7 vs dev.json 一致性审查（必选）** | 捕捉 PRDReview 覆盖后 dev.json 脱节；DT-017 必选维度 |
+| 5 | prd-dev-consistency 校验 | **YES，移入 A2 Checklist 第 18 项** | prd.md §7 vs dev.json 一致性；原 PRDReview Enrich 维度改为 A2 Checklist 校验（Enrich 审查随 Mode 2 删除） |
 | 6 | auto-chain 失败后的状态 | **Ralph 模型 + 明确恢复指令** | Background Agent 编排器执行 A1+A2；失败打印 `请运行 /prdreview 然后 /prd2json`；与 Coding/Testing Ralph 一致 |
 | 8 | 方案卡选项数量 | **2-4 个 + "其他" 逃生口** | 超过 4 个选项说明问题应拆分；"其他（自行输入）"覆盖所有情况 |
 | 15 | PRDing Ralph 执行模型 | **Background Agent 编排器** | PyramidPRD Tf 后启动 background agent 执行 A1+A2；context 隔离（主对话 ~50KB，编排器 ~245KB）；A1→A2 文件交接+自动压缩；非阻塞 |
