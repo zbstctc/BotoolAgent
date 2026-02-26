@@ -1344,8 +1344,18 @@ Phase T1 ──→ T2 ──→ T2.5 ──→ T3 ──→ T4 ──→ T5 ─�
 
 4. 在 metadata 中设置 `transformPhase: 'source-input'`、`sourcePrdPath: '<路径>'`
    4a. 将源文件路径写入 `$TASKS_DIR/<projectId>/SOURCE_PRD.ref`
+       **路径安全校验（不可跳过）：**
+       - 使用 realpath 归一化路径: `SAFE_PATH=$(realpath "$SOURCE_PRD_PATH")`
+       - 拒绝包含 `..` 的路径（路径穿越）
+       - 拒绝符号链接指向项目目录外的文件
+       - 校验失败 → 报错退出，不继续执行
        （供 prd2json 阶段的完整性比对读取）
-5. 告知用户："正在分析您的 PRD 文档..."
+5. **Ti 备份（不可跳过）：**
+   - 将源 PRD 文件备份为 `$PROJECT_DIR/prd_original.md`
+   - 命令: `cp "$SOURCE_PRD_PATH" "$PROJECT_DIR/prd_original.md"`
+   - 此备份用于后续 Tf 字段级比对的基准文件
+   - 备份成功后在 metadata 中记录: `originalBackup: true`
+6. 告知用户："正在分析您的 PRD 文档..."
 
 ---
 
@@ -1742,6 +1752,7 @@ mkdir -p "$PROJECT_DIR"
 $TASKS_DIR/
   <projectId>/
     DRAFT.md                 ← 用户原始 Draft（如从 brainstorm 导入）
+    prd_original.md          ← 源 PRD 备份（Ti 阶段创建，Tf 字段级比对基准）
     prd.md                   ← 生成的 BotoolAgent PRD（标准格式）
     prd.json                 ← 自动化执行用 JSON
   registry.json              ← 项目注册表
@@ -1795,6 +1806,44 @@ $TASKS_DIR/
 | 大文件架构约束 | 源含三层分离/SSE 解耦 | Grep `三层\|SSE.*解耦\|maxDuration` |
 
 若源 PRD 中存在某类信号，但生成 PRD 中 Grep 为空 → 该项标记为 `❌ 缺失`。
+
+#### 步骤 2.5：DT↔prd.md 交叉检查
+
+对生成的 PRD §7 开发计划中的每个 DT：
+1. 确认该 DT 的标题和描述在 PRD §7 Phase 章节中有对应内容
+2. 确认 PRD §7 Phase 章节中的每个任务条目都有对应的 DT
+3. 不匹配的项标记为 ❌：
+   - 孤立 DT（PRD 中无对应 Phase 内容）
+   - 遗漏 DT（PRD Phase 中有任务描述但未创建 DT）
+4. ❌ 项在步骤 4 自动补充中修复
+
+#### 步骤 2.6：SQL 字段完整性校验（Transform 模式）
+
+**前置条件：** 存在 `$PROJECT_DIR/prd_original.md`（Ti 备份）
+
+> 若 `prd_original.md` 不存在（非 Transform 模式或未执行 Ti 备份），跳过此步骤。
+
+1. 从 prd_original.md（源 PRD）Grep 所有 `CREATE TABLE` 语句，提取每张表的字段列表
+2. 从生成的 prd.md Grep 所有 `CREATE TABLE` 语句，提取每张表的字段列表
+3. 逐表比对：
+   - 源表字段列表 vs 生成表字段列表
+   - 缺失字段标记为 ❌
+   - 新增字段标记为 ⚠️（可能是改进，不阻塞）
+4. 字段完整率 = (生成表匹配字段数 / 源表字段数) x 100%
+5. 任一表完整率 < 90% → 该表标记为 ❌，步骤 4 自动补充
+
+```
+SQL 字段完整性校验：
+┌──────────────────┬──────────┬──────────┬──────────┬────────┐
+│ 表名             │ 源字段数 │ 匹配字段 │ 完整率   │ 状态   │
+├──────────────────┼──────────┼──────────┼──────────┼────────┤
+│ users            │  12      │  12      │  100%    │ ✅     │
+│ documents        │  18      │  16      │   89%    │ ❌     │
+│ templates        │   8      │   8      │  100%    │ ✅     │
+└──────────────────┴──────────┴──────────┴──────────┴────────┘
+缺失字段：documents.archived_at, documents.version
+新增字段（⚠️ 不阻塞）：documents.updated_by
+```
 
 #### 步骤 3：输出比对报告（纯文本，**不打断流程，不等待用户**）
 
