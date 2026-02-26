@@ -138,14 +138,25 @@
       "updatedAt": "2026-02-22T00:00:00.000Z"
     },
     "botool-present-v16": {
-      "name": "Botool_Present v1.6 — 数据库初始化 + 新架构落地",
+      "name": "Botool_Present v1.6 — PPT演示文稿管理平台",
       "prdMd": "botool-present-v16/prd.md",
       "prdJson": "botool-present-v16/prd.json",
+      "progress": "botool-present-v16/progress.txt",
       "branch": "botool/botool-present-v16",
       "status": "prd",
       "createdAt": "2026-02-23T00:00:00.000Z",
       "updatedAt": "2026-02-23T00:00:00.000Z"
+    },
+    "botoolagent-arch-v2": {
+      "name": "BotoolAgent PRD 管线全链路升级",
+      "prdMd": "botoolagent-arch-v2/prd.md",
+      "prdJson": "botoolagent-arch-v2/prd.json",
+      "progress": "botoolagent-arch-v2/progress.txt",
+      "branch": "botool/botoolagent-arch-v2",
+      "status": "coding",
+      "createdAt": "2026-02-25T00:00:00.000Z",
+      "updatedAt": "2026-02-26T12:00:00.000Z"
     }
   },
-  "activeProject": null
+  "activeProject": "botoolagent-arch-v2"
 }
