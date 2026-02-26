@@ -93,8 +93,8 @@ ARCHIVE_DIR="$SCRIPT_DIR/tasks/snapshots"
 if [ -n "$PRD_PATH_OVERRIDE" ]; then
   PRD_FILE="$PRD_PATH_OVERRIDE"
   PRD_BASENAME="$(basename "$PRD_PATH_OVERRIDE")"
-  if [ "$PRD_BASENAME" = "prd.json" ]; then
-    # New format: tasks/{id}/prd.json → progress at tasks/{id}/progress.txt
+  if [ "$PRD_BASENAME" = "dev.json" ] || [ "$PRD_BASENAME" = "prd.json" ]; then
+    # New format: tasks/{id}/dev.json → progress at tasks/{id}/progress.txt
     PROGRESS_FILE="$(dirname "$PRD_PATH_OVERRIDE")/progress.txt"
     # Auto-extract PROJECT_ID from parent directory name if not provided
     if [ -z "$PROJECT_ID" ]; then
@@ -112,7 +112,12 @@ if [ -n "$PRD_PATH_OVERRIDE" ]; then
     fi
   fi
 else
-  PRD_FILE="$PROJECT_DIR/prd.json"
+  # Prefer dev.json; fall back to prd.json for backward compatibility
+  if [ -f "$PROJECT_DIR/dev.json" ]; then
+    PRD_FILE="$PROJECT_DIR/dev.json"
+  else
+    PRD_FILE="$PROJECT_DIR/prd.json"
+  fi
   PROGRESS_FILE="$PROJECT_DIR/progress.txt"
 fi
 
@@ -220,14 +225,14 @@ command -v tmux &>/dev/null || { echo "ERROR: tmux required (brew install tmux)"
 CLAUDE_CMD=$(which claude 2>/dev/null || echo "$HOME/.claude/local/claude")
 [ -x "$CLAUDE_CMD" ] || { echo "ERROR: claude CLI not found"; exit 1; }
 
-# 3. prd.json 存在
-[ -f "$PRD_FILE" ] || { echo "ERROR: prd.json not found at $PRD_FILE"; exit 1; }
+# 3. dev.json (or prd.json fallback) exists
+[ -f "$PRD_FILE" ] || { echo "ERROR: dev.json not found at $PRD_FILE"; exit 1; }
 
 echo ">>> 前置检查通过"
 echo "    tmux: $(tmux -V)"
 echo "    claude: $CLAUDE_CMD"
 echo "    项目目录: $PROJECT_DIR"
-echo "    prd.json: $PRD_FILE"
+echo "    dev.json: $PRD_FILE"
 echo "    session: $SESSION_NAME"
 echo ""
 
