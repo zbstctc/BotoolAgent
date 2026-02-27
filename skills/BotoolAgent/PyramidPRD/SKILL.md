@@ -24,21 +24,75 @@ user-invocable: true
 评估复杂度 → 确定问题数量 → 选择模式
     ↓
 L0: 方向探索 - 项目上下文扫描 + 需求方向理解 + 方案选择 + 范围确认
-    ↓  （Quick Fix 跳过 / 用户明确说不需要时跳过）
-L1: 核心识别 - 理解需求本质
+    ↓  → Write qa-journal.md §L0
+    ↓  （用户明确说不需要时跳过）
+L1: 核心识别 - 理解需求本质（Read journal → 方案卡 → Write journal §L1）
     ↓
-代码库扫描（增强版：技术栈 + 数据库 + 组件接口 + API 签名）
+S1: 代码库扫描 → Task(Explore) subagent → codebase-scan.md
     ↓
-L2: 领域分支 - 按维度深入（融合扫描结果）+ 数据模型 + UI 层次
+R1: 规范确认 - 扫描 rules/ 目录，用户确认适用规范 → Write journal §R1
     ↓
-L3: 细节深入 - 实现细节 + 状态流转 + 业务规则 + 组件交互
+L2: 领域分支 - Read journal → 方案卡 → Write journal §L2
     ↓
-L4: 边界确认 - 范围边界 + 文件命名约定 + 现有代码修改范围
+L3: 细节深入 - Read journal → 方案卡 → Write journal §L3
+    ↓
+L4: 边界确认 - Read journal → 方案卡 → Write journal §L4
+    ↓
+Phase 5.5: 外部依赖扫描
     ↓
 L5: 确认门控 - ASCII 多维度可视化确认（架构/数据/UI/规则/计划）
     ↓
-生成多维度 PRD 文档（§1-§8，含 ASCII 图 + 安全检查自动注入）
+G1/W1: PRD 生成 → Task(general-purpose) subagent → prd.md
+    ↓
+PRDing Ralph 后台编排（A1 自动审查 → A2 自动转换）
 ```
+
+### Q&A Journal 持久化机制
+
+**每层结束后 Write journal → 下层开始时 Read journal 恢复上下文。**
+
+Journal 文件路径：`$TASKS_DIR/<projectId>/qa-journal.md`
+
+上下文从线性累积 ~150KB 降至 journal ~3KB + 当前层 ~5KB。
+
+**Journal 格式：**
+
+```markdown
+# Q&A Journal — [项目名]
+> 模式: 功能开发 | 复杂度: 中等
+
+## L0 方向探索
+- 选定方向: [方向 + 一句话说明]
+- 实现思路: [技术方案]
+- 范围: ✅ [要做] / ❌ [不做]
+- 技术栈: [框架 + 语言 + DB]
+
+## S1 代码扫描摘要
+- 技术栈: [Subagent 产出摘要]
+- 关键模块: [组件列表]
+- 已有 API: [端点列表]
+
+## R1 规范确认
+- 已确认规范: [rules/ 扫描结果]
+- 排除: [不适用的规范]
+
+## L1 核心识别
+- Q1: [问题] → [选定答案]
+- Q2: [问题] → [选定答案]
+...
+
+## L2 领域分支
+...
+
+## L3 细节深入
+...
+
+## L4 边界确认
+...
+```
+
+**写入时机：** 每层用户确认后立即 Write（追加模式，不覆盖前序层级）。
+**读取时机：** 每层开始前 Read 全部 journal 内容作为上下文输入。
 
 ---
 
@@ -119,19 +173,19 @@ L5: 确认门控 - ASCII 多维度可视化确认（架构/数据/UI/规则/计�
 
 **目标：** 根据用户的初始需求描述，AI 评估复杂度并推荐模式，但最终由用户选择。
 
-**注意：** 如果用户的消息中已包含 `[模式:快速修复]`、`[模式:功能开发]`、`[模式:导入]` 等模式标记（由 Viewer 前端自动添加），则跳过模式选择，直接按指定模式进入对应流程。
+**注意：** 如果用户的消息中已包含 `[模式:功能开发]`、`[模式:完整规划]`、`[模式:导入]` 等模式标记（由 Viewer 前端自动添加），则跳过模式选择，直接按指定模式进入对应流程。
 
 **步骤 1：接收用户需求描述**
 
 用户提供初始需求描述后，在内部进行复杂度评估（不展示给用户）：
 
-| 分析维度 | 权重 | Quick Fix | Feature Build | Full Planning |
-|----------|------|-----------|---------------|---------------|
-| 涉及文件数（预估） | 30% | 1-2个 | 3-8个 | 8+个 |
-| 是否有数据模型变更 | 25% | 无 | 可能有 | 一定有 |
-| 是否需要新建模块/页面 | 20% | 否 | 可能 | 是 |
-| 是否涉及多个系统层 | 15% | 1层 | 2-3层 | 全栈 |
-| 描述复杂度（字数/概念） | 10% | <50字 | 50-200字 | 200+字 |
+| 分析维度 | 权重 | Feature Build | Full Planning |
+|----------|------|---------------|---------------|
+| 涉及文件数（预估） | 30% | 3-8个 | 8+个 |
+| 是否有数据模型变更 | 25% | 可能有 | 一定有 |
+| 是否需要新建模块/页面 | 20% | 可能 | 是 |
+| 是否涉及多个系统层 | 15% | 2-3层 | 全栈 |
+| 描述复杂度（字数/概念） | 10% | 50-200字 | 200+字 |
 
 **步骤 2：使用 AskUserQuestion 呈现选择**
 
@@ -142,7 +196,6 @@ L5: 确认门控 - ASCII 多维度可视化确认（架构/数据/UI/规则/计�
       "question": "我分析了你的需求，推荐使用以下模式。请选择：",
       "header": "模式选择",
       "options": [
-        { "label": "快速修复 (~2分钟)", "description": "适合改 bug、调样式、小调整。流程：描述需求->确认任务->自动执行" },
         { "label": "功能开发 (~10-15分钟) 推荐", "description": "适合新功能、新页面、多文件变更。流程：核心问答->任务规划->确认->自动执行" },
         { "label": "完整规划 (~30-45分钟)", "description": "适合架构级变更、新模块、复杂系统。流程：5层金字塔问答->富化规格->确认->自动执行" },
         { "label": "PRD 导入 (~15-20分钟)", "description": "你已有现成的需求文档，系统将分析→补充→转换为标准格式→拆解为开发任务" }
@@ -157,7 +210,6 @@ L5: 确认门控 - ASCII 多维度可视化确认（架构/数据/UI/规则/计�
 
 **步骤 3：根据选择进入不同流程**
 
-- **快速修复** -> 跳过 L0，直接进入 Phase 1-Quick（简化流程）
 - **功能开发** -> 进入 Phase 0.5 L0 方向探索 → Phase 1（跳过 L2、L3，只走 L1 + L4 + 确认）
 - **完整规划** -> 进入 Phase 0.5 L0 方向探索 → Phase 1（完整 L1->L5 流程，即当前默认流程）
 - **PRD 导入** -> 跳过 L0，进入 Phase T1-Transform（Transform 流程，见下文）
@@ -169,7 +221,6 @@ L5: 确认门控 - ASCII 多维度可视化确认（架构/数据/UI/规则/计�
 **目标：** 在进入 L1 核心问答之前，先建立对项目和需求方向的共识，避免后续问答走偏。通过 2-3 个 AskUserQuestion 完成方向探索。
 
 **跳过条件：**
-- 快速修复模式 → 自动跳过
 - PRD 导入模式 → 自动跳过
 - 用户消息中包含 `[跳过探索]` 或明确说"不需要探索"/"直接开始" → 跳过
 - 需求描述已非常具体且明确（如已包含技术方案、文件路径、组件名称等） → AI 判断可跳过，但需告知用户
@@ -288,45 +339,6 @@ L0 上下文摘要:
 
 ---
 
-### Phase 1-Quick: 快速修复流程
-
-**适用：** 用户选择了快速修复模式
-
-1. 用户已提供初始描述
-2. 执行代码库扫描（如果有代码库）
-3. AI 自动生成 1-3 个 DT 任务
-4. 使用 AskUserQuestion 确认任务列表
-5. 自动检测 tasks 目录并创建项目子目录：`TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"` → `mkdir -p "$TASKS_DIR/<projectId>"`
-6. 生成极简 PRD.md 到 `$TASKS_DIR/<projectId>/prd.md`（只含 § 1 项目概述 + § 7 开发计划，无 § 2-6）
-7. 快速模式规范处理（跳过 Stage 2 的交互式规则选择，但自动检测规范）：
-   - 使用 Glob 检查项目中是否存在 `rules/*.md` 或 `BotoolAgent/rules/*.md` 目录
-   - **有 rules/ 目录时**：自动扫描所有 `rules/*.md` 文件，为每个规范文件生成 `file + checklist` 格式的 constitution 条目（与功能开发/完整规划模式一致）：
-     ```json
-     {
-       "constitution": [
-         {
-           "id": "rule-001",
-           "name": "[规范名称]",
-           "file": "rules/[filename].md",
-           "checklist": [
-             "[从规范文件提取的关键检查项 1]",
-             "[关键检查项 2]",
-             "[关键检查项 3]"
-           ]
-         }
-       ]
-     }
-     ```
-     - 每个规范文件读取摘要，提取 3-5 条最关键的 checklist 条目
-     - 仅选择与当前 DT 任务相关的规范（通过关键词匹配判断相关性）
-     - 将 checklist 中的 `[规范]` 条目注入到 PRD.md § 7 对应 DT 的验收条件中
-   - **无 rules/ 目录时**：跳过规范处理，constitution 为空数组（向后兼容旧行为）
-   - **旧模式兼容**：如果项目使用旧的 `content` 格式规范，检测逻辑为 `rule.file ? "新模式" : rule.content ? "旧模式" : "无规范"`
-8. 生成 prd.json 到 `$TASKS_DIR/<projectId>/prd.json`（含 prdFile 指向 `<projectId>/prd.md`、每个 DT 有 prdSection、constitution 使用 file+checklist 格式），同时更新 `$TASKS_DIR/registry.json`
-9. 执行安全关键词扫描（仅对高风险关键词：认证/支付）
-
----
-
 ### Phase 1: 接收需求描述并评估复杂度
 
 用户会提供一句话需求描述，例如：
@@ -349,29 +361,121 @@ L0 上下文摘要:
 
 ---
 
-### Phase 2: L1 核心识别
+### 方案卡交互协议（L1-L4 统一）
+
+**L1-L4 每层问答从 N 个 AskUserQuestion 合并为 1 个方案卡。** 方案卡在 question 文本中列出所有问题和 AI 推荐，用户只需选择「全部接受」或输入修改指令。
+
+#### 方案卡模板
+
+```
+【LX: 层级名 — AI 方案卡】
+
+基于: [前序层级 + 代码扫描结果摘要]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ Q1. [问题描述]
+   A) [选项A描述]
+   B) [选项B描述]  ← 匹配现有项目
+   C) [选项C描述]
+   → AI 选择: B
+
+ Q2. [问题描述]
+   A) [选项A描述]  ← 推荐
+   B) [选项B描述]
+   → AI 选择: A
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+要修改请在下方 Type something 中输入如 "Q3 换 B"
+```
+
+#### AskUserQuestion 结构（3 个固定选项）
+
+```json
+{
+  "questions": [{
+    "question": "【方案卡内容】\n\n━━━━━━\n要修改请在下方 Type something 中输入如 \"Q3 换 B\"",
+    "header": "LX 层级名",
+    "options": [
+      { "label": "全部接受 (推荐)", "description": "按 AI 推荐方案继续" },
+      { "label": "方向不对，重新生成", "description": "补充说明后 AI 重新出方案卡" },
+      { "label": "↓ 请在下方 Type something 输入修改", "description": "如 'Q3 换 B'" }
+    ],
+    "multiSelect": false
+  }],
+  "metadata": {
+    "source": "pyramidprd",
+    "level": <层级号>,
+    "levelName": "LX: 层级名",
+    "proposalCard": true
+  }
+}
+```
+
+#### AI 推荐选择规则
+
+**强制规则：每个 Q 必须有且仅有一个 AI 推荐（← 标记），无例外。**
+
+| 优先级 | 依据来源 | 示例 |
+|--------|---------|------|
+| 1 | 代码库扫描 (codebase-scan.md) | 项目用 Prisma → 推荐 PostgreSQL + Prisma |
+| 2 | L0 方向 + 前序层级回答 (journal) | 用户选"管理面板" → 推荐 DataTable |
+| 3 | 行业最佳实践 | 无代码库 → 推荐当前主流方案 |
+| 4 | 最安全/最简单 | 无法判断时 → 推荐最稳妥选项 |
+
+#### 修改指令解析规则
+
+| 用户输入 | 解析结果 |
+|---------|---------|
+| `Q3 换 B` | 第 3 题改为选项 B |
+| `Q2 换 C, Q5 换 B` | 第 2 题改为 C，第 5 题改为 B |
+| `第 3 个问题换成 B` | 同 Q3 换 B |
+| `认证方式换成 Session` | 按关键词匹配到对应 Q，选项匹配到对应字母 |
+
+**解析优先级**: 精确格式 `QN 换 X` → 关键词匹配 → 无法匹配则追问一次确认。
+
+**回显确认规则（强制）**: 修改指令解析后，AI 必须先回显解析结果（"收到：Q3 改为 B(Session 认证)"），等用户确认后再执行。
+
+#### 逃生口处理
+
+- 用户选"方向不对，重新生成" → AI 追问补充说明 → 重新生成方案卡
+- **最多重试 2 次**，仍不满意 → 切换为逐题模式（恢复传统 AskUserQuestion per question）
+
+#### Journal 写入
+
+每层方案卡确认后，立即将所有 Q/A 结果写入（追加） `$PROJECT_DIR/qa-journal.md` 对应章节。
+
+---
+
+### Phase 2: L1 核心识别（方案卡）
 
 **目标：** 理解需求的本质和范围
 
-**必问话题：**
+**Read journal** → 获取 L0 上下文
+
+**必问话题（4-7 题，根据复杂度决定）：**
 1. **问题域** - 这个需求涉及哪些领域？
 2. **目标用户** - 谁会使用这个功能？
 3. **核心价值** - 解决什么痛点？
 4. **规模预期** - MVP 还是完整功能？
 
-（问题示例与格式同之前，此处省略以避免冗余。保持所有 AskUserQuestion 调用必须带 metadata。）
+根据复杂度追加 3 题（中等/复杂需求）：
+5. **优先级** - 哪些功能是 P0 必做？
+6. **数据源** - 数据从哪里来？
+7. **交付形式** - 需要哪些页面/API？
 
-**L1 完成后：**
-- 根据答案确定激活哪些 L2 维度（frontend, backend, ux, architecture）
-- 简短总结收集的信息
-- **进入代码库扫描阶段**（如果有代码库）
-- 扫描完成后进入 L2
+**使用方案卡交互协议**发送 1 个 AskUserQuestion（header: "L1 核心识别"）。
+
+**L1 完成后 → Write journal §L1：**
+- 记录所有 Q/A 选择结果
+- 确定激活哪些 L2 维度（frontend, backend, ux, architecture）
+- **进入 S1 代码库扫描**（如果有代码库）→ R1 规范确认 → L2
 
 ---
 
-### Phase 2.5: 代码库感知扫描（L1→L2 之间）（增强版）
+### Phase 2.5: S1 代码库感知扫描（Explore Subagent）
 
-**目标：** 扫描当前项目代码库，识别技术栈、架构模式、现有组件和数据模型，为后续问答和 PRD 生成提供精准上下文。
+**目标：** 扫描当前项目代码库，识别技术栈、架构模式、现有组件和数据模型。**三模式统一（含 Transform）。**
 
 **触发条件：** L1 完成后自动判断是否有代码库。
 
@@ -379,217 +483,194 @@ L0 上下文摘要:
 
 使用 Glob 工具检查当前工作目录是否有项目文件：
 - 检查 `package.json`、`tsconfig.json`、`Cargo.toml`、`go.mod`、`requirements.txt`、`pom.xml` 等
-- 如果没有任何项目文件 → **跳过扫描**，在 metadata 中标记 `codebaseScanned: false`，直接进入 L2
-- 如果有项目文件 → **执行扫描**
+- 如果没有任何项目文件 → **跳过扫描**，标记 `codebaseScanned: false`，直接进入 R1
+- 如果有项目文件 → **执行 Explore Subagent 扫描**
 
-#### 扫描步骤（有代码库时执行）
+#### 使用 Task(Explore) 执行扫描
 
-**步骤 1：技术栈检测**（不变）
-- 使用 Read 读取 `package.json`（检查 dependencies/devDependencies）
-- 识别框架（React、Next.js、Vue、Express、Django 等）
-- 识别语言（TypeScript、JavaScript、Python、Go 等）
-- 识别构建工具（Vite、Webpack、Turbo 等）
+**将代码扫描委托给 Explore subagent，释放主对话上下文。**
 
-**步骤 2：目录结构分析**（不变）
-- 使用 Glob 扫描顶层目录结构（`*`、`src/*`、`app/*`）
-- 识别项目架构模式（monorepo、标准 src 结构、Next.js App Router 等）
-- 记录关键目录（components、pages/app、api、lib、utils 等）
+```
+Task(subagent_type="Explore", prompt="""
+对当前项目执行全面代码库扫描，输出结构化 codebase-scan.md。
 
-**步骤 3：现有组件/路由/API 识别**（不变）
-- 使用 Glob 扫描 `src/components/**/*.{tsx,jsx,vue}` 识别现有组件
-- 使用 Glob 扫描 `src/app/**/page.{tsx,jsx}` 或 `pages/**/*.{tsx,jsx}` 识别路由
-- 使用 Glob 扫描 `src/app/api/**/*.{ts,js}` 或 `api/**/*.{ts,js}` 识别 API 接口
-- 记录关键组件名称和路由路径
+扫描维度：
+1. 技术栈检测：package.json dependencies、框架、语言、构建工具
+2. 目录结构：顶层目录、架构模式（monorepo/App Router 等）
+3. 现有组件/路由/API：组件名称、路由路径、API 端点
+4. 数据模型：schema.prisma、types.ts、SQL 建表语句
+5. 数据库 Schema：表名、字段、约束、RLS 策略
+6. UI 组件接口：interface.*Props 定义
+7. API 签名：export GET/POST/PUT/DELETE
+8. 业务逻辑：services/、lib/ 的 export 列表
 
-**步骤 4：数据模型分析**（不变）
-- 使用 Grep 搜索 `schema.prisma`、`models.py`、数据库模型定义
-- 使用 Grep 搜索类型定义文件（`types.ts`、`interfaces.ts`）
-- 识别核心数据模型和关系
+输出格式（Markdown）：
+# Codebase Scan Report
+## 技术栈
+## 目录结构
+## 现有组件
+## 现有路由
+## 现有 API 端点
+## 数据模型
+## 数据库 Schema（SQL 表摘要）
+## UI 组件接口
+## 业务逻辑函数
 
-**步骤 5：数据库 Schema 扫描**（NEW）
-- 使用 Glob 搜索 `**/*.sql`、`**/migrations/**`、`**/schema.prisma`
-- 读取现有 SQL 建表语句，提取表名、字段、约束
-- 识别哪些表已存在、哪些有 RLS 策略
-- 这些信息将用于 PRD § 2（当前状态）和 § 4（数据设计）
-
-**步骤 6：UI 组件接口扫描**（NEW）
-- 使用 Grep 搜索 `interface.*Props`、`type.*Props` 提取组件 Props 定义
-- 识别可复用的组件及其接口签名
-- 这些信息将用于 PRD § 5（UI 设计，标记可复用组件）
-
-**步骤 7：API 签名扫描**（NEW）
-- 使用 Grep 搜索 `export.*GET`、`export.*POST`、`export.*PUT`、`export.*DELETE`
-- 识别已有 API 端点的方法签名
-- 这些信息将用于 PRD § 2（当前状态）
-
-**步骤 8：业务逻辑扫描**（NEW）
-- 读取关键 `services/`、`lib/` 文件的 export 列表
-- 识别已有的业务逻辑函数和服务
-- 这些信息将用于 PRD § 2（当前状态）
+将结果写入文件：$TASKS_DIR/<projectId>/codebase-scan.md
+""")
+```
 
 #### 扫描结果双重用途
 
-扫描结果用于两个目的：
+1. **内化到后续问题中**：L2 问题预设技术栈、组件选项包含已有组件名称
+2. **作为 PRD 内容数据源**：§ 2 当前状态、§ 4 数据设计、§ 5 UI 设计、§ 8 文件索引
 
-**1. 内化到后续问题中（不变）：**
-- L2 问题中预设当前项目的技术栈
-- 组件选项中包含已有组件名称
-- API 类型根据项目现有模式预设
+#### 扫描完成后
 
-**2. 作为 PRD 内容数据源（NEW）：**
-- § 2 当前状态：已有能力表格 + 缺口分析
-- § 4 数据设计：已有 Schema 作为基准
-- § 5 UI 设计：已有组件标记为可复用
-- § 8 附录：代码文件索引的基础数据
+- 读取 `codebase-scan.md` 摘要写入 journal §S1
+- 提示用户：> "已识别项目技术栈：[概要]，将基于现有架构生成更精准的问题。"
 
-#### 步骤 9：生成/更新 PROJECT.md（不变）
-
-在代码库扫描完成后，自动生成或更新项目根目录的 `PROJECT.md` 文件。逻辑不变。
-
-#### 无代码库时的降级处理（不变）
+#### 无代码库时的降级处理
 
 如果判断没有代码库（新项目）：
-- 在 metadata 中标记 `codebaseScanned: false`
-- 跳过扫描，直接进入 L2
+- 标记 `codebaseScanned: false`
+- 跳过扫描，直接进入 R1
 - PRD § 2 当前状态将显示为"新项目，无现有代码库"
 
-#### 扫描耗时提示（不变）
+---
 
-扫描前向用户发送简短提示：
-> "正在分析项目代码库，以便为您提供更精准的问题..."
+### Phase 2.6: R1 规范确认（S1 后自动执行，全模式共享）
 
-扫描完成后简短总结：
-> "已识别项目技术栈：[Next.js + TypeScript + Prisma]，将基于现有架构生成更精准的问题。"
+**目标：** 扫描项目 `rules/` 目录中的规范文件，让用户确认哪些规范适用于本次开发，将结果写入 qa-journal.md。
+
+**触发条件：** S1 代码扫描完成后自动执行（功能开发、完整规划、Transform 三种模式都执行）。
+
+**步骤：**
+
+1. 使用 Glob 检查 `rules/*.md` 或 `BotoolAgent/rules/*.md` 是否存在
+2. **无 rules/ 目录** → 跳过 R1，在 journal 中记录 "R1: 无 rules/ 目录，跳过"
+3. **有 rules/ 目录** → 读取每个 .md 文件的前 30 行，提取规范名称和核心要点
+4. 使用 AskUserQuestion 展示发现的规范列表，让用户确认：
+
+```json
+{
+  "questions": [
+    {
+      "question": "【R1: 规范确认】\n\n在项目中发现以下规范文件，请选择本次开发适用的规范：",
+      "header": "规范确认",
+      "options": [
+        { "label": "rules/frontend.md — 前端代码规范", "description": "[从文件前 30 行提取的核心要点摘要]" },
+        { "label": "rules/api.md — API 设计规范", "description": "[核心要点摘要]" },
+        { "label": "rules/mobile.md — 移动端规范", "description": "[核心要点摘要]" }
+      ],
+      "multiSelect": true
+    }
+  ],
+  "metadata": {
+    "source": "pyramidprd",
+    "level": 1,
+    "levelName": "R1: 规范确认",
+    "progress": "R1",
+    "rulesDetected": true
+  }
+}
+```
+
+注意：上方 options 为示例格式，实际应根据项目中发现的 rules/*.md 文件动态生成。每个选项的 label 包含文件名和规范名称，description 包含从文件前 30 行提取的核心要点。`multiSelect: true` 允许用户同时选择多个适用规范。
+
+5. 将确认结果写入 `$TASKS_DIR/<projectId>/qa-journal.md`：
+
+```markdown
+## R1 规范确认
+- ✅ rules/frontend.md — 前端代码规范
+- ✅ rules/api.md — API 设计规范
+- ❌ rules/mobile.md — 移动端规范（用户排除）
+```
+
+**R1 完成后，继续进入后续流程（L2 或对应模式的下一阶段）。**
 
 ---
 
-### Phase 3: L2 领域分支（增强版）
+### Phase 3: L2 领域分支（方案卡）
 
-**目标：** 按领域深入探索具体需求。**如果代码库扫描已完成（codebaseScanned: true），必须在问题选项中融入扫描发现的信息。**
+**目标：** 按领域深入探索具体需求。**仅完整规划模式执行，功能开发跳过。**
+
+**Read journal** → 获取 L0 + L1 + S1 + R1 上下文
 
 **融合扫描结果的规则：**
-- 技术栈选项中预设当前项目的技术栈作为推荐选项
-- 组件选项中包含已有组件名称（如「复用现有 DataTable 组件」）
-- API 类型和数据存储选项根据扫描结果预设
+- 技术栈选项中预设 codebase-scan.md 识别的技术栈（AI 推荐 ← 标记）
+- 组件选项包含已有组件名称（如「复用现有 DataTable 组件 ← 匹配现有项目」）
 - 如果 `codebaseScanned: false`，使用通用选项
 
-**维度定义：**
+**维度定义（根据 L1 激活的维度选题，5-12 题）：**
 
-#### frontend（前端）
-- 页面结构（单页/多页/仪表盘）
-- 核心组件（表单/列表/图表）
-- 响应式需求
-- 交互方式
+| 维度 | 话题 |
+|------|------|
+| frontend | 页面结构、核心组件、响应式、交互方式 |
+| backend | API 类型、数据模型、认证方式、存储需求 |
+| ux | 用户旅程、核心流程、错误处理、反馈机制 |
+| architecture | 技术栈、模块划分、部署方式 |
+| dataModel | 新建表？关键字段？表间关系？约束/枚举/软删除？ |
+| uiStructure | 新页面数/路由？复用/新建组件？弹窗？布局？ |
 
-#### backend（后端）
-- API 类型
-- 数据模型
-- 认证方式
-- 存储需求
+**使用方案卡交互协议**发送 1 个 AskUserQuestion（header: "L2 领域分支"）。
 
-#### ux（用户体验）
-- 用户旅程
-- 核心流程
-- 错误处理
-- 反馈机制
-
-#### architecture（技术架构）
-- 技术栈
-- 模块划分
-- 部署方式
-
-**新增话题（功能开发 + 完整规划模式）：**
-
-#### dataModel（数据模型）— NEW
-- 是否需要新建数据库表？
-- 核心表的关键字段有哪些？
-- 与现有表的关系（外键/引用）？
-- 是否有约束或特殊规则（唯一/枚举/软删除）？
-
-#### uiStructure（UI 层次）— NEW
-- 需要几个新页面？列出页面名称和路由
-- 复用哪些已有组件？需要新建哪些组件？
-- 需要哪些弹窗/对话框？
-- 关键页面的大致布局（左右分栏/上下结构/Tab 切换）？
-
-**根据 L1 答案选择激活的维度，为每个维度生成 2-4 个问题。**
+**L2 完成后 → Write journal §L2** → 进入 L3
 
 ---
 
-### Phase 4: L3 细节深入（增强版）
+### Phase 4: L3 细节深入（方案卡）
 
-**目标：** 根据 L2 答案，深入实现细节
+**目标：** 根据 L2 答案，深入实现细节。**仅完整规划模式执行，功能开发跳过。**
 
-**动态话题（根据 L2 答案激活）：**
+**Read journal** → 获取 L0-L2 + S1 + R1 上下文
 
-#### 如果有表单
-- 验证规则
-- 错误提示方式
-- 提交流程
+**动态话题（根据 L2 答案激活，5-12 题）：**
 
-#### 如果有列表
-- 分页方式
-- 排序过滤
-- 空状态
+| 条件 | 话题 |
+|------|------|
+| 有表单 | 验证规则、错误提示方式、提交流程 |
+| 有列表 | 分页方式、排序过滤、空状态 |
+| 有 API | 错误处理、权限控制 |
+| 有数据模型 | 模型关系、字段定义 |
+| 有状态流转 | 状态列表、转换规则、不可逆操作、副作用 |
+| 有业务规则 | 核心规则、删除级联、危险操作确认、边界条件 |
+| 有组件交互 | 弹窗确认流程、下拉选项来源、拖拽/批量操作 |
 
-#### 如果有 API
-- 错误处理
-- 权限控制
+**使用方案卡交互协议**发送 1 个 AskUserQuestion（header: "L3 细节深入"）。
 
-#### 如果有数据模型
-- 模型关系
-- 字段定义
-
-**新增话题（仅完整规划模式）：**
-
-#### 状态流转 — NEW
-- 核心实体有几种状态？（如 draft/published/archived）
-- 状态之间如何转换？谁能触发转换？
-- 是否有不可逆的状态变更？
-- 状态变更时是否有副作用（如通知、级联更新）？
-
-#### 业务规则 — NEW
-- 有哪些核心业务规则？（如"版本号单调递增"、"同一分类下不可重复指派"）
-- 删除操作是否有级联影响？如何处理？
-- 是否有需要弹窗确认的危险操作？
-- 边界情况有哪些？
-
-#### 组件交互 — NEW
-- 弹窗确认流程是怎样的？（如创建/删除确认）
-- 下拉选择的选项来源？（静态列表/API 动态加载）
-- 是否有拖拽排序、批量操作等复杂交互？
+**L3 完成后 → Write journal §L3** → 进入 L4
 
 ---
 
-### Phase 5: L4 边界确认（增强版）
+### Phase 5: L4 边界确认（方案卡）
 
 **目标：** 确认范围边界，防止范围蔓延
 
-**必问话题：**
-1. **集成点** - 需要修改哪些现有代码？
-2. **排除范围** - 哪些功能明确不做？
-3. **非功能需求** - 性能/安全要求？
-4. **MVP 边界** - 哪些可以推迟？
+**Read journal** → 获取 L0-L3 + S1 + R1 上下文
 
-**新增话题（功能开发 + 完整规划模式）：**
+**必问话题（4-7 题）：**
 
-#### 文件命名约定 — NEW
-- API 路径模式（如 `/api/[resource]/route.ts`）？
-- 组件文件命名约定（如 PascalCase）？
-- 是否有现有的目录结构约定需要遵循？
+| 话题 | 问题 |
+|------|------|
+| 集成点 | 需要修改哪些现有代码？ |
+| 排除范围 | 哪些功能明确不做？ |
+| 非功能需求 | 性能/安全要求？ |
+| MVP 边界 | 哪些可以推迟？ |
+| 文件命名约定 | API 路径模式？组件命名约定？目录结构？ |
+| 现有代码修改范围 | 修改哪些文件？是否变更数据库？是否修改类型定义？ |
 
-#### 现有代码修改范围 — NEW
-- 哪些现有文件会被修改（而非新建）？
-- 是否需要修改数据库（新建表/修改现有表）？
-- 是否需要修改现有的类型定义？
+**使用方案卡交互协议**发送 1 个 AskUserQuestion（header: "L4 边界确认"）。
+
+**L4 完成后 → Write journal §L4** → 进入 Phase 5.5 外部依赖扫描
 
 ---
 
 ### Phase 5.5: 外部依赖扫描（L4 完成后自动执行）
 
-**目标：** 在进入 L5 前，扫描所有已收集的需求，识别开发前需要用户准备的外部依赖，写入 prd.json 的 `prerequisites` 字段，让 Lead Agent 能在开始 coding 前给用户预警。
+**目标：** 在进入 L5 前，扫描所有已收集的需求，识别开发前需要用户准备的外部依赖，写入 dev.json 的 `prerequisites` 字段，让 Lead Agent 能在开始 coding 前给用户预警。
 
-**触发条件：** L4 完成后自动执行。快速修复模式跳过。
+**触发条件：** L4 完成后自动执行（功能开发 + 完整规划模式）。Transform 模式在 PRD 生成后执行。
 
 #### 扫描规则
 
@@ -627,7 +708,7 @@ L0 上下文摘要:
 ```
 
 **写入 prerequisites 字段规则：**
-- 不管用户选哪个，检测到的依赖都写入 prd.json `prerequisites`
+- 不管用户选哪个，检测到的依赖都写入 dev.json `prerequisites`
 - "已全部准备好" → 各项 `resolved: true`
 - 其他选项 → 各项 `resolved: false`
 - Lead Agent 会在初始化时读取此字段，在 progress.txt 中给出预警提示
@@ -644,18 +725,16 @@ L0 上下文摘要:
 
 8 个维度分 **2 轮 Tabs** 展示，每轮 4 个 Tab，用户可左右切换快速审阅。每个 Tab 只聚焦 **一个维度**。
 
-| 维度 | Tab | 快速修复 | 功能开发 | 完整规划 |
-|------|-----|---------|---------|---------|
-| 项目概述 | 第 1 轮 Tab 1 | 跳过 | 展示 | 展示 |
-| 核心架构 | 第 1 轮 Tab 2 | 跳过 | 展示 | 展示 |
-| 用户角色 | 第 1 轮 Tab 3 | 跳过 | 展示 | 展示 |
-| 核心工作流 | 第 1 轮 Tab 4 | 跳过 | 展示 | 展示 |
-| 数据模型 | 第 2 轮 Tab 1 | 跳过 | 跳过 | 展示 |
-| 关键 UI | 第 2 轮 Tab 2 | 跳过 | 跳过 | 展示（仅有前端时） |
-| 业务规则 | 第 2 轮 Tab 3 | 跳过 | 跳过 | 展示 |
-| 总确认 | 第 2 轮 Tab 4 | 跳过 | 展示 | 展示 |
-
-**快速修复模式：** 跳过 L5，直接生成。
+| 维度 | Tab | 功能开发 | 完整规划 |
+|------|-----|---------|---------|
+| 项目概述 | 第 1 轮 Tab 1 | 展示 | 展示 |
+| 核心架构 | 第 1 轮 Tab 2 | 展示 | 展示 |
+| 用户角色 | 第 1 轮 Tab 3 | 展示 | 展示 |
+| 核心工作流 | 第 1 轮 Tab 4 | 展示 | 展示 |
+| 数据模型 | 第 2 轮 Tab 1 | 跳过 | 展示 |
+| 关键 UI | 第 2 轮 Tab 2 | 跳过 | 展示（仅有前端时） |
+| 业务规则 | 第 2 轮 Tab 3 | 跳过 | 展示 |
+| 总确认 | 第 2 轮 Tab 4 | 展示 | 展示 |
 
 **功能开发模式：** 只展示第 1 轮（4 Tabs）+ 第 2 轮 Tab 4（总确认），跳过数据模型/关键 UI/业务规则。
 
@@ -687,7 +766,7 @@ L0 上下文摘要:
 │  技术栈: [框架] + [语言] + [数据库]      │
 │          + [状态管理] + [其他]           │
 │                                         │
-│  模式: [快速修复 / 功能开发 / 完整规划]   │
+│  模式: [功能开发 / 完整规划 / PRD导入]    │
 └─────────────────────────────────────────┘
 ```
 
@@ -988,33 +1067,77 @@ LOW:    [风险项]
 
 ---
 
-### Phase 7: 生成多维度 PRD（模板重写）
+### Phase 7: G1/W1 PRD 生成（general-purpose Subagent 委托）
 
-**L5 确认门控通过后，根据收集的所有信息和代码库扫描结果，生成多维度、高颗粒度的 PRD 文档。**
+**L5 确认门控通过后，将 PRD 生成委托给 general-purpose Subagent，释放主对话上下文。**
 
 **输出路径（per-project 子目录）：**
 ```bash
 TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"
-# projectId 从功能名称派生（kebab-case，如 "adversarial-review"）
 PROJECT_DIR="$TASKS_DIR/<projectId>"
 mkdir -p "$PROJECT_DIR"
 # PRD 写入: $PROJECT_DIR/prd.md
-# prd.json 写入: $PROJECT_DIR/prd.json
-# registry 更新: $TASKS_DIR/registry.json（路径格式: "<projectId>/prd.md"）
+# (dev.json 和 registry 由 PRDing Ralph 管线中的 A2:prd2json 自动生成)
 ```
+
+#### Subagent 委托调用
+
+```
+Task(
+  subagent_type: "general-purpose",
+  description: "生成 PRD 文档",
+  prompt: """
+你是 BotoolAgent PRD 生成器。根据以下输入生成完整的 PRD 文档。
+
+## 输入
+
+### Q&A Journal（需求决策记录）
+<读取 $PROJECT_DIR/qa-journal.md 的全部内容并粘贴到此处>
+
+### 代码库扫描报告
+<读取 $PROJECT_DIR/codebase-scan.md 的全部内容并粘贴到此处（如不存在则写 "新项目，无现有代码库"）>
+
+### 生成参数
+- 模式: <功能开发 | 完整规划>
+- projectId: <projectId>
+- 输出路径: $PROJECT_DIR/prd.md
+
+## 生成规则
+
+<将下方「复杂度裁剪规则」「PRD 模板」「Dev Task 规则」全部嵌入 prompt>
+
+## 安全检查自动注入
+
+<将下方「Phase 7.5 安全检查自动注入」规则嵌入 prompt>
+
+生成完成后，将 PRD 写入 $PROJECT_DIR/prd.md。
+"""
+)
+```
+
+**Subagent 输入构造规则：**
+1. 读取 `$PROJECT_DIR/qa-journal.md` 全部内容作为需求决策上下文
+2. 读取 `$PROJECT_DIR/codebase-scan.md` 全部内容作为技术上下文（不存在则标记"新项目"）
+3. 根据 journal 中标注的模式（功能开发/完整规划）选择对应模板
+4. 将下方所有模板规则嵌入 Subagent prompt（模板是 Subagent 的生成指令）
+
+**Subagent 完成后：**
+1. 验证 `$PROJECT_DIR/prd.md` 已写入且非空
+2. 如果写入失败 → 报错并提供手动恢复指令
+3. 继续进入 PRDing Ralph 编排器（A1 审查 + A2 转换）
 
 #### 复杂度裁剪规则
 
-| PRD 节 | 快速修复 | 功能开发 | 完整规划 |
-|--------|---------|---------|---------|
-| § 1. 项目概述 | 2-3 句 | 1 段 | 完整（背景/目标/指标） |
-| § 2. 当前状态 | 跳过 | 简要表格 | 完整（含 ASCII 缺口分析） |
-| § 3. 架构设计 | 跳过 | 概要（1 个 ASCII） | 完整（多 ASCII：概念/角色/工作流/状态机） |
-| § 4. 数据设计 | 跳过 | Schema 表格 | 完整（SQL CREATE + ER 图 + 约束） |
-| § 5. UI 设计 | 跳过 | 组件清单表格 | 完整（ASCII 布局 + 弹窗 + Props 接口） |
-| § 6. 业务规则 | 跳过 | 简要表格 | 完整（分领域规则表 + 决策树 ASCII） |
-| § 7. 开发计划 | 1-3 个 DT | Phase 列表 + DT | 完整（Phase 依赖图 + DT 含文件路径） |
-| § 8. 附录 | 跳过 | 文件索引 | 完整（文件索引 + 风险 + 测试 + 非目标 + 安全） |
+| PRD 节 | 功能开发 | 完整规划 |
+|--------|---------|---------|
+| § 1. 项目概述 | 1 段 | 完整（背景/目标/指标） |
+| § 2. 当前状态 | 简要表格 | 完整（含 ASCII 缺口分析） |
+| § 3. 架构设计 | 概要（1 个 ASCII） | 完整（多 ASCII：概念/角色/工作流/状态机） |
+| § 4. 数据设计 | Schema 表格 | 完整（SQL CREATE + ER 图 + 约束） |
+| § 5. UI 设计 | 组件清单表格 | 完整（ASCII 布局 + 弹窗 + Props 接口） |
+| § 6. 业务规则 | 简要表格 | 完整（分领域规则表 + 决策树 ASCII） |
+| § 7. 开发计划 | Phase 列表 + DT | 完整（Phase 依赖图 + DT 含文件路径） |
+| § 8. 附录 | 文件索引 | 完整（文件索引 + 风险 + 测试 + 非目标 + 安全） |
 
 #### PRD 模板（完整规划模式）
 
@@ -1283,8 +1406,7 @@ Phase 2, Phase 3 可并行
 1. **`[安全]` 前缀**：所有注入的安全项必须以 `[安全]` 前缀标记
 2. **多类别匹配**：一个 DT 可以匹配多个关键词类别，所有匹配类别的安全项都追加（去重）
 3. **无匹配不注入**：不涉及安全关键词的 DT 不添加任何安全项
-4. **Quick Fix 模式**：仅对高风险关键词注入（登录/认证/支付）
-5. **Feature Build / Full Planning 模式**：所有六类关键词均触发注入
+4. **Feature Build / Full Planning 模式**：所有六类关键词均触发注入
 
 #### 安全项在 PRD 中的位置
 
@@ -1305,10 +1427,16 @@ Phase 2, Phase 3 可并行
 **触发条件：** 用户消息中包含 `[模式:导入]` 时进入 Transform 流程。
 
 ```
-Phase T1 ──→ T2 ──→ T2.5 ──→ T3 ──→ T4 ──→ T5 ──→ T6 ──→ L5确认 ──→ 生成PRD
-获取文件    结构发现  完整性校验  覆盖评分  针对问答  DT分解   收敛门控  确认门控  输出PRD
-            (Grep)   (必执行)   (打分)   (0-2轮)  (算法)   (复用)   (复用)
+Phase T1 ──→ S1 ──→ R1 ──→ T2 ──→ T2.5 ──→ T3 ──→ T4 ──→ T5 ──→ T6 ──→ L5确认 ──→ 生成PRD ──→ Phase 5.5
+获取文件    代码扫描  规范确认  结构发现  完整性校验  覆盖评分  针对问答  DT分解   收敛门控  确认门控  输出PRD    外部依赖
+            (复用)   (复用)   (Grep)   (必执行)   (打分)   (0-2轮)  (算法)   (复用)   (复用)              (复用)
 ```
+
+**Transform 模式新增步骤说明：**
+
+- **T1 → S1（代码扫描）：** T1 获取源文件后，执行 S1 代码库感知扫描（复用 Phase 2.5 的逻辑）。扫描当前项目的技术栈、目录结构、已有组件和数据模型，为后续 T2 结构发现和 PRD 生成提供代码库上下文。
+- **S1 → R1（规范确认）：** S1 完成后执行 R1 规范确认（复用 Phase 2.6 的逻辑）。扫描 `rules/` 目录，让用户确认适用规范，结果写入 qa-journal.md。
+- **生成PRD → Phase 5.5（外部依赖扫描）：** PRD 生成后执行 Phase 5.5 外部依赖扫描（复用已有的 Phase 5.5 逻辑）。扫描生成 PRD 中的外部依赖信号，写入 dev.json 的 `prerequisites` 字段。
 
 ---
 
@@ -1344,14 +1472,227 @@ Phase T1 ──→ T2 ──→ T2.5 ──→ T3 ──→ T4 ──→ T5 ─�
 
 4. 在 metadata 中设置 `transformPhase: 'source-input'`、`sourcePrdPath: '<路径>'`
    4a. 将源文件路径写入 `$TASKS_DIR/<projectId>/SOURCE_PRD.ref`
+       **路径安全校验（不可跳过）：**
+       - 使用 realpath 归一化路径: `SAFE_PATH=$(realpath "$SOURCE_PRD_PATH")`
+       - 拒绝包含 `..` 的路径（路径穿越）
+       - 拒绝符号链接指向项目目录外的文件
+       - 校验失败 → 报错退出，不继续执行
        （供 prd2json 阶段的完整性比对读取）
-5. 告知用户："正在分析您的 PRD 文档..."
+5. **Ti 备份（不可跳过）：**
+   - 将源 PRD 文件备份为 `$PROJECT_DIR/prd_original.md`
+   - 命令: `cp "$SOURCE_PRD_PATH" "$PROJECT_DIR/prd_original.md"`
+   - 此备份用于后续 Tf 字段级比对的基准文件
+   - 备份成功后在 metadata 中记录: `originalBackup: true`
+6. 告知用户："正在分析您的 PRD 文档..."
 
 ---
 
-### Phase T2: 结构发现（两遍读取策略）
+### Phase T1.5: 大文件阈值路由
 
-**目标：** 从源 PRD 中提取结构信息，按 BotoolAgent 维度分类。
+**目标：** 根据源 PRD 行数选择最优处理策略，防止大文件导致上下文溢出。
+
+```bash
+SOURCE_LINES=$(wc -l < "$SOURCE_PRD_PATH")
+echo "源 PRD 行数: $SOURCE_LINES"
+```
+
+**三档路由：**
+
+| 行数范围 | 策略代号 | 处理方式 | 说明 |
+|---------|---------|---------|------|
+| < 2000 | **Standard** | Phase T2 当前流程 | 主对话直接读取，无需拆分 |
+| 2000-5000 | **C2** | 单源多遍抽取 | 4 个 Explore Subagent 按维度并行提取 |
+| > 5000 | **C1** | Master Context + Phase Bundle | 两遍提取 + 并行 Subagent 处理 |
+
+**路由逻辑：**
+```
+if SOURCE_LINES < 2000:
+  → 进入 Phase T2（Standard 模式，当前流程不变）
+elif SOURCE_LINES >= 2000 and SOURCE_LINES <= 5000:
+  → 进入 Phase T2-C2（单源多遍抽取）
+else:  # > 5000
+  → 进入 Phase T2-C1（Master Context + Phase Bundle）
+```
+
+告知用户当前策略：
+- Standard: "源文件 {N} 行，使用标准流程处理。"
+- C2: "源文件 {N} 行（中型），使用 C2 多维度并行提取。"
+- C1: "源文件 {N} 行（大型），使用 C1 Master Context + Phase Bundle 分包处理。"
+
+---
+
+### Phase T2-C2: 单源多遍抽取（2000-5000 行）
+
+**目标：** 将源 PRD 的 4 个维度并行提取到独立文件，避免单次读取超出上下文。
+
+#### 步骤 1: 启动 4 个 Explore Subagent（并行）
+
+```
+# 同时启动 4 个 Task(Explore)，按维度并行提取
+
+Task(subagent_type="Explore", description="提取§4数据设计",
+  prompt="读取源 PRD 文件 $SOURCE_PRD_PATH，提取所有与数据设计相关的内容：
+    - 全部 CREATE TABLE 语句（完整保留，含字段、约束、注释）
+    - 数据模型关系（ER 图、外键引用）
+    - 数据库约束和索引
+    输出到: $PROJECT_DIR/c2-data-extraction.md")
+
+Task(subagent_type="Explore", description="提取§3+§6架构+规则",
+  prompt="读取源 PRD 文件 $SOURCE_PRD_PATH，提取所有与架构和规则相关的内容：
+    - 架构设计（状态机、角色权限、工作流）
+    - 业务规则（所有 BR-xxx 或规则表格）
+    - 约束和权限定义
+    输出到: $PROJECT_DIR/c2-arch-rules-extraction.md")
+
+Task(subagent_type="Explore", description="提取§5+§8 UI+附录",
+  prompt="读取源 PRD 文件 $SOURCE_PRD_PATH，提取所有与 UI 和附录相关的内容：
+    - 页面布局（ASCII 线框图完整保留）
+    - 组件清单和 Props 接口
+    - 测试策略、风险评估、实现细节代码示例
+    输出到: $PROJECT_DIR/c2-ui-appendix-extraction.md")
+
+Task(subagent_type="Explore", description="提取§7开发计划",
+  prompt="读取源 PRD 文件 $SOURCE_PRD_PATH，提取开发计划相关的内容：
+    - 所有 Phase 定义（标题、前置条件、产出）
+    - 所有任务条目（含文件路径、组件名、API 路由）
+    - Phase 间依赖关系
+    输出到: $PROJECT_DIR/c2-plan-extraction.md")
+```
+
+#### 步骤 2: 主对话合并
+
+4 个 Subagent 完成后，主对话读取 4 个提取文件：
+```
+Read $PROJECT_DIR/c2-data-extraction.md
+Read $PROJECT_DIR/c2-arch-rules-extraction.md
+Read $PROJECT_DIR/c2-ui-appendix-extraction.md
+Read $PROJECT_DIR/c2-plan-extraction.md
+```
+
+合并后的内容用于：
+- 源章节映射（等同 T2 的映射逻辑）
+- T3 覆盖度评分
+- 后续 Tq 方案卡补充
+
+**C2 完成后 → 进入 Phase T2.5（完整性校验）→ T3 → Tq → T5 → L5 → G1/W1**
+
+---
+
+### Phase T2-C1: Master Context + Phase Bundle（> 5000 行）
+
+**目标：** 将超大 PRD 分解为可管理的分包，每个分包自包含 master context + 单 Phase 内容。
+
+#### 步骤 1: Master Context 提取
+
+使用 Explore Subagent 从源 PRD 提取全局上下文（~500 行）：
+
+```
+Task(subagent_type="Explore", description="提取 master-context",
+  prompt="""
+读取源 PRD 文件 $SOURCE_PRD_PATH，提取全局上下文并输出到 $PROJECT_DIR/master-context.md。
+
+提取内容（~500 行，必须完整保留）:
+1. 项目概述摘要（压缩为 10-20 行）
+2. 全部 CREATE TABLE 语句（完整保留每个字段、约束、注释，不可省略）
+3. 架构设计关键部分（状态机定义、角色权限矩阵）
+4. 全局业务规则（跨 Phase 的约束规则）
+5. 技术栈声明（框架、语言、数据库、依赖）
+
+输出格式:
+# Master Context — [项目名]
+## 项目概述
+[摘要]
+## 数据库 Schema（完整）
+[所有 CREATE TABLE]
+## 架构设计
+[状态机、权限]
+## 全局规则
+[跨 Phase 规则]
+## 技术栈
+[声明]
+
+输出到: $PROJECT_DIR/master-context.md
+""")
+```
+
+验证 master-context.md:
+- 文件存在且非空
+- 包含所有 CREATE TABLE（`grep -c 'CREATE TABLE' master-context.md` ≥ T1「必须保留表清单」的 80%）
+- 行数在 300-800 行范围内（过短说明提取不充分，过长说明压缩不够）
+
+#### 步骤 2: Phase Bundle 分包
+
+根据 T1「必须保留Phase清单」，为每个 Phase（或 2-3 个相关 Phase 合并）创建自包含分包：
+
+```
+对每个 Phase N（或合并的 Phase 组）:
+  phase-bundle-N.md =
+    ┌── master-context.md（完整嵌入，~500 行）
+    ├── Phase N 原文（完整，从源 PRD 按行号范围提取）
+    └── Phase N 引用的表/规则/UI（从源 PRD 精选引用的章节内容）
+
+每个分包目标: ~800-1300 行
+```
+
+**分包合并规则：**
+- 如果单 Phase 原文 < 300 行 → 与相邻 Phase 合并
+- 如果单 Phase 原文 > 800 行 → 单独成包
+- 最终分包数量 ≤ 8（超过则合并小 Phase）
+
+写入分包: `$PROJECT_DIR/phase-bundle-1.md`, `phase-bundle-2.md`, ...
+
+#### 步骤 3: 并行 Subagent 处理（≤ 4 并行）
+
+```
+# 每个分包启动一个 general-purpose Subagent 生成对应 Phase 的 PRD 片段
+
+for each phase-bundle-N.md:
+  Task(
+    subagent_type: "general-purpose",
+    description: "生成 Phase N PRD",
+    prompt: """
+读取 $PROJECT_DIR/phase-bundle-N.md。
+
+根据分包内容，生成 BotoolAgent PRD 格式的 Phase 片段。
+
+输出必须包含:
+- § 7.N Phase N 标题 + DT 列表（按 DT 分解规则拆分）
+- 该 Phase 涉及的 § 3/4/5/6 设计内容（从分包中提取并格式化）
+- 每个 DT 必须有完整验收条件
+
+输出到: $PROJECT_DIR/prd-phase-N.md
+"""
+  )
+```
+
+**最多同时 4 个 Subagent 并行**。如果分包 > 4 个，分批处理（第一批 4 个完成后启动第二批）。
+
+#### 步骤 4: 合并校验
+
+所有 Subagent 完成后，合并分片为最终 PRD：
+
+```bash
+# 合并所有 prd-phase-N.md → 最终 prd.md
+# 在合并前添加 § 1 项目概述和 § 2 当前状态（从 master-context.md 提取）
+```
+
+**合并校验（不可跳过）：**
+
+1. **CREATE TABLE 完整性**: `grep -c 'CREATE TABLE' prd.md` ≥ T1 表清单的 80%
+2. **Phase 完整性**: 生成 PRD 中的 Phase 数量 ≥ T1「必须保留Phase清单」的 100%
+3. **行数校验**: 生成 PRD 行数 ≥ 2000 行（源 PRD > 5000 行时的最低要求）
+4. **冲突检测**: 检查是否有重复的 DT 编号（不同 Subagent 可能生成重叠 DT-xxx）
+   - 发现重复 → 重新编号（按 Phase 顺序递增）
+
+校验失败 → 报错并指明具体缺失项，提示用户手动补充或重新运行。
+
+**C1 完成后 → 进入 Phase T2.5（完整性校验）→ T3 → Tq → T5 → L5 → G1/W1**
+
+---
+
+### Phase T2: 结构发现（Standard 模式，< 2000 行）
+
+**目标：** 从源 PRD 中提取结构信息，按 BotoolAgent 维度分类。**仅 Standard 模式（< 2000 行）使用此流程。C2/C1 模式跳过此 Phase。**
 
 **第一遍：源章节枚举 + 显式映射（Source-First）**
 
@@ -1427,16 +1768,27 @@ Phase T1 ──→ T2 ──→ T2.5 ──→ T3 ──→ T4 ──→ T5 ─�
 **强制记录（大文件模式，不可跳过）：**
 
 每读完一张 CREATE TABLE（§4 数据设计维度），立即在工作笔记中记录：
-  ✅ table: categories → 字段: [id, name, slug, parent_id(自引用外键!), icon, color, ...]
+  ✅ table: categories → 字段数: 8 → 字段: [id, name, slug, parent_id(自引用外键!), icon, color, ...]
   ⚠️  关键字段标注：parent_id → 两层分类结构核心，生成 PRD 时必须保留
+  📊 字段数统计：每张表必须记录准确的字段数（用于 Tv 字段数校验）
 
 每读完一个开发计划 Phase（§7 开发计划维度，即 T1 步骤 3d 识别的源 PRD 章节），立即在工作笔记中记录：
   ✅ phase: [源PRD编号] [Phase名称] → 任务数: X，涉及文件/组件: [关键列表]
   ⚠️  关键依赖标注：[依赖前一 Phase 的任务，生成 DT 时必须标注 dependsOn]
 
 每个维度桶读取完成后，在工作笔记中标注：
-  [完成] §4 数据设计 — 共读取 X 个表，关键字段已标注 Y 个
+  [完成] §4 数据设计 — 共读取 X 个表，总字段数 F 个，关键字段已标注 Y 个
   [完成] §7 开发计划 — 共读取 Z 个 Phase（源PRD编号：9.0-9.8 等），任务条目总计 N 条
+
+**字段数汇总表（§4 维度完成后必填，供 Tv 校验使用）：**
+```
+源 PRD 字段数汇总:
+  categories:           8 个字段
+  documents:           12 个字段
+  present_elements:    15 个字段
+  ...
+  总计: X 张表, Y 个字段
+```
 
 在 metadata 中设置 `transformPhase: 'extraction'`
 
@@ -1456,6 +1808,26 @@ Phase T1 ──→ T2 ──→ T2.5 ──→ T3 ──→ T4 ──→ T5 ─�
    - 未记录 → 立即返回 T2 补充读取该表（不得跳过、不得"假设已读"）
 3. 对照「关键字段清单」，确认 parent_id、source_type 等已被捕获
 
+**A2. Tv 字段数校验（不可跳过）**
+
+对「字段数汇总表」中的每张表，逐一校验字段数完整性：
+
+1. 从工作笔记读取每张表的「已记录字段数」
+2. 与 T1 步骤 3a 中 Grep 提取的 CREATE TABLE 原文逐表比对：
+   - 重新 Grep 源 PRD 中该表的 CREATE TABLE 块，统计「源字段数」
+   - 已记录字段数 ≥ 源字段数 → ✅ 通过
+   - 已记录字段数 < 源字段数 → ⚠️ 字段数不足，返回 T2 补充读取该表
+3. 输出 Tv 字段数比对结果：
+   ```
+   Tv 字段数校验:
+     categories:    8/8   ✅
+     documents:    10/12  ⚠️ 差 2 个字段 → 返回补充读取
+     elements:     15/15  ✅
+     总计: X/Y 表通过 (字段覆盖率 Z%)
+   ```
+4. 存在 ⚠️ 的表 → 返回 T2 使用 Read 重新读取该表的完整 CREATE TABLE 块，补充遗漏字段后更新工作笔记中的字段数
+5. 补充完成后重新执行 Tv 校验（最多循环 2 次，防止无限循环）
+
 **B. 开发计划 Phase 完整性校验（新增）**
 
 4. 从工作笔记列出已记录的所有开发计划 Phase（含源 PRD 编号）
@@ -1469,15 +1841,16 @@ Phase T1 ──→ T2 ──→ T2.5 ──→ T3 ──→ T4 ──→ T5 ─�
 **C. 输出校验结果**（纯文本输出，不使用 AskUserQuestion）
 
 若全部通过：
-> "✅ T2.5 校验通过：SQL 表 X/Y（关键字段均已捕获），开发计划 Phase Z/Z（任务条目 N 条，覆盖率 ≥ 80%），进入覆盖度分析。"
+> "✅ T2.5 校验通过：SQL 表 X/Y（关键字段均已捕获），Tv 字段数 F1/F2（覆盖率 Z%），开发计划 Phase Z/Z（任务条目 N 条，覆盖率 ≥ 80%），进入覆盖度分析。"
 
 若有缺失：
 > "⚠️ T2.5 发现缺失：
 >    - [SQL 表] present_collaborators（整表缺失）→ 正在补充读取...
+>    - [Tv 字段数] documents 10/12 字段（差 2 个）→ 正在补充读取...
 >    - [SQL 字段] categories.parent_id（字段未标注）→ 正在补充标注...
 >    - [开发Phase] Phase 9.3（整节缺失）→ 正在补充读取...
 >    - [任务条目] 已记录 45 条，基准 120 条（覆盖率 37%）→ 正在补充读取 Phase 9.4-9.8..."
-> 补充完成后，重新执行步骤 A-C 直至全部通过。
+> 补充完成后，重新执行步骤 A-C（含 Tv）直至全部通过。
 
 **D. 源章节覆盖完整性校验（新增，不可跳过）**
 
@@ -1569,45 +1942,47 @@ Phase T1 ──→ T2 ──→ T2.5 ──→ T3 ──→ T4 ──→ T5 ─�
 
 ---
 
-### Phase T4: 针对性问答（仅 PARTIAL/SPARSE 维度）
+### Phase T4: Tq 针对性问答（方案卡，仅 PARTIAL/SPARSE 维度）
 
-**核心原则：不重复问用户 PRD 中已有的内容。**
+**核心原则：不重复问用户 PRD 中已有的内容。只对覆盖不足的维度使用方案卡补充。**
 
-对每个需要补充的维度，复用现有 L2/L3 问题模板，但只选择相关子集：
+#### 问题选取规则
+
+| 维度覆盖度 | 选题来源 | 问题数 |
+|-----------|---------|--------|
+| § 5 UI = PARTIAL | L2 uiStructure（页面列表、组件、布局） | 2-4 |
+| § 6 规则 = SPARSE | L3 业务规则 + 状态流转 + L2 backend（权限、约束） | 3-5 |
+| § 3 架构 = PARTIAL | L2 architecture（跳过已有高层设计） | 2-3 |
+| § 4 数据 = PARTIAL | L2 dataModel（跳过已有表名，只问缺失字段/约束） | 2-4 |
+
+#### Tq 方案卡模板
 
 ```
-如果 § 5 UI 是 PARTIAL：
-  → 复用 L2 的 uiStructure 问题（页面列表、组件、布局）
-  → 跳过 L2 的其他维度
+【Transform Tq — AI 补充方案卡】
 
-如果 § 6 规则是 SPARSE：
-  → 复用 L3 的「业务规则」和「状态流转」问题
-  → 同时复用 L2 的 backend 部分问题（权限、约束）
+覆盖不足维度: [§5 UI (PARTIAL), §6 规则 (SPARSE)]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+§5 补充:
+  Q1. 页面数: A) 2个 ← 推断  B) 3个  C) 我来列
+  → AI 选择: A
 
-如果 § 3 架构是 PARTIAL：
-  → 复用 L2 的 architecture 问题
-  → 跳过已有的高层设计部分
+§6 补充:
+  Q2. 删除策略: A) 软删除 ← 安全  B) 硬删除+确认
+  → AI 选择: A
 
-如果 § 4 数据是 PARTIAL：
-  → 复用 L2 的 dataModel 问题
-  → 跳过已有表名，只问缺失字段和约束
+  Q3. 权限控制: A) 管理员才能删 ← 推荐  B) 所有用户
+  → AI 选择: A
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+要修改请在下方 Type something 中输入如 "Q2 换 B"
 ```
 
-**限制：最多 2 轮问答（每轮批量提问），防止过长。**
+**使用方案卡交互协议**发送 1 个 AskUserQuestion（header: "Tq 补充问答"）。
 
-使用 AskUserQuestion 时的 metadata：
-```json
-{
-  "metadata": {
-    "source": "pyramidprd",
-    "level": 3,
-    "levelName": "Transform: 针对性问答",
-    "progress": "T4/T6",
-    "totalLevels": 5,
-    "transformPhase": "targeted-qa"
-  }
-}
-```
+**3 个固定选项同 L1-L4 方案卡**：全部接受 / 方向不对重新生成 / 输入修改。
+
+**限制：最多 2 轮方案卡**（第 1 轮 PARTIAL/SPARSE 全覆盖，第 2 轮仅处理用户修改后新增的不确定项）。
+
+**Tq 完成后 → Write journal §Tq** → 进入 T5 DT 分解
 
 ---
 
@@ -1742,8 +2117,9 @@ mkdir -p "$PROJECT_DIR"
 $TASKS_DIR/
   <projectId>/
     DRAFT.md                 ← 用户原始 Draft（如从 brainstorm 导入）
+    prd_original.md          ← 源 PRD 备份（Ti 阶段创建，Tf 字段级比对基准）
     prd.md                   ← 生成的 BotoolAgent PRD（标准格式）
-    prd.json                 ← 自动化执行用 JSON
+    dev.json                 ← 自动化执行用 JSON
   registry.json              ← 项目注册表
 ```
 
@@ -1795,6 +2171,44 @@ $TASKS_DIR/
 | 大文件架构约束 | 源含三层分离/SSE 解耦 | Grep `三层\|SSE.*解耦\|maxDuration` |
 
 若源 PRD 中存在某类信号，但生成 PRD 中 Grep 为空 → 该项标记为 `❌ 缺失`。
+
+#### 步骤 2.5：DT↔prd.md 交叉检查
+
+对生成的 PRD §7 开发计划中的每个 DT：
+1. 确认该 DT 的标题和描述在 PRD §7 Phase 章节中有对应内容
+2. 确认 PRD §7 Phase 章节中的每个任务条目都有对应的 DT
+3. 不匹配的项标记为 ❌：
+   - 孤立 DT（PRD 中无对应 Phase 内容）
+   - 遗漏 DT（PRD Phase 中有任务描述但未创建 DT）
+4. ❌ 项在步骤 4 自动补充中修复
+
+#### 步骤 2.6：SQL 字段完整性校验（Transform 模式）
+
+**前置条件：** 存在 `$PROJECT_DIR/prd_original.md`（Ti 备份）
+
+> 若 `prd_original.md` 不存在（非 Transform 模式或未执行 Ti 备份），跳过此步骤。
+
+1. 从 prd_original.md（源 PRD）Grep 所有 `CREATE TABLE` 语句，提取每张表的字段列表
+2. 从生成的 prd.md Grep 所有 `CREATE TABLE` 语句，提取每张表的字段列表
+3. 逐表比对：
+   - 源表字段列表 vs 生成表字段列表
+   - 缺失字段标记为 ❌
+   - 新增字段标记为 ⚠️（可能是改进，不阻塞）
+4. 字段完整率 = (生成表匹配字段数 / 源表字段数) x 100%
+5. 任一表完整率 < 90% → 该表标记为 ❌，步骤 4 自动补充
+
+```
+SQL 字段完整性校验：
+┌──────────────────┬──────────┬──────────┬──────────┬────────┐
+│ 表名             │ 源字段数 │ 匹配字段 │ 完整率   │ 状态   │
+├──────────────────┼──────────┼──────────┼──────────┼────────┤
+│ users            │  12      │  12      │  100%    │ ✅     │
+│ documents        │  18      │  16      │   89%    │ ❌     │
+│ templates        │   8      │   8      │  100%    │ ✅     │
+└──────────────────┴──────────┴──────────┴──────────┴────────┘
+缺失字段：documents.archived_at, documents.version
+新增字段（⚠️ 不阻塞）：documents.updated_by
+```
 
 #### 步骤 3：输出比对报告（纯文本，**不打断流程，不等待用户**）
 
@@ -1861,23 +2275,143 @@ $TASKS_DIR/
 2. **立即开始提问** - 收到需求后先评估模式，然后按流程开始 L0 或 L1，不做冗长分析
 3. **使用 AskUserQuestion** - 所有问题都通过工具提问
 4. **包含 metadata** - 每次提问必须带 level 信息
-5. **层级递进** - 严格按 L0→L1→L2→L3→L4→L5（确认）顺序（Quick Fix 跳过 L0）
+5. **层级递进** - 严格按 L0→L1→S1→R1→L2→L3→L4→Phase 5.5→L5（确认）顺序
 6. **动态调整** - 根据答案调整后续问题
 7. **简洁反馈** - 每层完成后简短总结，立即进入下一层
 8. **ASCII 可视化** - L5 门控和 PRD 文档中使用 ASCII 图表达架构/UI/数据/流程
 9. **高颗粒度** - DT 必须包含具体的 API 路径、组件名、文件路径
 10. **交叉引用** - Phase 必须标注对应的设计 Section
-11. **规范一致性** - 快速模式也使用 file + checklist 格式处理规范（有 rules/ 时自动检测）
+11. **规范一致性** - 所有模式使用 R1 规范确认流程（有 rules/ 时自动扫描、用户确认、结果写入 qa-journal.md）
 
 ---
 
-## 完成后
+## 完成后 — PRDing Ralph 编排器
 
-生成 PRD 后，告诉用户：
+PRD 生成（Phase 7 写入 prd.md）完成后，**自动启动 PRDing Ralph 后台编排器**执行 A1(PRDReview) + A2(PRD2JSON) 管线。用户无需手动运行这两个 skill。
 
-"PRD 已生成。下一步：
-1. 查看并确认 PRD 内容
-2. 使用 `/botoolagent-prd2json` 转换为 JSON（精简版，只包含自动化必需字段）
-3. 运行 `/botoolagent-coding` 开始自动开发
+### 流程概要
 
-Coding agent 会读取 prd.json 找到下一个任务，然后跳读 PRD.md 中对应的设计章节获取完整上下文。"
+```
+PyramidPRD 主对话 → Phase 7 生成 prd.md
+  ├─ 1. pipeline.lock 检查 + 创建
+  ├─ 2. Task(run_in_background) 启动 PRDing Ralph
+  ├─ 3. 告知用户 "后台自动执行中，可继续其他工作"
+  └─ PyramidPRD 返回，主对话结束
+
+PRDing Ralph（Background Agent）:
+  ├─ A1: Skill("botoolagent-prdreview") → 对抗审查
+  ├─ A2: Skill("botoolagent-prd2json") → 生成 dev.json + registry
+  ├─ 成功 → 删除 pipeline.lock → 通知用户
+  └─ 失败 → 删除 pipeline.lock → 通知用户 + 打印恢复指令
+```
+
+### Step 1: pipeline.lock 检查与创建
+
+在启动编排器之前，必须检查并创建 pipeline.lock 防止并发执行。
+
+```bash
+LOCK_FILE="$PROJECT_DIR/pipeline.lock"
+```
+
+**检查逻辑：**
+1. 如果 `$LOCK_FILE` 存在：
+   - 读取其中的 PID 和时间戳
+   - 如果 PID 进程仍存活 **且** 时间戳距今 < 30 分钟 → 告知用户 "管线正在运行中，请稍候" 并**跳过**编排器启动
+   - 如果 PID 进程已死 **或** 时间戳距今 >= 30 分钟（TTL 过期）→ 视为过期，删除旧 lock 继续
+2. 如果 `$LOCK_FILE` 不存在 → 继续
+
+**创建 lock 文件：**
+写入以下 JSON 内容到 `$LOCK_FILE`：
+```json
+{
+  "pid": "<当前进程 PID>",
+  "startedAt": "<ISO 8601 时间戳>",
+  "projectId": "<projectId>",
+  "ttlMinutes": 30
+}
+```
+
+### Step 2: 启动 PRDing Ralph 后台编排器
+
+使用 Task 工具启动后台编排器：
+
+```
+Task(
+  run_in_background: true,
+  subagent_type: "general-purpose",
+  prompt: 见下方编排器 prompt
+)
+```
+
+**编排器 prompt 模板：**
+
+```
+你是 PRDing Ralph — BotoolAgent PRD 后处理编排器。
+你的任务是依次执行 A1(PRDReview) 和 A2(PRD2JSON) 管线。
+
+项目信息:
+- projectId: <projectId>
+- PROJECT_DIR: <PROJECT_DIR 的绝对路径>
+- TASKS_DIR: <TASKS_DIR 的绝对路径>
+- prd.md 路径: <PROJECT_DIR>/prd.md
+
+## 执行步骤
+
+### A1: PRD 审查
+执行: Skill("botoolagent-prdreview", args: "<projectId>")
+- 如果审查通过或仅有 advisory → 继续 A2
+- 如果审查发现 HIGH severity 问题 → 记录问题，仍继续 A2（审查结果供用户参考）
+
+### A2: PRD 转 JSON
+执行: Skill("botoolagent-prd2json", args: "<projectId>")
+- 此步骤会生成 dev.json 和更新 registry.json
+
+## 完成处理
+
+### 成功时:
+1. 删除 pipeline.lock: 使用 Bash 执行 rm -f <PROJECT_DIR>/pipeline.lock
+2. 输出完成消息:
+   "✅ PRDing Ralph 完成:
+   - A1 PRDReview: [通过/有发现(N条)]
+   - A2 PRD2JSON: dev.json 已生成
+   用户可运行 /botoolagent-coding 开始自动开发。"
+
+### 失败时:
+1. 删除 pipeline.lock: 使用 Bash 执行 rm -f <PROJECT_DIR>/pipeline.lock
+2. 输出错误消息和恢复指令:
+   "❌ PRDing Ralph 失败于 [A1/A2]:
+   错误: <错误信息>
+
+   手动恢复指令:
+   /botoolagent-prdreview <projectId>
+   /botoolagent-prd2json <projectId>"
+```
+
+### Step 3: 告知用户
+
+编排器启动后，**立即**向用户输出以下消息（不等待编排器完成）：
+
+```
+"PRD 已生成并保存到 <PROJECT_DIR>/prd.md。
+
+后台已自动启动 PRDing Ralph 编排器，正在执行：
+1. PRD 对抗审查 (PRDReview)
+2. PRD 转 JSON (PRD2JSON → dev.json + registry)
+
+你可以继续其他工作，编排器完成后会自动通知你结果。
+完成后运行 /botoolagent-coding 即可开始自动开发。"
+```
+
+### 降级处理
+
+如果 Task 工具调用本身失败（例如工具不可用）：
+
+1. 删除已创建的 pipeline.lock
+2. 告知用户并提供手动恢复指令：
+
+```
+"PRD 已生成，但后台编排器启动失败。请手动执行以下步骤：
+1. /botoolagent-prdreview <projectId>
+2. /botoolagent-prd2json <projectId>
+3. /botoolagent-coding 开始自动开发"
+```

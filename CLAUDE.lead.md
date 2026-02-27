@@ -7,7 +7,7 @@
 - `BOTOOL_SCRIPT_DIR`: BotoolAgent 文件目录
 - `BOTOOL_PROJECT_DIR`: 用户项目目录
 - `BOTOOL_MAX_ROUNDS`: 最大轮次（由 BotoolAgent.sh 传入，写 agent-status 时必须使用此值）
-- `BOTOOL_PRD_FILE`: 当前项目的 prd.json 绝对路径（per-project 路径）
+- `BOTOOL_PRD_FILE`: 当前项目的 dev.json 绝对路径（per-project 路径；向后兼容时可能指向 prd.json）
 - `BOTOOL_PROGRESS_FILE`: 当前项目的 progress.txt 绝对路径（per-project 路径）
 - `BOTOOL_STATUS_FILE`: 当前项目的 agent-status 文件路径（DT-001 后生效；在此之前用 `$BOTOOL_SCRIPT_DIR/.state/agent-status`）
 
@@ -15,10 +15,10 @@
 
 1. 读取 `$BOTOOL_PROJECT_DIR/PROJECT.md`（如果存在）— 了解项目全局
 2. 读取 `$BOTOOL_SCRIPT_DIR/patterns.json`（如果存在）— 了解累积经验，按 confidence 降序，只读 `status: "active"`
-3. 读取 `$BOTOOL_PRD_FILE`（如不存在则回退到 `$BOTOOL_PROJECT_DIR/prd.json`）— 了解所有开发任务
+3. 读取 `$BOTOOL_PRD_FILE`（优先 dev.json；如不存在则回退到 `$BOTOOL_PROJECT_DIR/dev.json`，再退 `$BOTOOL_PROJECT_DIR/prd.json`）— 了解所有开发任务
 4. 读取 `$BOTOOL_PROGRESS_FILE`（如不存在则回退到 `$BOTOOL_PROJECT_DIR/progress.txt`）中的 Codebase Patterns（如果存在）
-5. 确认 git 分支 = `prd.json.branchName`（不是则切换/创建）
-5.5 检查 prerequisites（如果 prd.json 有此字段）：
+5. 确认 git 分支 = `dev.json.branchName`（不是则切换/创建）
+5.5 检查 prerequisites（如果 dev.json 有此字段）：
    - 无 prerequisites 字段 或 全部 `resolved: true` → 跳过
    - 有 `resolved: false` 的项 → 乐观尝试验证（用户可能已补上）：
      按 name 推断变量名，用 printenv / grep .env 检测；找到则自动更新为 `resolved: true`
@@ -31,9 +31,9 @@
 
 ### 2.1 Session 容量规划
 
-**从 `prd.json.sessions` 读取预分配的 session 计划。**
+**从 `dev.json.sessions` 读取预分配的 session 计划。**
 
-1. 检查 `prd.json` 是否有 `sessions` 字段
+1. 检查 `dev.json` 是否有 `sessions` 字段
 2. **如果有 `sessions`**：
    - 找到第一个包含 `passes: false` 任务的 session
    - 本 session 只执行该 session 组内的未完成 DT
@@ -64,19 +64,29 @@ Lead 的职责是编排（Explore → 编写 prompt → spawn → 验收），�
 Explore 结果用于编写高质量的 teammate prompt，不要用于自己写代码。
 
 1. 为每个任务 spawn 一个 teammate（使用 Task 工具）
-2. Teammate prompt 模板（根据任务字段选择模式）：
+2. Teammate prompt 模板（dev.json fat 模式）：
 
-**模式 A — 有 prdFile + prdSection（slim 模式）：**
+**每个 devTask 包含 `description`、`acceptanceCriteria[]`、`designRefs[]` 等字段，直接使用：**
 
 ```
 你正在实现 {id}: {title}
 
+描述: {description}
+验收条件: {acceptanceCriteria}
+相关信息: {notes}
+
+{如果有 designRefs}
+设计引用（PRD 跳读）:
+{designRefs 逐条列出，格式如 "§4.2 数据模型概览"}
+→ 对每条 designRef，在 PRD.md 中 grep 该章节标题（如 "4.2"），跳读对应内容获取设计上下文
+
+{如果有 files}
+预期涉及文件: {files 逐条列出}
+
 上下文获取:
-1. 读取 {prdFile}，跳读 prdSection {prdSection} 对应的章节
-2. 从 Phase 章节提取：适用规范、规范要点、任务描述、验收条件（含 [规范] 条目）
-3. 如有"对应设计"引用，跳读对应设计章节
-4. 读取 progress.txt 了解 Codebase Patterns
-5. 如果存在 patterns.json，筛选 category 与本 DT 匹配、confidence ≥ 0.7 且 status = "active" 的 pattern 作为实现参考；不相关的 pattern 直接忽略，不要全量注入
+1. 读取 progress.txt 了解 Codebase Patterns
+2. 如果存在 patterns.json，筛选与本 DT 相关且 confidence ≥ 0.7 的 active pattern 参考
+3. 对每条 designRef（格式 "§X.Y 章节标题"），在 PRD.md 中 grep 章节标题，跳读对应设计内容
 
 写代码之前（禁止跳过）：
 - Grep 搜索是否已有类似实现，避免重复创建组件或函数
@@ -89,46 +99,15 @@ Explore 结果用于编写高质量的 teammate prompt，不要用于自己写�
 每完成一步后确认结果再继续。如果某步失败，停下来报告。
 
 {如果没有 steps 字段}
-实现步骤（每步完成后确认结果再继续，某步失败立即停下报告，禁止带着错误继续）:
+步骤（每步完成后确认结果再继续，某步失败立即停下报告，禁止带着错误继续）:
 1. 实现功能
 2. 运行所有验证命令（必须读取完整输出，不能用"应该能过"代替实际运行）：
    a. npx tsc --noEmit
    b. {task.evals 中的其他命令}
-3. 逐条对照验收条件（特别注意 [规范] 前缀的条目）
-   - 如果某条 [规范] 不确定如何实现 → 读取 Phase 头部的规范文件获取详细说明
-   - 修复不符合项，修复后重新运行步骤 2
+3. 逐条对照验收条件自检，不符合项修复后重新运行步骤 2
 4. git add <modified files> && git commit -m "feat: {id} - {title}"
 5. git push origin {branchName}
 6. 在报告中包含每个验证命令的完整输出
-```
-
-**模式 B — 有 description/acceptanceCriteria（旧 fat 模式，向后兼容）：**
-
-```
-你正在实现 {id}: {title}
-
-描述: {description}
-验收条件: {acceptanceCriteria}
-相关信息: {notes}
-
-{如果有 steps 字段}
-按以下步骤顺序执行，不要跳步：
-{steps 逐条列出}
-每完成一步后确认结果再继续。如果某步失败，停下来报告。
-
-{如果没有 steps 字段}
-步骤（每步完成后确认结果再继续，某步失败立即停下报告，禁止带着错误继续）:
-1. 读取 progress.txt 了解 Codebase Patterns
-2. 如果存在 patterns.json，筛选与本 DT 相关且 confidence ≥ 0.7 的 active pattern 参考
-3. 写代码之前：Grep 搜索类似现有实现，确认依赖库已在 package.json 中
-4. 实现功能
-5. 运行所有验证命令（必须读取完整输出）：
-   a. npx tsc --noEmit
-   b. {task.evals 中的其他命令}
-6. 逐条对照验收条件自检，不符合项修复后重新运行步骤 5
-7. git add <modified files> && git commit -m "feat: {id} - {title}"
-8. git push origin {branchName}
-9. 在报告中包含每个验证命令的完整输出
 ```
 
 3. 等所有 teammate 完成
@@ -183,23 +162,11 @@ STATUS_PATH="${BOTOOL_STATUS_FILE:-$BOTOOL_SCRIPT_DIR/.state/agent-status}"
 
 ## 单任务执行协议
 
-1. 检查任务字段，判断使用哪种模式：
-   - **如果任务有 `prdFile` + `prdSection`**（slim 模式）→ 执行跳读流程（步骤 2）
-   - **如果任务有 `description`/`acceptanceCriteria`/`spec`**（旧 fat 模式）→ 直接使用这些字段（跳到步骤 3）
+1. 从 dev.json 中读取该任务的 `description`、`acceptanceCriteria`、`designRefs`、`files` 字段。
 
-2. **跳读流程**（slim prd.json）：
-   a. 读取 prd.json 中任务的 `prdFile` 和 `prdSection`
-   b. 使用 Read 工具的 offset/limit 跳读 PRD.md 对应 Phase 章节
-      **← 跳读失败处理 →**
-      若 Read 返回内容不含该 Phase 的关键词（DT 标题、"Phase X"、"7.X"）：
-      → 停止执行，报告：
-        "⚠️ prdSection 行号无效：{prdSection} 位置的内容与 DT-{id} 不匹配
-         acceptanceCriteria 无法从 PRD 提取，禁止标记 passes: true
-         请重新运行 /botoolagent-prd2json 更新 prdSection 行号后再继续"
-      → 将该 DT 标记为 blocked（不是 passes: true，也不是 passes: false）
-      → 等待 Lead Agent 处理
-   c. 从 Phase 章节提取：前置条件、产出描述、对应设计引用、任务清单
-   d. 根据"对应设计"引用，跳读 PRD 相关设计章节（如 Section 3-6）获取 SQL/UI/规则等上下文
+2. **designRefs 跳读流程**（如果任务有 `designRefs`）：
+   对每条 designRef（格式 "§X.Y 章节标题"），在 PRD.md 中 grep 章节标题（如 grep "4.2" 或 grep "数据模型概览"），
+   跳读对应设计章节获取 SQL/UI/规则等上下文。
 
 3. 执行上下文检索（读取相关文件，最多 5 个深度阅读）
 4. 实现代码
@@ -209,14 +176,14 @@ STATUS_PATH="${BOTOOL_STATUS_FILE:-$BOTOOL_SCRIPT_DIR/.state/agent-status}"
    a. **独立验证**：运行该 DT 的所有 evals（验证铁律）→ 任一失败 → 修复 → 重新运行
    b. **Stage A: Spec + Constitution Review** → FAIL 则修复后重新验证
    c. **Stage B: Quick Quality Check** → HIGH 立即修复
-   d. 全部 PASS → 更新 `prd.json`：`passes` → `true` → **执行 DT 完成反思（见「DT 完成反思」章节）**
+   d. 全部 PASS → 更新 `dev.json`：`passes` → `true` → **执行 DT 完成反思（见「DT 完成反思」章节）**
 8. 写 `progress.txt`
 
 ## 验证铁律
 
 **任何 DT 在标记 passes: true 之前，Lead Agent 必须：**
 
-1. 运行 prd.json 中该任务的所有 evals（不仅仅是 typecheck）
+1. 运行 dev.json 中该任务的所有 evals（不仅仅是 typecheck）
 2. 读取完整输出并确认退出码为 0
 3. 检查文件是否存在（如果 eval 包含 test -f）
 4. 只有全部 evals 通过后才能写 passes: true
@@ -231,7 +198,7 @@ STATUS_PATH="${BOTOOL_STATUS_FILE:-$BOTOOL_SCRIPT_DIR/.state/agent-status}"
 | 依赖类 | 缺少前置 DT 的产出 | 检查 dependsOn，确认前置任务真正 pass |
 | 实现类 | 代码 bug，逻辑错误 | Lead 接管直接修复，不重派 |
 | 规范类 | constitution checklist 不合规 | 对照 rule.file 修复后重验证 |
-| 环境类 | eval 命令配置有误 | 修正 prd.json 中的 evals |
+| 环境类 | eval 命令配置有误 | 修正 dev.json 中的 evals |
 
 根因确认后：
 - 不标记 passes: true
@@ -246,7 +213,7 @@ STATUS_PATH="${BOTOOL_STATUS_FILE:-$BOTOOL_SCRIPT_DIR/.state/agent-status}"
 
 1. 遍历 acceptanceCriteria，每条用 grep/read 确认代码有对应实现 → 缺了 = FAIL
 2. 看 git diff --stat 新增文件，不属于任何 criteria → 多了 = WARNING（不阻塞）
-3. 遍历 prd.json 中的 constitution checklist，逐条对照本次修改的代码：
+3. 遍历 dev.json 中的 constitution checklist，逐条对照本次修改的代码：
    - 合规 → OK
    - 不合规 → FAIL → 修复
    - 不确定 → 读 rule.file 获取完整规范后判断

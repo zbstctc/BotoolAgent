@@ -8,6 +8,10 @@ user-invocable: true
 
 Uses Codex CLI to perform adversarial red-team review of PRD documents, finding completeness gaps, consistency issues, security risks, and implementability problems before development begins.
 
+Supports two modes:
+- **A1 Auto-chain** — called by PRDing Ralph background agent as part of the automated pipeline
+- **Standalone** — user manually runs `/prdreview <file-path>` to review any `.md` file
+
 ---
 
 **Announce at start:** "Starting adversarial PRD review using Codex CLI red-team analysis..."
@@ -32,30 +36,110 @@ If codex is not available, see **Error Handling / Degraded Mode** at the bottom 
 
 **Trigger phrases:** `prd review`, `review prd`, `prdreview`, `审查 prd`
 
-**Options:**
-- Default: reviews the PRD (`prd.md` or `prd.json`)
-- `--target enrich`: reviews the Enrich output instead of the raw PRD
+**Arguments:**
+- No argument or a projectId → A1 auto-chain mode (registry lookup)
+- A file path (contains `/` or ends with `.md`) → Standalone mode
 
 **Examples:**
-- `/botoolagent-prdreview` — review the PRD for the current project
-- `/botoolagent-prdreview --target enrich` — review the Enrich output
+- `/botoolagent-prdreview` — A1 mode: review prd.md for the current project
+- `/botoolagent-prdreview botool-present-v16` — A1 mode: review prd.md for the given projectId
+- `/botoolagent-prdreview tasks/my-feature/prd.md` — Standalone mode: review the specified file
+- `/botoolagent-prdreview ~/docs/spec.md` — Standalone mode: review an arbitrary markdown file
 
 ---
 
-## Step 0: Project Selection + Argument Parsing
+## Step 0: Mode Detection + Setup
 
-### Project Selection
+### Mode Detection
 
-Check `tasks/registry.json` (or `BotoolAgent/tasks/registry.json`) for multi-project mode:
-- If exists with multiple projects, use AskUserQuestion to let the user choose
-- Set `PROJECT_ID` and `PRD_DIR="tasks/${PROJECT_ID}"`
-- If no registry or single project, set `PRD_DIR="tasks/${PROJECT_ID}"` for the sole project, or fall back to root `.`
+Parse the argument to determine the mode:
 
-### Argument Parsing
+```
+ARG = user-provided argument (may be empty)
 
-Check if user passed `--target enrich`:
-- If yes, set `REVIEW_TARGET="enrich"`
-- Otherwise, set `REVIEW_TARGET="prd"` (default)
+if ARG contains "/" OR ARG ends with ".md":
+  MODE = "standalone"
+  SOURCE_FILE = ARG  (resolve to absolute path)
+else:
+  MODE = "auto-chain"
+  PROJECT_ID = ARG  (may be empty)
+```
+
+### A1 Auto-chain Setup
+
+When `MODE = "auto-chain"`:
+
+1. If `PROJECT_ID` is provided (non-empty), use it directly.
+2. Otherwise, check `tasks/registry.json` (or `BotoolAgent/tasks/registry.json`):
+   - If exists with multiple projects, use AskUserQuestion to let the user choose
+   - If single project, use that project's ID
+   - If no registry, fall back to root `.`
+3. Set `PRD_DIR = "tasks/${PROJECT_ID}"`
+
+Locate the PRD file:
+```bash
+if [ -f "${PRD_DIR}/prd.md" ]; then
+  PRD_FILE="${PRD_DIR}/prd.md"
+elif [ -f "${PRD_DIR}/prd.json" ]; then
+  PRD_FILE="${PRD_DIR}/prd.json"
+else
+  echo "ERROR: No PRD file found in ${PRD_DIR}"
+fi
+```
+
+**If no PRD file found:**
+```
+Error: PRD file not found.
+
+Recovery suggestions:
+- Run /botoolagent-pyramidprd to generate a PRD
+- Or check the project directory exists: tasks/${PROJECT_ID}/
+```
+Then stop here.
+
+### Standalone Setup
+
+When `MODE = "standalone"`:
+
+1. Resolve `SOURCE_FILE` to an absolute path.
+2. **Path boundary validation (Security Rule #6):**
+```bash
+SAFE_PATH=$(realpath "$SOURCE_FILE" 2>/dev/null)
+PROJECT_ROOT=$(pwd)
+# Reject paths outside project root
+if [[ "$SAFE_PATH" != "$PROJECT_ROOT"/* ]]; then
+  echo "WARNING: File is outside the project directory."
+  echo "  File: $SAFE_PATH"
+  echo "  Project: $PROJECT_ROOT"
+  # AskUserQuestion: "此文件不在项目目录内，确认要审查吗？" → 继续/取消
+fi
+# Reject known sensitive patterns
+if echo "$SAFE_PATH" | grep -qE '\.(env|key|pem|ssh|credentials)'; then
+  echo "ERROR: Refusing to process sensitive file: $SAFE_PATH"
+  # stop here
+fi
+```
+3. Verify the file exists:
+```bash
+if [ ! -f "$SOURCE_FILE" ]; then
+  echo "ERROR: File not found: $SOURCE_FILE"
+  # stop here
+fi
+```
+3. Extract the stem for output naming:
+```bash
+STEM=$(basename "$SOURCE_FILE" .md)
+SOURCE_DIR=$(dirname "$SOURCE_FILE")
+```
+4. **Backup the original file** before any modifications (BR-042):
+```bash
+cp "$SOURCE_FILE" "${SOURCE_DIR}/${STEM}_original.md"
+```
+Tell the user: `"Backup saved to ${SOURCE_DIR}/${STEM}_original.md"`
+
+5. Set `PRD_FILE = $SOURCE_FILE` (used by subsequent steps).
+
+**Skip registry lookup entirely in standalone mode.**
 
 ---
 
@@ -74,40 +158,9 @@ Then switch to **Degraded Mode** (see Error Handling section).
 
 ## Step 2: Read PRD Content
 
-### For `REVIEW_TARGET="prd"`:
+Read the content of `PRD_FILE` (determined in Step 0) into `PRD_CONTENT`.
 
-```bash
-# Try prd.md first, then prd.json
-if [ -f "${PRD_DIR}/prd.md" ]; then
-  PRD_FILE="${PRD_DIR}/prd.md"
-elif [ -f "${PRD_DIR}/prd.json" ]; then
-  PRD_FILE="${PRD_DIR}/prd.json"
-else
-  echo "ERROR: No PRD file found in ${PRD_DIR}"
-fi
-```
-
-### For `REVIEW_TARGET="enrich"`:
-
-```bash
-if [ -f "${PRD_DIR}/prd.json" ]; then
-  PRD_FILE="${PRD_DIR}/prd.json"
-else
-  echo "ERROR: No prd.json found in ${PRD_DIR}"
-fi
-```
-
-**If no PRD file found:**
-```
-Error: PRD file not found.
-
-Recovery suggestions:
-- Run /botoolagent-pyramidprd to generate a PRD
-- Or run /botoolagent-prd2json to convert PRD to JSON
-```
-Then stop here.
-
-Read the PRD content into `PRD_CONTENT`.
+For both modes, the file has already been located and validated in Step 0.
 
 ---
 
@@ -119,8 +172,6 @@ The two-step method is required because `codex exec review --base` and custom pr
 
 ### Build the Review Prompt
 
-**For PRD review (`REVIEW_TARGET="prd"`):**
-
 Write the PRD content to a temporary file, then invoke Codex with a prompt covering these 5 dimensions:
 1. **completeness** -- Are all requirements, acceptance criteria, and edge cases covered? Are there missing sections?
 2. **consistency** -- Are there any contradictions between sections? Do numbers, names, and references align?
@@ -128,24 +179,12 @@ Write the PRD content to a temporary file, then invoke Codex with a prompt cover
 4. **security** -- Are there security risks not addressed (injection, auth, data leaks, path traversal)?
 5. **ux** -- Are user flows clear? Are error states and loading states described?
 
-**For Enrich review (`REVIEW_TARGET="enrich"`):**
-
-Write the Enrich JSON to a temporary file, then invoke Codex with a prompt covering these 5 dimensions:
-1. **syntax** -- Are code examples syntactically valid TypeScript/JavaScript? Are imports correct?
-2. **dependency** -- Are task dependencies acyclic? Is the dependency graph consistent (no missing refs)?
-3. **filepath** -- Do filesToModify reference paths that plausibly exist in the project structure?
-4. **eval** -- Are eval commands valid shell commands? Would blocking evals actually work (no typos)?
-5. **session** -- Are sessions properly sized (max 8 DTs each)? Are dependent tasks in the same session?
-
 ### Execute Codex
 
 ```bash
 # Write content to temp file
 TEMP_FILE=$(mktemp /tmp/prd-review-XXXXXX.md)
 # (write PRD_CONTENT to TEMP_FILE)
-
-# Build prompt (see buildPrdReviewPrompt / buildEnrichReviewPrompt in
-# viewer/src/app/api/prd/review/route.ts for the exact prompt format)
 
 REVIEW_OUTPUT=$(mktemp /tmp/codex-review-output-XXXXXX.txt)
 
@@ -155,7 +194,11 @@ codex exec --full-auto \
 Read the PRD file at: $TEMP_FILE
 
 Review it across these 5 dimensions:
-[dimensions list based on REVIEW_TARGET]
+1. completeness
+2. consistency
+3. implementability
+4. security
+5. ux
 
 For each finding, output a block in this exact format:
 ---
@@ -175,6 +218,8 @@ Be thorough but precise. Only flag real problems with concrete evidence." \
 rm -f "$TEMP_FILE"
 ```
 
+**Sandbox boundary (auto-chain only, BR-040):** When running in A1 auto-chain mode, Codex `exec --full-auto` operates within its built-in sandbox. File writes from this skill are restricted to `tasks/<id>/` and `/tmp/` only. Do NOT write to any path outside these directories in auto-chain mode.
+
 ---
 
 ## Step 4: Parse Codex Output
@@ -186,7 +231,7 @@ Claude reads the content of `$REVIEW_OUTPUT` and parses the free-text into struc
 1. Split the output by `---` delimiters
 2. For each block, extract:
    - `SEVERITY:` HIGH | MEDIUM | LOW
-   - `CATEGORY:` completeness | consistency | implementability | security | ux | rule-violation | syntax | dependency | filepath | eval | session
+   - `CATEGORY:` completeness | consistency | implementability | security | ux | rule-violation
    - `SECTION:` (optional) which PRD section
    - `MESSAGE:` problem description
    - `SUGGESTION:` fix recommendation
@@ -246,7 +291,7 @@ For each HIGH or MEDIUM finding, Claude chooses one of:
 
 **Mode A -- Fix:**
 - Read the relevant PRD section
-- Apply the fix (modify the PRD content in memory or write to a backup file)
+- Apply the fix (modify the PRD content in memory)
 - Record what was changed
 
 **Mode B -- Argue Rejection:**
@@ -270,9 +315,14 @@ codex exec --full-auto \
 - **Codex accepts** -> finding marked as `resolved (rejected)`
 - **Codex rejects** -> finding remains `unresolved`
 
-#### 5b. Write Fixed PRD to Backup
+#### 5b. Write Fixed PRD
 
-Write the modified PRD to `${PRD_DIR}/prd-review-fixed.md` (or `.json`). **Never overwrite the original file.**
+**A1 auto-chain mode:** Write fixed PRD to both:
+- `${PRD_DIR}/prd-review-fixed.md` (diff record)
+- Overwrite `${PRD_DIR}/prd.md` (auto-chain overwrites the original, per BR-017)
+
+**Standalone mode:** Write fixed content to:
+- Overwrite `$SOURCE_FILE` directly (original was backed up in Step 0 as `{stem}_original.md`, per BR-042)
 
 #### 5c. Codex Re-review (Incremental)
 
@@ -295,7 +345,24 @@ Check re-review results:
   Still has HIGH/MEDIUM AND round = 3 -> Circuit breaker.
 ```
 
-**Circuit Breaker (round 3 with unresolved findings):**
+**Circuit Breaker behavior depends on mode:**
+
+**A1 auto-chain mode (BR-029):**
+Default to `accept + advisory` for unresolved HIGH/MEDIUM findings after 3 rounds. This does NOT block the pipeline -- unresolved findings are recorded as advisory in the review report, and the auto-chain continues to the next step (A2 PRD2JSON).
+
+```
+Adversarial PRD review -- 3 rounds without full convergence.
+Unresolved findings recorded as advisory (auto-chain continues).
+
+Round history:
+  Round 1: Found {n}, Fixed {m}, Rejected {r}
+  Round 2: ...
+  Round 3: ...
+```
+
+**Standalone mode:**
+Present the unresolved findings to the user and ask for a decision:
+
 ```
 Adversarial PRD review -- 3 rounds without convergence.
 Unresolved findings:
@@ -325,7 +392,7 @@ Display the complete review report:
 ```
 === PRD Adversarial Review Report ===
 
-Target: {prd|enrich}
+Mode: {auto-chain|standalone}
 File: {PRD_FILE}
 Rounds: {rounds}/3
 Status: {converged|circuit_breaker|no_issues}
@@ -338,14 +405,16 @@ Findings Summary:
 [Detailed findings list with resolution status]
 ```
 
-### Save to File
+### Save Review Report
 
+**A1 auto-chain mode:**
 Write the review results to `${PRD_DIR}/prd-review.json`:
 
 ```json
 {
-  "reviewTarget": "prd|enrich",
+  "mode": "auto-chain",
   "timestamp": "ISO timestamp",
+  "sourceFile": "tasks/{projectId}/prd.md",
   "rounds": 1,
   "maxRounds": 3,
   "status": "converged|circuit_breaker|no_issues",
@@ -357,7 +426,7 @@ Write the review results to `${PRD_DIR}/prd-review.json`:
       "message": "...",
       "suggestion": "...",
       "taskId": "...",
-      "resolution": "fixed|rejected|unresolved",
+      "resolution": "fixed|rejected|unresolved|advisory",
       "rejectionReason": "...(only for rejected)",
       "codexAccepted": true
     }
@@ -378,7 +447,29 @@ Tell the user:
 > "Review report saved to `${PRD_DIR}/prd-review.json`"
 
 If a fixed PRD was generated:
-> "Fixed PRD saved to `${PRD_DIR}/prd-review-fixed.md` (original unchanged)"
+> "Reviewed PRD saved to `${PRD_DIR}/prd.md` (auto-overwritten). Diff record at `${PRD_DIR}/prd-review-fixed.md`"
+
+**Standalone mode:**
+Write the review results to `${SOURCE_DIR}/${STEM}_review.json` (per BR-042):
+
+```json
+{
+  "mode": "standalone",
+  "timestamp": "ISO timestamp",
+  "sourceFile": "/absolute/path/to/reviewed-file.md",
+  "backupFile": "/absolute/path/to/{stem}_original.md",
+  "rounds": 1,
+  "maxRounds": 3,
+  "status": "converged|circuit_breaker|no_issues",
+  "findings": [ ... ],
+  "summary": { ... }
+}
+```
+
+Tell the user:
+> "Review report saved to `${SOURCE_DIR}/${STEM}_review.json`"
+> "Original file backed up at `${SOURCE_DIR}/${STEM}_original.md`"
+> "Reviewed file overwritten at `${SOURCE_FILE}`"
 
 ### Clean Up
 
@@ -394,12 +485,12 @@ rm -f "$REVIEW_OUTPUT" "$RECHECK_OUTPUT" "$REJECTION_EVAL"
 
 When Codex CLI is not installed, fall back to Claude-only review:
 
-1. **Claude performs the review directly** using the same 5 dimensions (PRD or Enrich)
+1. **Claude performs the review directly** using the same 5 dimensions
 2. Claude generates findings in the same structured format
 3. **No adversarial loop** (since there is no independent second reviewer)
 4. Output includes a warning: "Degraded mode: Claude-only review (no Codex adversarial validation). Install Codex for full adversarial review."
 
-The degraded mode review still produces `prd-review.json` with the same schema, but with `"mode": "degraded"` added to the top level.
+The degraded mode review still produces the review JSON (either `prd-review.json` for auto-chain or `{stem}_review.json` for standalone) with the same schema, but with `"mode": "degraded"` added to the top level.
 
 ### Codex Timeout
 
@@ -412,16 +503,17 @@ If Codex does not respond within 60 seconds:
 If Codex output cannot be parsed into any findings and does not contain `NO_ISSUES_FOUND`:
 - **Do NOT treat as "no issues"** (fail-closed principle, per BR-009)
 - Report the parse failure to the user
-- Save raw output to `prd-review.json` with `"parseError": true`
+- Save raw output to review JSON with `"parseError": true`
 - Offer: retry / switch to degraded mode / abort
 
 ---
 
 ## Safety Rules
 
-1. **NEVER overwrite the original PRD file** -- all fixes go to `prd-review-fixed.md` (or `.json`)
-2. **NEVER modify files outside the project's `tasks/` directory**
-3. **Always create backup before modifying** any PRD-adjacent files
-4. **Temp files must be cleaned up** after review completes (success or failure)
-5. **Path traversal protection** -- validate all file paths stay within the project directory
-6. **No user input in shell commands** -- Codex prompts use fixed templates, never interpolate user-provided paths into shell commands
+1. **Auto-chain sandbox boundary (BR-040):** In A1 auto-chain mode, file writes are restricted to `tasks/<id>/` and `/tmp/` only. Do NOT write to any path outside these directories.
+2. **Standalone backup required (BR-042):** In standalone mode, ALWAYS create `{stem}_original.md` backup before any modifications to the source file.
+3. **Auto-chain overwrites prd.md (BR-017):** In A1 mode, the reviewed PRD overwrites `tasks/<id>/prd.md` (the original is reconstructible from prd-review-fixed.md diff record).
+4. **Standalone overwrites source file (BR-017):** In standalone mode, the reviewed file overwrites the original (which was backed up in Step 0).
+5. **Temp files must be cleaned up** after review completes (success or failure)
+6. **Path traversal protection** -- validate all file paths stay within expected boundaries (auto-chain: `tasks/<id>/`; standalone: the source file's directory)
+7. **No user input in shell commands** -- Codex prompts use fixed templates, never interpolate user-provided paths into shell commands

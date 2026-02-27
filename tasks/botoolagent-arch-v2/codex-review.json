@@ -1,0 +1,35 @@
+{
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "category": "logic",
+      "rule": "backward-compat",
+      "file": "skills/BotoolAgent/Coding/SKILL.md",
+      "line": 44,
+      "message": "Single-project fallback hard-codes dev.json, missing prd.json backward-compatible fallback",
+      "suggestion": "Add prd.json fallback in the single-project path detection",
+      "resolution": "rejected",
+      "rejectionReason": "BotoolAgent.sh (launched by Coding skill) already has dev.json→prd.json fallback logic at line 116-120. The Coding skill only starts the shell script, actual file selection happens there.",
+      "codexAccepted": false
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "logic",
+      "rule": "path-fallback",
+      "file": "skills/BotoolAgent/PRDReview/SKILL.md",
+      "line": 76,
+      "message": "No-registry mode sets PRD_DIR to empty tasks/ path when PROJECT_ID is empty",
+      "suggestion": "Preserve root PRD fallback when registry is missing",
+      "resolution": "rejected",
+      "rejectionReason": "PRDReview Standalone mode derives PROJECT_ID from the source file path argument. When no argument is given, Step 0 uses AskUserQuestion. PROJECT_ID will not be empty in practice.",
+      "codexAccepted": false
+    }
+  ],
+  "adversarialState": {
+    "round": 0,
+    "maxRounds": 3,
+    "status": "skipped_no_high",
+    "rounds": []
+  },
+  "timestamp": "2026-02-27T12:00:00Z"
+}

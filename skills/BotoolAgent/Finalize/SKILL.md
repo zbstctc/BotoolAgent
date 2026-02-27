@@ -53,19 +53,19 @@ fi
 
 检查 `tasks/registry.json`（或 `BotoolAgent/tasks/registry.json`）是否存在：
 - 如果存在且有多个项目 → 用 AskUserQuestion 列出项目让用户选择
-- 选择后，设置 `PRD_PATH="tasks/${PROJECT_ID}/prd.json"`
-- 如果不存在 registry 或只有一个项目 → 设置 `PRD_PATH="prd.json"`（向后兼容）
+- 选择后，设置 `PRD_PATH="tasks/${PROJECT_ID}/dev.json"`
+- 如果不存在 registry 或只有一个项目 → 设置 `PRD_PATH="dev.json"`（向后兼容）
 
-### 1b. 检查 prd.json 和 branchName
+### 1b. 检查 dev.json 和 branchName
 
 ```bash
 # 使用 Step 1a 确定的 PRD_PATH（per-project 或根目录）
 ls "$PRD_PATH" 2>/dev/null
 ```
 
-**如果 prd.json 不存在：**
+**如果 dev.json 不存在：**
 ```
-错误：未找到 prd.json。
+错误：未找到 dev.json。
 
 恢复建议：
 - 运行 /botoolagent-prd2json 从 PRD 文档生成
@@ -79,9 +79,9 @@ BRANCH_NAME=$(grep -o '"branchName": "[^"]*"' "$PRD_PATH" | cut -d'"' -f4)
 
 **如果 branchName 为空：**
 ```
-错误：prd.json 中缺少 branchName 字段。
+错误：dev.json 中缺少 branchName 字段。
 
-恢复建议：在 prd.json 顶层添加 "branchName": "your-branch-name"
+恢复建议：在 dev.json 顶层添加 "branchName": "your-branch-name"
 ```
 Then stop here.
 
@@ -336,8 +336,8 @@ BotoolAgent Finalize 完成！
 
 | 错误 | 恢复建议 |
 |------|----------|
-| prd.json 不存在 | 运行 `/botoolagent-prd2json` 先生成 |
-| branchName 缺失 | 在 prd.json 中添加 branchName 字段 |
+| dev.json 不存在 | 运行 `/botoolagent-prd2json` 先生成 |
+| branchName 缺失 | 在 dev.json 中添加 branchName 字段 |
 | agent-status 不是 testing_complete | 运行 `/botoolagent-testing` 完成 6 层质检 |
 | testing-report.json 不存在 | 运行 `/botoolagent-testing` 生成报告 |
 | 未找到 PR | 检查远程仓库，或手动 `gh pr create` |
