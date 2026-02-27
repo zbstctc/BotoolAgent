@@ -1487,9 +1487,212 @@ Phase T1 ──→ S1 ──→ R1 ──→ T2 ──→ T2.5 ──→ T3 ─�
 
 ---
 
-### Phase T2: 结构发现（两遍读取策略）
+### Phase T1.5: 大文件阈值路由
 
-**目标：** 从源 PRD 中提取结构信息，按 BotoolAgent 维度分类。
+**目标：** 根据源 PRD 行数选择最优处理策略，防止大文件导致上下文溢出。
+
+```bash
+SOURCE_LINES=$(wc -l < "$SOURCE_PRD_PATH")
+echo "源 PRD 行数: $SOURCE_LINES"
+```
+
+**三档路由：**
+
+| 行数范围 | 策略代号 | 处理方式 | 说明 |
+|---------|---------|---------|------|
+| < 2000 | **Standard** | Phase T2 当前流程 | 主对话直接读取，无需拆分 |
+| 2000-5000 | **C2** | 单源多遍抽取 | 4 个 Explore Subagent 按维度并行提取 |
+| > 5000 | **C1** | Master Context + Phase Bundle | 两遍提取 + 并行 Subagent 处理 |
+
+**路由逻辑：**
+```
+if SOURCE_LINES < 2000:
+  → 进入 Phase T2（Standard 模式，当前流程不变）
+elif SOURCE_LINES >= 2000 and SOURCE_LINES <= 5000:
+  → 进入 Phase T2-C2（单源多遍抽取）
+else:  # > 5000
+  → 进入 Phase T2-C1（Master Context + Phase Bundle）
+```
+
+告知用户当前策略：
+- Standard: "源文件 {N} 行，使用标准流程处理。"
+- C2: "源文件 {N} 行（中型），使用 C2 多维度并行提取。"
+- C1: "源文件 {N} 行（大型），使用 C1 Master Context + Phase Bundle 分包处理。"
+
+---
+
+### Phase T2-C2: 单源多遍抽取（2000-5000 行）
+
+**目标：** 将源 PRD 的 4 个维度并行提取到独立文件，避免单次读取超出上下文。
+
+#### 步骤 1: 启动 4 个 Explore Subagent（并行）
+
+```
+# 同时启动 4 个 Task(Explore)，按维度并行提取
+
+Task(subagent_type="Explore", description="提取§4数据设计",
+  prompt="读取源 PRD 文件 $SOURCE_PRD_PATH，提取所有与数据设计相关的内容：
+    - 全部 CREATE TABLE 语句（完整保留，含字段、约束、注释）
+    - 数据模型关系（ER 图、外键引用）
+    - 数据库约束和索引
+    输出到: $PROJECT_DIR/c2-data-extraction.md")
+
+Task(subagent_type="Explore", description="提取§3+§6架构+规则",
+  prompt="读取源 PRD 文件 $SOURCE_PRD_PATH，提取所有与架构和规则相关的内容：
+    - 架构设计（状态机、角色权限、工作流）
+    - 业务规则（所有 BR-xxx 或规则表格）
+    - 约束和权限定义
+    输出到: $PROJECT_DIR/c2-arch-rules-extraction.md")
+
+Task(subagent_type="Explore", description="提取§5+§8 UI+附录",
+  prompt="读取源 PRD 文件 $SOURCE_PRD_PATH，提取所有与 UI 和附录相关的内容：
+    - 页面布局（ASCII 线框图完整保留）
+    - 组件清单和 Props 接口
+    - 测试策略、风险评估、实现细节代码示例
+    输出到: $PROJECT_DIR/c2-ui-appendix-extraction.md")
+
+Task(subagent_type="Explore", description="提取§7开发计划",
+  prompt="读取源 PRD 文件 $SOURCE_PRD_PATH，提取开发计划相关的内容：
+    - 所有 Phase 定义（标题、前置条件、产出）
+    - 所有任务条目（含文件路径、组件名、API 路由）
+    - Phase 间依赖关系
+    输出到: $PROJECT_DIR/c2-plan-extraction.md")
+```
+
+#### 步骤 2: 主对话合并
+
+4 个 Subagent 完成后，主对话读取 4 个提取文件：
+```
+Read $PROJECT_DIR/c2-data-extraction.md
+Read $PROJECT_DIR/c2-arch-rules-extraction.md
+Read $PROJECT_DIR/c2-ui-appendix-extraction.md
+Read $PROJECT_DIR/c2-plan-extraction.md
+```
+
+合并后的内容用于：
+- 源章节映射（等同 T2 的映射逻辑）
+- T3 覆盖度评分
+- 后续 Tq 方案卡补充
+
+**C2 完成后 → 进入 Phase T2.5（完整性校验）→ T3 → Tq → T5 → L5 → G1/W1**
+
+---
+
+### Phase T2-C1: Master Context + Phase Bundle（> 5000 行）
+
+**目标：** 将超大 PRD 分解为可管理的分包，每个分包自包含 master context + 单 Phase 内容。
+
+#### 步骤 1: Master Context 提取
+
+使用 Explore Subagent 从源 PRD 提取全局上下文（~500 行）：
+
+```
+Task(subagent_type="Explore", description="提取 master-context",
+  prompt="""
+读取源 PRD 文件 $SOURCE_PRD_PATH，提取全局上下文并输出到 $PROJECT_DIR/master-context.md。
+
+提取内容（~500 行，必须完整保留）:
+1. 项目概述摘要（压缩为 10-20 行）
+2. 全部 CREATE TABLE 语句（完整保留每个字段、约束、注释，不可省略）
+3. 架构设计关键部分（状态机定义、角色权限矩阵）
+4. 全局业务规则（跨 Phase 的约束规则）
+5. 技术栈声明（框架、语言、数据库、依赖）
+
+输出格式:
+# Master Context — [项目名]
+## 项目概述
+[摘要]
+## 数据库 Schema（完整）
+[所有 CREATE TABLE]
+## 架构设计
+[状态机、权限]
+## 全局规则
+[跨 Phase 规则]
+## 技术栈
+[声明]
+
+输出到: $PROJECT_DIR/master-context.md
+""")
+```
+
+验证 master-context.md:
+- 文件存在且非空
+- 包含所有 CREATE TABLE（`grep -c 'CREATE TABLE' master-context.md` ≥ T1「必须保留表清单」的 80%）
+- 行数在 300-800 行范围内（过短说明提取不充分，过长说明压缩不够）
+
+#### 步骤 2: Phase Bundle 分包
+
+根据 T1「必须保留Phase清单」，为每个 Phase（或 2-3 个相关 Phase 合并）创建自包含分包：
+
+```
+对每个 Phase N（或合并的 Phase 组）:
+  phase-bundle-N.md =
+    ┌── master-context.md（完整嵌入，~500 行）
+    ├── Phase N 原文（完整，从源 PRD 按行号范围提取）
+    └── Phase N 引用的表/规则/UI（从源 PRD 精选引用的章节内容）
+
+每个分包目标: ~800-1300 行
+```
+
+**分包合并规则：**
+- 如果单 Phase 原文 < 300 行 → 与相邻 Phase 合并
+- 如果单 Phase 原文 > 800 行 → 单独成包
+- 最终分包数量 ≤ 8（超过则合并小 Phase）
+
+写入分包: `$PROJECT_DIR/phase-bundle-1.md`, `phase-bundle-2.md`, ...
+
+#### 步骤 3: 并行 Subagent 处理（≤ 4 并行）
+
+```
+# 每个分包启动一个 general-purpose Subagent 生成对应 Phase 的 PRD 片段
+
+for each phase-bundle-N.md:
+  Task(
+    subagent_type: "general-purpose",
+    description: "生成 Phase N PRD",
+    prompt: """
+读取 $PROJECT_DIR/phase-bundle-N.md。
+
+根据分包内容，生成 BotoolAgent PRD 格式的 Phase 片段。
+
+输出必须包含:
+- § 7.N Phase N 标题 + DT 列表（按 DT 分解规则拆分）
+- 该 Phase 涉及的 § 3/4/5/6 设计内容（从分包中提取并格式化）
+- 每个 DT 必须有完整验收条件
+
+输出到: $PROJECT_DIR/prd-phase-N.md
+"""
+  )
+```
+
+**最多同时 4 个 Subagent 并行**。如果分包 > 4 个，分批处理（第一批 4 个完成后启动第二批）。
+
+#### 步骤 4: 合并校验
+
+所有 Subagent 完成后，合并分片为最终 PRD：
+
+```bash
+# 合并所有 prd-phase-N.md → 最终 prd.md
+# 在合并前添加 § 1 项目概述和 § 2 当前状态（从 master-context.md 提取）
+```
+
+**合并校验（不可跳过）：**
+
+1. **CREATE TABLE 完整性**: `grep -c 'CREATE TABLE' prd.md` ≥ T1 表清单的 80%
+2. **Phase 完整性**: 生成 PRD 中的 Phase 数量 ≥ T1「必须保留Phase清单」的 100%
+3. **行数校验**: 生成 PRD 行数 ≥ 2000 行（源 PRD > 5000 行时的最低要求）
+4. **冲突检测**: 检查是否有重复的 DT 编号（不同 Subagent 可能生成重叠 DT-xxx）
+   - 发现重复 → 重新编号（按 Phase 顺序递增）
+
+校验失败 → 报错并指明具体缺失项，提示用户手动补充或重新运行。
+
+**C1 完成后 → 进入 Phase T2.5（完整性校验）→ T3 → Tq → T5 → L5 → G1/W1**
+
+---
+
+### Phase T2: 结构发现（Standard 模式，< 2000 行）
+
+**目标：** 从源 PRD 中提取结构信息，按 BotoolAgent 维度分类。**仅 Standard 模式（< 2000 行）使用此流程。C2/C1 模式跳过此 Phase。**
 
 **第一遍：源章节枚举 + 显式映射（Source-First）**
 
