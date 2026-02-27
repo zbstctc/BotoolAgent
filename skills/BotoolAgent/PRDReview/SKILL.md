@@ -102,7 +102,24 @@ Then stop here.
 When `MODE = "standalone"`:
 
 1. Resolve `SOURCE_FILE` to an absolute path.
-2. Verify the file exists:
+2. **Path boundary validation (Security Rule #6):**
+```bash
+SAFE_PATH=$(realpath "$SOURCE_FILE" 2>/dev/null)
+PROJECT_ROOT=$(pwd)
+# Reject paths outside project root
+if [[ "$SAFE_PATH" != "$PROJECT_ROOT"/* ]]; then
+  echo "WARNING: File is outside the project directory."
+  echo "  File: $SAFE_PATH"
+  echo "  Project: $PROJECT_ROOT"
+  # AskUserQuestion: "此文件不在项目目录内，确认要审查吗？" → 继续/取消
+fi
+# Reject known sensitive patterns
+if echo "$SAFE_PATH" | grep -qE '\.(env|key|pem|ssh|credentials)'; then
+  echo "ERROR: Refusing to process sensitive file: $SAFE_PATH"
+  # stop here
+fi
+```
+3. Verify the file exists:
 ```bash
 if [ ! -f "$SOURCE_FILE" ]; then
   echo "ERROR: File not found: $SOURCE_FILE"
