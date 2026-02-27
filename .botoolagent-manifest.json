@@ -1,5 +1,6 @@
 {
   "$schema": "BotoolAgent update manifest — defines which files to replace vs preserve",
+  "version": "2.0.0",
   "repo": "zbstctc/BotoolAgent",
   "core": [
     "scripts/",
@@ -36,6 +37,7 @@
     "archive/",
     ".state/",
     "prd.json",
+    "dev.json",
     "progress.txt",
     "patterns.json",
     "CLAUDE.md",

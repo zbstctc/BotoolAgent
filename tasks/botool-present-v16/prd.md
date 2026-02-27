@@ -1,36 +1,83 @@
-# PRD: Botool_Present v1.6
-
-> **生成方式**: Transform Mode (PRD 导入)
-> **源文件**: `v1.6_Botool_Present_v2PRD copy.md` (8120 行, v4.1, 2026-02-21)
-> **生成日期**: 2026-02-23
-
----
+# PRD: Botool_Present v1.6 — PPT 编辑器原地进化
 
 ## 1. 项目概述
 
 ### 1.1 背景与动机
 
-Botool_Present 是一个基于 Web 的 PPT 演示文稿管理与协作平台。现有版本功能简单，仅支持基础的演示文稿创建和编辑，缺少企业级文档库管理、多版本控制、精细化权限体系和多语言 AI 翻译能力。
+Botool_Present（端口 3005）当前同时承载两大职责：**管理运营**（文档库管理、分类指派、版本管理、前台资料库）和 **PPT 编辑**（Ribbon 编辑器、Canvas 渲染、演示播放、DSL 引擎）。两者技术依赖差异大，混合导致构建体积大、关注点难以分离。
 
-v1.6 是一次全面升级，引入文档库分类管理体系、版本管理（主/次版本 + 选择性发布）、协作权限（read/write/admin）、多语言 AI 翻译（通义千问 qwen-max）、以及完整的导入/导出功能（PDF/PNG/.pptbt/PPTX）。
+本 PRD 描述 Present 的 **原地进化计划**：将管理功能剥离到全新 Botool_Gallery 应用（端口 3009），Present 保留为纯 PPT 编辑器，同时完成表名迁移（`present_*` → `ppt_*`）、共享包提取（`@botool/ppt-core`）、功能扩展（审阅 Tab、翻译 Tab、PPTX 导入导出）。
 
-同时，v1.6 将编辑器拆分为独立的 Botool_PPT 应用（port 3009），Botool_Present（port 3005）专注于文档库管理。
+```
+Botool 内容工具生态:
+
+┌──────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│   Botool_Present (3005)      ← PPT 文档工具（编辑/渲染/播放）   │
+│   Botool_Video (未来)        ← 视频工具                         │
+│   Botool_PDF (未来)          ← PDF 工具                         │
+│                                                                  │
+│   ──────────────────────────────────────────────────────────     │
+│                                                                  │
+│   Botool_Gallery (3009)      ← 展示平台（聚合 PPT/Video/PDF）   │
+│   Botool_Task (3003)         ← 可嵌入 PPT 查看器                │
+│   Botool_Meet (3007)         ← 可嵌入 PPT 演示                  │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
 
 ### 1.2 核心目标
 
-1. **文档库管理体系**: 建立两级分类（大类/子类）+ 槽位分配机制，让文档可被组织化管理
-2. **版本控制**: 支持主版本（major）和次版本（minor）管理，支持选择性发布各语言版本
-3. **协作权限**: 精细化 read/write/admin 三级权限，支持访问请求工作流（含 24h 冷却期）
-4. **多语言 AI 翻译**: 集成通义千问 qwen-max，支持专有词汇库，SSE 实时进度推送
-5. **导入/导出**: PDF（html2canvas + jspdf）、PNG、.pptbt（JSZip 格式）、PPTX 导入（pptxtojson）
-6. **应用拆分**: 将编辑器迁移到 Botool_PPT (port 3009)，解耦管理与编辑职责
+- **Present 原地进化为纯 PPT 编辑器** — 删除管理代码，保留编辑/渲染/播放
+- **提取 `@botool/ppt-core` 共享包** — 无跨应用 HTTP 调用，仅共享 types/services/converter/config/security
+- **表名统一迁移** — `present_*` → `ppt_*`（~162 处引用），双轨切换保证无中断
+- **功能扩展** — 新增审阅 Tab、翻译 Tab、PPTX 导入、PDF/.pptbt 导出
 
-### 1.3 成功指标
+### 1.3 核心原则
 
-- 文档可通过分类树被检索，检索时间 < 500ms
-- AI 翻译成功率 ≥ 95%（不含网络故障）
-- PDF 导出还原率 ≥ 90%（相对于浏览器渲染效果）
-- PPTX 导入元素映射覆盖率 ≥ 85%（文本/图片/形状/表格）
+| 原则 | 说明 |
+|------|------|
+| **Present 拥有文档** | PPT 文档的一切操作（CRUD、DSL、版本、协作）归 Present 拥有 |
+| **共享 Service 层** | 通过 `@botool/ppt-core` 共享包提供 service/types/converter，无跨应用 HTTP 调用 |
+| **ppt_ 表前缀** | PPT 文档相关表统一使用 `ppt_` 前缀（描述内容类型，非应用名） |
+| **共享数据库** | 两个应用共享同一 Supabase 项目和 PostgreSQL 数据库 |
+| **Present 原地进化** | 编辑器代码已在 Present 中，只需清理管理代码，无需迁移 |
+| **Gallery 全新创建** | 管理功能由全新 Botool_Gallery 应用从零开发 |
+| **Copy first, delete later** | 面向 Gallery 的参考实现必须先固化快照，再执行删除动作 |
+
+### 1.4 成功指标
+
+- 编辑器功能不受拆分影响，所有现有功能正常运行
+- PPTX 导入整体视觉还原度 ≥ 80%
+- `pnpm build` 无编译错误
+- 管理端代码完全清除，无残留路由
+
+### 1.5 技术栈
+
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| Next.js | 16 | 应用框架 |
+| React | 19.1 | UI 框架 |
+| TypeScript | 5.x | 类型安全 |
+| Zustand + Immer | latest | 状态管理（编辑器） |
+| Tiptap | 3.14 | 富文本编辑 |
+| Canvas API | - | PPT 渲染引擎 |
+| pptxgenjs | 4.0 | PPTX 生成 |
+| pptxtojson | 1.9 | PPTX 解析 |
+| DOMPurify | 3.3 | HTML 清理 |
+| @supabase/ssr | 0.6.x | 认证 Cookie 管理 |
+| **@botool/ppt-core** | workspace | PPT 共享 service/types/converter |
+
+### 1.6 应用配置
+
+```
+应用名称: Botool_Present（沿用现有应用）
+端口: 3005（不变）
+basePath:
+  development: / (直接端口访问)
+  staging:     /present
+  production:  /present
+```
 
 ---
 
@@ -40,124 +87,319 @@ v1.6 是一次全面升级，引入文档库分类管理体系、版本管理（
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
-| PPT 编辑器 | ✅ 已实现 | Canvas 渲染 + DSL 存储，Ribbon 工具栏 4 个 Tab |
-| 基础文档管理 | ⚠️ 部分实现 | 创建/编辑可用，无分类、无版本、无权限 |
-| /library 页面 | ⚠️ 部分实现 | 列表展示可用，缺分类筛选和协作功能 |
-| /admin 页面 | ⚠️ 部分实现 | 单页布局，缺 3-Tab 结构 |
-| /upload 页面 | ❌ 待删除 | 独立上传页面，v1.6 改为统一入口 |
-| 'editing' 状态 | ❌ 待删除 | status 枚举中的 editing 状态，逻辑已废弃 |
-| 版本管理 | ❌ 未实现 | 无 present_version_groups/present_versions 表 |
-| 分类管理 | ❌ 未实现 | 无 present_categories/present_category_slots 表 |
-| 协作权限 | ❌ 未实现 | 无 present_collaborators/present_access_requests 表 |
-| AI 翻译 | ❌ 未实现 | 无翻译任务队列，无术语库 |
-| 导入/导出 | ❌ 未实现 | 无 PDF/PNG/.pptbt/PPTX 转换器 |
+| **Ribbon UI** | ✅ 已实现 | 通用/插入/设计/视图 四个 Tab |
+| **Canvas 画布** | ✅ 已实现 | 拖拽、缩放、对齐、多选 |
+| **属性面板** | ✅ 已实现 | 元素属性编辑（位置/大小/样式/文本） |
+| **幻灯片面板** | ✅ 已实现 | 左侧缩略图、排序、增删 |
+| **撤销/重做** | ✅ 已实现 | Zustand + Immer 历史栈 |
+| **富文本编辑** | ✅ 已实现 | Tiptap 集成 |
+| **演示模式** | ✅ 已实现 | 全屏播放、键盘/鼠标翻页 |
+| **DSL 引擎** | ✅ 已实现 | 6 种元素类型渲染器 |
+| **状态管理** | ✅ 已实现 | Zustand + Immer 核心 Store |
+| **认证 (ATT)** | ✅ 已实现 | 跨端口 ATT 认证流程 |
+| **管理端** | ⚠️ 待剥离 | 文档库管理、分类指派等迁移到 Gallery |
+| **审阅 Tab** | ❌ 未实现 | Phase 3 新增 |
+| **翻译 Tab** | ❌ 未实现 | Phase 5 新增 |
+| **PPTX 导入** | ❌ 未实现 | Phase 4 新增 |
+| **PDF/.pptbt 导出** | ❌ 未实现 | Phase 4 新增 |
 
 ### 2.2 缺口分析
 
-**核心缺口**（阻塞 P0 功能）:
-- 数据库层完全缺失：12 张新表均未创建，无 RLS 策略
-- /admin 页面结构需重构为 3-Tab
-- 编辑器与管理应用混杂在同一 Next.js 项目中
-
-**待实现缺口**（P1/P2 功能）:
-- 版本管理的状态机和 UI 组件
-- 分类树组件（CategoryManagementDialog）
-- 翻译流水线（qwen-max API 集成 + SSE）
-- 所有格式转换器（PDF/PNG/.pptbt/PPTX）
+- **Ribbon 扩展**: 当前仅 4 个 Tab（通用/插入/设计/视图），需扩展到 6 个（+翻译/审阅）
+- **导入导出**: 缺少 PPTX 导入、PDF 导出、.pptbt 导入导出
+- **表名迁移**: 所有 `present_*` 表需迁移为 `ppt_*`，涉及 ~162 处代码引用
+- **共享包**: `@botool/ppt-core` 尚未提取，types/services/converter 散布在 Present 内部
+- **管理代码清理**: admin/library 页面和 API 需从 Present 中移除
 
 ---
 
 ## 3. 架构设计
 
-### 3.1 核心概念
+### 3.1 拆分后架构
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  双应用架构                                                   │
-│                                                             │
-│  Botool_Present (port 3005)    Botool_PPT (port 3009)      │
-│  ┌─────────────────────────┐   ┌──────────────────────────┐ │
-│  │ 文档库管理               │   │ PPT 编辑器               │ │
-│  │ - 分类浏览/搜索          │   │ - Canvas 渲染            │ │
-│  │ - 版本管理               │   │ - DSL 编辑               │ │
-│  │ - 协作权限               │←─→│ - Ribbon 工具栏          │ │
-│  │ - AI 翻译管理            │   │ - 导入/导出转换器        │ │
-│  │ - 导入/导出 UI           │   │                          │ │
-│  └─────────────────────────┘   └──────────────────────────┘ │
-│                 │                                            │
-│                 ↓                                            │
-│       Supabase PostgreSQL + Storage                          │
-└─────────────────────────────────────────────────────────────┘
+拆分后:
+┌──────────────────────┐    ┌──────────────────────┐
+│  Botool_Present      │    │  Botool_Gallery       │
+│  (3005, /present)    │    │  (3009, /gallery)     │
+│                      │    │                       │
+│  • Ribbon 编辑器      │    │  • 分类指派           │
+│  • Canvas 渲染引擎    │    │  • 前台资料库         │
+│  • 演示播放器         │    │  • 术语表管理         │
+│  • DSL 引擎          │    │  • 版本管理(管理端UI) │
+│  • 导入导出           │    │  • 后台翻译入口       │
+│  • 文档 CRUD          │    │  • 下载 UI            │
+│  • AI 翻译(编辑器)    │    │                       │
+│  • 审批与批注         │    │  (展示平台，消费方)    │
+│  • 协作者管理         │    │                       │
+│                      │    │  import               │
+│  (文档工具，提供方)    │    │  @botool/ppt-core     │
+│  代码保留在原地        │    │  全新应用              │
+└──────────────────────┘    └──────────────────────┘
 ```
 
-### 3.2 用户角色
+### 3.2 跨应用通信
 
 ```
-┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
-│  访客 (Guest)    │   │  协作者           │   │  管理员 (Admin)  │
-│                  │   │  (Collaborator)   │   │                  │
-│  - 查看已发布    │   │                  │   │  - 全部权限      │
-│  - 申请访问      │   │  read: 只读      │   │  - 管理分类      │
-│                  │   │  write: 可编辑   │   │  - 审批请求      │
-│  入口: /library  │   │  admin: 可共享   │   │  - 发布版本      │
-│                  │   │                  │   │  - 启动翻译      │
-│                  │   │  入口: /library  │   │  入口: /admin    │
-└──────────────────┘   └──────────────────┘   └──────────────────┘
+┌──────────────────────┐         URL 跳转          ┌──────────────────────┐
+│   Botool_Gallery     │ ─────────────────────────▶ │   Botool_Present     │
+│   (3009, /gallery)   │                            │   (3005, /present)   │
+│                      │                            │                      │
+│  • 分类指派          │  编辑: {PRESENT_URL}/editor/{presentationId}     │
+│  • 前台资料库        │  演示: {PRESENT_URL}/present/{id}               │
+│  • 术语表管理        │  新建: {PRESENT_URL}/editor/new                 │
+│                      │                            │                      │
+│  import              │ ◀───────────────────────── │                      │
+│  @botool/ppt-core    │  返回: {GALLERY_URL}/admin │                      │
+└──────────────────────┘                            └──────────────────────┘
+
+跨应用数据共享方式（非 HTTP 调用）:
+┌──────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│   Botool_Gallery                    Botool_Present               │
+│       │                                  │                       │
+│       │  import { DocumentService }      │                       │
+│       │  from '@botool/ppt-core'         │                       │
+│       │                                  │                       │
+│       └──────────┐        ┌──────────────┘                       │
+│                  ▼        ▼                                      │
+│           @botool/ppt-core                                       │
+│           (共享 service 层)                                      │
+│                  │                                               │
+│                  ▼                                               │
+│           Supabase / PostgreSQL                                  │
+│           (同一数据库实例)                                        │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.3 核心工作流
+**参数传递方式**: URL path + query parameters
+- `/editor/{presentationId}` — 编辑指定 PPT
+- `?versionId={versionId}` — 标记 Gallery 版本管理进入的目标语言版本
+- `?lang={code}` — 当前语言上下文
+- `?from=gallery` — 来源为 Gallery 管理端
+- `?returnUrl={url}` — 编辑完成后返回地址
+
+### 3.3 核心实体关系
 
 ```
-───────── 文档库工作流 ─────────
+───────── 核心实体关系 ─────────
 
-[管理员创建草稿] → [编辑内容] → [创建版本组] → [翻译语言版本]
-       │                              │
-       ↓                              ↓
-[分配分类槽位] → [文档库可见] ← [选择性发布各语言版本]
-
-───────── 访问控制工作流 ─────────
-
-[访客申请访问] → [管理员审批/拒绝]
-                    │           │
-                    ↓           ↓
-              [添加协作者]   [24h 冷却]
-                    │
-                    ↓
-             [协作者可读写]
-
-───────── AI 翻译工作流 ─────────
-
-[管理员选择翻译] → [确认术语库] → [创建翻译任务]
+   ppt_documents（文档主表）
+      │
+      ├──── 1:N ──── ppt_dsl_snapshots（DSL 快照）
+      ├──── 1:N ──── ppt_collaborators（协作者）
+      ├──── 1:N ──── ppt_comments / ppt_comment_replies（评论/批注）
+      ├──── 1:N ──── ppt_reviews / ppt_reviewers（审批）
+      ├──── 1:N ──── ppt_access_requests（访问请求）
+      ├──── 1:N ──── ppt_access_history（访问历史）
+      ├──── 1:N ──── ppt_visibility_groups（可见性分组）
+      ├──── 1:N ──── ppt_translations (source_type='presentation')
+      │
+      └──── N:1 ──── ppt_version_groups
+                        │
+                        └── 1:N ──── ppt_versions
                                        │
-                    ┌──────────────────┘
-                    ↓
-             [SSE 推送进度] → [completed/failed]
-                                    │
-                               [创建新语言版本]
+                                       └── 1:N ──── ppt_translations (source_type='version')
 ```
 
-### 3.4 版本状态机
+### 3.4 用户角色
 
 ```
-───────── 版本组状态 ─────────
+───────── 角色定义 ─────────
 
-  [创建版本组]
-       │
-       ▼
-  version_groups.is_published = false
-  versions[lang].status = 'draft'
-       │
-       ├── [选择某语言版本发布] ──▶ versions[lang].status = 'published'
-       │                              (已发布 = 只读)
-       │
-       └── [撤销发布] ──▶ versions[lang].status = 'draft'
-                          (可再次编辑)
+┌──────────────────┐     ┌──────────────────┐
+│  内容编辑者       │     │  管理员           │
+│                  │     │                  │
+│  权限:           │     │  权限:           │
+│  - 编辑 PPT      │     │  - 全部编辑权限  │
+│  - 演示播放      │     │  - 协作者管理    │
+│  - 导入导出      │     │  - 审批处理      │
+│  - AI 翻译       │     │  - 访问请求审批  │
+│  - 发起审批      │     │                  │
+│                  │     │  入口:           │
+│  入口:           │     │  /editor/[id]    │
+│  /editor/[id]    │     └──────────────────┘
+└──────────────────┘
 
-───────── 翻译任务状态机 ─────────
+┌──────────────────┐
+│  查看者           │
+│                  │
+│  权限:           │
+│  - 查看 PPT      │
+│  - 演示播放      │
+│                  │
+│  入口:           │
+│  /present/[id]   │
+└──────────────────┘
+```
 
-  pending ──▶ processing ──▶ completed
-                    │
-                    └──▶ failed ──▶ [重试] ──▶ pending
+### 3.5 核心工作流
+
+```
+───────── 开发阶段流转 ─────────
+
+Pre-Phase ──▶ Phase 0 ──▶ Phase 1 ──▶ Phase 2 ──▶ Phase 3/4/5
+[Gate安全]    [ppt-core]   [新建表]    [删代码]    [功能开发]
+(P0)          (P0)         (P0)        (P0)        (P1)
+
+依赖: Pre-Phase → Phase 0 → Phase 1 → Phase 2
+      Phase 3/4/5 可并行（均依赖 Phase 2）
+```
+
+### 3.6 编辑器保存行为
+
+#### 草稿箱模式
+
+```
+用户访问 /editor/new
+      │
+      ▼
+  创建新 PPT
+      │ POST /api/presentations
+      │ { title, type: 'private' }
+      ▼
+  ppt_documents
+  ┌────────────────────────┐
+  │ id: 123                │
+  │ title: "Q1销售方案"    │
+  │ type: 'private'        │
+  │ current_version_group_id: NULL │
+  └────────────────────────┘
+      │
+      │ 关键：没有创建 gallery_category_slots 记录
+      ▼
+  ✅ 保存到草稿箱
+```
+
+#### 版本管理模式
+
+- 入口：Gallery `/admin` Tab 2 → 选择版本组 → 选择语言版本 → [编辑]
+- 跳转：`/editor/[presentationId]?versionId={versionId}&lang={code}&from=gallery`
+- 保存到 `ppt_versions` 表对应的 DSL 快照
+- published 版本不可直接编辑，需先取消发布
+
+#### 模式判断
+
+```typescript
+async function loadPresentation(id: number) {
+  const query = new URLSearchParams(window.location.search)
+  const versionId = query.get('versionId')
+  const lang = query.get('lang')
+  const from = query.get('from')
+
+  const doc = await fetch(`/api/presentations/${id}`).then(r => r.json())
+  const slot = await fetch(`/api/presentations/${id}/slot`).then(r => r.json())
+
+  if (slot.data && from === 'gallery') {
+    // 版本管理模式
+    setContext({ mode: 'slot', slotInfo: slot.data, ... })
+  } else {
+    // 草稿箱模式
+    setContext({ mode: 'draft', slotInfo: null, ... })
+  }
+}
+```
+
+### 3.7 DSL 引擎
+
+**核心位置**: `@botool/ppt-core` 共享包中的 `types/dsl.ts`
+
+**支持的元素类型**:
+
+| 类型 | 说明 |
+|------|------|
+| `text` | 文本框（富文本 HTML，Tiptap 编辑） |
+| `image` | 图片元素（Supabase Storage URL） |
+| `shape` | 形状元素（预设形状 + 自定义 SVG path） |
+| `table` | 表格元素（行/列/合并单元格） |
+| `line` | 线条元素（直线/折线/曲线） |
+| `group` | 组合元素（递归嵌套子元素） |
+
+**渲染器组件**: `components/renderer/`（约 12 个文件）
+
+| 组件 | 说明 |
+|------|------|
+| `ElementRenderer` | 元素路由：根据 type 分发到对应渲染器 |
+| `TextRenderer` | 文本渲染：HTML → Canvas |
+| `ImageRenderer` | 图片渲染：URL → Canvas |
+| `ShapeRenderer` | 形状渲染：预设形状/SVG path |
+| `TableRenderer` | 表格渲染：单元格/边框/合并 |
+| `LineRenderer` | 线条渲染：直线/折线/曲线/箭头 |
+| `GroupRenderer` | 组合渲染：递归渲染子元素 |
+
+**状态管理**:
+
+| 文件 | 技术 | 说明 |
+|------|------|------|
+| `stores/presentation-store.ts` | Zustand + Immer | 核心状态：幻灯片列表、当前选中、元素数据 |
+| `stores/editor-context.tsx` | React Context | 编辑器上下文：模式、工具、缩放 |
+
+数据流: 编辑器组件 → Zustand Store → API Routes → Supabase Client → PostgreSQL
+
+### 3.8 认证设计
+
+#### 开发环境（ATT 跨端口认证）
+
+```
+Dashboard (3001) 登录成功
+    ↓
+生成一次性 ATT（30秒有效）
+    ↓
+跳转: http://localhost:3005?att=xxx
+    ↓
+Present middleware 检测 att 参数
+    ↓
+调用 Dashboard /api/auth/exchange 换取 session
+    ↓
+设置本地 Supabase Session，清除 URL 中的 att 参数
+```
+
+#### staging/production（Cookie 共享）
+
+同域名部署下，Supabase HttpOnly Cookie 自动跨路径共享。
+
+### 3.9 @botool/ppt-core 共享包结构
+
+```
+libs/
+└── ppt-core/                    ← @botool/ppt-core
+    ├── package.json
+    ├── tsconfig.json
+    │
+    ├── services/                ← 业务逻辑层
+    │   ├── document.service.ts    ← 文档 CRUD (ppt_documents)
+    │   ├── dsl.service.ts         ← DSL 读写 (ppt_dsl_snapshots)
+    │   ├── version.service.ts     ← 版本管理 (ppt_versions / ppt_version_groups)
+    │   ├── translation.service.ts ← 翻译任务 (ppt_translations)
+    │   ├── collaborator.service.ts ← 协作者管理 (ppt_collaborators)
+    │   └── review.service.ts      ← 审批管理 (ppt_reviews / ppt_reviewers)
+    │
+    ├── types/                   ← TypeScript 类型定义
+    │   ├── dsl.ts                 ← DSL 类型（核心）
+    │   ├── document.ts            ← 文档类型
+    │   ├── version.ts             ← 版本类型
+    │   └── translation.ts         ← 翻译类型
+    │
+    ├── converter/               ← 文件格式转换
+    │   ├── pptx-to-dsl.ts         ← PPTX → DSL 主转换
+    │   ├── pptx-types.ts          ← pptxtojson 输出类型
+    │   ├── pptx-html-cleaner.ts   ← HTML 清洗
+    │   ├── pptx-shape-map.ts      ← 形状映射表
+    │   ├── pptx-image-upload.ts   ← 图片批量上传
+    │   ├── pptx-fill-converter.ts ← 填充转换
+    │   ├── dsl-to-pdf.ts          ← DSL → PDF
+    │   ├── dsl-to-pptbt.ts        ← DSL → .pptbt
+    │   └── pptbt-to-dsl.ts        ← .pptbt → DSL
+    │
+    ├── security/                ← 安全工具
+    │   └── sanitize.ts            ← HTML 清理、XSS 防护
+    │
+    ├── config/                  ← 配置
+    │   ├── languages.ts           ← 语言配置
+    │   └── qwen.ts                ← 通义千问翻译配置
+    │
+    └── index.ts                 ← 统一导出
 ```
 
 ---
@@ -166,315 +408,347 @@ v1.6 是一次全面升级，引入文档库分类管理体系、版本管理（
 
 ### 4.1 数据模型概览
 
-| 模型 | 用途 | 状态 |
-|------|------|------|
-| present_presentations | 主文档（含DSL内容） | 新建 |
-| present_dsl_snapshots | DSL 历史快照 | 新建 |
-| present_collaborators | 协作者权限记录 | 新建 |
-| present_access_requests | 访问申请 + 冷却期 | 新建 |
-| present_visibility_groups | 可见分组（部门/角色） | 新建 |
-| present_version_groups | 版本组（major/minor） | 新建 |
-| present_versions | 按语言的版本实例 | 新建 |
-| present_categories | 分类定义（2层树） | 新建 |
-| present_category_slots | 分类槽位（复制体） | 新建 |
-| present_translations | AI 翻译任务队列 | 新建 |
-| present_glossary | 专有词汇库 | 新建 |
-| present_glossary_translations | 词汇翻译映射 | 新建 |
+#### Present 拥有的表（`ppt_` 前缀）
+
+| 模型 | 用途 | 关键字段 | 状态 |
+|------|------|---------|------|
+| ppt_documents | 文档主表 | id, title, owner_id, dsl_json, visibility, type, status | 已有→重命名 |
+| ppt_dsl_snapshots | DSL 快照 | id, presentation_id, dsl_json, snapshot_type | 已有→重命名 |
+| ppt_version_groups | 版本组 | id, presentation_id, version_number, is_published | 已有→重命名 |
+| ppt_versions | 语言版本 | id, version_group_id, language_code, status, dsl_snapshot_id | 已有→重命名 |
+| ppt_collaborators | 协作者 | id, presentation_id, user_id, permission | 已有→重命名 |
+| ppt_comments | 评论/批注 | id, presentation_id, content, slide_index | 已有→重命名 |
+| ppt_comment_replies | 评论回复 | id, comment_id, content | 新建 |
+| ppt_reviews | 审批 | id, presentation_id, status | 已有→重命名 |
+| ppt_reviewers | 审批人 | id, review_id, user_id, decision | 已有→重命名 |
+| ppt_translations | 翻译任务 | id, source_type, target_language, status, progress | 已有→重命名 |
+| ppt_access_requests | 访问请求 | id, presentation_id, requester_id, status | 已有→重命名 |
+| ppt_access_history | 访问历史 | id, presentation_id, user_id | 新建 |
+| ppt_visibility_groups | 可见性分组 | id, presentation_id, group_type, group_value | 已有→重命名 |
+
+#### Gallery 拥有的表（`gallery_` 前缀，不在本 PRD 范围）
+
+| 表名 | 说明 |
+|------|------|
+| gallery_categories | 分类定义表（2 级结构） |
+| gallery_category_slots | 分类槽位表（FK → ppt_documents.id） |
+| gallery_glossary | 术语表主表 |
+| gallery_glossary_translations | 术语翻译表 |
 
 ### 4.2 Schema 定义
 
+#### 4.2.1 ppt_documents (文档主表)
+
 ```sql
--- ═══════════════════════════════════════════════════════
--- Script 1: 核心文档表
--- ═══════════════════════════════════════════════════════
+CREATE TABLE ppt_documents (
+  id                      SERIAL PRIMARY KEY,
 
--- present_presentations: 主文档表
-CREATE TABLE present_presentations (
-  id                  UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  title               TEXT        NOT NULL,
-  slug                TEXT        UNIQUE,
-  type                TEXT        NOT NULL DEFAULT 'ppt',
-  status              TEXT        NOT NULL DEFAULT 'draft'
-                                  CHECK (status IN ('draft', 'published', 'archived')),
-  dsl_json            JSONB,                               -- 小文档内联存储
-  dsl_storage_path    TEXT,                                -- 大文档 Supabase Storage 路径
-  owner_id            UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  is_deleted          BOOLEAN     NOT NULL DEFAULT FALSE,  -- 软删除
-  language_code       TEXT        NOT NULL DEFAULT 'zh',   -- 文档语言
-  translated_from_id  UUID        REFERENCES present_presentations(id), -- 翻译来源
-  thumbnail_url       TEXT,
-  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  -- 标题和标识
+  title                   VARCHAR(255) NOT NULL,
+  title_en                VARCHAR(255),
+  slug                    VARCHAR(100),
+
+  description             TEXT,
+  thumbnail_url           VARCHAR(500),
+  tags                    JSONB DEFAULT '[]',
+  language_code           VARCHAR(10) DEFAULT 'zh',
+  translated_from_id      INT REFERENCES ppt_documents(id),
+
+  -- 类型（访问控制标识）
+  type                    VARCHAR(20) DEFAULT 'private',
+
+  -- 导入元数据
+  original_path           VARCHAR(500),
+  file_name               VARCHAR(255),
+  file_size               BIGINT,
+
+  -- 文档状态
+  status                  VARCHAR(20) DEFAULT 'draft',   -- draft / importing / import_failed
+  review_status           VARCHAR(20) DEFAULT 'draft',   -- draft/reviewing/approved/rejected
+
+  -- DSL 存储
+  dsl_json                JSONB,
+  dsl_storage_path        VARCHAR(500),
+
+  -- 当前编辑的版本组
+  current_version_group_id INT,
+
+  -- 权限字段 (RLS 必需)
+  owner_id                INT NOT NULL,
+  dept_path               VARCHAR(100),
+
+  -- 软删除
+  is_deleted              BOOLEAN DEFAULT FALSE,
+  deleted_at              TIMESTAMPTZ,
+  deleted_by              INT,
+  deleted_by_name         VARCHAR(255),
+
+  -- 审计
+  created_at              TIMESTAMPTZ DEFAULT NOW(),
+  created_by              INT,
+  created_by_name         VARCHAR(255),
+  updated_at              TIMESTAMPTZ DEFAULT NOW(),
+  updated_by              INT,
+  updated_by_name         VARCHAR(255)
+);
+```
+
+**草稿箱 vs 官方资料库区分逻辑**:
+
+| 位置 | 判断逻辑 |
+|------|----------|
+| 草稿箱 | `NOT EXISTS (SELECT 1 FROM gallery_category_slots s WHERE s.presentation_id = p.id)` |
+| 官方资料库 | `EXISTS (SELECT 1 FROM gallery_category_slots s WHERE s.presentation_id = p.id)` |
+
+#### 4.2.2 ppt_dsl_snapshots (DSL 快照表)
+
+```sql
+CREATE TABLE ppt_dsl_snapshots (
+  id                SERIAL PRIMARY KEY,
+  presentation_id       INT NOT NULL REFERENCES ppt_documents(id),
+  dsl_json          JSONB,
+  dsl_storage_path  VARCHAR(500),
+  snapshot_type     VARCHAR(20) DEFAULT 'auto',  -- auto / manual
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  created_by        INT
+);
+```
+
+#### 4.2.3 ppt_access_requests (访问申请表)
+
+```sql
+CREATE TABLE ppt_access_requests (
+  id                SERIAL PRIMARY KEY,
+  presentation_id       INT NOT NULL REFERENCES ppt_documents(id) ON DELETE CASCADE,
+  user_id           INT NOT NULL,
+  status            VARCHAR(20) NOT NULL DEFAULT 'pending',  -- pending / approved / rejected
+  request_message   TEXT,
+  admin_response    TEXT,
+  reviewed_by       INT REFERENCES botool_users(id),
+  reviewed_at       TIMESTAMPTZ,
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  is_deleted        BOOLEAN DEFAULT FALSE,
+
+  CONSTRAINT status_check CHECK (status IN ('pending', 'approved', 'rejected')),
+  CONSTRAINT uq_pending_request UNIQUE NULLS NOT DISTINCT (presentation_id, user_id, status)
+    DEFERRABLE INITIALLY DEFERRED
 );
 
-CREATE INDEX idx_presentations_owner    ON present_presentations(owner_id);
-CREATE INDEX idx_presentations_status   ON present_presentations(status);
-CREATE INDEX idx_presentations_language ON present_presentations(language_code);
-CREATE INDEX idx_presentations_deleted  ON present_presentations(is_deleted);
+-- 索引
+CREATE INDEX idx_ppt_access_requests_doc ON ppt_access_requests(presentation_id) WHERE is_deleted = FALSE;
+CREATE INDEX idx_ppt_access_requests_user ON ppt_access_requests(user_id) WHERE is_deleted = FALSE;
+CREATE INDEX idx_ppt_access_requests_pending ON ppt_access_requests(presentation_id, status) WHERE status = 'pending' AND is_deleted = FALSE;
 
--- ═══════════════════════════════════════════════════════
--- Script 2: DSL 快照表
--- ═══════════════════════════════════════════════════════
+-- RLS
+ALTER TABLE ppt_access_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ppt_access_requests FORCE ROW LEVEL SECURITY;
 
--- present_dsl_snapshots: DSL 历史版本快照
-CREATE TABLE present_dsl_snapshots (
-  id                UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  presentation_id   UUID        NOT NULL REFERENCES present_presentations(id) ON DELETE CASCADE,
-  dsl_json          JSONB       NOT NULL,
-  snapshot_label    TEXT,                                  -- 可选快照标签
-  created_by        UUID        REFERENCES auth.users(id),
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE POLICY "ppt_access_requests_select_own" ON ppt_access_requests
+  FOR SELECT TO authenticated
+  USING (user_id = (SELECT id FROM botool_users WHERE auth_user_id = auth.uid() LIMIT 1)
+         OR check_ppt_access(presentation_id, 'admin'));
+
+CREATE POLICY "ppt_access_requests_insert" ON ppt_access_requests
+  FOR INSERT TO authenticated
+  WITH CHECK (user_id = (SELECT id FROM botool_users WHERE auth_user_id = auth.uid() LIMIT 1));
+
+CREATE POLICY "ppt_access_requests_update_admin" ON ppt_access_requests
+  FOR UPDATE TO authenticated
+  USING (check_ppt_access(presentation_id, 'admin'));
+
+CREATE POLICY "ppt_access_requests_delete_admin" ON ppt_access_requests
+  FOR DELETE TO authenticated
+  USING (check_ppt_access(presentation_id, 'admin'));
+```
+
+#### 4.2.4 ppt_visibility_groups (可见性分组表)
+
+```sql
+CREATE TABLE ppt_visibility_groups (
+  id                SERIAL PRIMARY KEY,
+  presentation_id       INT NOT NULL REFERENCES ppt_documents(id) ON DELETE CASCADE,
+  group_type        VARCHAR(30) NOT NULL,   -- 'dept' | 'role' | 'org'
+  group_value       VARCHAR(200) NOT NULL,
+  granted_by        INT REFERENCES botool_users(id),
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  is_deleted        BOOLEAN DEFAULT FALSE,
+
+  UNIQUE(presentation_id, group_type, group_value)
 );
 
-CREATE INDEX idx_dsl_snapshots_presentation ON present_dsl_snapshots(presentation_id);
+CREATE INDEX idx_ppt_vis_groups_doc ON ppt_visibility_groups(presentation_id) WHERE is_deleted = FALSE;
+CREATE INDEX idx_ppt_vis_groups_value ON ppt_visibility_groups(group_type, group_value) WHERE is_deleted = FALSE;
 
--- ═══════════════════════════════════════════════════════
--- Script 3: 协作与访问控制表
--- ═══════════════════════════════════════════════════════
+ALTER TABLE ppt_visibility_groups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ppt_visibility_groups FORCE ROW LEVEL SECURITY;
 
--- present_collaborators: 协作者权限表
-CREATE TABLE present_collaborators (
-  id                UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  presentation_id   UUID        NOT NULL REFERENCES present_presentations(id) ON DELETE CASCADE,
-  user_id           UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  permission        TEXT        NOT NULL CHECK (permission IN ('read', 'write', 'admin')),
-  granted_by        UUID        REFERENCES auth.users(id),
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (presentation_id, user_id)
-);
+CREATE POLICY "ppt_vis_groups_select" ON ppt_visibility_groups
+  FOR SELECT TO authenticated USING (NOT is_deleted);
 
-CREATE INDEX idx_collaborators_user ON present_collaborators(user_id);
-CREATE INDEX idx_collaborators_presentation ON present_collaborators(presentation_id);
+CREATE POLICY "ppt_vis_groups_manage" ON ppt_visibility_groups
+  FOR ALL TO authenticated
+  USING (check_ppt_access(presentation_id, 'admin'))
+  WITH CHECK (check_ppt_access(presentation_id, 'admin'));
+```
 
--- present_access_requests: 访问申请表（含冷却期）
-CREATE TABLE present_access_requests (
-  id                UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  presentation_id   UUID        NOT NULL REFERENCES present_presentations(id) ON DELETE CASCADE,
-  user_id           UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  status            TEXT        NOT NULL DEFAULT 'pending'
-                                CHECK (status IN ('pending', 'approved', 'rejected')),
-  message           TEXT,
-  requested_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  responded_at      TIMESTAMPTZ,
-  responded_by      UUID        REFERENCES auth.users(id),
-  cooldown_until    TIMESTAMPTZ                             -- 拒绝后 24h 冷却截止时间
-);
+#### 4.2.5 ppt_translations (翻译任务表)
 
-CREATE INDEX idx_access_requests_presentation ON present_access_requests(presentation_id);
-CREATE INDEX idx_access_requests_user ON present_access_requests(user_id, status);
+```sql
+CREATE TABLE ppt_translations (
+  id                      SERIAL PRIMARY KEY,
 
--- ═══════════════════════════════════════════════════════
--- Script 4: 可见性分组表
--- ═══════════════════════════════════════════════════════
+  -- 翻译入口类型
+  source_type             VARCHAR(20) DEFAULT 'version',  -- 'version'(Gallery) | 'presentation'(Editor)
 
--- present_visibility_groups: 可见性分组（部门/角色/组织）
-CREATE TABLE present_visibility_groups (
-  id                UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  presentation_id   UUID        NOT NULL REFERENCES present_presentations(id) ON DELETE CASCADE,
-  group_type        TEXT        NOT NULL CHECK (group_type IN ('dept', 'role', 'org')),
-  group_value       TEXT        NOT NULL,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+  -- Gallery 后台翻译
+  source_version_id       INT REFERENCES ppt_versions(id),
+  result_version_id       INT REFERENCES ppt_versions(id),
 
-CREATE INDEX idx_visibility_groups_presentation ON present_visibility_groups(presentation_id);
+  -- Editor 草稿翻译
+  source_presentation_id      INT REFERENCES ppt_documents(id),
+  result_presentation_id      INT REFERENCES ppt_documents(id),
 
--- ═══════════════════════════════════════════════════════
--- Script 5: 版本管理表
--- ═══════════════════════════════════════════════════════
-
--- present_version_groups: 版本组（一个 version_group 对应一次版本）
-CREATE TABLE present_version_groups (
-  id                UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  presentation_id   UUID        NOT NULL REFERENCES present_presentations(id) ON DELETE CASCADE,
-  version_number    TEXT        NOT NULL,                   -- "1.0", "1.1", "2.0"
-  version_type      TEXT        NOT NULL CHECK (version_type IN ('major', 'minor')),
-  sort_key          DECIMAL     NOT NULL,                   -- 排序键（版本号的数值形式）
-  is_published      BOOLEAN     NOT NULL DEFAULT FALSE,
-  label             TEXT,                                   -- 可选版本说明
-  created_by        UUID        REFERENCES auth.users(id),
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_version_groups_presentation ON present_version_groups(presentation_id);
-CREATE INDEX idx_version_groups_sort ON present_version_groups(presentation_id, sort_key);
-
--- present_versions: 按语言的版本实例
-CREATE TABLE present_versions (
-  id                      UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  version_group_id        UUID        NOT NULL REFERENCES present_version_groups(id) ON DELETE CASCADE,
-  presentation_id         UUID        NOT NULL REFERENCES present_presentations(id) ON DELETE CASCADE,
-  language_code           TEXT        NOT NULL,             -- 'zh', 'en', 'ja', etc.
-  status                  TEXT        NOT NULL DEFAULT 'draft'
-                                      CHECK (status IN ('draft', 'published')),
-  source_version_id       UUID        REFERENCES present_versions(id), -- 翻译来源版本
-  source_presentation_id  UUID        REFERENCES present_presentations(id),
-  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (version_group_id, language_code)
-);
-
-CREATE INDEX idx_versions_group ON present_versions(version_group_id);
-CREATE INDEX idx_versions_presentation ON present_versions(presentation_id);
-CREATE INDEX idx_versions_status ON present_versions(status);
-
--- ═══════════════════════════════════════════════════════
--- Script 6: 分类管理表
--- ═══════════════════════════════════════════════════════
-
--- present_categories: 分类定义（两级树，parent_id=NULL 为根分类）
-CREATE TABLE present_categories (
-  id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  parent_id   UUID        REFERENCES present_categories(id) ON DELETE CASCADE, -- 自引用，NULL=大类
-  code        TEXT        NOT NULL UNIQUE,
-  name        TEXT        NOT NULL,
-  icon        TEXT,
-  color       TEXT,
-  sort_order  INTEGER     NOT NULL DEFAULT 0,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_categories_parent ON present_categories(parent_id);
-
--- present_category_slots: 分类槽位（复制体，非引用）
--- 挂载时创建 presentation 的副本，写入此表
-CREATE TABLE present_category_slots (
-  id                UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  category_id       UUID        NOT NULL REFERENCES present_categories(id) ON DELETE CASCADE,
-  presentation_id   UUID        NOT NULL REFERENCES present_presentations(id) ON DELETE CASCADE,
-  version_group_id  UUID        REFERENCES present_version_groups(id),
-  assigned_by       UUID        REFERENCES auth.users(id),
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (category_id, presentation_id)
-);
-
-CREATE INDEX idx_category_slots_category ON present_category_slots(category_id);
-CREATE INDEX idx_category_slots_presentation ON present_category_slots(presentation_id);
-
--- 触发函数：确保槽位和文档状态一致性
-CREATE OR REPLACE FUNCTION sync_category_slot_status()
-RETURNS TRIGGER AS $$
-BEGIN
-  -- 当文档被软删除时，同步删除其槽位记录
-  IF NEW.is_deleted = TRUE AND OLD.is_deleted = FALSE THEN
-    DELETE FROM present_category_slots
-    WHERE presentation_id = NEW.id;
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trigger_sync_category_slot
-AFTER UPDATE OF is_deleted ON present_presentations
-FOR EACH ROW EXECUTE FUNCTION sync_category_slot_status();
-
--- ═══════════════════════════════════════════════════════
--- Script 7: 翻译与术语库表
--- ═══════════════════════════════════════════════════════
-
--- present_translations: AI 翻译任务队列
-CREATE TABLE present_translations (
-  id                      UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  source_type             TEXT        NOT NULL CHECK (source_type IN ('version', 'presentation')),
-  -- source_type='version': Admin 后台翻译版本
-  -- source_type='presentation': 编辑器内翻译当前文档
-  source_version_id       UUID        REFERENCES present_versions(id),
-  source_presentation_id  UUID        REFERENCES present_presentations(id),
-  result_version_id       UUID        REFERENCES present_versions(id),
-  result_presentation_id  UUID        REFERENCES present_presentations(id),
-  target_language         TEXT        NOT NULL,
-  status                  TEXT        NOT NULL DEFAULT 'pending'
-                                      CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
-  progress                DECIMAL     NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
+  target_language         VARCHAR(10) NOT NULL,
+  status                  VARCHAR(20) DEFAULT 'pending',  -- pending/processing/completed/failed
   error_message           TEXT,
-  logs                    JSONB       NOT NULL DEFAULT '[]'::jsonb,
-  created_by              UUID        REFERENCES auth.users(id),
-  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+  -- 进度追踪
+  total_slides        INT DEFAULT 0,
+  completed_slides    INT DEFAULT 0,
+  total_texts         INT DEFAULT 0,
+  completed_texts     INT DEFAULT 0,
+  total_batches       INT DEFAULT 0,
+  completed_batches   INT DEFAULT 0,
+  input_tokens        INT DEFAULT 0,
+  output_tokens       INT DEFAULT 0,
+  logs                JSONB DEFAULT '[]',
+
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  created_by          INT NOT NULL,
+  completed_at        TIMESTAMPTZ,
+
+  -- 字段互斥约束
+  CONSTRAINT ppt_translations_source_type_check CHECK (
+    source_type IN ('version', 'presentation')
+  ),
+  CONSTRAINT ppt_translations_version_fields CHECK (
+    source_type != 'version' OR (
+      source_version_id IS NOT NULL
+      AND source_presentation_id IS NULL
+      AND result_presentation_id IS NULL
+    )
+  ),
+  CONSTRAINT ppt_translations_document_fields CHECK (
+    source_type != 'presentation' OR (
+      source_presentation_id IS NOT NULL
+      AND source_version_id IS NULL
+      AND result_version_id IS NULL
+    )
+  )
 );
-
-CREATE INDEX idx_translations_source_version ON present_translations(source_version_id);
-CREATE INDEX idx_translations_status ON present_translations(status);
-
--- present_glossary: 专有词汇库（仅当源语言为 zh 时生效）
-CREATE TABLE present_glossary (
-  id            UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  source_term   TEXT        NOT NULL,
-  term_type     TEXT        NOT NULL CHECK (term_type IN ('no_translate', 'translate')),
-  -- no_translate: 该词保持原样不翻译（如品牌名）
-  -- translate: 该词使用指定翻译（替换 AI 默认翻译）
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (source_term)
-);
-
--- present_glossary_translations: 词汇翻译映射
-CREATE TABLE present_glossary_translations (
-  id              UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  glossary_id     UUID        NOT NULL REFERENCES present_glossary(id) ON DELETE CASCADE,
-  language_code   TEXT        NOT NULL,
-  translated_term TEXT        NOT NULL,
-  UNIQUE (glossary_id, language_code)
-);
-
-CREATE INDEX idx_glossary_translations_glossary ON present_glossary_translations(glossary_id);
 ```
 
-### 4.3 模型关系（ER 图）
-
-```
-present_presentations ──1:N──▶ present_dsl_snapshots
-present_presentations ──1:N──▶ present_collaborators
-present_presentations ──1:N──▶ present_access_requests
-present_presentations ──1:N──▶ present_visibility_groups
-present_presentations ──1:N──▶ present_version_groups
-                                       │
-                                       └──1:N──▶ present_versions
-                                                        │
-                                                        └──1:N──▶ present_translations
-present_presentations ──0:1──▶ present_category_slots
-                                       │
-                                       └──N:1──▶ present_categories (self-ref)
-
-present_glossary ──1:N──▶ present_glossary_translations
-```
-
-### 4.4 RLS 策略
+#### 4.2.6 ppt_version_groups (版本组表)
 
 ```sql
--- 启用 RLS
-ALTER TABLE present_presentations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE present_collaborators ENABLE ROW LEVEL SECURITY;
-ALTER TABLE present_access_requests ENABLE ROW LEVEL SECURITY;
-ALTER TABLE present_versions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE present_category_slots ENABLE ROW LEVEL SECURITY;
-ALTER TABLE present_translations ENABLE ROW LEVEL SECURITY;
+CREATE TABLE ppt_version_groups (
+  id                SERIAL PRIMARY KEY,
+  presentation_id       INT NOT NULL REFERENCES ppt_documents(id),
+  version_number    VARCHAR(20) NOT NULL,
+  version_type      VARCHAR(10) NOT NULL,       -- major / minor
+  sort_key          INT NOT NULL DEFAULT 0,
+  publish_note      TEXT,
 
--- 文档访问策略：已发布文档所有人可读；协作者按权限读写
-CREATE POLICY "presentations_select" ON present_presentations
-  FOR SELECT USING (
-    status = 'published'
-    OR owner_id = auth.uid()
-    OR EXISTS (
-      SELECT 1 FROM present_collaborators
-      WHERE presentation_id = id AND user_id = auth.uid()
-    )
-  );
+  is_published      BOOLEAN DEFAULT FALSE,
+  published_at      TIMESTAMPTZ,
+  published_by      INT REFERENCES botool_users(id),
 
-CREATE POLICY "presentations_insert" ON present_presentations
-  FOR INSERT WITH CHECK (owner_id = auth.uid());
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  created_by        INT,
 
-CREATE POLICY "presentations_update" ON present_presentations
-  FOR UPDATE USING (
-    owner_id = auth.uid()
-    OR EXISTS (
-      SELECT 1 FROM present_collaborators
-      WHERE presentation_id = id AND user_id = auth.uid()
-      AND permission IN ('write', 'admin')
-    )
-  );
+  UNIQUE(presentation_id, version_number)
+);
 ```
+
+#### 4.2.7 ppt_versions (语言版本表)
+
+```sql
+CREATE TABLE ppt_versions (
+  id                  SERIAL PRIMARY KEY,
+  version_group_id    INT NOT NULL REFERENCES ppt_version_groups(id),
+  language_code       VARCHAR(10) NOT NULL,
+
+  status              VARCHAR(20) DEFAULT 'draft',
+
+  dsl_snapshot_id     INT,
+
+  slide_count         INT,
+  file_size           BIGINT,
+  pdf_storage_path    VARCHAR(500),
+  pptbt_storage_path  VARCHAR(500),
+
+  source_version_id       INT REFERENCES ppt_versions(id),
+  source_presentation_id      INT REFERENCES ppt_documents(id),
+
+  published_at        TIMESTAMPTZ,
+  published_by        INT,
+
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  created_by          INT,
+
+  CONSTRAINT ppt_versions_status_check CHECK (status IN ('draft', 'published')),
+  UNIQUE(version_group_id, language_code)
+);
+```
+
+### 4.3 模型关系
+
+```
+───────── 跨应用数据关系 ─────────
+
+Gallery 管理侧 (gallery_*)             Present PPT文档侧 (ppt_*)
+─────────────────────                   ──────────────────
+
+gallery_categories                      ppt_documents  ← 核心实体
+       │                                      │
+       ▼                                      ├── ppt_dsl_snapshots
+gallery_category_slots ──FK──▶ ppt_documents   ├── ppt_version_groups
+                                      │       │      └── ppt_versions
+gallery_glossary                      │       ├── ppt_collaborators
+gallery_glossary_translations         │       ├── ppt_comments / ppt_comment_replies
+                                      │       ├── ppt_reviews / ppt_reviewers
+                                      │       ├── ppt_translations
+                                      │       ├── ppt_access_requests / ppt_access_history
+                                      │       └── ppt_visibility_groups
+```
+
+### 4.4 表名迁移映射
+
+| 旧表名 (present_*) | 新表名 (ppt_*) | 变更 |
+|---------------------|----------------|------|
+| present_presentations | ppt_documents | 前缀 + 实体名 |
+| present_dsl_snapshots | ppt_dsl_snapshots | 前缀 |
+| present_versions | ppt_versions | 前缀 |
+| present_version_groups | ppt_version_groups | 前缀 |
+| present_collaborators | ppt_collaborators | 前缀 |
+| present_comments | ppt_comments | 前缀 |
+| present_comment_replies | ppt_comment_replies | 新建 |
+| present_reviews | ppt_reviews | 前缀 |
+| present_reviewers | ppt_reviewers | 前缀 |
+| present_translations | ppt_translations | 前缀 |
+| present_access_requests | ppt_access_requests | 前缀 |
+| present_access_history | ppt_access_history | 新建 |
+| present_visibility_groups | ppt_visibility_groups | 前缀 |
+
+> 采用双轨切换：先创建 `ppt_*` → 回填与一致性校验 → API 分批切流到 `ppt_*` → 稳定后再下线 `present_*`。
+
+### 4.5 Storage Bucket
+
+| 原名 | 新名 | 说明 |
+|------|------|------|
+| `present-files` | `ppt-files` | PPT 文档相关文件存储 |
+
+路径格式: `presentations/{presentationId}/images/{hash}.{ext}`
 
 ---
 
@@ -484,210 +758,479 @@ CREATE POLICY "presentations_update" ON present_presentations
 
 | 页面 | 路由 | 说明 | 状态 |
 |------|------|------|------|
-| 文档库 | `/library` | 公共文档浏览，分类筛选 | 已有（需改造） |
-| 管理后台 | `/admin` | 3-Tab 布局管理页 | 已有（需重构） |
-| 编辑器 | 跳转至 Botool_PPT | port 3009 独立应用 | 迁移 |
+| PPT 编辑器 | `/editor/[id]` | 核心编辑页 | 已有（增量扩展 Ribbon） |
+| PPT 编辑器（新建） | `/editor/new` | 新建空白 PPT | 已有 |
+| 演示模式 | `/present/[id]` | 全屏播放 | 已有（增加权限检查） |
+| 预览 | `/present/preview` | 预览模式 | 已有 |
 
-**删除页面**: `/upload`（功能合并到管理后台）
-
-### 5.2 组件清单
-
-| 组件 | 说明 | 状态 |
-|------|------|------|
-| `<ShareDialog>` | 共享文档 + 管理协作者 + 审批访问请求 | 新建 |
-| `<CategoryManagementDialog>` | 两级分类树 + 槽位分配 | 新建 |
-| `<CreateVersionDialog>` | 创建主/次版本（含规则校验） | 新建 |
-| `<AccessRequestView>` | 访问请求列表 + 一键审批/拒绝 | 新建 |
-| `<TranslateConfirmDialog>` | 翻译语言选择 + 术语库预览 | 新建 |
-| `<TranslateProgressDialog>` | SSE 实时翻译进度 | 新建 |
-| `<GlossaryPanel>` | 术语库管理面板（仅 zh 源语言激活） | 新建 |
-| `<DownloadDialog>` | 格式选择 + 导出设置 | 新建 |
-| `<FileNameBuilder>` | 文件名生成工具函数 | 新建 |
-| `<VersionListPanel>` | 版本组列表 + 各语言版本状态 | 新建 |
-| `<AdminLayout>` | 管理后台 3-Tab 布局 | 重构 |
-
-### 5.3 关键页面布局
+### 5.2 Ribbon Tab 扩展
 
 ```
-───────── /admin 页面 (3-Tab 布局) ─────────
+当前（代码已实现）:
+┌──────┬──────┬──────┬──────┐
+│ 通用 │ 插入 │ 设计 │ 视图 │
+└──────┴──────┴──────┴──────┘
 
+目标（PRD 扩展后）:
+┌──────┬──────┬──────┬──────┬──────┬──────┐
+│ 通用 │ 插入 │ 设计 │ 翻译 │ 审阅 │ 视图 │
+└──────┴──────┴──────┴──────┴──────┴──────┘
+```
+
+### 5.3 组件清单
+
+| 组件 | Props 接口 | 状态 | Phase |
+|------|-----------|------|-------|
+| `ReviewTab` | `{}` | 新建 | 3 |
+| `ReviewConfigDialog` | `{ open, onOpenChange }` | 已有 | 3 |
+| `ReviewStatusPopover` | `{ presentationId }` | 已有 | 3 |
+| `AnnotationTool` | `{}` | 已有 | 3 |
+| `AnnotationList` | `{}` | 已有 | 3 |
+| `TranslateTab` | `{}` | 新建 | 5 |
+| `TranslateMenu` | `{}` | 新建 | 5 |
+| `TranslateConfirmDialog` | `{ open, onOpenChange, presentationId }` | 新建 | 5 |
+| `TranslateProgressDialog` | `{ translationId, open }` | 新建 | 5 |
+| `TranslateHistoryPopover` | `{ presentationId }` | 新建 | 5 |
+| `GlossaryViewPanel` | `{}` | 新建 | 5 |
+| `ImportProgressDialog` | `{ presentationId, open }` | 新建 | 4 |
+| `ExportDialog` | `{ open, onOpenChange }` | 新建 | 4 |
+
+### 5.4 关键页面布局
+
+```
+───────── PPT 编辑器 (/editor/[id]) ─────────
 ┌─────────────────────────────────────────────────┐
-│  Botool_Present 管理后台                         │
-│  ──────────────────────────────────────────────  │
-│  [我的 PPT] [PPT 库管理] [设置]                  │
-│  ═══════════════════════════════                 │
-│  ┌───────────────────────────────────────────┐  │
-│  │ [搜索...] [分类▼] [状态▼] [+新建文档]     │  │
-│  │                                           │  │
-│  │  标题             状态    操作             │  │
-│  │  ─────────────────────────────────────    │  │
-│  │  公司介绍 2024    ● 已发布  [Share][分类][版本]│  │
-│  │  产品路线图 Q1    ○ 草稿   [Share][分类][版本]│  │
-│  │  技术架构图       ● 已发布  [Share][分类][版本]│  │
-│  │                                           │  │
-│  │  [分类管理]  [访问请求 (3)]               │  │
-│  └───────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────┘
-
-───────── /library 页面 ─────────
-
-┌─────────────────────────────────────────────────┐
-│  PPT 文档库          [登录]                      │
-│  ──────────────────────────────────────────────  │
-│  ┌──────────┬────────────────────────────────┐  │
-│  │ 分类树   │ 文档网格/列表                  │  │
-│  │          │                               │  │
-│  │ 全部     │ [缩略图] 标题           状态   │  │
-│  │ ▶ 大类A  │ [缩略图] 公司介绍 2024  ● 已发布│  │
-│  │   子类A1 │ [缩略图] 产品路线图     ● 已发布│  │
-│  │   子类A2 │                               │  │
-│  │ ▶ 大类B  │ [申请访问]（未登录时显示）     │  │
-│  │   子类B1 │                               │  │
-│  └──────────┴────────────────────────────────┘  │
+│  [←][💾][↩][↪]  标题 [中文版]                   │
+│  [通用][插入][设计][翻译][审阅][视图]             │
+│  ┌────────────┬────────────────────────────┐    │
+│  │ SlidePanel │  Canvas (SVG/HTML)         │    │
+│  │            │  ┌────────────────────┐    │    │
+│  │  [Slide 1] │  │                    │    │    │
+│  │  [Slide 2] │  │  Active Slide      │    │    │
+│  │  [Slide 3] │  │  (960×540 viewport)│    │    │
+│  │            │  │                    │    │    │
+│  │            │  └────────────────────┘    │    │
+│  │            │                            │    │
+│  │            │  PropertiesPanel (右侧)     │    │
+│  └────────────┴────────────────────────────┘    │
+│  StatusBar [缩放 | 页码 | 🌐语言 | 审阅状态]    │
 └─────────────────────────────────────────────────┘
 ```
 
-### 5.4 关键弹窗布局
+### 5.5 关键弹窗
 
 ```
-───────── ShareDialog ─────────
+───────── PPTX 导入进度 ─────────
+┌───────────────────────────────────────────────────────┐
+│  📥 导入 PowerPoint 文件                        [×]   │
+│  ──────────────────────────────────────────────────── │
+│                                                        │
+│  📄 公司简介2026.pptx    文件大小: 58.3 MB             │
+│                                                        │
+│  导入进度:                                             │
+│  ✅ 上传文件                             完成          │
+│  ✅ 解析 PPTX 结构                       完成          │
+│  🔄 处理图片资源 (12/35)                 进行中        │
+│  ○  转换文档格式                         等待中        │
+│  ○  保存文档                             等待中        │
+│                                                        │
+│  [██████████████░░░░░░░░░░░░░░] 45%                   │
+│  预计剩余时间: 约 30 秒                                │
+│                                                        │
+│                              [取消导入]                │
+└───────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────┐
-│  共享文档                  [x]  │
-│  ─────────────────────────────  │
-│  添加协作者:                    │
-│  [邮箱搜索...]  [查看▼]  [添加] │
-│                                 │
-│  已共享 (2):                   │
-│  alice@..  write   [权限▼][移除]│
-│  bob@..    read    [权限▼][移除]│
-│                                 │
-│  访问请求 (1):                  │
-│  carol@..  2分钟前  [批准][拒绝]│
-│                                 │
-│                        [完成]   │
-└─────────────────────────────────┘
+───────── 导出对话框 ─────────
+┌───────────────────────────────────────────────────┐
+│  📤 导出演示文稿                            [×]    │
+│  ──────────────────────────────────────────────── │
+│                                                    │
+│  选择导出格式:                                     │
+│  ● PDF 文档 (.pdf)     - 用于分享、打印  [推荐]    │
+│  ○ Botool 格式 (.pptbt) - 可再次导入编辑           │
+│  ○ 图片 (.png)          - 导出为图片               │
+│                                                    │
+│  导出范围:                                         │
+│  ● 全部幻灯片                                     │
+│  ○ 当前幻灯片                                     │
+│  ○ 自定义范围: 第 [1] 页 - 第 [10] 页             │
+│                                                    │
+│                       [取消]    [开始导出]          │
+└───────────────────────────────────────────────────┘
 
-───────── CategoryManagementDialog ─────────
-
-┌─────────────────────────────────┐
-│  分类管理                  [x]  │
-│  ─────────────────────────────  │
-│  文档: 公司介绍 2024            │
-│  ─────────────────────────────  │
-│  选择槽位:                      │
-│  ▼ 大类 A                      │
-│    ○ 子类 A1  (已有 3 个文档)  │
-│    ○ 子类 A2  (已有 1 个文档)  │
-│  ▼ 大类 B                      │
-│    ● 子类 B1  (当前槽位)       │
-│                                 │
-│  [重新分配]   [移出槽位]        │
-│              [取消]  [确认]     │
-└─────────────────────────────────┘
-
-───────── CreateVersionDialog ─────────
-
-┌─────────────────────────────────┐
-│  创建新版本                [x]  │
-│  ─────────────────────────────  │
-│  版本类型:                      │
-│  ○ 主版本 (3.0)  重大更新      │
-│  ● 次版本 (2.1)  小幅修订      │
-│                                 │
-│  版本说明 (可选):               │
-│  [Q1 路线图更新...]             │
-│                                 │
-│  ⚠ 创建后将从当前版本复制内容   │
-│                                 │
-│              [取消]  [创建]     │
-└─────────────────────────────────┘
-
-───────── TranslateProgressDialog ─────────
-
-┌─────────────────────────────────┐
-│  正在翻译...               [x]  │
-│  ─────────────────────────────  │
-│  源: 中文  →  目标: 英文        │
-│                                 │
-│  [████████████░░░░] 68%        │
-│                                 │
-│  正在处理第 17/25 张幻灯片      │
-│  估计剩余: 约 30 秒             │
-│                                 │
-│  ✅ 已处理:                     │
-│  - 第1-16张: 文本元素翻译完成   │
-│                                 │
-│              [后台运行] [取消]  │
-└─────────────────────────────────┘
+───────── AI 翻译 ─────────
+┌─────────────────────────────────────────────────┐
+│  🌐 AI 翻译                               [×]   │
+│  ─────────────────────────────────────────────  │
+│                                                  │
+│  当前文档: 公司简介 [中文版]                      │
+│                                                  │
+│  翻译为:                                         │
+│  ○ English                                       │
+│  ○ Deutsch                                       │
+│  ○ 日本語                                        │
+│                                                  │
+│  ⚙️ 术语表: ✅ 已启用 · 28条（仅中文源时显示）   │
+│                                                  │
+│  ─────────────────────────────────────────────  │
+│  💡 翻译完成后将创建一份新的目标语言版草稿文档    │
+│                                                  │
+│                          [取消]  [🤖 开始翻译]   │
+└─────────────────────────────────────────────────┘
 ```
+
+### 5.6 Ribbon Tab 内容定义
+
+#### 「审阅」Tab
+
+| 组名 | 按钮 | 交互 | 组件 |
+|------|------|------|------|
+| 审批 | 📋 发起审批 | 打开审批配置 | `<ReviewConfigDialog />` |
+| 审批 | 📝 审批详情 | 查看审批状态 | `<ReviewStatusPopover />` |
+| 批注 | 💬 新建批注 | 进入画框批注模式 | `<AnnotationTool />` |
+| 批注 | 👁️ 显示批注 | 开关批注可见性 | Toggle |
+| 批注 | 📌 跳转到批注 | 列表定位到对应批注 | `<AnnotationList />` |
+
+#### 「翻译」Tab
+
+| 组名 | 按钮 | 交互 | 组件 |
+|------|------|------|------|
+| AI 翻译 | 🤖 AI 翻译 ▼ | 打开翻译 Popover | `<TranslateMenu />` |
+| AI 翻译 | 📋 翻译记录 | 查看翻译历史 | `<TranslateHistoryPopover />` |
+| 术语表 | 📖 查看术语表 | 只读查看 | `<GlossaryViewPanel />` |
+| 语言 | 🌐 当前语言 | 只读 Badge | Badge |
+
+### 5.7 Ribbon 扩展技术实现
+
+| 要点 | 说明 |
+|------|------|
+| Tab 注册 | 在 `RibbonContainer.tsx` 的 `TABS` 中新增 `translate`、`review` |
+| 新组件 | `components/editor/EditorRibbon/TranslateTab.tsx` |
+| 新组件 | `components/editor/EditorRibbon/ReviewTab.tsx` |
+| 顶栏增强 | `RibbonTabBar` 标题区支持 `languageBadge` |
+| 状态栏增强 | `StatusBar` 增加 `reviewStatus`、`onShare` |
+| Tab 顺序 | 通用 → 插入 → 设计 → 翻译 → 审阅 → 视图 |
 
 ---
 
 ## 6. 业务规则
 
-### 6.1 文档库与分类规则
+### 6.1 PPTX 导入规则
 
-| ID | 规则 | 影响任务 |
-|----|------|---------|
-| BR-001 | **槽位分配 = 复制体**: 挂载时创建文档副本（新 present_presentations 记录），不引用原文档 | DT-035 |
-| BR-002 | **草稿箱定义**: 无对应 present_category_slots 记录的文档属于草稿箱，不在公共库中显示 | DT-020, DT-036 |
-| BR-003 | **软删除**: 文档 is_deleted=TRUE 时，触发函数自动删除其所有 category_slots 记录 | DT-015 |
-| BR-004 | **分类两级**: categories 表仅支持 parent_id=NULL（大类）和 parent_id IS NOT NULL（子类）两级，不支持更深层级 | DT-034, DT-037 |
+| ID | 规则 | 说明 | 影响任务 |
+|----|------|------|---------|
+| BR-001 | 扁平化策略 | 4 层样式继承（master→layout→slide→shape）合并为 flat DSL，不保留主题/母版结构 | DT-027,028 |
+| BR-002 | 6 种元素映射 | text/image/shape/table/line/group（group 可递归嵌套） | DT-027,028 |
+| BR-003 | 不支持元素降级 | chart/diagram 忽略, video/audio 忽略, math 降级为 image | DT-027 |
+| BR-004 | 文件大小限制 | ≤ 200MB 统一异步处理, > 200MB 拒绝上传 | DT-029 |
+| BR-005 | 服务端解析 | 浏览器内存不足，强制服务端 Node.js 解析 | DT-029 |
+| BR-006 | SSE 进度推送 | 14 步流程，前端 EventSource 接收进度 | DT-029,030 |
+| BR-007 | 任务与 SSE 解耦 | 提交层/处理层/进度层三层分离，SSE 断开不影响后台任务 | DT-029 |
 
-### 6.2 版本管理规则
+#### 逐元素类型映射规则
 
-| ID | 规则 | 影响任务 |
-|----|------|---------|
-| BR-005 | **主版本号**: 新主版本 = max(existing major) + 1.0（如现有最高 2.0，新建 3.0） | DT-023 |
-| BR-006 | **次版本号**: 新次版本 = 当前主版本下 max(minor) + 0.1（如 2.0 下有 2.1，新建 2.2） | DT-023 |
-| BR-007 | **已发布只读**: status='published' 的版本不可编辑，必须先撤销（→ draft）才能修改 | DT-024 |
-| BR-008 | **选择性发布**: 每个语言版本（present_versions）独立发布/撤销，不影响其他语言版本 | DT-024 |
-| BR-009 | **版本复制**: 创建新版本时，从最新已发布版本（或最新草稿）复制 DSL 内容 | DT-023 |
+**文本元素 (TextElement)**:
 
-### 6.3 翻译规则
+| pptxtojson 字段 | DSL 字段 | 转换说明 |
+|-----------------|---------|---------|
+| `type: 'text'` | `type: 'text'` | 直接映射 |
+| `left/top/width/height` | `x/y/w/h` | 直接映射（pt） |
+| `rotate` | `rotate` | 直接映射（degrees） |
+| `isFlipH/isFlipV` | `flipX/flipY` | 直接映射 |
+| `content` (HTML) | `contentHtml` | 需 HTML 清洗 |
+| `vAlign: 'mid'` | `textStyle.verticalAlign` | 'mid' → 'middle' |
+| `isVertical: true` | `textStyle.writingMode` | true → 'vertical' |
+| `fill` | `fill` | 颜色/渐变/图片映射 |
 
-| ID | 规则 | 影响任务 |
-|----|------|---------|
-| BR-010 | **source_type 区分**: Admin 后台触发翻译 → source_type='version'；编辑器内触发 → source_type='presentation' | DT-038 |
-| BR-011 | **术语库激活条件**: 仅当翻译源语言为 'zh' 时，GlossaryPanel 可用，且翻译 prompt 中注入术语表 | DT-042, DT-043 |
-| BR-012 | **no_translate 词汇**: term_type='no_translate' 的词汇在翻译 prompt 中指示 AI 保持原文不翻译 | DT-038, DT-039 |
-| BR-013 | **翻译结果存储**: 翻译完成后创建新的 present_presentations 记录（language_code=target_lang，translated_from_id=source_id）| DT-039, DT-040 |
-| BR-014 | **失败重试**: status='failed' 的翻译任务可重新提交，状态回到 pending | DT-040 |
+**图片元素 (ImageElement)**:
 
-### 6.4 协作与访问控制规则
+| pptxtojson 字段 | DSL 字段 | 转换说明 |
+|-----------------|---------|---------|
+| `src` (base64) | `src` (URL) | base64 → 上传 Storage → URL |
+| `rect` | `crop` | PPTX 裁剪百分比 → DSL 0-1 比例 |
 
-| ID | 规则 | 影响任务 |
-|----|------|---------|
-| BR-015 | **访问申请冷却期**: 被拒绝的访问请求，24 小时内用户不可再次申请（cooldown_until = NOW() + 24h） | DT-019 |
-| BR-016 | **协作者权限优先级**: admin > write > read，同一用户只保留最高权限记录 | DT-018 |
-| BR-017 | **owner 永久访问**: 文档 owner_id 的用户始终有全部权限，不受 collaborators 表约束 | DT-015 |
+**形状元素 (ShapeElement)**:
 
-### 6.5 文件安全规则
+| pptxtojson 字段 | DSL 字段 | 转换说明 |
+|-----------------|---------|---------|
+| `shapType` | `shapeType` | 需映射表，不认识的→'custom'+path |
+| `path` | `path` | SVG path（custom 兜底） |
+| `keypoints` | `borderRadius` | roundRect 圆角值 |
+| `content` (HTML) | `text` | 形状内文字，需 HTML 清洗 |
 
-| ID | 规则 | 影响任务 |
-|----|------|---------|
-| BR-018 | **ZIP 炸弹防护**: PPTX 导入时校验：解压缩比 > 100x / 解压后 > 2GB / 文件数 > 10000 / 嵌套层数 > 10，任一触发拒绝 | DT-031 |
-| BR-019 | **SSRF 防护**: 图片代理接口必须校验目标 URL 不指向内网地址（127.0.0.1、10.x、172.16.x、192.168.x、localhost 等） | DT-031 |
-| BR-020 | **文件类型白名单**: PPTX 导入仅接受 .pptx 扩展名 + MIME application/vnd.openxmlformats-officedocument.presentationml.presentation | DT-031 |
+**表格元素 (TableElement)**:
 
-### 6.6 决策树：翻译触发流程
+| pptxtojson 字段 | DSL 字段 | 转换说明 |
+|-----------------|---------|---------|
+| `data[][]` | `cells[][]` | 逐单元格转换：cell.text→content, cell.fillColor→fill, cell.colspan/rowspan→保留 |
+| `colWidths[]/rowHeights[]` | `colWidths[]/rowHeights[]` | 直接映射（pt） |
+
+**线条元素 (LineElement)**:
+
+| pptxtojson 字段 | DSL 字段 | 转换说明 |
+|-----------------|---------|---------|
+| `type:'shape'` 且 shapType 为线条类型 | `type:'line'` | 检测 line/straightConnector1/bentConnector*/curvedConnector* |
+| 起点/终点 | `points[]` | 根据 isFlipH/isFlipV 计算坐标 |
+
+**组合元素 (GroupElement)**:
+
+| pptxtojson 字段 | DSL 字段 | 转换说明 |
+|-----------------|---------|---------|
+| `elements[]` | `children[]` | 递归调用 convertElement |
+
+**形状类型映射表**:
+
+| OOXML shapType | DSL shapeType | 备注 |
+|----------------|--------------|------|
+| rect | rect | 矩形 |
+| roundRect | roundRect | 圆角矩形 |
+| snip1Rect / snip2SameRect | roundRect | 降级 |
+| ellipse | ellipse | 椭圆 |
+| triangle / rtTriangle | triangle | 三角形 |
+| diamond | diamond | 菱形 |
+| rightArrow / leftArrow / upArrow / downArrow | arrow | 箭头 |
+| star4 / star5 | star | 星形 |
+| 未覆盖的 shapType | custom + path | SVG path 兜底 |
+
+**背景映射**:
+
+| pptxtojson fill | DSL Background | 转换说明 |
+|-----------------|---------------|---------|
+| `type:'color'` | `type:'color'` | hex 直接映射 |
+| `type:'image'` | `type:'image'` | base64 → Storage URL |
+| `type:'gradient'` | `type:'gradient'` | stops/angle → CSS gradient |
+| `type:'pattern'` | `type:'color'` | 降级：提取主色调 |
+| undefined/null | `type:'color'` | 默认白色 |
+
+**layoutElements 处理策略**: 合并到 elements 数组最底层，先转换 layoutElements 再转换 slide.elements，去重相同位置+内容的元素。
+
+#### PPTX 导入验收标准
+
+- 文本内容 100% 保留
+- 文本样式 90%+ 还原
+- 图片资源成功率 ≥ 98%
+- 形状位置/大小 95%+ 准确
+- 表格结构 100% 保留
+- 整体视觉还原度 ≥ 80%
+
+### 6.2 PPTX 导入安全规则
+
+| ID | 规则 | 说明 | 影响任务 |
+|----|------|------|---------|
+| BR-008 | ZIP 炸弹检测 | 解压后总大小 ≤ 2GB；单文件数 ≤ 10000；目录层级 ≤ 10；压缩比 > 100 倍终止 | DT-027 |
+| BR-009 | SSRF 防护 | 图片代理：协议白名单(https)、私网 IP 阻断、MIME 校验(image/*)、≤10MB、超时 3+10s | DT-028 |
+| BR-010 | HTML XSS 防护 | href 协议白名单(http/https/mailto/tel)、on* 属性剥离、内联样式白名单、target="_blank" 强制 rel="noopener noreferrer" | DT-028 |
+
+**HTML 清洗规则** (`normalizeHtml()`):
+- 保留标签白名单：`<p>`, `<span style>`, `<strong>/<b>`, `<em>/<i>`, `<u>`, `<s>/<del>`, `<a href>`, `<sub>/<sup>`
+- 移除不支持标签（如 `<font>`），提取样式到 `<span>`
+- 规范化空段落：空 `<p>` → `<p><br></p>`（Tiptap 要求）
+- 内联样式白名单 CSS：font-size, color, font-weight, font-style, text-decoration, font-family, line-height, letter-spacing, vertical-align, background-color
+- 禁止 expression()、url()、position:fixed/absolute
+
+### 6.3 AI 翻译规则
+
+| ID | 规则 | 说明 | 影响任务 |
+|----|------|------|---------|
+| BR-011 | 翻译双入口 | Editor(`source_type='presentation'`) + Gallery(`source_type='version'`)，共用 `ppt_translations` 表 | DT-034 |
+| BR-012 | 翻译产出 | Editor 翻译在草稿库创建独立新 draft PPT（带语言标签） | DT-034 |
+| BR-013 | 术语表条件 | 仅中文源时启用术语替换，非中文源自动跳过 | DT-034 |
+| BR-014 | 翻译模型 | 通义千问 qwen-max，温度 0.3，单批 ≤ 50 条文本 | DT-034 |
+| BR-015 | 状态机 | pending → processing → completed / failed | DT-034 |
+| BR-016 | 失败恢复 | 单批次自动重试 3 次（指数退避 2s/4s/8s），3 次仍失败则整体 failed，丢弃部分结果 | DT-034 |
+| BR-017 | 幂等去重 | 同一用户对同一源+目标语言的重复提交，30s 幂等去重 | DT-034 |
+| BR-018 | 共享服务层 | `source_type='version'` 和 `source_type='presentation'` 共用 `@botool/ppt-core` 翻译服务层 | DT-034 |
+
+### 6.4 Gate-Delete-Admin 规则
+
+| ID | 规则 | 说明 | 影响任务 |
+|----|------|------|---------|
+| BR-019 | 先复制后删除 | 删除管理代码前必须有 Gallery seed snapshot + env contract | DT-001~004 |
+| BR-020 | Gate 通过条件 | 基线 tag 已创建 + 参考清单完成 + Seed 快照可用 + Env 合同确认 | DT-004 |
+| BR-021 | 禁删范围 | Gate 未通过前，禁止执行删除整页/删除管理组件/删除管理端页面路由 | DT-017 |
+
+### 6.5 表名迁移规则
+
+| ID | 规则 | 说明 | 影响任务 |
+|----|------|------|---------|
+| BR-022 | 全局替换 | `present_*` → `ppt_*` (~162 处 `.from()` 调用) | DT-022 |
+| BR-023 | 双轨切换 | 先创建 ppt_* → 回填 → 一致性校验 → 切流 → 下线 present_* | DT-012~016 |
+
+### 6.6 分享与访问控制规则
+
+| ID | 规则 | 说明 | 影响任务 |
+|----|------|------|---------|
+| BR-024 | 文档可见性 | private/internal/public + visibility_groups 精细控制 | DT-014 |
+| BR-025 | 链接访问-有权限 | 直接渲染 PPT 预览页 | DT-014 |
+| BR-026 | 链接访问-无权限 | 渲染索要授权页面，PPT 标题可见，内容不可见 | DT-014 |
+| BR-027 | 访问请求唯一性 | 一个用户对同一 PPT 只能有一个 pending 请求 | DT-014 |
+| BR-028 | 审批→自动添加 | approve → 自动添加为 collaborator | DT-014 |
+
+### 6.7 导入导出格式支持矩阵
+
+| 格式 | 导入 | 导出 | 优先级 |
+|------|------|------|--------|
+| **.pptbt** | ✅ | ✅ | P0 |
+| **PDF** | ❌ | ✅ | P1 |
+| **PPTX** | ✅ | ❌ | P1 |
+| **.ppt** | ❌ 不支持 | ❌ | - |
+| **PNG** | ❌ | ✅ 单页/多页 | P2 |
+
+### 6.8 边框类型映射规则
+
+> **[T7 补充自源 PRD §5.4.3.4]**
+
+| pptxtojson borderType | DSL border.style |
+|----------------------|-----------------|
+| 'solid' / undefined | 'solid' |
+| 'dashed' / 'lgDash' | 'dashed' |
+| 'dotted' / 'sysDot' | 'dotted' |
+| 'dashDot' | 'dashed' |
+| 其他 | 'solid'（兜底） |
+
+### 6.9 PPTX 导入取消语义规则
+
+> **[T7 补充自源 PRD §5.4.8]**
+
+| 阶段 | 可取消性 | 取消行为 |
+|------|----------|----------|
+| `uploading` | 可立即取消 | 中断 XHR 上传，不完整文件自动丢弃 |
+| `parsing` | 可取消 | 调用 cancel API，服务端终止解析 |
+| `images` | 可取消 | 服务端停止剩余图片上传，已上传图片随任务清理 |
+| `converting` | 可取消但不确定 | 服务端尽力终止，partial 文档自动删除 |
+| `saving` | 不可取消 | 按钮禁用，提示"正在保存，请稍候…" |
+
+### 6.10 导入进度百分比分配规则
+
+> **[T7 补充自源 PRD §5.4.8]**
+
+| 阶段 | 百分比 | stage |
+|------|--------|-------|
+| 上传文件到服务器 | 0-15% | `uploading`（前端 XHR 进度） |
+| 解析 PPTX 结构 | 15-25% | `parsing` |
+| 处理图片资源 | 25-80% | `images`（最耗时） |
+| 转换文档格式 | 80-95% | `converting` |
+| 保存文档 | 95-100% | `saving` |
+
+### 6.11 SSE 事件类型定义
+
+> **[T7 补充自源 PRD §5.4.8]**
+
+```typescript
+interface ImportProgressEvent {
+  type: 'progress'
+  stage: 'uploading' | 'parsing' | 'images' | 'converting' | 'saving'
+  percent: number              // 0-100
+  detail?: string              // 如 "图片 12/35"
+}
+
+interface ImportCompleteEvent {
+  type: 'complete'
+  presentationId: number
+  slideCount: number
+  warnings: string[]           // 如 ["2 张图片未能加载"]
+}
+
+interface ImportErrorEvent {
+  type: 'error'
+  message: string
+  code?: string                // 'ENCRYPTED', 'CORRUPTED', 'TOO_LARGE', 'ZIP_BOMB'
+}
+```
+
+### 6.12 导入超时防护规则
+
+> **[T7 补充自源 PRD §5.4.7]**
+
+| 场景 | 策略 |
+|------|------|
+| 文件上传超时 | 前端 XHR 带 progress 事件，超时设为 5 分钟 |
+| SSE 连接断开 | 前端自动重连（EventSource 原生），服务端保存进度状态，重连后从上次继续 |
+| 服务端处理超时 | maxDuration: 300，超时前保存已完成部分 |
+| 图片上传部分失败 | 失败图片用占位符替代，不阻断整体 |
+| 浏览器标签页关闭 | 任务执行与 SSE 生命周期解耦，重新打开时检查 status='importing' |
+
+### 6.13 导入风险与应对规则
+
+> **[T7 补充自源 PRD §5.4.5]**
+
+| 风险项 | 应对方案 |
+|--------|----------|
+| pptxtojson 解析失败（文件损坏/加密） | try-catch，提示"无法解析此文件，请确认文件未损坏且未加密" |
+| 部分样式丢失 | 导入完成后提示"部分高级效果可能简化显示，建议检查并调整" |
+| 字体不可用 | 使用 theme.font 兜底：latin→Arial, cjk→Alibaba PuHuiTi |
+| 图片上传失败 | 单张失败不阻断整体，失败图片 src 设为占位符，提示"N 张图片上传失败" |
+| 中大文件（50-200MB） | 强制走异步导入 + SSE 进度，服务端解析避免浏览器 OOM |
+| 动画/转场/音视频 | 静默忽略，不报错 |
+| 密码保护 PPTX | pptxtojson 会抛异常，提示"此文件受密码保护，请解除保护后重试" |
+
+### 6.14 图片处理流程规则
+
+> **[T7 补充自源 PRD §5.4.2]**
+
+1. 遍历所有元素，收集 base64 src
+2. 对 base64 取 hash 去重（同图片只上传一次）
+3. 并发上传到 Supabase Storage (ppt-files bucket)
+   路径: `presentations/{presentationId}/images/{hash}.{ext}`
+   并发度限制: 最多 5 个
+4. 遍历 DSL，用 hash→URL 映射替换所有图片引用
+
+### 6.15 导出功能规则
+
+> **[T7 补充自源 PRD §5.5]**
+
+#### .pptbt 导出（Botool 原生格式）
+
+技术栈：`jszip`（浏览器端 ZIP 打包）
 
 ```
-管理员点击"翻译"按钮
-├── 源语言是否为 zh?
-│   ├── 是 → 展示 TranslateConfirmDialog（含术语库预览）
-│   │         │
-│   │         └── 用户确认 → 创建翻译任务 (source_type='version')
-│   │                        → 展示 TranslateProgressDialog (SSE)
-│   └── 否 → 展示 TranslateConfirmDialog（无术语库预览）
-│             │
-│             └── 用户确认 → 创建翻译任务 (source_type='version')
-│                            → 展示 TranslateProgressDialog (SSE)
-└── 翻译完成/失败?
-    ├── completed → 关闭进度弹窗，刷新版本列表，显示新语言版本
-    └── failed    → 显示错误信息 + [重试] 按钮
+打包结构:
+document.pptbt (ZIP)
+├── manifest.json     # 元信息
+├── content.json      # DSL（图片路径改为相对路径 media/xxx.png）
+└── media/            # 所有图片资源
+    ├── img_001.png
+    └── ...
 ```
+
+SSRF 防护基线 — 图片代理下载时：协议白名单(仅 https://)、DNS/IP 黑名单(拒绝私网)、最大响应体≤10MB、超时 3+10s、MIME 须为 image/*、审计日志。
+
+#### PNG 图片导出
+
+技术栈：`html2canvas`（复用 PDF 导出截图逻辑）
+
+| 规则 | 说明 |
+|------|------|
+| 单页导出 | 当前页 DOM → canvas → `toBlob('image/png')` 直接下载 |
+| 多页导出 | 按页渲染后写入 ZIP（`JSZip`），文件名 `slide_{index}.png` |
+| 透明背景 | 导出前铺白底，避免深色主题下背景透明 |
+| 大文档保护 | 页数 > 50 时提示，允许仅导出当前页/范围 |
+| 缩放比例 | 1x / 2x / 3x |
+
+### 6.16 AI 翻译运行时规则
+
+> **[T7 补充自源 PRD §6.4.4]**
+
+| ID | 规则 | 说明 |
+|----|------|------|
+| BR-029 | 共享翻译服务 | `source_type='version'`(Gallery) 与 `source_type='presentation'`(Editor) 共用 `@botool/ppt-core` 翻译服务层，避免双实现漂移 |
+| BR-030 | 术语表降级 | 当源语言非 `zh` 时，术语表流程自动降级为"仅普通翻译，不做术语替换" |
+| BR-031 | 统一翻译表 | 所有翻译任务写入统一 `ppt_translations`，前端仅按 `source_type` 区分来源 |
+| BR-032 | 任务日志 | 日志写入 `logs JSONB`，前端 UI 只读展示，不在客户端拼接状态 |
+
+### 6.17 审批与批注规则
+
+> **[T7 补充自源 PRD §7]**
+
+审批流程从 Present 迁移，包括审批配置、状态追踪、批注标注。
+
+| 功能 | 说明 |
+|------|------|
+| 发起审批 | 审批配置对话框，选择审批人 |
+| 审批详情 | 查看审批状态流转 |
+| 新建批注 | 画框批注模式，标注到幻灯片 |
+| 批注可见性 | 开关批注显隐 |
+| 批注定位 | 列表点击跳转到对应批注位置 |
 
 ---
 
@@ -696,389 +1239,304 @@ CREATE POLICY "presentations_update" ON present_presentations
 ### 7.0 Phase 依赖图
 
 ```
-Phase 0 ──▶ Phase 1 ──▶ Phase 2 ──▶ Phase 3 ──▶┐
- 清理        DB建库       App拆分      文档库        │
- (P0)        (P0)         (P0)        (P0)          │
-                                                    │
-                                              ┌─────┘
-                                              ├──▶ Phase 4 (P1) 版本管理
-                                              ├──▶ Phase 5 (P1) 导入导出
-                                              ├──▶ Phase 6 (P1) 分类管理
-                                              │
-                                              └──▶ Phase 7 (P2) AI翻译
-                                                         │
-                                                         └──▶ Phase 8 (P2) 下载UI
+Pre-Phase ──▶ Phase 0 ──▶ Phase 1 ──▶ Phase 2 ──▶ Phase 3
+[Gate安全]    [ppt-core]   [新建表]    [删代码]    [审阅Tab]
+DT:4 (P0)    DT:7 (P0)    DT:5 (P0)   DT:8 (P0)   DT:2 (P1)
+                                            │
+                                            ├──▶ Phase 4
+                                            │    [导入导出]
+                                            │    DT:6 (P1)
+                                            │
+                                            └──▶ Phase 5
+                                                 [翻译Tab]
+                                                 DT:3 (P2)
 
 依赖关系:
-Phase 0 → 必须先清理旧代码，避免后续冲突
-Phase 1 → 所有后续 Phase 的基础（数据库必须先建好）
-Phase 2 → Phase 3 的前置（编辑器独立后才能做文档库联动）
-Phase 3 → Phase 4/5/6 可并行
-Phase 4+5 → Phase 7 的前置（翻译需要版本系统）
-Phase 7 → Phase 8（下载 UI 依赖导出格式已实现）
+Pre-Phase → Phase 0 → Phase 1 → Phase 2（严格顺序）
+Phase 3, Phase 4, Phase 5 可并行（均依赖 Phase 2）
 ```
 
-### 7.1 Phase 0: 代码清理 (P0)
+### 7.1 Pre-Phase: Gallery 交接基线 (P0)
 
 > **前置**: 无
-> **产出**: 删除废弃页面/状态，/admin 重构为 3-Tab 布局
-> **对应设计**: Section 5.1, 5.3
+> **产出**: Gallery 可复用代码基线 + 路径映射 + Env 合同；作为后续删除管理代码的硬门禁
+> **对应设计**: Section 3.1, 6.4
 
-- [ ] **DT-001**: 删除 `/upload` 页面及其相关路由 (`文件: app/upload/page.tsx`)
-  - 验收: 访问 /upload 返回 404；侧边栏不再出现"上传文档"入口
-  - [ ] 从 status CHECK 约束中移除 'editing' 状态值
-  - [ ] Typecheck passes
+- [ ] DT-001: 创建 Gallery baseline tag + 参考代码清单 (`文件: docs/migration/gallery-reference-inventory.md`)
+  - 在删除管理代码前创建基线 tag `present-v5-gallery-seed-baseline`
+  - 清单覆盖 `components/admin/*`, `components/library/*`, `app/(main)/library/admin/*`, `app/api/admin/*`, `app/api/version-groups/*`, `app/api/translations/*`
+  - Typecheck passes
 
-- [ ] **DT-002**: 重构 `/admin` 为 3-Tab 布局 (`文件: app/admin/page.tsx`, `组件: <AdminLayout>`)
-  - Tab 1: 我的 PPT（当前用户所有草稿）
-  - Tab 2: PPT 库管理（文档列表 + 筛选 + 操作按钮）
-  - Tab 3: 设置（预留空 Tab）
-  - 验收: 3 Tab 可切换，Tab 2 展示文档列表；Verify in browser
-  - [ ] [安全] 错误响应不泄露内部信息
-  - [ ] Typecheck passes
+- [ ] DT-002: Gallery Seed 快照导出 + 路径映射 (`文件: docs/migration/gallery-seed/`, `docs/migration/gallery-path-mapping.md`)
+  - 将可复用参考实现复制到 `docs/migration/gallery-seed/`
+  - 生成"旧路径 → Gallery 目标路径"映射表
+  - 对核心参考组件标注复用策略（A/B/C）
+  - Typecheck passes
 
-### 7.2 Phase 1: 数据库初始化 (P0)
+- [ ] DT-003: Env 合同输出 (`文件: docs/migration/gallery-env-contract.md`, `docs/migration/.env.example.gallery`)
+  - 合同覆盖: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, NEXT_PUBLIC_DASHBOARD_URL, NEXT_PUBLIC_BASE_PATH, NEXT_PUBLIC_BOTOOL_ENV, QWEN_API_KEY
+  - Typecheck passes
+
+- [ ] DT-004: Gate-Delete-Admin 通过检查 (`文件: docs/migration/gate-check-result.md`)
+  - 验证基线 tag 已创建且可追溯
+  - 验证参考清单 + 路径映射文档已完成
+  - 验证 Gallery Seed 快照已导出
+  - 验证 Env 合同文档已确认
+  - 记录 Gate 通过结果
+  - Typecheck passes
+
+### 7.2 Phase 0: 共享包提取 + DB 脚本 (P0)
+
+> **前置**: Pre-Phase
+> **产出**: `@botool/ppt-core` 共享包 + `ppt_*` 数据库 SQL 脚本（仅产出，不执行）
+> **对应设计**: Section 3.9, 4.2
+
+- [ ] DT-005: ppt-core 共享包骨架初始化 (`文件: libs/ppt-core/package.json`, `libs/ppt-core/tsconfig.json`, `libs/ppt-core/index.ts`)
+  - 创建 `libs/ppt-core/` 目录
+  - 设计 index.ts 导出面（types/services/converter/config/security）
+  - 更新 `pnpm-workspace.yaml`
+  - Typecheck passes
+
+- [ ] DT-006: 类型定义提取到 ppt-core (`文件: libs/ppt-core/types/dsl.ts`, `types/document.ts`, `types/version.ts`, `types/translation.ts`)
+  - 将 DSL 类型从 Present 提取到 `@botool/ppt-core`
+  - 将版本/翻译/文档类型提取
+  - Present 端改为 import `@botool/ppt-core`
+  - Typecheck passes
+
+- [ ] DT-007: 服务层提取到 ppt-core (`文件: libs/ppt-core/services/document.service.ts`, `dsl.service.ts`, `version.service.ts`, `translation.service.ts`, `collaborator.service.ts`, `review.service.ts`)
+  - 将 translation/version/document service 层提取
+  - Present API route handler 改为调用 `@botool/ppt-core`
+  - 接口行为不变
+  - Typecheck passes
+
+- [ ] DT-008: Converter + Security 提取到 ppt-core (`文件: libs/ppt-core/converter/`, `libs/ppt-core/security/sanitize.ts`, `libs/ppt-core/config/languages.ts`, `libs/ppt-core/config/qwen.ts`)
+  - 将 converter/security/config 工具提取
+  - Present 端改为 import `@botool/ppt-core`
+  - Typecheck passes
+
+- [ ] DT-009: Present 端 import 路径全量切换 (`全局`)
+  - 所有组件 import types/converter/security → `@botool/ppt-core`
+  - 所有 API route handler 调用 service → `@botool/ppt-core`
+  - 确认无 import 残留（引用提取前旧路径的 import 语句）
+  - `pnpm build` 通过
+  - Typecheck passes
+
+- [ ] DT-010: ppt_* 前缀建表 SQL 脚本产出 (`文件: sql/create-ppt-tables.sql`)
+  - 编写全部 13 张 ppt_* 表的 CREATE TABLE SQL（基于 Section 4.2）
+  - 编写 RLS 策略脚本
+  - 编写索引脚本
+  - Typecheck passes
+
+- [ ] DT-011: 数据回填 + 一致性校验脚本产出 (`文件: sql/backfill-present-to-ppt.sql`, `sql/verify-consistency.sql`)
+  - 编写 `present_* → ppt_*` 历史数据回填脚本
+  - 编写一致性校验脚本（行数/关键字段/抽样 DSL）
+  - Typecheck passes
+
+### 7.3 Phase 1: 数据库创建 + 回填校验 (P0)
 
 > **前置**: Phase 0
-> **产出**: 12 张表 + RLS 策略 + 索引全部就绪
-> **对应设计**: Section 4.2
+> **产出**: 所有 `ppt_*` 表创建完成，历史数据回填并通过一致性校验
+> **对应设计**: Section 4.2, 4.3
 
-- [ ] **DT-003**: SQL Script 1 — 创建 present_presentations 表 (`文件: sql/01_presentations.sql`)
-  - 含 title/slug/type/status/dsl_json/dsl_storage_path/owner_id/is_deleted/language_code/translated_from_id 字段
-  - 含所有索引（owner, status, language, deleted）
-  - [ ] [安全] 使用参数化查询
-  - [ ] [安全] 迁移脚本使用 IF NOT EXISTS
-  - [ ] 执行后确认表存在，索引已建
+- [ ] DT-012: 执行核心表创建 SQL (`SQL: ppt_documents, ppt_dsl_snapshots`)
+  - 执行 ppt_documents 主表创建
+  - 执行 ppt_dsl_snapshots 快照表创建
+  - 运行验证 SQL 确认表存在
+  - Typecheck passes
 
-- [ ] **DT-004**: SQL Script 2 — 创建 present_dsl_snapshots 表 (`文件: sql/02_dsl_snapshots.sql`)
-  - 验收: 表存在，外键约束正确
+- [ ] DT-013: 执行版本表创建 SQL (`SQL: ppt_version_groups, ppt_versions, ppt_translations`)
+  - 执行版本组/版本/翻译表创建
+  - 确认约束正确（CHECK, UNIQUE）
+  - Typecheck passes
 
-- [ ] **DT-005**: SQL Script 3 — 创建 present_collaborators 和 present_access_requests 表 (`文件: sql/03_collaboration.sql`)
-  - collaborators UNIQUE(presentation_id, user_id)
-  - access_requests 含 cooldown_until 字段
-  - 验收: 两表存在，约束正确
+- [ ] DT-014: 执行访问/协作/审批表创建 SQL (`SQL: ppt_access_requests, ppt_visibility_groups, ppt_collaborators, ppt_comments, ppt_comment_replies, ppt_reviews, ppt_reviewers, ppt_access_history`)
+  - 执行全部辅助表创建
+  - 确认 RLS 策略正确
+  - Typecheck passes
 
-- [ ] **DT-006**: SQL Script 4 — 创建 present_visibility_groups 表 (`文件: sql/04_visibility.sql`)
+- [ ] DT-015: Storage Bucket 创建 + 数据回填 (`Storage: ppt-files`, `SQL: backfill`)
+  - 创建 ppt-files Storage Bucket
+  - 执行 `present_* → ppt_*` 回填脚本
+  - 执行数据一致性校验
+  - Typecheck passes
 
-- [ ] **DT-007**: SQL Script 5 — 创建 present_version_groups 和 present_versions 表 (`文件: sql/05_versions.sql`)
-  - version_groups: version_number/version_type/sort_key/is_published
-  - versions: UNIQUE(version_group_id, language_code)
-  - 验收: 两表存在，外键和唯一约束正确
+- [ ] DT-016: RLS 策略全量启用 + 验证 (`SQL: RLS policies`)
+  - 为所有新表启用 RLS 策略
+  - 运行验证确认 RLS 生效
+  - 编辑器保存功能正常（写入 ppt_documents）
+  - Typecheck passes
 
-- [ ] **DT-008**: SQL Script 6 — 创建 present_categories 和 present_category_slots 表 + 触发函数 (`文件: sql/06_categories.sql`)
-  - categories: parent_id 自引用外键（2级树）
-  - category_slots: UNIQUE(category_id, presentation_id)
-  - 触发函数: sync_category_slot_status（软删除级联清理槽位）
-  - [ ] [安全] 迁移脚本使用 IF NOT EXISTS
-  - 验收: 两表存在，触发函数已创建，测试软删除级联
-
-- [ ] **DT-009**: SQL Script 7 — 创建翻译和术语库表 (`文件: sql/07_translations.sql`)
-  - present_translations: source_type/status/progress/logs JSONB
-  - present_glossary + present_glossary_translations
-  - 验收: 三表存在，CHECK 约束正确
-
-- [ ] **DT-010**: RLS 策略和索引脚本 (`文件: sql/08_rls_policies.sql`)
-  - 为 6 张核心表启用 RLS
-  - 实现 presentations_select/insert/update 策略
-  - [ ] [安全] 添加权限检查
-  - 验收: RLS 已启用；未认证用户只能读已发布文档；owner 可全量访问
-
-### 7.3 Phase 2: 应用拆分 — Botool_PPT (P0)
+### 7.4 Phase 2: Present 清理 + 表名更新 (P0)
 
 > **前置**: Phase 1
-> **产出**: 编辑器迁移到独立 Next.js 应用 (port 3009)
-> **对应设计**: Section 3.1
+> **产出**: Present 成为纯 PPT 编辑器，管理代码已删除，所有运行时表引用更新为 `ppt_*`
+> **对应设计**: Section 3.1, 6.4, 6.5
 
-- [ ] **DT-011**: 创建 Botool_PPT Next.js 应用结构 (`文件: botool-ppt/package.json`, `botool-ppt/next.config.ts`)
-  - port: 3009
-  - 复用 Supabase 配置
-  - 验收: `npm run dev` 在 3009 端口启动；Verify in browser
+- [ ] DT-017: Gate-Delete-Admin 复核 (`文件: docs/migration/gate-check-result.md`)
+  - 复核基线 tag 与参考清单可访问
+  - 复核 Gallery Seed 快照与路径映射完整
+  - 复核 Env 合同可直接用于 Gallery 初始化
+  - Gate 通过后才继续
+  - Typecheck passes
 
-- [ ] **DT-012**: 迁移编辑器核心组件到 Botool_PPT (`目录: botool-ppt/components/editor/`)
-  - 迁移 44+ 编辑器组件（Canvas、SlideList、Ribbon、元素工具等）
-  - 迁移 DSL 类型定义
-  - 验收: Botool_PPT 可独立运行编辑器；Typecheck passes
+- [ ] DT-018: 删除 /upload 页面 (`删除: app/(main)/upload/page.tsx`, `修改: config/menu-items.ts`)
+  - 删除上传页面
+  - 删除侧边栏「上传文档」入口
+  - Typecheck passes
 
-- [ ] **DT-013**: 配置跨应用导航 (`文件: botool-ppt/app/editor/[id]/page.tsx`)
-  - Botool_Present 中"编辑"按钮跳转到 `http://localhost:3009/editor/[id]`
-  - 编辑完成后跳转回 Botool_Present
-  - 验收: 跨应用导航正常，文档数据共用 Supabase
+- [ ] DT-019: 删除管理端组件 (`删除: components/admin/TranslateDialog.tsx`, `TranslationProgress.tsx`, `ManualCreateDialog.tsx`, `components/library/CategoryManager.tsx`)
+  - 删除由 Gallery 全新实现的管理端组件
+  - 确认无 import 残留
+  - Typecheck passes
 
-- [ ] **DT-014**: 更新 Botool_Present 路由，删除原编辑器入口 (`文件: app/editor/page.tsx`)
-  - Botool_Present 中不再承载编辑器代码
-  - 验收: Botool_Present typecheck 无编辑器相关错误
+- [ ] DT-020: 简化版本状态模型 (`修改: @botool/ppt-core → services/version-status.service.ts`, `types/version.ts`)
+  - 移除 editing 状态：三态 → 两态（draft/published）
+  - 清理所有 `status: 'editing'` 引用
+  - Typecheck passes
 
-### 7.4 Phase 3: 文档库管理 (P0)
+- [ ] DT-021: 删除管理端页面 + API 路由 (`删除: app/library/*`, `app/(admin)/*`, `app/api/admin/*`, `app/api/categories/*`, `app/api/glossary/*`)
+  - 删除前台浏览/管理后台页面
+  - 删除管理端 API
+  - 确认无残留路由
+  - Typecheck passes
+
+- [ ] DT-022: 全局表名替换 present_* → ppt_* (`全局: ~162 处 .from() 调用`)
+  - 全局替换 `.from('present_presentations')` → `.from('ppt_documents')`
+  - 全局替换所有 `present_*` 表引用
+  - service 层统一使用 `@botool/ppt-core`
+  - [安全] 使用参数化查询防止 SQL 注入
+  - [安全] 错误响应不泄露内部信息
+  - Typecheck passes
+
+- [ ] DT-023: API 路径 + import 更新 (`修改: app/api/presentations/`)
+  - 编辑器 API 统一 `/api/presentations/` 前缀
+  - 组件 import → `@botool/ppt-core`
+  - API route handler → `@botool/ppt-core`
+  - [安全] 添加权限检查
+  - `pnpm build` 通过
+  - Typecheck passes
+
+- [ ] DT-024: 编辑器首页下拉菜单 (`修改: 编辑器首页组件`)
+  - 合并 [+ 新建文档] + [导入] → [+ 新增 PPT ▼] 下拉
+  - 选项：✏️ 创建空白 PPT / 📤 上传 .pptbt / 📤 上传 PPTX
+  - Verify in browser
+  - Typecheck passes
+
+### 7.5 Phase 3: Ribbon 扩展 — 审阅 Tab (P1)
 
 > **前置**: Phase 2
-> **产出**: 完整的文档库 CRUD + 协作权限 + 访问请求
-> **对应设计**: Section 5.3, 5.4, 6.4
+> **产出**: 编辑器中新增「审阅」Tab
+> **对应设计**: Section 5.6
 
-- [ ] **DT-015**: 文档 CRUD API (`API: GET/POST/DELETE /api/presentations`, `文件: app/api/presentations/route.ts`)
-  - GET: 分页+筛选（status/owner/category）
-  - POST: 创建新文档（owner=当前用户）
-  - DELETE: 软删除（is_deleted=TRUE）
-  - [ ] [安全] 使用参数化查询防止 SQL 注入
-  - [ ] [安全] 错误响应不泄露内部信息
-  - [ ] [安全] 添加权限检查（仅 owner 可删除）
-  - [ ] Typecheck passes
+- [ ] DT-025: 审阅 Tab 注册 + ReviewTab 组件 (`组件: components/editor/EditorRibbon/ReviewTab.tsx`, `修改: RibbonContainer.tsx`)
+  - 在 TABS 中注册 review Tab
+  - 实现 ReviewTab.tsx 组件
+  - 接入审批/批注组件
+  - Verify in browser
+  - Typecheck passes
 
-- [ ] **DT-016**: 文档库公共浏览页 (`页面: /library`, `文件: app/library/page.tsx`)
-  - 展示所有已发布文档（无 category_slot = 草稿箱，不显示）
-  - 分类树侧边栏筛选
-  - 未登录用户可申请访问
-  - [ ] [安全] 输入使用 schema 验证（如 zod）
-  - 验收: 已发布文档可见；草稿箱文档不可见；Verify in browser
+- [ ] DT-026: 审阅/批注集成 + 状态栏扩展 (`修改: StatusBar`, `RibbonTabBar`)
+  - 状态栏增加审批状态指示
+  - 状态栏增加 [分享] 按钮
+  - 顶栏标题区增加语言 Badge
+  - Verify in browser
+  - Typecheck passes
 
-- [ ] **DT-017**: 管理后台文档列表 Tab (`组件: <AdminLibraryTab>`, `文件: components/AdminLibraryTab.tsx`)
-  - 搜索框 + 分类/状态筛选
-  - 每行操作按钮：Share、分类、版本
-  - 展示草稿箱和已发布文档
-  - 验收: 筛选功能正常；Verify in browser
+### 7.6 Phase 4: 导入导出完善 (P1)
 
-- [ ] **DT-018**: ShareDialog 组件 + 协作者 API (`组件: <ShareDialog>`, `API: /api/presentations/[id]/collaborators`)
-  - GET/POST/PATCH/DELETE collaborators
-  - 弹窗：添加协作者（邮箱搜索）+ 权限选择 + 访问请求审批
-  - [ ] [安全] 添加权限检查（仅 admin 权限可管理协作者）
-  - [ ] [安全] 输入使用 schema 验证（如 zod）
-  - 验收: 可添加/修改/删除协作者；权限变更立即生效；Verify in browser
+> **前置**: Phase 2
+> **产出**: PPTX 导入 + PDF/.pptbt 导出可用
+> **对应设计**: Section 6.1, 6.2, 8.E
 
-- [ ] **DT-019**: 访问申请 API + AccessRequestView (`API: /api/presentations/[id]/access-requests`, `组件: <AccessRequestView>`)
-  - GET: 获取待审批列表
-  - POST: 用户申请访问（含冷却期校验 BR-015）
-  - PATCH: 批准/拒绝（拒绝时设置 cooldown_until = NOW() + 24h）
-  - [ ] [安全] 添加权限检查
-  - [ ] [安全] 输入使用 schema 验证（如 zod）
-  - 验收: 申请工作流完整；拒绝后 24h 内不可再申请；Verify in browser
+- [ ] DT-027: PPTX 核心转换器 (`文件: libs/ppt-core/converter/pptx-to-dsl.ts`, `pptx-types.ts`, `pptx-html-cleaner.ts`)
+  - 实现主转换入口 + 元素路由
+  - 实现 pptxtojson 输出类型定义
+  - 实现 HTML 清洗器（normalizeHtml + XSS 防护）
+  - [安全] 文件类型白名单校验
+  - [安全] 字符串长度限制
+  - Typecheck passes
 
-- [ ] **DT-020**: 草稿箱集成 (`文件: app/admin/page.tsx` — 我的PPT Tab)
-  - 展示当前用户无 category_slot 的文档（= 草稿箱）
-  - 提供"移入分类"入口（触发 CategoryManagementDialog）
-  - 验收: 草稿箱文档正确展示；Verify in browser
+- [ ] DT-028: PPTX 辅助转换器 (`文件: libs/ppt-core/converter/pptx-shape-map.ts`, `pptx-image-upload.ts`, `pptx-fill-converter.ts`)
+  - 实现形状映射表（OOXML → DSL）
+  - 实现图片批量上传（base64 → Storage，并发度 5）
+  - 实现填充样式转换（color/image/gradient/pattern）
+  - [安全] 文件大小限制（单张 ≤ 10MB）
+  - [安全] 存储路径不可由用户控制
+  - Typecheck passes
 
-### 7.5 Phase 4: 版本管理 (P1)
+- [ ] DT-029: SSE 双阶段导入 API (`API: POST /api/presentations/import`, `GET /api/presentations/[id]/import-sse`, `POST /api/presentations/imports/[importId]/cancel`)
+  - 实现文件上传 + 创建记录 API
+  - 实现 SSE 进度推送 API（14 步流程）
+  - 实现取消导入 API
+  - runtime = 'nodejs', maxDuration = 300
+  - [安全] ZIP 炸弹检测（解压后 ≤ 2GB，文件数 ≤ 10000）
+  - [安全] 文件类型白名单校验
+  - [安全] 文件大小限制（≤ 200MB）
+  - [安全] 使用参数化查询防止 SQL 注入
+  - [安全] 添加权限检查
+  - Typecheck passes
 
-> **前置**: Phase 3
-> **产出**: 版本组管理 + 选择性发布
-> **对应设计**: Section 3.4, 6.2
+- [ ] DT-030: ImportProgressDialog + ExportDialog 组件 (`组件: components/file/ImportProgressDialog.tsx`, `components/file/ExportDialog.tsx`)
+  - 实现导入进度弹窗（SSE 连接 + 分阶段进度 + 取消）
+  - 实现导出对话框（格式选择 + 范围选择 + 进度）
+  - [安全] XSS 防护
+  - Verify in browser
+  - Typecheck passes
 
-- [ ] **DT-021**: 版本组 API (`API: GET/POST /api/presentations/[id]/version-groups`, `文件: app/api/presentations/[id]/version-groups/route.ts`)
-  - GET: 获取文档所有版本组（含各语言版本状态）
-  - POST: 创建新版本组（含 BR-005/BR-006 版本号规则校验）
-  - [ ] [安全] 添加权限检查（仅 admin 可创建版本）
-  - [ ] [安全] 输入使用 schema 验证（如 zod）
-  - [ ] Typecheck passes
+- [ ] DT-031: PDF + .pptbt 导出实现 (`文件: libs/ppt-core/converter/dsl-to-pdf.ts`, `dsl-to-pptbt.ts`, `pptbt-to-dsl.ts`)
+  - 实现 PDF 导出（html2canvas + jspdf）
+  - 实现 .pptbt 导出（jszip 打包）
+  - 实现 .pptbt 导入（jszip 解包 + Storage 上传）
+  - [安全] SSRF 防护（协议白名单、私网 IP 阻断、MIME 校验）
+  - Typecheck passes
 
-- [ ] **DT-022**: 版本列表面板 (`组件: <VersionListPanel>`, `文件: components/VersionListPanel.tsx`)
-  - 展示版本组树状结构（major/minor）
-  - 每个语言版本展示状态（draft/published）+ 操作按钮
-  - 验收: 版本列表正确展示层级关系；Verify in browser
+- [ ] DT-032: PPTX 导入验收测试 (`测试文件: 10 个 PPTX 样本`)
+  - 纯文本 PPT（多种字号/颜色）
+  - 图片为主 PPT（含裁剪）
+  - 多种形状 PPT（含自定义形状）
+  - 含表格 PPT（含合并单元格）
+  - 含组合 PPT（含嵌套组合）
+  - 深色主题 PPT
+  - 含渐变背景/形状 PPT
+  - 含母版 logo/装饰 PPT
+  - 真实商务 PPT（综合）
+  - 竖排文字 PPT
+  - 验收: 文本 100% 保留, 样式 90%+, 图片 98%+, 整体视觉 ≥ 80%
+  - Typecheck passes
 
-- [ ] **DT-023**: CreateVersionDialog (`组件: <CreateVersionDialog>`, `文件: components/CreateVersionDialog.tsx`)
-  - 主版本/次版本选择（显示将生成的版本号）
-  - 校验 BR-005/BR-006 版本号规则
-  - 创建后从最新版本复制 DSL（BR-009）
-  - [ ] [安全] 输入使用 schema 验证（如 zod）
-  - 验收: 版本号自动计算正确；Verify in browser
+### 7.7 Phase 5: Ribbon 扩展 — 翻译 Tab (P2)
 
-- [ ] **DT-024**: 发布/撤销版本 API + UI (`API: POST/DELETE /api/versions/[id]/publish`)
-  - 发布：versions.status → 'published'（仅影响当前语言版本）
-  - 撤销：versions.status → 'draft'
-  - 已发布版本 UI 显示只读状态徽章
-  - [ ] [安全] 添加权限检查（仅 admin 可发布/撤销）
-  - 验收: 选择性发布正常；发布后版本只读；Verify in browser
+> **前置**: Phase 2
+> **产出**: 编辑器中新增「翻译」Tab + Editor AI 翻译功能
+> **对应设计**: Section 5.6, 6.3
 
-- [ ] **DT-025**: 版本回滚 (`API: POST /api/versions/[id]/rollback`)
-  - 将指定旧版本的 DSL 复制到当前草稿版本
-  - 操作前弹窗确认（不可逆警告）
-  - [ ] [安全] 添加权限检查
-  - 验收: 回滚后内容与目标版本一致；Verify in browser
+- [ ] DT-033: 翻译 Tab 注册 + 组件 (`组件: components/editor/EditorRibbon/TranslateTab.tsx`, `components/editor/TranslateMenu.tsx`, `components/dialogs/TranslateHistoryPopover.tsx`, `components/dialogs/GlossaryViewPanel.tsx`)
+  - 在 TABS 中注册 translate Tab
+  - 实现 TranslateTab.tsx + TranslateMenu
+  - 实现翻译记录查看 + 术语表只读面板
+  - [安全] 输入使用 schema 验证（zod）
+  - [安全] XSS 防护
+  - Verify in browser
+  - Typecheck passes
 
-### 7.6 Phase 5: 导入/导出 (P1)
+- [ ] DT-034: Editor 翻译 API + 进度 API (`API: POST /api/presentations/[id]/translate`, `GET /api/presentations/translations/[id]/progress`)
+  - 实现 Editor 翻译发起 API
+  - 实现翻译进度查询 API（前端每 3 秒轮询）
+  - 翻译产出：草稿库创建独立 draft PPT
+  - 复用 `@botool/ppt-core` 翻译服务层
+  - [安全] 使用参数化查询防止 SQL 注入
+  - [安全] 错误响应不泄露内部信息
+  - [安全] 添加权限检查
+  - [安全] 速率限制（30s 幂等去重）
+  - Typecheck passes
 
-> **前置**: Phase 3
-> **产出**: PDF/PNG/.pptbt 导出 + .pptbt/PPTX 导入
-> **对应设计**: Section 6.5, §8.E
-
-- [ ] **DT-026**: PDF 导出实现 (`文件: lib/converter/dsl-to-pdf.ts`)
-  - 依赖: `pnpm add html2canvas jspdf`
-  - 逐张幻灯片创建临时 DOM → html2canvas 截图 → jsPDF 合并
-  - 支持 range 参数（all/current/[start,end]）
-  - 支持 scale 参数（默认 2x）
-  - onProgress 回调报告进度
-  - [ ] [安全] 文件大小限制
-  - 验收: PDF 多页正确；还原率 ≥ 90%；Typecheck passes
-
-- [ ] **DT-027**: PNG 导出实现 (`文件: lib/converter/dsl-to-png.ts`)
-  - 单张幻灯片 html2canvas → canvas.toBlob('image/png')
-  - 验收: PNG 导出正确；Typecheck passes
-
-- [ ] **DT-028**: .pptbt 导出实现 (`文件: lib/converter/dsl-to-pptbt.ts`)
-  - 依赖: `pnpm add jszip`
-  - ZIP 包含: manifest.json + content.json（图片路径替换为相对路径）+ media/ 目录
-  - 提取所有图片 URL → 下载 → 添加到 ZIP → 替换路径
-  - manifest 格式: version/"1.0"/generator/"Botool Present"/generatorVersion/"1.6.0"
-  - [ ] [安全] 文件大小限制
-  - 验收: .pptbt 文件结构正确；重新导入后内容一致；Typecheck passes
-
-- [ ] **DT-029**: .pptbt 导入实现 (`文件: lib/converter/pptbt-to-dsl.ts`)
-  - JSZip 解压 → 验证 manifest 版本 → 读取 content.json → 上传 media/ 图片到 Supabase Storage → 替换图片路径
-  - 验收: 导入后 DSL 内容与原始一致；图片可显示；Typecheck passes
-
-- [ ] **DT-030**: PPTX 导入实现 — 5 文件转换器结构 (`目录: lib/converter/`)
-  - `pptx-to-dsl.ts` — 主转换入口
-  - `pptx-html-cleaner.ts` — HTML 清洗（pptxtojson HTML → Tiptap 兼容）
-  - `pptx-shape-map.ts` — 形状类型映射（OOXML preset → DSL ShapeType）
-  - `pptx-image-upload.ts` — 图片批量上传（base64 → Storage URL）
-  - `pptx-fill-converter.ts` — 填充样式转换（color/gradient/image/pattern）
-  - 依赖: `pnpm add pptxtojson`（版本 ≥ 1.9.0）
-  - 元素类型映射: text/image/shape/table/line/group（video/audio/math → 占位符）
-  - 验收: 常规 PPTX 文本/图片/形状元素正确转换；Typecheck passes
-
-- [ ] **DT-031**: PPTX 导入安全验证 (`文件: lib/converter/pptx-to-dsl.ts`)
-  - 文件类型白名单校验: .pptx 扩展名 + MIME 类型（BR-020）
-  - ZIP 炸弹防护（BR-018）: 解压缩比 > 100x / > 2GB / > 10000 文件 / 嵌套 > 10 层 → 拒绝
-  - 图片代理 SSRF 防护（BR-019）: 校验 URL 不指向内网
-  - [ ] [安全] 文件类型白名单校验
-  - [ ] [安全] 文件大小限制
-  - [ ] [安全] 存储路径不可由用户控制
-  - [ ] [安全] 输入使用 schema 验证（如 zod）
-  - 验收: 恶意 PPTX 文件被拒绝；SSRF 攻击被阻止；Typecheck passes
-
-- [ ] **DT-032**: 导入 UI — 文件拖放区 + 进度 (`组件: <ImportButton>`, `文件: components/ImportButton.tsx`)
-  - 支持拖放和点击选择
-  - 接受 .pptbt 和 .pptx 格式
-  - 显示导入进度（解析/上传/处理）
-  - 错误友好展示
-  - [ ] [安全] 文件类型白名单校验
-  - 验收: 两种格式导入均正常；错误有清晰提示；Verify in browser
-
-### 7.7 Phase 6: 分类管理 (P1)
-
-> **前置**: Phase 3
-> **产出**: 两级分类树管理 + 槽位分配
-> **对应设计**: Section 5.4, 6.1
-
-- [ ] **DT-033**: 分类 CRUD API (`API: GET/POST/PUT/DELETE /api/categories`, `文件: app/api/categories/route.ts`)
-  - 支持 parent_id 参数（NULL=大类，有值=子类）
-  - 删除大类时级联删除子类（数据库外键）
-  - [ ] [安全] 添加权限检查（仅 admin 可管理分类）
-  - [ ] [安全] 使用参数化查询防止 SQL 注入
-  - [ ] Typecheck passes
-
-- [ ] **DT-034**: CategoryManagementDialog — 2 级分类树 UI (`组件: <CategoryManagementDialog>`, `文件: components/CategoryManagementDialog.tsx`)
-  - 左侧分类树（大类 + 展开子类）
-  - 右侧或内嵌"分配到此槽位"操作
-  - 支持创建/编辑/删除分类（inline 编辑）
-  - [ ] [安全] 输入使用 schema 验证（如 zod）
-  - 验收: 分类树正确展示；创建/编辑/删除正常；Verify in browser
-
-- [ ] **DT-035**: 槽位分配 API (`API: POST/DELETE /api/presentations/[id]/slots`, `文件: app/api/presentations/[id]/slots/route.ts`)
-  - POST: 复制文档（创建新 present_presentations 记录），写入 present_category_slots
-  - DELETE: 从槽位移除（删除 category_slot 记录，不删除副本）
-  - 实现 BR-001（复制体语义）
-  - [ ] [安全] 添加权限检查（仅 admin 可分配槽位）
-  - [ ] [安全] 使用参数化查询防止 SQL 注入
-  - 验收: 分配后槽位有独立文档副本；原文档不受影响；Typecheck passes
-
-- [ ] **DT-036**: 分类筛选集成 (`文件: app/library/page.tsx`, `app/admin/page.tsx`)
-  - /library 分类树侧边栏：按分类/子类过滤文档
-  - /admin 分类下拉筛选：快速过滤当前分类的文档
-  - 验收: 分类筛选正确过滤文档列表；Verify in browser
-
-- [ ] **DT-037**: 管理员分类管理入口 (`文件: app/admin/page.tsx` — 设置 Tab 或库管理 Tab)
-  - 独立的分类管理区域（大类列表 + 子类展开）
-  - 支持拖拽排序（sort_order 字段）
-  - 验收: 分类增删改正常；排序持久化；Verify in browser
-
-### 7.8 Phase 7: 多语言 AI 翻译 (P2)
-
-> **前置**: Phase 4 + Phase 5
-> **产出**: 通义千问 AI 翻译 + 术语库 + SSE 进度
-> **对应设计**: Section 3.3, 6.3
-
-- [ ] **DT-038**: 翻译任务 API (`API: POST /api/translations`, `文件: app/api/translations/route.ts`)
-  - POST 参数: source_type/source_id/target_language
-  - 创建 present_translations 记录（status=pending）
-  - 校验 BR-010（source_type 区分 version vs presentation）
-  - [ ] [安全] 添加权限检查（仅 admin 可创建翻译任务）
-  - [ ] [安全] 输入使用 schema 验证（如 zod）
-  - [ ] [安全] XSS 防护
-  - [ ] Typecheck passes
-
-- [ ] **DT-039**: 翻译 Worker — 通义千问集成 (`文件: lib/translation/qwen-worker.ts`)
-  - 调用 qwen-max API 逐张幻灯片翻译 DSL 文本内容
-  - 更新 translations.progress + translations.logs（进度追踪）
-  - 注入术语库（当源语言='zh' 时，BR-011/BR-012）
-  - 完成后创建新 present_presentations 记录（BR-013）
-  - [ ] [安全] 硬编码密钥检查（API Key 必须通过环境变量）
-  - [ ] Typecheck passes
-
-- [ ] **DT-040**: 翻译状态机 + SSE 推送 (`API: GET /api/translations/[id]/progress`, `文件: app/api/translations/[id]/progress/route.ts`)
-  - SSE 实时推送 translations.status 和 progress 变化
-  - 实现 BR-014（failed 状态可重试，状态回到 pending）
-  - [ ] [安全] 添加权限检查（仅相关用户可订阅）
-  - 验收: SSE 连接正常；进度实时更新；Typecheck passes
-
-- [ ] **DT-041**: 术语库 CRUD API (`API: GET/POST/PUT/DELETE /api/glossary`, `文件: app/api/glossary/route.ts`)
-  - 含 glossary_translations（每个词条 + 各语言翻译）
-  - [ ] [安全] 添加权限检查（仅 admin 可管理术语库）
-  - [ ] [安全] 使用参数化查询防止 SQL 注入
-  - [ ] Typecheck passes
-
-- [ ] **DT-042**: GlossaryPanel 组件 (`组件: <GlossaryPanel>`, `文件: components/GlossaryPanel.tsx`)
-  - 仅当源语言=zh 时激活（BR-011）
-  - 术语列表：source_term + term_type（保留/翻译）+ 各语言翻译
-  - 支持批量导入（CSV 格式）
-  - 验收: zh 源语言时可见，其他语言时隐藏；Verify in browser
-
-- [ ] **DT-043**: TranslateConfirmDialog (`组件: <TranslateConfirmDialog>`, `文件: components/TranslateConfirmDialog.tsx`)
-  - 语言选择（目标语言列表）
-  - 术语库预览（仅 zh 源语言，BR-011）
-  - 翻译模式选择（version 还是 presentation）
-  - [ ] [安全] 输入使用 schema 验证（如 zod）
-  - 验收: 语言选择正常；术语库预览正确展示；Verify in browser
-
-- [ ] **DT-044**: TranslateProgressDialog (`组件: <TranslateProgressDialog>`, `文件: components/TranslateProgressDialog.tsx`)
-  - SSE 连接实时接收翻译进度
-  - 进度条 + 当前处理幻灯片提示
-  - 完成/失败状态处理（[重试] 按钮）
-  - [后台运行] 选项（关闭弹窗但继续翻译）
-  - 验收: 进度实时更新；失败可重试；Verify in browser
-
-- [ ] **DT-045**: 编辑器 Ribbon 扩展（4→6 Tab）(`文件: botool-ppt/components/editor/Ribbon.tsx`)
-  - 新增 Tab 5: 翻译（触发 TranslateConfirmDialog，source_type='presentation'）
-  - 新增 Tab 6: 语言信息（展示当前版本语言 + 版本号）
-  - 验收: 新 Tab 可用；翻译功能通过 source_type='presentation' 调用；Verify in browser
-
-- [ ] **DT-046**: 语言信息面板 (`组件: <LanguageInfoPanel>`, `文件: botool-ppt/components/editor/LanguageInfoPanel.tsx`)
-  - 展示当前版本: 语言/版本组/版本号/发布状态
-  - 验收: 语言信息正确展示；Verify in browser
-
-### 7.9 Phase 8: 下载/导出 UI 完善 (P2)
-
-> **前置**: Phase 7
-> **产出**: 统一的下载对话框 + 文件名生成
-> **对应设计**: Section 5.4
-
-- [ ] **DT-047**: FileNameBuilder 工具 (`文件: lib/utils/file-name-builder.ts`)
-  - 生成格式: `{title}_{YYYY-MM-DD}_{language}.{ext}`
-  - 特殊字符替换为下划线
-  - 验收: 各种标题和语言组合均生成合法文件名；Typecheck passes
-
-- [ ] **DT-048**: DownloadDialog — 格式选择 + 导出设置 (`组件: <DownloadDialog>`, `文件: components/DownloadDialog.tsx`)
-  - 格式选项: PDF / PNG（当前页/全部页）/ .pptbt / (PPTX 导出 — Phase 5 不含，标记为"敬请期待")
-  - PDF 选项: 分辨率（1x/2x/3x）
-  - PNG 选项: 单张/全部（全部时生成 ZIP）
-  - 下载进度展示
-  - 使用 FileNameBuilder 生成文件名
-  - 验收: 三种格式导出均正常；文件名正确；Verify in browser
-
-- [ ] **DT-049**: 导出进度 + 错误处理 UI (`组件: <ExportProgressBar>`, `文件: components/ExportProgressBar.tsx`)
-  - 内联进度条（嵌入 DownloadDialog）
-  - 错误时显示具体原因 + [重试] 按钮
-  - 大文件时显示预估时间
-  - 验收: 进度展示正确；错误提示清晰；Verify in browser
+- [ ] DT-035: TranslateConfirmDialog + TranslateProgressDialog (`组件: components/dialogs/TranslateConfirmDialog.tsx`, `components/dialogs/TranslateProgressDialog.tsx`)
+  - 实现翻译前确认弹窗
+  - 实现翻译进度弹窗（含实时日志面板）
+  - 实现翻译完成确认弹窗
+  - [安全] XSS 防护
+  - Verify in browser
+  - Typecheck passes
 
 ---
 
@@ -1088,944 +1546,428 @@ Phase 7 → Phase 8（下载 UI 依赖导出格式已实现）
 
 | 文件路径 | 状态 | Phase | 任务 |
 |---------|------|-------|------|
-| `sql/01_presentations.sql` | 待创建 | Phase 1 | DT-003 |
-| `sql/02_dsl_snapshots.sql` | 待创建 | Phase 1 | DT-004 |
-| `sql/03_collaboration.sql` | 待创建 | Phase 1 | DT-005 |
-| `sql/04_visibility.sql` | 待创建 | Phase 1 | DT-006 |
-| `sql/05_versions.sql` | 待创建 | Phase 1 | DT-007 |
-| `sql/06_categories.sql` | 待创建 | Phase 1 | DT-008 |
-| `sql/07_translations.sql` | 待创建 | Phase 1 | DT-009 |
-| `sql/08_rls_policies.sql` | 待创建 | Phase 1 | DT-010 |
-| `app/upload/page.tsx` | 待删除 | Phase 0 | DT-001 |
-| `app/admin/page.tsx` | 重构 | Phase 0, 3, 6 | DT-002 |
-| `app/library/page.tsx` | 改造 | Phase 3, 6 | DT-016 |
-| `app/api/presentations/route.ts` | 新建 | Phase 3 | DT-015 |
-| `app/api/presentations/[id]/collaborators/route.ts` | 新建 | Phase 3 | DT-018 |
-| `app/api/presentations/[id]/access-requests/route.ts` | 新建 | Phase 3 | DT-019 |
-| `app/api/presentations/[id]/version-groups/route.ts` | 新建 | Phase 4 | DT-021 |
-| `app/api/versions/[id]/publish/route.ts` | 新建 | Phase 4 | DT-024 |
-| `app/api/versions/[id]/rollback/route.ts` | 新建 | Phase 4 | DT-025 |
-| `app/api/categories/route.ts` | 新建 | Phase 6 | DT-033 |
-| `app/api/presentations/[id]/slots/route.ts` | 新建 | Phase 6 | DT-035 |
-| `app/api/translations/route.ts` | 新建 | Phase 7 | DT-038 |
-| `app/api/translations/[id]/progress/route.ts` | 新建 | Phase 7 | DT-040 |
-| `app/api/glossary/route.ts` | 新建 | Phase 7 | DT-041 |
-| `lib/converter/dsl-to-pdf.ts` | 新建 | Phase 5 | DT-026 |
-| `lib/converter/dsl-to-png.ts` | 新建 | Phase 5 | DT-027 |
-| `lib/converter/dsl-to-pptbt.ts` | 新建 | Phase 5 | DT-028 |
-| `lib/converter/pptbt-to-dsl.ts` | 新建 | Phase 5 | DT-029 |
-| `lib/converter/pptx-to-dsl.ts` | 新建 | Phase 5 | DT-030 |
-| `lib/converter/pptx-html-cleaner.ts` | 新建 | Phase 5 | DT-030 |
-| `lib/converter/pptx-shape-map.ts` | 新建 | Phase 5 | DT-030 |
-| `lib/converter/pptx-image-upload.ts` | 新建 | Phase 5 | DT-030 |
-| `lib/converter/pptx-fill-converter.ts` | 新建 | Phase 5 | DT-030 |
-| `lib/converter/pptx-types.ts` | 新建 | Phase 5 | DT-030 |
-| `lib/translation/qwen-worker.ts` | 新建 | Phase 7 | DT-039 |
-| `lib/utils/file-name-builder.ts` | 新建 | Phase 8 | DT-047 |
-| `components/AdminLayout.tsx` | 重构 | Phase 0 | DT-002 |
-| `components/AdminLibraryTab.tsx` | 新建 | Phase 3 | DT-017 |
-| `components/ShareDialog.tsx` | 新建 | Phase 3 | DT-018 |
-| `components/AccessRequestView.tsx` | 新建 | Phase 3 | DT-019 |
-| `components/VersionListPanel.tsx` | 新建 | Phase 4 | DT-022 |
-| `components/CreateVersionDialog.tsx` | 新建 | Phase 4 | DT-023 |
-| `components/CategoryManagementDialog.tsx` | 新建 | Phase 6 | DT-034 |
-| `components/ImportButton.tsx` | 新建 | Phase 5 | DT-032 |
-| `components/GlossaryPanel.tsx` | 新建 | Phase 7 | DT-042 |
-| `components/TranslateConfirmDialog.tsx` | 新建 | Phase 7 | DT-043 |
-| `components/TranslateProgressDialog.tsx` | 新建 | Phase 7 | DT-044 |
-| `components/LanguageInfoPanel.tsx` | 新建 | Phase 7 | DT-046 |
-| `components/DownloadDialog.tsx` | 新建 | Phase 8 | DT-048 |
-| `components/ExportProgressBar.tsx` | 新建 | Phase 8 | DT-049 |
-| `botool-ppt/` (整个目录) | 新建 | Phase 2 | DT-011~014 |
+| `docs/migration/gallery-reference-inventory.md` | 待开发 | Pre | DT-001 |
+| `docs/migration/gallery-seed/` | 待开发 | Pre | DT-002 |
+| `docs/migration/gallery-path-mapping.md` | 待开发 | Pre | DT-002 |
+| `docs/migration/gallery-env-contract.md` | 待开发 | Pre | DT-003 |
+| `libs/ppt-core/package.json` | 待开发 | 0 | DT-005 |
+| `libs/ppt-core/index.ts` | 待开发 | 0 | DT-005 |
+| `libs/ppt-core/types/dsl.ts` | 提取 | 0 | DT-006 |
+| `libs/ppt-core/types/document.ts` | 提取 | 0 | DT-006 |
+| `libs/ppt-core/types/version.ts` | 提取 | 0 | DT-006 |
+| `libs/ppt-core/types/translation.ts` | 提取 | 0 | DT-006 |
+| `libs/ppt-core/services/document.service.ts` | 提取 | 0 | DT-007 |
+| `libs/ppt-core/services/dsl.service.ts` | 提取 | 0 | DT-007 |
+| `libs/ppt-core/services/version.service.ts` | 提取 | 0 | DT-007 |
+| `libs/ppt-core/services/translation.service.ts` | 提取 | 0 | DT-007 |
+| `libs/ppt-core/converter/pptx-to-dsl.ts` | 待开发 | 4 | DT-027 |
+| `libs/ppt-core/converter/pptx-types.ts` | 待开发 | 4 | DT-027 |
+| `libs/ppt-core/converter/pptx-html-cleaner.ts` | 待开发 | 4 | DT-027 |
+| `libs/ppt-core/converter/pptx-shape-map.ts` | 待开发 | 4 | DT-028 |
+| `libs/ppt-core/converter/pptx-image-upload.ts` | 待开发 | 4 | DT-028 |
+| `libs/ppt-core/converter/pptx-fill-converter.ts` | 待开发 | 4 | DT-028 |
+| `libs/ppt-core/converter/dsl-to-pdf.ts` | 待开发 | 4 | DT-031 |
+| `libs/ppt-core/converter/dsl-to-pptbt.ts` | 待开发 | 4 | DT-031 |
+| `libs/ppt-core/converter/pptbt-to-dsl.ts` | 待开发 | 4 | DT-031 |
+| `libs/ppt-core/security/sanitize.ts` | 提取 | 0 | DT-008 |
+| `libs/ppt-core/config/languages.ts` | 提取 | 0 | DT-008 |
+| `libs/ppt-core/config/qwen.ts` | 提取 | 0 | DT-008 |
+| `sql/create-ppt-tables.sql` | 待开发 | 0 | DT-010 |
+| `sql/backfill-present-to-ppt.sql` | 待开发 | 0 | DT-011 |
+| `sql/verify-consistency.sql` | 待开发 | 0 | DT-011 |
+| `components/editor/EditorRibbon/ReviewTab.tsx` | 待开发 | 3 | DT-025 |
+| `components/editor/EditorRibbon/TranslateTab.tsx` | 待开发 | 5 | DT-033 |
+| `components/editor/TranslateMenu.tsx` | 待开发 | 5 | DT-033 |
+| `components/dialogs/TranslateConfirmDialog.tsx` | 待开发 | 5 | DT-035 |
+| `components/dialogs/TranslateProgressDialog.tsx` | 待开发 | 5 | DT-035 |
+| `components/file/ImportProgressDialog.tsx` | 待开发 | 4 | DT-030 |
+| `components/file/ExportDialog.tsx` | 待开发 | 4 | DT-030 |
+| `app/api/presentations/import/route.ts` | 改造 | 4 | DT-029 |
+| `app/api/presentations/[id]/import-sse/route.ts` | 待开发 | 4 | DT-029 |
+| `app/api/presentations/[id]/translate/route.ts` | 待开发 | 5 | DT-034 |
+| `app/api/presentations/translations/[id]/progress/route.ts` | 待开发 | 5 | DT-034 |
+| `app/(editor)/editor/[id]/page.tsx` | ✅ 已有 | 3/5 | DT-025,033 |
+| `app/(present)/present/[id]/page.tsx` | ✅ 已有 | 3 | DT-026 |
+| `components/editor/*` | ✅ 已有 | - | 保留 |
+| `components/renderer/*` | ✅ 已有 | - | 保留 |
+| `stores/presentation-store.ts` | ✅ 已有 | - | 保留 |
 
-### B. 风险与缓解措施
+### B. API 端点汇总
+
+#### Present 编辑器专属 API
+
+| API | 方法 | 说明 | Phase |
+|-----|------|------|-------|
+| `/api/presentations/[id]/dsl` | GET/PUT | DSL 读写 | 2 |
+| `/api/presentations` | POST | 创建新文档 | 2 |
+| `/api/presentations/[id]/versions` | GET | 版本历史 | 2 |
+| `/api/presentations/[id]/versions/[ver]` | GET/POST | 获取/恢复版本 | 2 |
+| `/api/presentations/recent` | GET/DELETE | 最近文档 | 2 |
+| `/api/presentations/[id]/access` | POST | 记录访问 | 2 |
+| `/api/presentations/import` | POST | PPTX/.pptbt 导入 | 4 |
+| `/api/presentations/[id]/import-sse` | GET(SSE) | 导入进度 | 4 |
+| `/api/presentations/imports/[importId]/cancel` | POST | 取消导入 | 4 |
+| `/api/presentations/[id]/translate` | POST | Editor AI 翻译 | 5 |
+| `/api/presentations/translations/[id]/progress` | GET | 翻译进度 | 5 |
+| `/api/presentations/[id]/collaborators` | GET/POST/DELETE | 协作者 | 2 |
+| `/api/presentations/[id]/access-requests` | POST/GET/PATCH | 访问请求 | 2 |
+| `/api/presentations/[id]/reviews` | GET/POST | 审批 | 3 |
+| `/api/presentations/[id]/comments` | GET/POST | 评论/批注 | 3 |
+
+### C. 风险与缓解措施
 
 #### HIGH
 
-- **Phase 2 App 拆分复杂度**: 44+ 编辑器组件迁移可能引入难以预测的依赖问题
-  → **缓解**: 先建立最小可运行的 Botool_PPT（仅主编辑器组件），逐步迁移，每步 typecheck 验证
-
-- **PPTX 导入兼容性**: pptxtojson 库对各种 PPTX 格式的支持不一致，可能出现解析错误
-  → **缓解**: 建立元素类型降级策略（不支持的元素类型 → 占位符），避免整体导入失败
+- **表名全局替换 ~162 处**: 遗漏会导致运行时错误 → **缓解**: 使用 `grep -r` 全量扫描，构建替换脚本，替换后 `pnpm build` + 集成测试
+- **Gate-Delete-Admin 遗漏检查**: 可能删除正在使用的代码 → **缓解**: 严格执行 Gate 通过条件，创建基线 tag 可回溯
 
 #### MEDIUM
 
-- **AI 翻译 API 速率限制**: 通义千问 qwen-max 有并发限制，大型 PPT（50+ 张幻灯片）可能超时
-  → **缓解**: 实现指数退避重试，按幻灯片分批调用，进度状态持久化支持断点续传
-
-- **DSL 存储双模式**: dsl_json（内联）vs dsl_storage_path（Storage）切换逻辑
-  → **缓解**: 统一封装 `getDsl()` 函数，对调用方透明；阈值设为 1MB
+- **PPTX 导入扁平化逻辑复杂**: 边界情况多 → **缓解**: 10 个验收测试文件覆盖主要场景
+- **ppt-core 提取后 import 路径需全量更新**: 遗漏会编译失败 → **缓解**: `pnpm build` 作为每步检查点
 
 #### LOW
 
-- **分类树拖拽排序**: 两级树拖拽交互实现复杂
-  → **缓解**: Phase 6 可先实现 sort_order 手动排序（上移/下移按钮），拖拽作为后续优化
-
-### C. 测试策略
-
-#### 单元测试
-
-- `FileNameBuilder` 各种边界输入的文件名生成
-- 版本号规则（BR-005/BR-006）计算逻辑
-- 访问请求冷却期计算
-- ZIP 炸弹检测算法
-
-#### 集成测试
-
-- 翻译任务完整流水线（pending → processing → completed）
-- 协作者权限矩阵（各权限级别的 API 访问控制）
-- 槽位分配复制语义（修改副本不影响原文档）
-
-#### E2E 测试
-
-- 文档创建 → 版本管理 → 分类分配 → 发布 完整流程
-- AI 翻译 → 进度推送 → 新语言版本创建
-- PPTX 导入 → DSL 转换 → 编辑器打开
+- **AI 翻译依赖外部 API（通义千问）**: 需处理超时 → **缓解**: 指数退避重试，失败后用户手动重试
 
 ### D. 非目标 (Out of Scope)
 
-- **PPTX 导出**: 仅实现 PPTX 导入；PDF/PNG/.pptbt 导出已覆盖，PPTX 导出复杂度高留后续版本
-- **实时协同编辑**: 多用户同时编辑同一 PPT（需 OT/CRDT 算法，超出 v1.6 范围）
-- **三级及以上分类**: 仅支持大类/子类两级树（数据库设计支持，但 UI 不实现三级）
-- **批量翻译**: 一次翻译多个文档（单文档翻译是 v1.6 功能，批量作为后续优化）
-- **视频/音频元素支持**: PPTX 导入时 video/audio 元素降级为占位符
+- **Gallery 应用开发** — 由独立的 Gallery PRD 负责
+- **gallery_* 表创建** — 由 Gallery PRD 负责
+- **PPTX 导出** — 当前仅支持导入
+- **图表/SmartArt/音视频导入** — 后续迭代
+- **断点续传翻译** — 当前为全量重试模式
 
-### E. 安全检查项汇总
+### E. 安全检查项
 
-| 关联 DT | 安全检查项 | 级别 |
-|---------|-----------|------|
-| DT-010 | RLS 策略未认证用户只能读已发布文档 | HIGH |
-| DT-015, 018, 019 | 协作者 API 权限校验（仅 admin 可管理） | HIGH |
-| DT-031 | PPTX 导入 ZIP 炸弹防护（压缩比/大小/文件数/层数） | HIGH |
-| DT-031 | 图片代理 SSRF 防护（内网地址黑名单） | HIGH |
-| DT-031 | 文件类型白名单（.pptx + MIME 验证） | HIGH |
-| DT-039 | qwen-max API Key 通过环境变量注入，禁止硬编码 | HIGH |
-| 全部 API | 参数化查询防 SQL 注入 | HIGH |
-| 全部 API | 错误响应不暴露内部实现细节 | MEDIUM |
-| 全部表单 | zod schema 输入验证 + XSS 防护 | MEDIUM |
+#### PPTX 导入安全 (DT-027, DT-028, DT-029)
 
-### F. 技术实现详情（摘录自源 PRD §10 附录 E）
+- [安全] ZIP 炸弹检测：解压后总大小 ≤ 2GB，单文件数 ≤ 10000，目录层级 ≤ 10
+- [安全] SSRF 防护：协议白名单(https)、私网 IP 阻断、MIME 校验(image/*)、≤10MB
+- [安全] HTML XSS 防护：href 协议白名单、on* 属性剥离、内联样式白名单
+- [安全] 文件类型白名单校验
+- [安全] 文件大小限制（≤ 200MB）
+- [安全] 存储路径不可由用户控制
 
-#### F.1 PDF 导出核心实现
+#### API 安全 (DT-022, DT-023, DT-029, DT-034)
 
-**文件**: `lib/converter/dsl-to-pdf.ts`
-**依赖**: `pnpm add html2canvas jspdf`
+- [安全] 使用参数化查询防止 SQL 注入
+- [安全] 错误响应不泄露内部信息
+- [安全] 添加权限检查
+- [安全] 输入使用 schema 验证（zod）
 
-**数据流**:
-```
-DSL → 创建临时DOM渲染幻灯片 → html2canvas截图 → Canvas图片 → jsPDF合并 → Blob下载
-```
+#### AI 翻译安全 (DT-034)
 
-**关键配置**:
+- [安全] 速率限制（30s 幂等去重）
+- [安全] 输入验证
+
+#### 文件上传安全 (DT-028, DT-029, DT-031)
+
+- [安全] 文件类型白名单校验
+- [安全] 文件大小限制
+- [安全] 存储路径不可由用户控制
+
+### F. 技术实现详情
+
+#### F.1 PDF 导出实现
+
+**文件位置**: `@botool/ppt-core` → `converter/dsl-to-pdf.ts`
+**依赖**: `html2canvas` + `jspdf`
+
 ```typescript
-const pdf = new jsPDF({
-  orientation: 'landscape',
-  unit: 'pt',
-  format: [dsl.size.width, dsl.size.height]
-})
+interface ExportPdfOptions {
+  range?: 'all' | 'current' | [number, number]
+  scale?: number  // 缩放比例，默认 2
+  onProgress?: (current: number, total: number) => void
+}
 
-const canvas = await html2canvas(container, {
-  scale: 2,          // 2x 分辨率
-  useCORS: true,     // 允许跨域图片
-  allowTaint: false,
-  backgroundColor: null,
-  logging: false
-})
-```
-
-**错误处理**:
-| 场景 | 处理 |
-|------|------|
-| 跨域图片加载失败 | 通过代理下载，或提示用户 |
-| 内存溢出（大文件） | 分批处理，显示进度 |
-| 渲染超时 | 超时限制 + 提示用户 |
-| 字体渲染不一致 | 使用 Web 安全字体 |
-
-#### F.2 .pptbt 文件格式
-
-**.pptbt 文件结构**（ZIP 包）:
-```
-document.pptbt (ZIP)
-├── manifest.json          # 元信息
-│   { version, generator, generatorVersion, created, title, slideCount }
-├── content.json           # DSL 内容（图片路径已替换为相对路径）
-│   { docId, meta, slides: [{ elements: [{ type: "image", src: "media/img_001.png" }] }] }
-└── media/                 # 图片资源目录
-    ├── img_001.png
-    ├── img_002.jpg
-    └── ...
-```
-
-#### F.3 PPTX 导入转换器结构
-
-**文件结构**:
-```
-lib/converter/
-├── pptx-to-dsl.ts           ← 主转换入口
-├── pptx-html-cleaner.ts     ← HTML清洗（pptxtojson HTML → Tiptap兼容）
-├── pptx-shape-map.ts        ← 形状类型映射（OOXML preset → DSL ShapeType）
-├── pptx-image-upload.ts     ← 图片批量上传（base64 → Storage URL）
-├── pptx-fill-converter.ts   ← 填充样式转换（color/gradient/image/pattern）
-└── pptx-types.ts            ← pptxtojson输出的TypeScript类型定义
-```
-
-**元素类型映射**:
-| pptxtojson 类型 | DSL 类型 | 备注 |
-|-----------------|---------|------|
-| text | TextElement | HTML → Tiptap 清洗 |
-| image | ImageElement | base64 → Storage URL |
-| shape | ShapeElement | OOXML preset → ShapeType |
-| table | TableElement | 格子数据映射 |
-| group | GroupElement | 递归处理 |
-| video/audio/math/diagram | PlaceholderElement | 不支持，降级为占位符 |
-
-**安全检查**（ZIP 炸弹防护阈值）:
-- 解压缩比 > 100x → 拒绝
-- 解压后总大小 > 2GB → 拒绝
-- ZIP 内文件数 > 10000 → 拒绝
-- 嵌套层数 > 10 → 拒绝
-
-#### F.4 通义千问翻译 API 集成
-
-**模型**: qwen-max
-**调用方式**: 逐张幻灯片翻译 DSL 文本节点
-**术语库注入格式**（source_type='version' 且 source_lang='zh' 时）:
-
-```
-系统提示词（含术语表）:
-以下词汇不翻译，保持原文：[no_translate 词汇列表]
-以下词汇固定翻译为指定译文：[translate 词汇 → 目标语言译文]
-
-请将以下 JSON 中的所有文本内容从[source_lang]翻译为[target_lang]，
-保持 JSON 结构不变，只翻译文本字段值...
-```
-
-**进度追踪**: translations.progress 字段（0-100），每张幻灯片完成后更新
-
-**翻译速率限制规则**:
-- 每用户每小时最多 10 个翻译任务
-- 同时处于 processing 状态的任务最多 3 个（per user）
-- 超出限制返回 429，前端提示"翻译任务过多，请等待当前任务完成"
-
-**翻译失败恢复规则**:
-```
-API 级别重试（自动）:
-  - HTTP 429 / 5xx → 指数退避重试，最多 3 次（1s, 2s, 4s）
-  - 超时（60s）→ 中断，标记该幻灯片失败
-
-任务级别（用户操作）:
-  - translations.status = 'failed' → 前端显示"翻译失败"+ "重试"按钮
-  - 点击重试 → PATCH /api/translations/:id/retry → 重新触发翻译流程
-  - 重试时继承原始 prompt 设置（术语库 + 目标语言）
-```
-
-**翻译批次策略（SSE 解耦架构）**:
-```
-POST /api/translations → 创建 translations 记录（status=pending）
-                       → 立即返回 translation_id（202 Accepted）
-                       ↓
-SSE /api/translations/:id/stream → 前端订阅实时进度
-                       ↓
-后台 Worker → 逐张幻灯片调用 qwen-max → 更新 progress(0-100)
-           → 完成 → status=completed → SSE 推送 done 事件
-           → 失败 → status=failed → SSE 推送 error 事件
-```
-
-#### F.5 槽位分配详细工作流
-
-**核心设计：槽位分配 = 复制语义（非引用）**
-
-```
-挂载前（文档库已有 presentation A）:
-
-  [present_presentations 表]
-  id=A: slug="q3-report", name="Q3报告", owner=category_C1
-
-  挂载到槽位时（不是引用，而是创建新记录）:
-
-  ┌─────────────────────────────────────────────────────┐
-  │ 槽位分配 = COPY 操作                                 │
-  │                                                     │
-  │ 用户: 将文档库中的 "Q3报告(A)" 挂载到 slot_id=S1    │
-  │                           ↓                         │
-  │ 系统操作:                                            │
-  │   1. 从文档库 A 的 presentations 记录中              │
-  │      复制所有 versions 记录（新建 B_v1, B_v2）       │
-  │   2. 新建 present_presentations 记录 B               │
-  │      - B.slot_id = S1                               │
-  │      - B.source_id = A （追溯来源）                  │
-  │      - B.name = A.name                              │
-  │   3. A 保留在文档库，不受影响                        │
-  │                                                     │
-  │ 挂载后状态:                                          │
-  │   文档库: [A] (原始，独立)                           │
-  │   槽位 S1: [B] (复制自 A，独立演化)                  │
-  └─────────────────────────────────────────────────────┘
-```
-
-**四步槽位分配流程**:
-```
-Step 1: 创建槽位
-  POST /api/categories/:id/slots
-  Body: { name, sort_order, max_versions?, allowed_langs? }
-  → 创建 present_slots 记录
-
-Step 2: 触发分配
-  用户在槽位页面点击"+ 挂载文档"
-  → 打开文档库选择器（SearchableModal）
-
-Step 3: 选择来源（3 种）
-  ├─ (a) 上传新文件 → 直接上传 .pptbt 到该槽位
-  ├─ (b) 从文档库选择 → 复制现有文档到该槽位
-  └─ (c) 复制当前槽位 → 同槽位内版本复制
-
-Step 4: 自动命名
-  挂载完成后，系统自动根据 4 段式命名规则生成:
-  格式: {category}.{code}-{slug}-{version}-{lang}.pdf
-  例如: market.p001-q3-report-v1.0-zh.pdf
-```
-
-#### F.6 版本号算法
-
-**主版本 (Major)** = 当前 presentation 下最大 major_version + 1
-**次版本 (Minor)** = 当前 major 下最大 minor_version + 0.1（四舍五入至1位小数）
-
-```
-场景: 槽位下已有版本 v1.0, v1.1, v2.0
-
-新建主版本:
-  major = max(1, 2) + 1 = 3
-  minor = 0
-  → 新建 v3.0
-
-新建次版本（基于 v2.0）:
-  major = 2
-  minor = max(0) + 0.1 = 0.1
-  → 新建 v2.1
-
-SQL 实现:
-  SELECT COALESCE(MAX(major_version), 0) + 1 AS next_major
-  FROM present_versions
-  WHERE presentation_id = $1;
-
-  SELECT COALESCE(MAX(minor_version), 0) + 0.1 AS next_minor
-  FROM present_versions
-  WHERE presentation_id = $1 AND major_version = $2;
-```
-
-#### F.7 语言版本创建三种来源
-
-```
-┌─────────────────────────────────────────────┐
-│  创建语言版本                          [x]  │
-│  ─────────────────────────────────────────  │
-│  目标语言: [English ▾]                      │
-│                                             │
-│  来源选择:                                  │
-│  ○ AI 翻译  [推荐]                          │
-│    基于现有中文版本自动翻译                  │
-│    预计耗时: ~2-5分钟                        │
-│                                             │
-│  ○ 从文档库选择                             │
-│    选择已有的英文演示文档                    │
-│                                             │
-│  ○ 空白新建                                 │
-│    创建空白演示文稿从头制作                  │
-│  ─────────────────────────────────────────  │
-│                      [取消]  [创建语言版本]  │
-└─────────────────────────────────────────────┘
-
-选择 "AI 翻译" 后的源版本选择器:
-┌─────────────────────────────────────────────┐
-│  选择翻译源版本                        [x]  │
-│                                             │
-│  ○ v3.0（最新）  2026-02-20 ★             │
-│  ○ v2.1          2026-02-15               │
-│  ○ v1.0          2026-01-10               │
-│  ─────────────────────────────────────────  │
-│                      [取消]  [开始翻译]      │
-└─────────────────────────────────────────────┘
-```
-
-#### F.8 选择性发布时间线示例
-
-```
-场景: 演示文稿有中文和英文两个语言版本
-
-时间线（以 slug=q3-report 为例）:
-
-  2026-02-01: zh v1.0 发布 → status=published
-    状态: zh[v1.0 published] / en[无]
-
-  2026-02-05: zh v1.1 发布 → zh v1.0 自动撤销
-    状态: zh[v1.1 published] / en[无]
-
-  2026-02-10: en v1.0 发布 → 仅 en 发布，zh 不受影响
-    状态: zh[v1.1 published] / en[v1.0 published]
-
-  2026-02-15: zh v2.0 发布 → 仅 zh v1.1 撤销，en 不受影响
-    状态: zh[v2.0 published] / en[v1.0 published]
-
-规则: 每语言版本各自独立管理 published 状态
-  - 发布操作: 同语言下只保留1个已发布版本（自动撤销旧版）
-  - 跨语言操作: 相互独立，互不影响
-  - 通用链接: /p/{presentation_id} → 展示所有已发布语言版本供用户切换
-```
-
-#### F.9 文件命名 4 段式规范
-
-**格式**: `{分类}.{编号}-{slug}-{版本}-{语言}.{格式}`
-
-```
-段 1: 分类缩写  (1-8字符)
-  market → 市场类   product → 产品类
-  finance → 财务类  tech → 技术类
-
-段 2: 文档编号  (p + 3-4位数字)
-  p001, p002, p0123
-
-段 3: slug      (kebab-case, 无特殊字符)
-  q3-report, annual-review, product-launch
-
-段 4: 版本      (v + 数字.数字)
-  v1.0, v2.1, v3.0
-
-语言标签:
-  zh → [中文版]    en → [英文版]
-  de → [德文版]    ja → [日文版]
-  fr → [法文版]    es → [西班牙文版]
-
-示例文件名:
-  market.p001-q3-report-v2.1-zh.pdf     ← PDF 导出
-  product.p023-launch-v1.0-en.pptbt     ← .pptbt 导出
-  finance.p015-annual-v3.0-ja.png       ← PNG 导出（首页缩略图）
-
-验证正则: /^[a-z]{1,8}\.[a-z]\d{3,4}-[a-z0-9-]+-v\d+\.\d+-[a-z]{2}\.(pdf|pptbt|png|pptx)$/
-```
-
-#### F.10 词汇表管理 Excel 风格 UI
-
-**设计原则**: 直接在表格单元格内编辑，无需打开侧边弹窗
-
-```
-词汇表管理页面 /categories/:id/glossary
-
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  词汇表管理                                                    [+ 新增词汇]   │
-│                                                                              │
-│  搜索: [搜索词汇...          ]                                               │
-│                                                                              │
-│  ┌─────────────────┬──────────┬──────────┬──────────┬──────────┬──────────┐ │
-│  │ 原文 (必填)      │ 不翻译   │ 中文     │ English  │ 日本語   │ Deutsch  │ │
-│  ├─────────────────┼──────────┼──────────┼──────────┼──────────┼──────────┤ │
-│  │ Botool          │ [☑ 开]   │          │          │          │          │ │
-│  │ 战略合作伙伴     │ [☐ 关]   │ 战略合作 │ Strategic│ 戦略パー │ Strate-  │ │
-│  │                 │          │ 伙伴      │ Partner  │ トナー   │ gische   │ │
-│  │ Q3              │ [☑ 开]   │          │          │          │          │ │
-│  │ [新词汇输入...]  │ [☐ 关]   │          │          │          │          │ │
-│  └─────────────────┴──────────┴──────────┴──────────┴──────────┴──────────┘ │
-│                                                                              │
-│  单元格点击即可编辑 (inline edit)                                             │
-│  Tab 键跳转下一单元格 / Enter 确认 / Esc 取消                                 │
-│  拖拽行首调整顺序                                                             │
-│  最后一行空行: 直接输入原文即可新增                                            │
-└──────────────────────────────────────────────────────────────────────────────┘
-
-数据结构 (present_glossary_entries):
-  source_text: "战略合作伙伴"
-  no_translate: false
-  translations: {
-    zh: "战略合作伙伴",
-    en: "Strategic Partner",
-    ja: "戦略パートナー",
-    de: "Strategischer Partner"
+export async function exportToPdf(
+  dsl: PresentationDSL,
+  options: ExportPdfOptions = {}
+): Promise<Blob> {
+  const { range = 'all', scale = 2, onProgress } = options
+  const slidesToExport = getSlidesToExport(dsl.slides, range)
+  const pdf = new jsPDF({
+    orientation: 'landscape',
+    unit: 'pt',
+    format: [dsl.size.width, dsl.size.height]
+  })
+  for (let i = 0; i < slidesToExport.length; i++) {
+    const slide = slidesToExport[i]
+    const container = createSlideContainer(dsl, slide)
+    document.body.appendChild(container)
+    try {
+      const canvas = await html2canvas(container, {
+        scale, useCORS: true, allowTaint: false, backgroundColor: null, logging: false
+      })
+      if (i > 0) pdf.addPage()
+      const imgData = canvas.toDataURL('image/jpeg', 0.95)
+      pdf.addImage(imgData, 'JPEG', 0, 0, dsl.size.width, dsl.size.height)
+      onProgress?.(i + 1, slidesToExport.length)
+    } finally { document.body.removeChild(container) }
   }
+  return pdf.output('blob')
+}
 ```
 
-**批量操作**:
-- 勾选多行 → 右键菜单 → "批量删除" / "批量设为不翻译"
-- Excel 粘贴：支持从 Excel 复制多行粘贴到词汇表
+#### F.2 .pptbt 导出实现
 
----
-
-### G. 分享与访问控制详细规格
-
-#### G.1 ShareDialog 详细规格
-
-```
-┌────────────────────────────────────────────────────────────┐
-│  分享设置                                            [x]   │
-│  ────────────────────────────────────────────────────────  │
-│                                                            │
-│  当前访问权限:                                             │
-│  ○ 私有（仅受邀成员可访问）                                │
-│  ● 组织内公开（所有登录用户可查看）                        │
-│  ○ 公开链接（任何人可访问，无需登录）                      │
-│                                                            │
-│  ────────────────────────────────────────────────────────  │
-│  邀请成员                                                  │
-│  [搜索用户名或邮箱...                        ] [邀请]      │
-│                                                            │
-│  已邀请成员:                                               │
-│  ┌──────────────────────────────────────────────────────┐ │
-│  │ 👤 张三 (zhang@company.com)        [编辑者 ▾] [移除] │ │
-│  │ 👤 李四 (li@company.com)           [查看者 ▾] [移除] │ │
-│  │ 👤 王五 (wang@company.com)         [查看者 ▾] [移除] │ │
-│  └──────────────────────────────────────────────────────┘ │
-│                                                            │
-│  分享链接:                                                 │
-│  https://botool.ai/p/abc123  [复制链接] [重置链接]        │
-│                                                            │
-│  链接有效期: [永久 ▾]  密码保护: [不启用 ▾]               │
-│                                                            │
-│                                        [关闭] [保存设置]  │
-└────────────────────────────────────────────────────────────┘
-```
-
-**权限级别**:
-| 权限 | 查看演示 | 下载文件 | 编辑内容 | 管理成员 |
-|------|---------|---------|---------|---------|
-| 查看者 | ✅ | ❌ | ❌ | ❌ |
-| 编辑者 | ✅ | ✅ | ✅ | ❌ |
-| 管理员 | ✅ | ✅ | ✅ | ✅ |
-
-#### G.2 访问请求视图
-
-```
-状态 A: 锁定视图（未登录或无权限）
-┌─────────────────────────────────────────┐
-│                 🔒                       │
-│                                         │
-│  此演示文稿需要申请访问权限              │
-│                                         │
-│  [申请访问]                             │
-└─────────────────────────────────────────┘
-
-状态 B: 申请已提交
-┌─────────────────────────────────────────┐
-│                 ⏳                       │
-│                                         │
-│  访问申请已提交，等待管理员审批          │
-│                                         │
-│  申请时间: 2026-02-23 14:30             │
-│                                         │
-│  [联系管理员]                           │
-└─────────────────────────────────────────┘
-```
-
-**API 端点**:
-```
-POST /api/presentations/:id/access-requests   ← 提交申请
-GET  /api/presentations/:id/access-requests   ← 管理员查看申请列表
-PATCH /api/access-requests/:id                ← 审批/拒绝
-```
-
----
-
-### H. 版本状态机完整定义
-
-```
-                  ┌─────────────────────────────────────────────┐
-                  │          版本 (present_versions) 状态机      │
-                  └─────────────────────────────────────────────┘
-
-  ┌─────────┐   用户点击"发布"    ┌───────────┐
-  │  draft  │ ──────────────────▶ │ published │
-  │（草稿）  │                    │（已发布）  │
-  └─────────┘ ◀─────────────────  └───────────┘
-       │          用户点击"撤销"          │
-       │                                  │ 发布新版本时，
-       │ (默认状态)                       │ 同语言旧版本
-       │                                  │ 自动撤销
-       │                         ┌────────┘
-       ▼                         ▼
-  ┌─────────────────────────────────────────────┐
-  │  状态转换 API:                               │
-  │  PATCH /api/versions/:id                    │
-  │  Body: { status: 'published' | 'draft' }    │
-  │                                             │
-  │  触发副作用（发布时）:                        │
-  │  1. 查询同 presentation + 同 language 下    │
-  │     其他 published 版本                      │
-  │  2. 批量更新 status = 'draft'               │
-  │  3. 更新 presentations.published_at         │
-  └─────────────────────────────────────────────┘
-```
-
-**翻译状态机**:
-```
-  ┌─────────┐  触发翻译   ┌────────────┐  翻译进行中  ┌───────────┐
-  │ pending │ ──────────▶ │ processing │ ────────────▶ │ completed │
-  └─────────┘             └────────────┘               └───────────┘
-                                │                            │
-                                │ API/网络错误               │
-                                ▼                            │
-                          ┌──────────┐                       │
-                          │  failed  │ ◀─────────────────────┘
-                          └──────────┘     (不可能，completed 不回退)
-                                │
-                                │ 用户点击"重试"
-                                ▼
-                          ┌─────────┐
-                          │ pending │（重新入队）
-                          └─────────┘
-```
-
----
-
-### I. API 端点完整清单
-
-| 方法 | 路径 | 描述 | 认证 |
-|------|------|------|------|
-| GET | /api/categories | 获取分类树 | 需要 |
-| POST | /api/categories | 创建分类 | 需要（管理员） |
-| PATCH | /api/categories/:id | 更新分类 | 需要（管理员） |
-| DELETE | /api/categories/:id | 删除分类 | 需要（管理员） |
-| GET | /api/categories/:id/slots | 获取槽位列表 | 需要 |
-| POST | /api/categories/:id/slots | 创建槽位 | 需要（管理员） |
-| GET | /api/presentations | 获取演示文稿列表（含筛选） | 需要 |
-| POST | /api/presentations | 创建演示文稿 | 需要 |
-| GET | /api/presentations/:id | 获取演示文稿详情 | 按权限 |
-| PATCH | /api/presentations/:id | 更新演示文稿元数据 | 需要（所有者） |
-| DELETE | /api/presentations/:id | 删除演示文稿 | 需要（管理员） |
-| POST | /api/presentations/:id/assign-slot | 挂载到槽位 | 需要 |
-| GET | /api/presentations/:id/versions | 获取版本列表 | 需要 |
-| POST | /api/presentations/:id/versions | 创建新版本 | 需要 |
-| PATCH | /api/versions/:id | 更新版本（含状态切换） | 需要 |
-| DELETE | /api/versions/:id | 删除版本 | 需要（管理员） |
-| GET | /api/versions/:id/download | 下载版本文件（.pptbt/.pdf） | 按权限 |
-| POST | /api/versions/:id/export-pdf | 导出 PDF（异步） | 需要 |
-| POST | /api/versions/:id/export-png | 导出 PNG（异步） | 需要 |
-| POST | /api/versions/:id/export-pptbt | 导出 .pptbt（异步） | 需要 |
-| GET | /api/translations/:id/stream | SSE 翻译进度流 | 需要 |
-| POST | /api/translations | 创建翻译任务 | 需要 |
-| PATCH | /api/translations/:id/retry | 重试翻译任务 | 需要 |
-| GET | /api/categories/:id/glossary | 获取词汇表 | 需要 |
-| POST | /api/categories/:id/glossary | 创建词汇条目 | 需要 |
-| PATCH | /api/glossary-entries/:id | 更新词汇条目 | 需要 |
-| DELETE | /api/glossary-entries/:id | 删除词汇条目 | 需要 |
-| POST | /api/presentations/:id/access-requests | 申请访问 | 需要（登录） |
-| GET | /api/presentations/:id/access-requests | 查看申请列表 | 需要（管理员） |
-| PATCH | /api/access-requests/:id | 审批/拒绝申请 | 需要（管理员） |
-| GET | /api/presentations/:id/collaborators | 获取协作者列表 | 需要 |
-| POST | /api/presentations/:id/collaborators | 邀请协作者 | 需要（管理员） |
-| PATCH | /api/collaborators/:id | 更新协作者权限 | 需要（管理员） |
-| DELETE | /api/collaborators/:id | 移除协作者 | 需要（管理员） |
-| GET | /p/:id | 公开演示页面（SSR） | 按权限 |
-
----
-
-### J. 环境变量清单
-
-```bash
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=         # Supabase 项目 URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY=    # Supabase 匿名密钥（客户端）
-SUPABASE_SERVICE_ROLE_KEY=        # Supabase 服务角色密钥（服务端）
-
-# AI 翻译
-QWEN_API_KEY=                     # 通义千问 API Key
-
-# 应用配置
-NEXT_PUBLIC_APP_URL=              # 应用公开 URL（用于生成分享链接）
-NEXT_PUBLIC_EDITOR_URL=           # Botool_PPT 编辑器 URL（port 3009）
-
-# 文件存储
-SUPABASE_STORAGE_BUCKET=present-files  # Supabase Storage Bucket 名称
-
-# 可选
-MAX_UPLOAD_SIZE_MB=50             # 最大上传文件大小（默认50MB）
-TRANSLATION_RATE_LIMIT_PER_HOUR=10  # 每用户每小时翻译任务数限制
-TRANSLATION_MAX_CONCURRENT=3        # 最大并发翻译任务数
-```
-
----
-
-### K. 组件 Props 接口详细定义
+**文件位置**: `@botool/ppt-core` → `converter/dsl-to-pptbt.ts`
+**依赖**: `jszip`
 
 ```typescript
-// SlotCard 组件
-interface SlotCardProps {
-  slot: PresentSlot;
-  presentation?: PresentPresentation;
-  onAssign: (slotId: string) => void;
-  onUnassign: (slotId: string) => void;
-  onViewPresentation: (presentationId: string) => void;
-  canManage: boolean;
-}
-
-// VersionTimeline 组件
-interface VersionTimelineProps {
-  versions: PresentVersion[];
-  currentVersionId: string;
-  onVersionSelect: (versionId: string) => void;
-  onPublish: (versionId: string) => void;
-  onUnpublish: (versionId: string) => void;
-  onCreateVersion: () => void;
-}
-
-// TranslationJobCard 组件
-interface TranslationJobCardProps {
-  job: PresentTranslation;
-  onRetry: (jobId: string) => void;
-  onCancel: (jobId: string) => void;
-}
-
-// GlossaryTable 组件（Excel 风格）
-interface GlossaryTableProps {
-  categoryId: string;
-  entries: GlossaryEntry[];
-  supportedLanguages: string[];
-  onEntryUpdate: (entryId: string, updates: Partial<GlossaryEntry>) => void;
-  onEntryCreate: (entry: Omit<GlossaryEntry, 'id'>) => void;
-  onEntryDelete: (entryId: string) => void;
-}
-
-// ShareDialog 组件
-interface ShareDialogProps {
-  presentationId: string;
-  isOpen: boolean;
-  onClose: () => void;
-  currentPermission: 'private' | 'org' | 'public';
-  collaborators: Collaborator[];
-}
-
-// PresentationViewer 组件（Botool_PPT port 3009）
-interface PresentationViewerProps {
-  presentationId: string;
-  versionId: string;
-  language: string;
-  mode: 'view' | 'edit' | 'present';
-  onSlideChange?: (slideIndex: number) => void;
-}
-
-// 核心数据类型
-interface PresentSlot {
-  id: string;
-  category_id: string;
-  name: string;
-  sort_order: number;
-  max_versions?: number;
-  allowed_langs?: string[];
-  created_at: string;
-}
-
-interface PresentVersion {
-  id: string;
-  presentation_id: string;
-  version_number: string;  // "1.0", "2.1" etc.
-  major_version: number;
-  minor_version: number;
-  language: string;
-  status: 'draft' | 'published';
-  file_url?: string;
-  slide_count?: number;
-  created_at: string;
-  published_at?: string;
-}
-
-interface GlossaryEntry {
-  id: string;
-  category_id: string;
-  source_text: string;
-  no_translate: boolean;
-  translations: Record<string, string>;  // { zh: "...", en: "...", ... }
-}
-
-interface PresentTranslation {
-  id: string;
-  version_id: string;
-  target_language: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  progress: number;  // 0-100
-  error_message?: string;
-  created_at: string;
-  completed_at?: string;
+export async function exportToPptbt(
+  dsl: PresentationDSL,
+  options: ExportPptbtOptions = {}
+): Promise<Blob> {
+  const { onProgress } = options
+  const zip = new JSZip()
+  // 1. manifest.json
+  zip.file('manifest.json', JSON.stringify({
+    version: '1.0', generator: 'Botool Present', generatorVersion: '1.6.0',
+    created: new Date().toISOString(), title: dsl.meta.title, slideCount: dsl.slides.length
+  }, null, 2))
+  // 2. 提取图片 URL → 下载 → 添加到 ZIP
+  const imageUrls = extractImageUrls(dsl)
+  const imageMap = new Map<string, string>()
+  // ... (并发下载，SSRF 防护：协议白名单、私网 IP 阻断、MIME 校验)
+  // 3. 替换 DSL 中图片路径 → content.json
+  const processedDsl = replaceImagePaths(dsl, imageMap)
+  zip.file('content.json', JSON.stringify(processedDsl, null, 2))
+  // 4. 生成 ZIP
+  return zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } })
 }
 ```
 
----
-
-### L. 数据库 RLS 策略详细定义
-
-```sql
--- ============================================================
--- RLS 策略: present_categories
--- ============================================================
-ALTER TABLE present_categories ENABLE ROW LEVEL SECURITY;
-
--- 所有登录用户可查看
-CREATE POLICY "categories_select_logged_in"
-  ON present_categories FOR SELECT
-  TO authenticated
-  USING (true);
-
--- 仅管理员可写
-CREATE POLICY "categories_insert_admin"
-  ON present_categories FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM present_org_members
-      WHERE user_id = auth.uid() AND role = 'admin'
-    )
-  );
-
-CREATE POLICY "categories_update_admin"
-  ON present_categories FOR UPDATE
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM present_org_members
-      WHERE user_id = auth.uid() AND role = 'admin'
-    )
-  );
-
--- ============================================================
--- RLS 策略: present_presentations
--- ============================================================
-ALTER TABLE present_presentations ENABLE ROW LEVEL SECURITY;
-
--- 查看权限：公开 OR 组织内 OR 协作者
-CREATE POLICY "presentations_select"
-  ON present_presentations FOR SELECT
-  TO authenticated
-  USING (
-    visibility = 'public'
-    OR visibility = 'org'
-    OR owner_user_id = auth.uid()
-    OR EXISTS (
-      SELECT 1 FROM present_collaborators
-      WHERE presentation_id = present_presentations.id
-        AND user_id = auth.uid()
-    )
-  );
-
--- 写入权限：所有者或管理员
-CREATE POLICY "presentations_update_owner"
-  ON present_presentations FOR UPDATE
-  TO authenticated
-  USING (
-    owner_user_id = auth.uid()
-    OR EXISTS (
-      SELECT 1 FROM present_collaborators
-      WHERE presentation_id = present_presentations.id
-        AND user_id = auth.uid()
-        AND permission = 'admin'
-    )
-  );
-
--- ============================================================
--- Storage RLS: present-files bucket
--- ============================================================
--- 上传权限：认证用户
-CREATE POLICY "storage_upload_authenticated"
-  ON storage.objects FOR INSERT
-  TO authenticated
-  WITH CHECK (bucket_id = 'present-files');
-
--- 下载权限：按演示文稿可见性
-CREATE POLICY "storage_download"
-  ON storage.objects FOR SELECT
-  TO authenticated
-  USING (
-    bucket_id = 'present-files'
-    AND (
-      -- 从路径解析 presentation_id 进行权限验证
-      EXISTS (
-        SELECT 1 FROM present_presentations p
-        JOIN present_versions v ON v.presentation_id = p.id
-        WHERE v.file_url LIKE '%' || storage.objects.name
-          AND (
-            p.visibility IN ('public', 'org')
-            OR p.owner_user_id = auth.uid()
-          )
-      )
-    )
-  );
-```
-
----
-
-### M. 测试策略详细规格
-
-#### M.1 单元测试重点
+#### F.3 PPTX 导入关键类型定义
 
 ```typescript
-// 版本号算法测试
-describe('VersionNumberAlgorithm', () => {
-  test('新建主版本时，major = max + 1', () => {
-    // 已有 v1.0, v1.1, v2.0 → 新建主版本 = v3.0
-  });
-  test('新建次版本时，minor = max_under_major + 0.1', () => {
-    // 已有 v2.0, v2.1 → 基于 v2 新建次版本 = v2.2
-  });
-  test('空演示文稿新建第一个版本 = v1.0', () => {});
-});
+// @botool/ppt-core/converter/pptx-types.ts
+export interface PptxJsonOutput {
+  slides: PptxJsonSlide[]
+  themeColors: string[]
+  size: { width: number; height: number }
+}
 
-// 翻译术语注入测试
-describe('GlossaryInjection', () => {
-  test('no_translate 词汇注入为"不翻译"指令', () => {});
-  test('translate 词汇注入为"固定翻译"指令', () => {});
-  test('词汇表为空时不影响翻译提示词', () => {});
-});
+export interface PptxJsonSlide {
+  fill?: PptxFill
+  elements: PptxJsonElement[]
+  layoutElements?: PptxJsonElement[]
+  note?: string
+}
 
-// 槽位分配 Copy 语义测试
-describe('SlotAssignment', () => {
-  test('挂载文档库文档后，原文档不受影响', () => {});
-  test('槽位 presentation 修改不影响文档库原始记录', () => {});
-  test('source_id 正确记录来源', () => {});
-});
+export interface PptxJsonElement {
+  type: 'text' | 'image' | 'shape' | 'table' | 'chart'
+       | 'group' | 'video' | 'audio' | 'math' | 'diagram'
+  left: number; top: number; width: number; height: number
+  rotate?: number; isFlipH?: boolean; isFlipV?: boolean; name?: string
+  fill?: PptxFill
+  borderColor?: string; borderWidth?: number; borderType?: string
+  shadow?: PptxShadow
+  content?: string; vAlign?: 'top' | 'mid' | 'bottom'; isVertical?: boolean
+  src?: string
+  rect?: { l?: number; t?: number; r?: number; b?: number }
+  shapType?: string; path?: string; keypoints?: unknown[]
+  data?: PptxTableCell[][]; colWidths?: number[]; rowHeights?: number[]
+  elements?: PptxJsonElement[]
+}
 
-// 文件命名验证
-describe('FileNamingConvention', () => {
-  test('4段式命名验证正则', () => {
-    expect(validateFileName('market.p001-q3-report-v2.1-zh.pdf')).toBe(true);
-    expect(validateFileName('invalid-name.pdf')).toBe(false);
-  });
-});
+export interface PptxTableCell {
+  text?: string; content?: string; fillColor?: string
+  fontColor?: string; fontSize?: number; bold?: boolean; italic?: boolean
+  colspan?: number; rowspan?: number
+  borderBottom?: PptxBorderSide; borderTop?: PptxBorderSide
+  borderLeft?: PptxBorderSide; borderRight?: PptxBorderSide
+}
 ```
 
-#### M.2 E2E 测试场景
+#### F.4 HTML 清洗器
 
-```
-场景 1: 完整槽位分配流程
-  前置: 已有分类 C1，已有文档库文档 A
-  步骤:
-    1. 管理员在 C1 下创建槽位 S1
-    2. 在 S1 页面点击"挂载文档"
-    3. 从文档库选择文档 A
-    4. 系统自动创建 presentation B，slot_id=S1，source_id=A
-  验证: B 存在，A 不受影响，B.slot_id=S1
-
-场景 2: AI 翻译全流程
-  前置: 已有中文版本 v1.0（slides 5张）
-  步骤:
-    1. 创建英文语言版本（选择 AI 翻译）
-    2. 选择源版本 v1.0
-    3. 点击"开始翻译"
-    4. 订阅 SSE 流，观察 progress 0→100
-    5. 翻译完成后打开英文版本
-  验证: 英文版本内容与中文版本结构相同，文本已翻译
-
-场景 3: 选择性发布
-  步骤:
-    1. 发布 zh v1.0 → zh 已发布
-    2. 发布 en v1.0 → en 已发布，zh 不受影响
-    3. 发布 zh v2.0 → zh v1.0 自动撤销，en v1.0 不受影响
-  验证: 每语言只有一个 published 版本
-
-场景 4: ZIP 炸弹防护
-  步骤:
-    1. 上传解压比 > 100x 的 .pptbt 文件
-  验证: 返回 400，提示"文件格式异常"，不触发解压
+```typescript
+// @botool/ppt-core/converter/pptx-html-cleaner.ts
+export function normalizeHtml(html: string): string {
+  if (!html || html.trim() === '') return '<p></p>'
+  let cleaned = html
+  cleaned = cleaned.replace(/<font([^>]*)>/gi, '<span$1>')
+  cleaned = cleaned.replace(/<\/font>/gi, '</span>')
+  if (!cleaned.includes('<p>') && !cleaned.includes('<p ')) {
+    cleaned = `<p>${cleaned}</p>`
+  }
+  cleaned = cleaned.replace(/<p><\/p>/g, '<p><br></p>')
+  cleaned = cleaned.replace(/<p>\s*<\/p>/g, '<p><br></p>')
+  return cleaned
+}
 ```
 
----
+#### F.5 形状映射表
 
-> **[T7 补充自源 PRD 关键章节]** 以上 F-M 节为 T7 自动补充内容，摘录自源 PRD v4.1 §3.6（槽位工作流）、§4.7（版本算法）、§5.3-5.5（词汇表/分享UI）、§6.4（文件命名）、§7.3（翻译技术配置）及附录章节。
+```typescript
+// @botool/ppt-core/converter/pptx-shape-map.ts
+const SHAPE_MAP: Record<string, string> = {
+  rect: 'rect', roundRect: 'roundRect',
+  snip1Rect: 'roundRect', snip2SameRect: 'roundRect',
+  ellipse: 'ellipse',
+  triangle: 'triangle', rtTriangle: 'triangle',
+  diamond: 'diamond', parallelogram: 'parallelogram',
+  pentagon: 'pentagon', hexagon: 'hexagon',
+  rightArrow: 'arrow', leftArrow: 'arrow', upArrow: 'arrow', downArrow: 'arrow',
+  chevron: 'arrow', homePlate: 'arrow',
+  star4: 'star', star5: 'star', star6: 'star', star8: 'star',
+}
 
----
+const LINE_TYPES = new Set([
+  'line', 'straightConnector1',
+  'bentConnector2', 'bentConnector3', 'bentConnector4', 'bentConnector5',
+  'curvedConnector2', 'curvedConnector3', 'curvedConnector4', 'curvedConnector5',
+])
 
-*此 PRD 由 BotoolAgent PyramidPRD Transform Mode 生成，基于源文件 v1.6_Botool_Present_v2PRD copy.md (v4.1) 转换。*
-*生成日期: 2026-02-23*
+export function isLineShapeType(shapType: string): boolean { return LINE_TYPES.has(shapType) }
+export function mapShapeType(shapType: string) {
+  const mapped = SHAPE_MAP[shapType]
+  return mapped ? { type: mapped } : { type: 'custom', fallbackPath: undefined }
+}
+```
+
+#### F.6 SSE 事件类型
+
+```typescript
+interface ImportProgressEvent {
+  type: 'progress'
+  stage: 'uploading' | 'parsing' | 'images' | 'converting' | 'saving'
+  percent: number              // 0-100
+  detail?: string              // 如 "图片 12/35"
+}
+
+interface ImportCompleteEvent {
+  type: 'complete'
+  presentationId: number
+  slideCount: number
+  warnings: string[]           // 如 ["2 张图片未能加载"]
+}
+
+interface ImportErrorEvent {
+  type: 'error'
+  message: string
+  code?: string                // 'ENCRYPTED', 'CORRUPTED', 'TOO_LARGE', 'ZIP_BOMB'
+}
+```
+
+**进度百分比分配**:
+
+| 阶段 | 百分比 | stage |
+|------|--------|-------|
+| 上传文件到服务器 | 0-15% | uploading |
+| 解析 PPTX 结构 | 15-25% | parsing |
+| 处理图片资源 | 25-80% | images（最耗时） |
+| 转换文档格式 | 80-95% | converting |
+| 保存文档 | 95-100% | saving |
+
+#### F.7 大文件导入方案（50MB+ PPTX）
+
+**瓶颈分析（60MB PPTX 实例推演）**:
+
+| 步骤 | 耗时估算 | 内存峰值 |
+|------|---------|---------|
+| 用户上传文件到服务器 | 5-15s | 60MB |
+| pptxtojson 解析 ZIP+XML | 3-8s | ~180MB |
+| base64 编码图片 | 含在上步 | ~240MB |
+| JSON → DSL 字段映射 | <1s | ~50MB |
+| 35 张图片上传 Storage | 15-60s | ~10MB/张 |
+| DSL 保存到数据库 | <1s | ~5MB |
+| **总计** | **25-85s** | **峰值 ~300MB** |
+
+**架构决策：服务端解析（Server-side）**
+
+**超时防护策略**:
+
+| 场景 | 策略 |
+|------|------|
+| 文件上传超时 | 前端 XHR 带 progress 事件，超时 5 分钟 |
+| SSE 连接断开 | 前端自动重连，服务端保存进度状态 |
+| 服务端处理超时 | maxDuration: 300 |
+| 图片上传部分失败 | 失败图片用占位符替代 |
+| 浏览器标签页关闭 | 任务与 SSE 解耦，重新打开时检查 status='importing' |
+
+#### F.8 ExportDialog 组件示例
+
+```typescript
+// components/file/ExportDialog.tsx
+'use client'
+import { useState } from 'react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@botool/ui'
+import { usePresentationStore } from '@/stores/presentation-store'
+import { exportToPdf, exportToPptbt } from '@botool/ppt-core'
+
+type ExportFormat = 'pdf' | 'pptbt' | 'png'
+
+export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { dsl, currentSlideIndex } = usePresentationStore()
+  const [format, setFormat] = useState<ExportFormat>('pdf')
+  const [range, setRange] = useState<'all' | 'current'>('all')
+  const [exporting, setExporting] = useState(false)
+  const [progress, setProgress] = useState({ current: 0, total: 0, message: '' })
+
+  const handleExport = async () => {
+    if (!dsl) return
+    setExporting(true)
+    try {
+      let blob: Blob, fileName: string
+      const exportRange = range === 'current'
+        ? [currentSlideIndex, currentSlideIndex] as [number, number] : 'all'
+      switch (format) {
+        case 'pdf':
+          blob = await exportToPdf(dsl, { range: exportRange,
+            onProgress: (c, t) => setProgress({ current: c, total: t, message: `导出 ${c}/${t} 页` }) })
+          fileName = `${dsl.meta.title || '演示文稿'}.pdf`; break
+        case 'pptbt':
+          blob = await exportToPptbt(dsl, {
+            onProgress: (msg, pct) => setProgress({ current: pct, total: 100, message: msg }) })
+          fileName = `${dsl.meta.title || '演示文稿'}.pptbt`; break
+        default: throw new Error('不支持的导出格式')
+      }
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href = url; a.download = fileName; a.click()
+      URL.revokeObjectURL(url)
+      toast.success('导出成功'); onOpenChange(false)
+    } catch { toast.error('导出失败，请重试') }
+    finally { setExporting(false) }
+  }
+  // ... Dialog UI
+}
+```
+
+### G. 测试策略
+
+#### 单元测试
+
+- PPTX 元素类型映射（6 种类型 × 基本场景）
+- HTML 清洗器（XSS 用例、格式保真）
+- 形状映射表（已覆盖/未覆盖/线条类型）
+- 背景映射（color/image/gradient/pattern/null）
+
+#### 集成测试
+
+- PPTX 完整导入流程（文件 → DSL → 数据库）
+- 翻译 API 端到端（发起 → 进度查询 → 完成）
+- 表名迁移后 CRUD 正常
+
+#### E2E 测试
+
+- 编辑器打开 → 编辑 → 保存完整流程
+- PPTX 导入 → SSE 进度 → 编辑器预览
+- AI 翻译 → 进度 → 新文档创建
+
+### H. PPTX 导入验证矩阵
+
+| # | 测试文件 | 验证重点 |
+|---|---------|---------|
+| 1 | 纯文本 PPT（多种字号/颜色） | 文本 HTML 保真度、混合格式 |
+| 2 | 图片为主的 PPT（含裁剪） | 图片提取+上传+裁剪还原 |
+| 3 | 多种形状 PPT（含自定义形状） | 形状映射、path 兜底、填充/描边 |
+| 4 | 含表格的 PPT（含合并单元格） | 表格结构、单元格样式 |
+| 5 | 含组合的 PPT（含嵌套组合） | 组递归、子元素坐标 |
+| 6 | 深色主题 PPT | 主题色展平、背景色 |
+| 7 | 含渐变背景/形状的 PPT | 渐变填充还原 |
+| 8 | 含母版 logo/装饰的 PPT | layoutElements 合并 |
+| 9 | 真实商务 PPT（综合） | 全面覆盖度 |
+| 10 | 竖排文字 PPT | writingMode: vertical |

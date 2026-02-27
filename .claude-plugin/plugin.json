@@ -1,7 +1,7 @@
 {
   "name": "botool-dev-skills",
-  "version": "1.0.0",
-  "description": "Skills for Botool Dev Agent - Generate PRDs and convert them to prd.json format for autonomous execution",
+  "version": "2.0.0",
+  "description": "Skills for BotoolAgent - Autonomous AI development agent with PRD pipeline, coding, testing and deployment",
   "author": {
     "name": "boszan"
   },
