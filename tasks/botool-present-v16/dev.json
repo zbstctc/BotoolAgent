@@ -1,0 +1,2365 @@
+{
+  "project": "Botool_Present v1.6",
+  "branchName": "botool/botool-present-v16",
+  "description": "Botool_Present v1.6 全面升级：引入文档库分类管理体系、版本管理（主/次版本 + 选择性发布）、协作权限（read/write/admin）、多语言 AI 翻译（通义千问 qwen-max）、完整导入/导出（PDF/PNG/.pptbt/PPTX），并将编辑器拆分为独立的 Botool_PPT 应用（port 3009）。",
+  "prdFile": "tasks/botool-present-v16/prd.md",
+  "constitution": {
+    "rules": [],
+    "ruleAuditSummary": ""
+  },
+  "devTasks": [
+    {
+      "id": "DT-001",
+      "title": "删除 /upload 页面及移除 editing 状态",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [],
+      "description": "删除 /upload 页面及其相关路由文件 app/upload/page.tsx，清理侧边栏中的「上传文档」入口。同时从数据库 status CHECK 约束中移除已废弃的 'editing' 状态值，确保后续 Phase 不会引用废弃代码。",
+      "acceptanceCriteria": [
+        "访问 /upload 返回 404",
+        "侧边栏不再出现「上传文档」入口",
+        "status CHECK 约束中不包含 'editing' 值",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§5.1 页面清单"
+      ],
+      "files": [
+        "app/upload/page.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "访问 /upload 返回 404"
+        }
+      ]
+    },
+    {
+      "id": "DT-002",
+      "title": "重构 /admin 为 3-Tab 布局",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-001"
+      ],
+      "description": "重构 /admin 页面为 3-Tab 布局（我的 PPT / PPT 库管理 / 设置），新建 AdminLayout 组件承载 Tab 切换逻辑。Tab 1 展示当前用户草稿，Tab 2 展示文档列表+筛选+操作按钮，Tab 3 为预留空 Tab。错误响应不泄露内部信息。",
+      "acceptanceCriteria": [
+        "3 个 Tab 可正常切换",
+        "Tab 2 展示文档列表",
+        "错误响应不泄露内部信息",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§5.1 页面清单",
+        "§5.3 关键页面布局"
+      ],
+      "files": [
+        "app/admin/page.tsx",
+        "components/AdminLayout.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "AdminLayout 组件文件存在",
+          "command": "test -f components/AdminLayout.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "3-Tab 布局可切换且正常展示"
+        }
+      ]
+    },
+    {
+      "id": "DT-003",
+      "title": "SQL Script 1 — 创建 present_presentations 表",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-001"
+      ],
+      "description": "创建 present_presentations 主文档表的 SQL 迁移脚本，包含 title/slug/type/status/dsl_json/dsl_storage_path/owner_id/is_deleted/language_code/translated_from_id/thumbnail_url 等字段。脚本使用 IF NOT EXISTS 确保幂等，并创建 owner/status/language/deleted 四个索引。",
+      "acceptanceCriteria": [
+        "SQL 脚本使用 IF NOT EXISTS 保证幂等",
+        "表包含所有 §4.2 定义的字段和 CHECK 约束",
+        "四个索引（owner, status, language, deleted）已创建",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§4.2 Schema 定义"
+      ],
+      "files": [
+        "sql/01_presentations.sql"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "SQL 文件存在",
+          "command": "test -f sql/01_presentations.sql",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "file-exists",
+          "desc": "sql/01_presentations.sql 文件已创建"
+        },
+        {
+          "type": "manual",
+          "desc": "执行后确认表存在，索引已建"
+        }
+      ]
+    },
+    {
+      "id": "DT-004",
+      "title": "SQL Script 2 — 创建 present_dsl_snapshots 表",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-003"
+      ],
+      "description": "创建 present_dsl_snapshots DSL 历史快照表的 SQL 迁移脚本，包含 presentation_id 外键引用（CASCADE 删除）、dsl_json JSONB、snapshot_label 和 created_by 字段。创建 presentation_id 索引。",
+      "acceptanceCriteria": [
+        "表存在且外键约束指向 present_presentations",
+        "CASCADE 删除正确配置",
+        "presentation_id 索引已创建",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§4.2 Schema 定义"
+      ],
+      "files": [
+        "sql/02_dsl_snapshots.sql"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "SQL 文件存在",
+          "command": "test -f sql/02_dsl_snapshots.sql",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "file-exists",
+          "desc": "sql/02_dsl_snapshots.sql 文件已创建"
+        }
+      ]
+    },
+    {
+      "id": "DT-005",
+      "title": "SQL Script 3 — 创建协作与访问控制表",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-003"
+      ],
+      "description": "创建 present_collaborators 和 present_access_requests 两张表的 SQL 迁移脚本。collaborators 表包含 UNIQUE(presentation_id, user_id) 约束和 permission CHECK('read','write','admin')。access_requests 表包含 cooldown_until 字段用于 24h 冷却期。",
+      "acceptanceCriteria": [
+        "两表存在且外键约束正确",
+        "collaborators 有 UNIQUE(presentation_id, user_id) 约束",
+        "access_requests 包含 cooldown_until 字段",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§4.2 Schema 定义"
+      ],
+      "files": [
+        "sql/03_collaboration.sql"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "SQL 文件存在",
+          "command": "test -f sql/03_collaboration.sql",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "file-exists",
+          "desc": "sql/03_collaboration.sql 文件已创建"
+        }
+      ]
+    },
+    {
+      "id": "DT-006",
+      "title": "SQL Script 4 — 创建 present_visibility_groups 表",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-003"
+      ],
+      "description": "创建 present_visibility_groups 可见性分组表的 SQL 迁移脚本，支持 dept/role/org 三种分组类型。包含 presentation_id 外键引用和 group_type CHECK 约束。",
+      "acceptanceCriteria": [
+        "表存在且 group_type CHECK 约束包含 dept/role/org",
+        "presentation_id 外键和索引已创建",
+        "SQL 脚本幂等执行",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§4.2 Schema 定义"
+      ],
+      "files": [
+        "sql/04_visibility.sql"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "SQL 文件存在",
+          "command": "test -f sql/04_visibility.sql",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "file-exists",
+          "desc": "sql/04_visibility.sql 文件已创建"
+        }
+      ]
+    },
+    {
+      "id": "DT-007",
+      "title": "SQL Script 5 — 创建版本管理表",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-003"
+      ],
+      "description": "创建 present_version_groups 和 present_versions 两张表的 SQL 迁移脚本。version_groups 包含 version_number/version_type/sort_key/is_published 字段。versions 包含 UNIQUE(version_group_id, language_code) 约束和 status CHECK('draft','published')。",
+      "acceptanceCriteria": [
+        "两表存在且外键约束正确",
+        "version_groups 有 version_type CHECK('major','minor')",
+        "versions 有 UNIQUE(version_group_id, language_code)",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§4.2 Schema 定义"
+      ],
+      "files": [
+        "sql/05_versions.sql"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "SQL 文件存在",
+          "command": "test -f sql/05_versions.sql",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "file-exists",
+          "desc": "sql/05_versions.sql 文件已创建"
+        }
+      ]
+    },
+    {
+      "id": "DT-008",
+      "title": "SQL Script 6 — 创建分类管理表 + 触发函数",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-003"
+      ],
+      "description": "创建 present_categories（两级分类树，parent_id 自引用外键）和 present_category_slots（UNIQUE(category_id, presentation_id)）两张表。同时创建 sync_category_slot_status 触发函数，当文档被软删除时自动级联清理其所有槽位记录。使用 IF NOT EXISTS 保证幂等。",
+      "acceptanceCriteria": [
+        "两表存在且外键约束正确",
+        "categories 的 parent_id 自引用外键已创建",
+        "category_slots 有 UNIQUE(category_id, presentation_id)",
+        "sync_category_slot_status 触发函数和 trigger 已创建",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§4.2 Schema 定义"
+      ],
+      "files": [
+        "sql/06_categories.sql"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "SQL 文件存在",
+          "command": "test -f sql/06_categories.sql",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "file-exists",
+          "desc": "sql/06_categories.sql 文件已创建"
+        },
+        {
+          "type": "manual",
+          "desc": "软删除文档后 category_slots 记录被自动删除"
+        }
+      ]
+    },
+    {
+      "id": "DT-009",
+      "title": "SQL Script 7 — 创建翻译和术语库表",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-003"
+      ],
+      "description": "创建 present_translations、present_glossary 和 present_glossary_translations 三张表的 SQL 迁移脚本。translations 包含 source_type CHECK('version','presentation')、status CHECK('pending','processing','completed','failed')、progress DECIMAL(0-100)、logs JSONB。glossary 包含 UNIQUE(source_term) 和 term_type CHECK('no_translate','translate')。",
+      "acceptanceCriteria": [
+        "三表存在且 CHECK 约束正确",
+        "translations.progress 有 BETWEEN 0 AND 100 约束",
+        "glossary 有 UNIQUE(source_term)",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§4.2 Schema 定义"
+      ],
+      "files": [
+        "sql/07_translations.sql"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "SQL 文件存在",
+          "command": "test -f sql/07_translations.sql",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "file-exists",
+          "desc": "sql/07_translations.sql 文件已创建"
+        }
+      ]
+    },
+    {
+      "id": "DT-010",
+      "title": "RLS 策略和索引脚本",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-003",
+        "DT-005",
+        "DT-007",
+        "DT-008",
+        "DT-009"
+      ],
+      "description": "为 6 张核心表（presentations, collaborators, access_requests, versions, category_slots, translations）启用 RLS。实现 presentations_select/insert/update 策略：已发布文档所有人可读，owner 可全量操作，协作者按权限读写。确保未认证用户只能读 status='published' 的文档。",
+      "acceptanceCriteria": [
+        "6 张表的 RLS 已启用",
+        "presentations_select 策略允许 published 文档公开读取",
+        "presentations_insert 策略限制 owner_id = auth.uid()",
+        "未认证用户只能读已发布文档",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§4.4 RLS 策略"
+      ],
+      "files": [
+        "sql/08_rls_policies.sql"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "SQL 文件存在",
+          "command": "test -f sql/08_rls_policies.sql",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "file-exists",
+          "desc": "sql/08_rls_policies.sql 文件已创建"
+        },
+        {
+          "type": "manual",
+          "desc": "RLS 策略生效：未认证用户仅可读已发布文档"
+        }
+      ]
+    },
+    {
+      "id": "DT-011",
+      "title": "创建 Botool_PPT Next.js 应用结构",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-010"
+      ],
+      "description": "创建 Botool_PPT 独立 Next.js 应用目录结构，包含 package.json 和 next.config.ts，配置端口为 3009。复用 Supabase 配置确保与 Botool_Present 共享数据库连接。设置基础的 tsconfig.json 和 tailwind 配置。",
+      "acceptanceCriteria": [
+        "botool-ppt/package.json 存在且配置正确",
+        "npm run dev 在 3009 端口启动",
+        "Supabase 配置复用成功",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§3.1 核心概念"
+      ],
+      "files": [
+        "botool-ppt/package.json",
+        "botool-ppt/next.config.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "Botool_PPT 在 3009 端口正常启动"
+        }
+      ]
+    },
+    {
+      "id": "DT-012",
+      "title": "迁移编辑器核心组件到 Botool_PPT",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-011"
+      ],
+      "description": "将 44+ 编辑器组件（Canvas、SlideList、Ribbon、元素工具等）从 Botool_Present 迁移到 botool-ppt/components/editor/ 目录。同时迁移 DSL 类型定义，确保编辑器在新应用中可独立运行。",
+      "acceptanceCriteria": [
+        "编辑器组件迁移到 botool-ppt/components/editor/",
+        "DSL 类型定义迁移完成",
+        "Botool_PPT 可独立运行编辑器",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§3.1 核心概念"
+      ],
+      "files": [
+        "botool-ppt/components/editor/"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "Botool_PPT 编辑器独立运行正常"
+        }
+      ]
+    },
+    {
+      "id": "DT-013",
+      "title": "配置跨应用导航",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-012"
+      ],
+      "description": "配置 Botool_Present 与 Botool_PPT 之间的跨应用导航。Botool_Present 中「编辑」按钮跳转到 http://localhost:3009/editor/[id]，编辑完成后跳转回 Botool_Present。文档数据通过共用 Supabase 保持一致。",
+      "acceptanceCriteria": [
+        "Botool_Present 的编辑按钮正确跳转到 Botool_PPT",
+        "编辑完成后可跳转回 Botool_Present",
+        "文档数据通过 Supabase 共用",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§3.1 核心概念"
+      ],
+      "files": [
+        "botool-ppt/app/editor/[id]/page.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "跨应用导航正常工作"
+        }
+      ]
+    },
+    {
+      "id": "DT-014",
+      "title": "更新 Botool_Present 路由，删除原编辑器入口",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-013"
+      ],
+      "description": "从 Botool_Present 中移除编辑器相关代码和路由入口（app/editor/page.tsx 等），确保 Botool_Present 不再承载编辑器功能。所有编辑器相关引用改为跳转至 Botool_PPT。",
+      "acceptanceCriteria": [
+        "Botool_Present 中不再包含编辑器代码",
+        "原编辑器路由已删除或重定向",
+        "Typecheck 无编辑器相关错误",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§3.1 核心概念"
+      ],
+      "files": [
+        "app/editor/page.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        }
+      ]
+    },
+    {
+      "id": "DT-015",
+      "title": "文档 CRUD API",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-014"
+      ],
+      "description": "实现文档 CRUD API（GET/POST/DELETE /api/presentations）。GET 支持分页+筛选（status/owner/category），POST 创建新文档（owner=当前用户），DELETE 实现软删除（is_deleted=TRUE）。使用参数化查询防止 SQL 注入，错误响应不泄露内部信息，仅 owner 可删除。",
+      "acceptanceCriteria": [
+        "GET 端点支持分页和 status/owner/category 筛选",
+        "POST 端点创建文档并设置 owner 为当前用户",
+        "DELETE 端点实现软删除（is_deleted=TRUE）",
+        "使用参数化查询防止 SQL 注入",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§7.4 Phase 3: 文档库管理"
+      ],
+      "files": [
+        "app/api/presentations/route.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "API 路由文件存在",
+          "command": "test -f app/api/presentations/route.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "e2e",
+          "desc": "GET/POST/DELETE 端点返回正确响应"
+        }
+      ]
+    },
+    {
+      "id": "DT-016",
+      "title": "文档库公共浏览页",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-015"
+      ],
+      "description": "改造 /library 页面为文档库公共浏览页，展示所有已发布文档（无 category_slot 的草稿箱文档不显示）。实现分类树侧边栏筛选，未登录用户可申请访问。使用 zod 进行输入验证。",
+      "acceptanceCriteria": [
+        "已发布文档可见，草稿箱文档不可见",
+        "分类树侧边栏筛选功能正常",
+        "未登录用户可看到申请访问入口",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§5.3 关键页面布局"
+      ],
+      "files": [
+        "app/library/page.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "/library 页面正确展示已发布文档"
+        }
+      ]
+    },
+    {
+      "id": "DT-017",
+      "title": "管理后台文档列表 Tab",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-002",
+        "DT-015"
+      ],
+      "description": "实现 AdminLibraryTab 组件用于管理后台 Tab 2（PPT 库管理）。包含搜索框+分类/状态筛选，每行文档展示操作按钮（Share、分类、版本），同时展示草稿箱和已发布文档。",
+      "acceptanceCriteria": [
+        "搜索框可搜索文档标题",
+        "分类和状态筛选功能正常",
+        "每行展示 Share/分类/版本操作按钮",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§5.3 关键页面布局"
+      ],
+      "files": [
+        "components/AdminLibraryTab.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "组件文件存在",
+          "command": "test -f components/AdminLibraryTab.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "筛选和操作按钮功能正常"
+        }
+      ]
+    },
+    {
+      "id": "DT-018",
+      "title": "ShareDialog 组件 + 协作者 API",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-015"
+      ],
+      "description": "实现 ShareDialog 弹窗组件和协作者 CRUD API（GET/POST/PATCH/DELETE /api/presentations/[id]/collaborators）。弹窗支持邮箱搜索添加协作者、权限选择（read/write/admin）和访问请求审批。仅 admin 权限可管理协作者，使用 zod 进行输入验证。",
+      "acceptanceCriteria": [
+        "协作者 API 支持 GET/POST/PATCH/DELETE",
+        "弹窗支持邮箱搜索添加协作者",
+        "权限选择（read/write/admin）正常工作",
+        "仅 admin 权限用户可管理协作者",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§5.4 关键弹窗布局",
+        "§G.1 ShareDialog 详细规格"
+      ],
+      "files": [
+        "components/ShareDialog.tsx",
+        "app/api/presentations/[id]/collaborators/route.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "ShareDialog 组件文件存在",
+          "command": "test -f components/ShareDialog.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "e2e",
+          "desc": "添加/修改/删除协作者工作正常"
+        }
+      ]
+    },
+    {
+      "id": "DT-019",
+      "title": "访问申请 API + AccessRequestView",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-015"
+      ],
+      "description": "实现访问申请 API（GET/POST/PATCH /api/presentations/[id]/access-requests）和 AccessRequestView 组件。GET 获取待审批列表，POST 提交访问申请（含 24h 冷却期校验 BR-015），PATCH 批准/拒绝（拒绝时设置 cooldown_until = NOW() + 24h）。使用 zod 进行输入验证。",
+      "acceptanceCriteria": [
+        "GET 端点返回待审批的访问请求列表",
+        "POST 端点校验 24h 冷却期后创建申请",
+        "PATCH 端点支持批准/拒绝操作",
+        "拒绝后 24h 内用户不可再申请",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§5.4 关键弹窗布局",
+        "§6.4 协作与访问控制规则"
+      ],
+      "files": [
+        "app/api/presentations/[id]/access-requests/route.ts",
+        "components/AccessRequestView.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "AccessRequestView 组件文件存在",
+          "command": "test -f components/AccessRequestView.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "e2e",
+          "desc": "申请→审批→冷却期完整工作流正常"
+        }
+      ]
+    },
+    {
+      "id": "DT-020",
+      "title": "草稿箱集成",
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "DT-017"
+      ],
+      "description": "在 /admin 我的PPT Tab 中集成草稿箱功能，展示当前用户无 category_slot 的文档。提供「移入分类」入口触发 CategoryManagementDialog（Phase 6 实现后联动）。草稿箱文档符合 BR-002 定义。",
+      "acceptanceCriteria": [
+        "我的PPT Tab 正确展示无 category_slot 的文档",
+        "提供「移入分类」入口按钮",
+        "草稿箱定义符合 BR-002",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§6.1 文档库与分类规则"
+      ],
+      "files": [
+        "app/admin/page.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "草稿箱文档正确展示"
+        }
+      ]
+    },
+    {
+      "id": "DT-021",
+      "title": "版本组 API",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-015"
+      ],
+      "description": "实现版本组 CRUD API（GET/POST /api/presentations/[id]/version-groups）。GET 返回文档所有版本组及各语言版本状态，POST 创建新版本组并校验 BR-005/BR-006 版本号规则（主版本 = max+1，次版本 = 当前主版本下 max+0.1）。仅 admin 权限可创建版本，使用 zod 验证。",
+      "acceptanceCriteria": [
+        "GET 端点返回版本组列表含各语言版本状态",
+        "POST 端点校验 BR-005/BR-006 版本号规则",
+        "仅 admin 权限可创建版本",
+        "使用 zod 进行输入验证",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§3.4 版本状态机",
+        "§6.2 版本管理规则"
+      ],
+      "files": [
+        "app/api/presentations/[id]/version-groups/route.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "API 路由文件存在",
+          "command": "test -f app/api/presentations/[id]/version-groups/route.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "e2e",
+          "desc": "版本号自动计算和创建正常"
+        }
+      ]
+    },
+    {
+      "id": "DT-022",
+      "title": "版本列表面板",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-021"
+      ],
+      "description": "实现 VersionListPanel 组件，展示版本组树状结构（major/minor 层级）。每个语言版本展示状态（draft/published）和操作按钮（发布/撤销/翻译/回滚）。版本列表从 version-groups API 获取数据。",
+      "acceptanceCriteria": [
+        "版本组以树状结构展示 major/minor 层级",
+        "每个语言版本显示 draft/published 状态",
+        "操作按钮（发布/撤销/翻译/回滚）可见",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§5.2 组件清单"
+      ],
+      "files": [
+        "components/VersionListPanel.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "组件文件存在",
+          "command": "test -f components/VersionListPanel.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "版本列表层级关系正确展示"
+        }
+      ]
+    },
+    {
+      "id": "DT-023",
+      "title": "CreateVersionDialog",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-021"
+      ],
+      "description": "实现 CreateVersionDialog 弹窗组件，支持主版本/次版本类型选择并显示将生成的版本号。校验 BR-005（主版本号 = max+1.0）和 BR-006（次版本号 = 当前主版本下 max+0.1）规则。创建后从最新已发布或最新草稿版本复制 DSL 内容（BR-009）。",
+      "acceptanceCriteria": [
+        "主/次版本选择 UI 正常工作",
+        "版本号自动计算符合 BR-005/BR-006",
+        "创建后从最新版本复制 DSL 内容（BR-009）",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§5.4 关键弹窗布局",
+        "§6.2 版本管理规则"
+      ],
+      "files": [
+        "components/CreateVersionDialog.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "组件文件存在",
+          "command": "test -f components/CreateVersionDialog.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "版本号自动计算正确且 DSL 复制成功"
+        }
+      ]
+    },
+    {
+      "id": "DT-024",
+      "title": "发布/撤销版本 API + UI",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-022"
+      ],
+      "description": "实现发布和撤销版本的 API（POST/DELETE /api/versions/[id]/publish）。发布操作将 versions.status 改为 'published'（仅影响当前语言版本，BR-008），撤销将 status 改为 'draft'。已发布版本 UI 显示只读状态徽章，仅 admin 可发布/撤销。",
+      "acceptanceCriteria": [
+        "POST 端点将版本状态改为 published",
+        "DELETE 端点将版本状态改为 draft",
+        "发布仅影响当前语言版本（BR-008）",
+        "已发布版本 UI 显示只读徽章",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§3.4 版本状态机",
+        "§6.2 版本管理规则"
+      ],
+      "files": [
+        "app/api/versions/[id]/publish/route.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "API 路由文件存在",
+          "command": "test -f app/api/versions/[id]/publish/route.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "e2e",
+          "desc": "选择性发布正常，发布后版本只读"
+        }
+      ]
+    },
+    {
+      "id": "DT-025",
+      "title": "版本回滚",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-024"
+      ],
+      "description": "实现版本回滚 API（POST /api/versions/[id]/rollback），将指定旧版本的 DSL 复制到当前草稿版本。操作前需弹窗确认（不可逆警告），仅有权限用户可执行。回滚后内容与目标版本一致。",
+      "acceptanceCriteria": [
+        "POST 端点正确复制目标版本的 DSL 内容",
+        "回滚前弹窗确认（不可逆警告）",
+        "回滚后内容与目标版本一致",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§6.2 版本管理规则"
+      ],
+      "files": [
+        "app/api/versions/[id]/rollback/route.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "API 路由文件存在",
+          "command": "test -f app/api/versions/[id]/rollback/route.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "e2e",
+          "desc": "回滚后内容与目标版本一致"
+        }
+      ]
+    },
+    {
+      "id": "DT-026",
+      "title": "PDF 导出实现",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-015"
+      ],
+      "description": "实现 DSL 到 PDF 的导出转换器（lib/converter/dsl-to-pdf.ts）。使用 html2canvas 逐张幻灯片创建临时 DOM 截图，再用 jsPDF 合并为多页 PDF。支持 range 参数（all/current/[start,end]）和 scale 参数（默认 2x），提供 onProgress 回调报告进度。处理跨域图片、内存溢出和渲染超时等错误场景。",
+      "acceptanceCriteria": [
+        "PDF 多页导出正确",
+        "支持 range 和 scale 参数",
+        "onProgress 回调正常报告进度",
+        "还原率 >= 90%",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§F.1 PDF 导出核心实现"
+      ],
+      "files": [
+        "lib/converter/dsl-to-pdf.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "转换器文件存在",
+          "command": "test -f lib/converter/dsl-to-pdf.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "PDF 导出多页正确且还原率合格"
+        }
+      ]
+    },
+    {
+      "id": "DT-027",
+      "title": "PNG 导出实现",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-026"
+      ],
+      "description": "实现单张幻灯片到 PNG 的导出转换器（lib/converter/dsl-to-png.ts）。使用 html2canvas 渲染幻灯片后通过 canvas.toBlob('image/png') 生成 PNG 图片。支持指定幻灯片索引和 scale 参数。",
+      "acceptanceCriteria": [
+        "单张幻灯片正确导出为 PNG",
+        "支持指定幻灯片索引",
+        "PNG 图片质量清晰",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§7.6 Phase 5: 导入/导出"
+      ],
+      "files": [
+        "lib/converter/dsl-to-png.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "转换器文件存在",
+          "command": "test -f lib/converter/dsl-to-png.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        }
+      ]
+    },
+    {
+      "id": "DT-028",
+      "title": ".pptbt 导出实现",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-015"
+      ],
+      "description": "实现 DSL 到 .pptbt 格式的导出转换器（lib/converter/dsl-to-pptbt.ts）。使用 JSZip 创建 ZIP 包，包含 manifest.json（version/generator/generatorVersion）、content.json（图片路径替换为相对路径）和 media/ 目录（提取所有图片 URL 下载后添加到 ZIP）。",
+      "acceptanceCriteria": [
+        "ZIP 包含 manifest.json + content.json + media/ 结构",
+        "manifest 格式正确（version/generator/generatorVersion）",
+        "图片路径正确替换为相对路径",
+        "重新导入后内容一致",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§F.2 .pptbt 文件格式"
+      ],
+      "files": [
+        "lib/converter/dsl-to-pptbt.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "转换器文件存在",
+          "command": "test -f lib/converter/dsl-to-pptbt.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": ".pptbt 文件结构正确且可重新导入"
+        }
+      ]
+    },
+    {
+      "id": "DT-029",
+      "title": ".pptbt 导入实现",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-028"
+      ],
+      "description": "实现 .pptbt 文件到 DSL 的导入转换器（lib/converter/pptbt-to-dsl.ts）。使用 JSZip 解压 → 验证 manifest 版本 → 读取 content.json → 上传 media/ 图片到 Supabase Storage → 替换图片路径为 Storage URL。确保导入后 DSL 内容与原始一致。",
+      "acceptanceCriteria": [
+        "JSZip 解压和 manifest 版本验证正常",
+        "content.json 正确解析为 DSL",
+        "media/ 图片上传到 Supabase Storage 后路径替换正确",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§F.2 .pptbt 文件格式"
+      ],
+      "files": [
+        "lib/converter/pptbt-to-dsl.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "转换器文件存在",
+          "command": "test -f lib/converter/pptbt-to-dsl.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "导入后 DSL 内容与原始一致且图片可显示"
+        }
+      ]
+    },
+    {
+      "id": "DT-030",
+      "title": "PPTX 导入实现 — 5 文件转换器结构",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-015"
+      ],
+      "description": "实现 PPTX 导入的 5 文件转换器结构：pptx-to-dsl.ts（主转换入口）、pptx-html-cleaner.ts（HTML 清洗，pptxtojson HTML → Tiptap 兼容）、pptx-shape-map.ts（形状映射，OOXML preset → DSL ShapeType）、pptx-image-upload.ts（图片批量上传，base64 → Storage URL）、pptx-fill-converter.ts（填充样式转换）。支持 text/image/shape/table/line/group 元素类型映射，video/audio/math 降级为占位符。",
+      "acceptanceCriteria": [
+        "5 个转换器文件全部创建",
+        "text/image/shape/table 元素类型正确转换",
+        "不支持的元素（video/audio/math）降级为占位符",
+        "HTML 清洗生成 Tiptap 兼容格式",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§F.3 PPTX 导入转换器结构"
+      ],
+      "files": [
+        "lib/converter/pptx-to-dsl.ts",
+        "lib/converter/pptx-html-cleaner.ts",
+        "lib/converter/pptx-shape-map.ts",
+        "lib/converter/pptx-image-upload.ts",
+        "lib/converter/pptx-fill-converter.ts",
+        "lib/converter/pptx-types.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "主转换入口文件存在",
+          "command": "test -f lib/converter/pptx-to-dsl.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "常规 PPTX 文本/图片/形状元素正确转换"
+        }
+      ]
+    },
+    {
+      "id": "DT-031",
+      "title": "PPTX 导入安全验证",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-030"
+      ],
+      "description": "在 PPTX 导入流程中添加安全验证：文件类型白名单校验（.pptx 扩展名 + MIME application/vnd.openxmlformats-officedocument.presentationml.presentation，BR-020），ZIP 炸弹防护（解压缩比>100x / >2GB / >10000文件 / 嵌套>10层，BR-018），图片代理 SSRF 防护（校验 URL 不指向内网地址 127.0.0.1/10.x/172.16.x/192.168.x/localhost，BR-019）。",
+      "acceptanceCriteria": [
+        "文件类型白名单校验（.pptx + MIME）正常拦截",
+        "ZIP 炸弹防护（4个阈值条件）正常工作",
+        "SSRF 防护拦截内网地址",
+        "zod schema 验证输入",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§6.5 文件安全规则",
+        "§E 安全检查项汇总"
+      ],
+      "files": [
+        "lib/converter/pptx-to-dsl.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "恶意 PPTX 文件被拒绝，SSRF 攻击被阻止"
+        }
+      ]
+    },
+    {
+      "id": "DT-032",
+      "title": "导入 UI — 文件拖放区 + 进度",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-029",
+        "DT-030"
+      ],
+      "description": "实现 ImportButton 组件，支持文件拖放和点击选择两种交互方式。接受 .pptbt 和 .pptx 两种格式，显示导入进度（解析/上传/处理三阶段），错误时展示友好提示信息。文件类型白名单校验在前端层面过滤。",
+      "acceptanceCriteria": [
+        "支持拖放和点击选择文件",
+        "接受 .pptbt 和 .pptx 格式",
+        "显示导入三阶段进度（解析/上传/处理）",
+        "错误时展示清晰友好提示",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§7.6 Phase 5: 导入/导出"
+      ],
+      "files": [
+        "components/ImportButton.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "组件文件存在",
+          "command": "test -f components/ImportButton.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "两种格式导入正常且错误提示清晰"
+        }
+      ]
+    },
+    {
+      "id": "DT-033",
+      "title": "分类 CRUD API",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-015"
+      ],
+      "description": "实现分类 CRUD API（GET/POST/PUT/DELETE /api/categories）。支持 parent_id 参数区分大类（NULL）和子类（有值），删除大类时通过数据库外键级联删除子类。仅 admin 权限可管理分类，使用参数化查询防止 SQL 注入。",
+      "acceptanceCriteria": [
+        "GET 端点返回分类树（含大类和子类）",
+        "POST 端点支持 parent_id 创建大类/子类",
+        "DELETE 大类时级联删除所有子类",
+        "仅 admin 权限可操作",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§6.1 文档库与分类规则"
+      ],
+      "files": [
+        "app/api/categories/route.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "API 路由文件存在",
+          "command": "test -f app/api/categories/route.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "e2e",
+          "desc": "分类 CRUD 操作和级联删除正常"
+        }
+      ]
+    },
+    {
+      "id": "DT-034",
+      "title": "CategoryManagementDialog — 2 级分类树 UI",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-033"
+      ],
+      "description": "实现 CategoryManagementDialog 弹窗组件，展示两级分类树（大类+展开子类），右侧或内嵌「分配到此槽位」操作。支持 inline 编辑创建/编辑/删除分类。分类仅支持两级（BR-004），使用 zod 进行输入验证。",
+      "acceptanceCriteria": [
+        "分类树正确展示大类和子类两级结构",
+        "支持 inline 编辑创建/编辑/删除分类",
+        "分配到槽位操作正常工作",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§5.4 关键弹窗布局",
+        "§6.1 文档库与分类规则"
+      ],
+      "files": [
+        "components/CategoryManagementDialog.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "组件文件存在",
+          "command": "test -f components/CategoryManagementDialog.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "分类树展示和 CRUD 操作正常"
+        }
+      ]
+    },
+    {
+      "id": "DT-035",
+      "title": "槽位分配 API",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-033"
+      ],
+      "description": "实现槽位分配 API（POST/DELETE /api/presentations/[id]/slots）。POST 操作执行复制体语义（BR-001）：创建新 present_presentations 记录并写入 present_category_slots。DELETE 从槽位移除记录（不删除副本）。仅 admin 可分配槽位，使用参数化查询防止 SQL 注入。",
+      "acceptanceCriteria": [
+        "POST 端点创建文档副本并写入 category_slots",
+        "副本为独立记录，不引用原文档（BR-001）",
+        "DELETE 端点仅删除 slot 记录不删除副本",
+        "仅 admin 权限可操作",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§6.1 文档库与分类规则",
+        "§F.5 槽位分配详细工作流"
+      ],
+      "files": [
+        "app/api/presentations/[id]/slots/route.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "API 路由文件存在",
+          "command": "test -f app/api/presentations/[id]/slots/route.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "e2e",
+          "desc": "分配后槽位有独立副本且原文档不受影响"
+        }
+      ]
+    },
+    {
+      "id": "DT-036",
+      "title": "分类筛选集成",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-034",
+        "DT-016"
+      ],
+      "description": "在 /library 页面实现分类树侧边栏按分类/子类过滤文档列表，在 /admin 页面实现分类下拉筛选快速过滤当前分类的文档。两处筛选都基于 category_slots 关联查询。",
+      "acceptanceCriteria": [
+        "/library 分类树侧边栏筛选功能正常",
+        "/admin 分类下拉筛选功能正常",
+        "筛选结果正确反映分类关联关系",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§5.3 关键页面布局"
+      ],
+      "files": [
+        "app/library/page.tsx",
+        "app/admin/page.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "分类筛选正确过滤文档列表"
+        }
+      ]
+    },
+    {
+      "id": "DT-037",
+      "title": "管理员分类管理入口",
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "DT-034"
+      ],
+      "description": "在 /admin 页面（设置 Tab 或库管理 Tab）添加独立的分类管理区域，展示大类列表+子类展开结构。支持拖拽排序（通过 sort_order 字段持久化），admin 可在此直接管理分类的增删改。",
+      "acceptanceCriteria": [
+        "分类管理区域在 /admin 页面可见",
+        "大类列表和子类展开正常",
+        "分类增删改操作正常",
+        "排序持久化到 sort_order 字段",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§7.7 Phase 6: 分类管理"
+      ],
+      "files": [
+        "app/admin/page.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "分类增删改正常且排序持久化"
+        }
+      ]
+    },
+    {
+      "id": "DT-038",
+      "title": "翻译任务 API",
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "DT-021",
+        "DT-026"
+      ],
+      "description": "实现翻译任务创建 API（POST /api/translations）。接受 source_type/source_id/target_language 参数，创建 present_translations 记录（status=pending）。校验 BR-010（source_type='version' 来自 Admin 后台，source_type='presentation' 来自编辑器）。仅 admin 可创建翻译任务，使用 zod 验证输入，注意 XSS 防护。",
+      "acceptanceCriteria": [
+        "POST 端点创建翻译任务记录（status=pending）",
+        "source_type 区分 version 和 presentation（BR-010）",
+        "仅 admin 权限可创建翻译任务",
+        "zod 输入验证和 XSS 防护",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§6.3 翻译规则",
+        "§F.4 通义千问翻译 API 集成"
+      ],
+      "files": [
+        "app/api/translations/route.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "API 路由文件存在",
+          "command": "test -f app/api/translations/route.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "e2e",
+          "desc": "翻译任务创建正常返回 202 Accepted"
+        }
+      ]
+    },
+    {
+      "id": "DT-039",
+      "title": "翻译 Worker — 通义千问集成",
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "DT-038"
+      ],
+      "description": "实现翻译 Worker（lib/translation/qwen-worker.ts），调用通义千问 qwen-max API 逐张幻灯片翻译 DSL 文本内容。更新 translations.progress 和 translations.logs 追踪进度。当源语言为 'zh' 时注入术语库（BR-011/BR-012，no_translate 词保持原文，translate 词使用指定翻译）。翻译完成后创建新 present_presentations 记录（BR-013）。API Key 通过环境变量注入。",
+      "acceptanceCriteria": [
+        "逐张幻灯片调用 qwen-max API 翻译",
+        "progress 和 logs 字段实时更新",
+        "源语言 zh 时注入术语库（BR-011/BR-012）",
+        "完成后创建新 present_presentations 记录（BR-013）",
+        "API Key 通过环境变量注入",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§F.4 通义千问翻译 API 集成",
+        "§6.3 翻译规则"
+      ],
+      "files": [
+        "lib/translation/qwen-worker.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "Worker 文件存在",
+          "command": "test -f lib/translation/qwen-worker.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "翻译流水线完整执行且术语库注入正确"
+        }
+      ]
+    },
+    {
+      "id": "DT-040",
+      "title": "翻译状态机 + SSE 推送",
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "DT-039"
+      ],
+      "description": "实现翻译进度 SSE 推送 API（GET /api/translations/[id]/progress），实时推送 translations.status 和 progress 变化。实现 BR-014（status='failed' 的任务可重试，状态回到 pending）。仅相关用户可订阅 SSE 进度。",
+      "acceptanceCriteria": [
+        "SSE 连接建立正常",
+        "progress 和 status 变化实时推送",
+        "failed 状态可重试（状态回到 pending，BR-014）",
+        "仅相关用户可订阅",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§F.4 通义千问翻译 API 集成"
+      ],
+      "files": [
+        "app/api/translations/[id]/progress/route.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "API 路由文件存在",
+          "command": "test -f app/api/translations/[id]/progress/route.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "e2e",
+          "desc": "SSE 连接正常且进度实时更新"
+        }
+      ]
+    },
+    {
+      "id": "DT-041",
+      "title": "术语库 CRUD API",
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "DT-038"
+      ],
+      "description": "实现术语库 CRUD API（GET/POST/PUT/DELETE /api/glossary），管理 present_glossary 和 present_glossary_translations 表数据。每个词条包含 source_term、term_type（no_translate/translate）和各语言翻译。仅 admin 权限可管理术语库，使用参数化查询防止 SQL 注入。",
+      "acceptanceCriteria": [
+        "GET 端点返回术语列表含各语言翻译",
+        "POST 端点创建词条及翻译映射",
+        "PUT/DELETE 端点正常更新和删除",
+        "仅 admin 权限可操作",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§6.3 翻译规则"
+      ],
+      "files": [
+        "app/api/glossary/route.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "API 路由文件存在",
+          "command": "test -f app/api/glossary/route.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "e2e",
+          "desc": "术语库 CRUD 操作正常"
+        }
+      ]
+    },
+    {
+      "id": "DT-042",
+      "title": "GlossaryPanel 组件",
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "DT-041"
+      ],
+      "description": "实现 GlossaryPanel 术语库管理面板组件。仅当源语言为 'zh' 时激活显示（BR-011），展示术语列表包含 source_term、term_type（保留/翻译）和各语言翻译。支持批量导入（CSV 格式）和 Excel 风格 inline 编辑。",
+      "acceptanceCriteria": [
+        "源语言 zh 时面板可见，其他语言时隐藏",
+        "术语列表展示 source_term/term_type/翻译",
+        "支持 CSV 批量导入",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§5.2 组件清单",
+        "§F.10 词汇表管理 Excel 风格 UI"
+      ],
+      "files": [
+        "components/GlossaryPanel.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "组件文件存在",
+          "command": "test -f components/GlossaryPanel.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "zh 源语言时面板可见且 CRUD 正常"
+        }
+      ]
+    },
+    {
+      "id": "DT-043",
+      "title": "TranslateConfirmDialog",
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "DT-042"
+      ],
+      "description": "实现 TranslateConfirmDialog 弹窗组件，支持目标语言选择、术语库预览（仅 zh 源语言显示，BR-011）和翻译模式选择（version 或 presentation）。确认后触发翻译任务创建，使用 zod 进行输入验证。",
+      "acceptanceCriteria": [
+        "目标语言选择列表正常展示",
+        "zh 源语言时展示术语库预览",
+        "翻译模式选择（version/presentation）正常",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§5.4 关键弹窗布局",
+        "§6.6 决策树：翻译触发流程"
+      ],
+      "files": [
+        "components/TranslateConfirmDialog.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "组件文件存在",
+          "command": "test -f components/TranslateConfirmDialog.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "语言选择和术语库预览正常工作"
+        }
+      ]
+    },
+    {
+      "id": "DT-044",
+      "title": "TranslateProgressDialog",
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "DT-040",
+        "DT-043"
+      ],
+      "description": "实现 TranslateProgressDialog 弹窗组件，通过 SSE 连接实时接收翻译进度。展示进度条+当前处理幻灯片提示+预估剩余时间。处理完成/失败状态（失败时显示 [重试] 按钮），支持 [后台运行] 选项（关闭弹窗但翻译继续）。",
+      "acceptanceCriteria": [
+        "SSE 连接实时接收翻译进度",
+        "进度条和幻灯片处理提示正确展示",
+        "失败时显示重试按钮",
+        "后台运行选项正常工作",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§5.4 关键弹窗布局"
+      ],
+      "files": [
+        "components/TranslateProgressDialog.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "组件文件存在",
+          "command": "test -f components/TranslateProgressDialog.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "进度实时更新且失败可重试"
+        }
+      ]
+    },
+    {
+      "id": "DT-045",
+      "title": "编辑器 Ribbon 扩展（4→6 Tab）",
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "DT-043",
+        "DT-012"
+      ],
+      "description": "扩展 Botool_PPT 编辑器的 Ribbon 工具栏从 4 个 Tab 增加到 6 个。新增 Tab 5: 翻译（触发 TranslateConfirmDialog，source_type='presentation'），新增 Tab 6: 语言信息（展示当前版本语言+版本号）。",
+      "acceptanceCriteria": [
+        "Ribbon 从 4 Tab 扩展到 6 Tab",
+        "Tab 5 翻译功能通过 source_type='presentation' 调用",
+        "Tab 6 展示语言信息",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§7.8 Phase 7: 多语言 AI 翻译"
+      ],
+      "files": [
+        "botool-ppt/components/editor/Ribbon.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "新 Tab 可用且翻译功能正常调用"
+        }
+      ]
+    },
+    {
+      "id": "DT-046",
+      "title": "语言信息面板",
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "DT-045"
+      ],
+      "description": "实现 LanguageInfoPanel 组件（Ribbon Tab 6 的内容），展示当前版本的语言代码、所属版本组、版本号和发布状态信息。面板从 API 获取版本数据并实时展示。",
+      "acceptanceCriteria": [
+        "展示当前版本语言/版本组/版本号",
+        "发布状态正确显示",
+        "数据从 API 实时获取",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§7.8 Phase 7: 多语言 AI 翻译"
+      ],
+      "files": [
+        "botool-ppt/components/editor/LanguageInfoPanel.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "组件文件存在",
+          "command": "test -f botool-ppt/components/editor/LanguageInfoPanel.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "语言信息正确展示"
+        }
+      ]
+    },
+    {
+      "id": "DT-047",
+      "title": "FileNameBuilder 工具",
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "DT-026"
+      ],
+      "description": "实现 FileNameBuilder 工具函数（lib/utils/file-name-builder.ts），生成格式为 {title}_{YYYY-MM-DD}_{language}.{ext} 的文件名。特殊字符（空格、斜杠等）替换为下划线，确保各种标题和语言组合均生成合法文件名。支持 §F.9 定义的 4 段式文件命名规范。",
+      "acceptanceCriteria": [
+        "文件名格式符合 {title}_{YYYY-MM-DD}_{language}.{ext}",
+        "特殊字符正确替换为下划线",
+        "各种边界输入生成合法文件名",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§F.9 文件命名 4 段式规范"
+      ],
+      "files": [
+        "lib/utils/file-name-builder.ts"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "工具函数文件存在",
+          "command": "test -f lib/utils/file-name-builder.ts",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "unit",
+          "desc": "各种边界输入的文件名生成正确"
+        }
+      ]
+    },
+    {
+      "id": "DT-048",
+      "title": "DownloadDialog — 格式选择 + 导出设置",
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "DT-047",
+        "DT-026",
+        "DT-027",
+        "DT-028"
+      ],
+      "description": "实现 DownloadDialog 弹窗组件，提供格式选择（PDF/PNG/pptbt，PPTX 标记为「敬请期待」）。PDF 选项支持分辨率（1x/2x/3x），PNG 选项支持单张/全部（全部时生成 ZIP）。使用 FileNameBuilder 生成文件名，展示下载进度。",
+      "acceptanceCriteria": [
+        "格式选项 PDF/PNG/.pptbt 均可选择",
+        "PPTX 导出标记为「敬请期待」不可选",
+        "PDF 支持 1x/2x/3x 分辨率选项",
+        "PNG 支持单张/全部（全部生成 ZIP）",
+        "文件名使用 FileNameBuilder 生成",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§5.4 关键弹窗布局"
+      ],
+      "files": [
+        "components/DownloadDialog.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "组件文件存在",
+          "command": "test -f components/DownloadDialog.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "三种格式导出正常且文件名正确"
+        }
+      ]
+    },
+    {
+      "id": "DT-049",
+      "title": "导出进度 + 错误处理 UI",
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "DT-048"
+      ],
+      "description": "实现 ExportProgressBar 组件，作为内联进度条嵌入 DownloadDialog。错误时显示具体原因和 [重试] 按钮，大文件时显示预估剩余时间。进度条根据不同导出格式展示对应的处理阶段信息。",
+      "acceptanceCriteria": [
+        "进度条正确嵌入 DownloadDialog",
+        "错误时显示具体原因和重试按钮",
+        "大文件显示预估剩余时间",
+        "Typecheck passes"
+      ],
+      "designRefs": [
+        "§7.9 Phase 8: 下载/导出 UI 完善"
+      ],
+      "files": [
+        "components/ExportProgressBar.tsx"
+      ],
+      "evals": [
+        {
+          "type": "code-based",
+          "blocking": true,
+          "description": "Typecheck",
+          "command": "npx tsc --noEmit",
+          "expect": "exit-0"
+        },
+        {
+          "type": "code-based",
+          "blocking": false,
+          "description": "组件文件存在",
+          "command": "test -f components/ExportProgressBar.tsx",
+          "expect": "exit-0"
+        }
+      ],
+      "testCases": [
+        {
+          "type": "typecheck",
+          "desc": "TypeScript 编译通过"
+        },
+        {
+          "type": "manual",
+          "desc": "进度展示正确且错误提示清晰"
+        }
+      ]
+    }
+  ],
+  "sessions": [
+    {
+      "id": "S1",
+      "title": "Phase 0: 代码清理",
+      "tasks": [
+        "DT-001",
+        "DT-002"
+      ]
+    },
+    {
+      "id": "S2",
+      "title": "Phase 1: 数据库初始化",
+      "tasks": [
+        "DT-003",
+        "DT-004",
+        "DT-005",
+        "DT-006",
+        "DT-007",
+        "DT-008",
+        "DT-009",
+        "DT-010"
+      ]
+    },
+    {
+      "id": "S3",
+      "title": "Phase 2: 应用拆分 — Botool_PPT",
+      "tasks": [
+        "DT-011",
+        "DT-012",
+        "DT-013",
+        "DT-014"
+      ]
+    },
+    {
+      "id": "S4",
+      "title": "Phase 3: 文档库管理",
+      "tasks": [
+        "DT-015",
+        "DT-016",
+        "DT-017",
+        "DT-018",
+        "DT-019",
+        "DT-020"
+      ]
+    },
+    {
+      "id": "S5",
+      "title": "Phase 4: 版本管理",
+      "tasks": [
+        "DT-021",
+        "DT-022",
+        "DT-023",
+        "DT-024",
+        "DT-025"
+      ]
+    },
+    {
+      "id": "S6",
+      "title": "Phase 5: 导入/导出",
+      "tasks": [
+        "DT-026",
+        "DT-027",
+        "DT-028",
+        "DT-029",
+        "DT-030",
+        "DT-031",
+        "DT-032"
+      ]
+    },
+    {
+      "id": "S7",
+      "title": "Phase 6: 分类管理",
+      "tasks": [
+        "DT-033",
+        "DT-034",
+        "DT-035",
+        "DT-036",
+        "DT-037"
+      ]
+    },
+    {
+      "id": "S8",
+      "title": "Phase 7: 多语言 AI 翻译",
+      "tasks": [
+        "DT-038",
+        "DT-039",
+        "DT-040",
+        "DT-041",
+        "DT-042",
+        "DT-043",
+        "DT-044",
+        "DT-045",
+        "DT-046"
+      ]
+    },
+    {
+      "id": "S9",
+      "title": "Phase 8: 下载/导出 UI 完善",
+      "tasks": [
+        "DT-047",
+        "DT-048",
+        "DT-049"
+      ]
+    }
+  ]
+}
