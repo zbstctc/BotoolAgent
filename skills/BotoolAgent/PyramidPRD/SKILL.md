@@ -24,25 +24,75 @@ user-invocable: true
 评估复杂度 → 确定问题数量 → 选择模式
     ↓
 L0: 方向探索 - 项目上下文扫描 + 需求方向理解 + 方案选择 + 范围确认
+    ↓  → Write qa-journal.md §L0
     ↓  （用户明确说不需要时跳过）
-L1: 核心识别 - 理解需求本质
+L1: 核心识别 - 理解需求本质（Read journal → 方案卡 → Write journal §L1）
     ↓
-S1: 代码库扫描（增强版：技术栈 + 数据库 + 组件接口 + API 签名）
+S1: 代码库扫描 → Task(Explore) subagent → codebase-scan.md
     ↓
-R1: 规范确认 - 扫描 rules/ 目录，用户确认适用规范，结果写入 qa-journal.md
+R1: 规范确认 - 扫描 rules/ 目录，用户确认适用规范 → Write journal §R1
     ↓
-L2: 领域分支 - 按维度深入（融合扫描结果）+ 数据模型 + UI 层次
+L2: 领域分支 - Read journal → 方案卡 → Write journal §L2
     ↓
-L3: 细节深入 - 实现细节 + 状态流转 + 业务规则 + 组件交互
+L3: 细节深入 - Read journal → 方案卡 → Write journal §L3
     ↓
-L4: 边界确认 - 范围边界 + 文件命名约定 + 现有代码修改范围
+L4: 边界确认 - Read journal → 方案卡 → Write journal §L4
     ↓
 Phase 5.5: 外部依赖扫描
     ↓
 L5: 确认门控 - ASCII 多维度可视化确认（架构/数据/UI/规则/计划）
     ↓
-生成多维度 PRD 文档（§1-§8，含 ASCII 图 + 安全检查自动注入）
+G1/W1: PRD 生成 → Task(general-purpose) subagent → prd.md
+    ↓
+PRDing Ralph 后台编排（A1 自动审查 → A2 自动转换）
 ```
+
+### Q&A Journal 持久化机制
+
+**每层结束后 Write journal → 下层开始时 Read journal 恢复上下文。**
+
+Journal 文件路径：`$TASKS_DIR/<projectId>/qa-journal.md`
+
+上下文从线性累积 ~150KB 降至 journal ~3KB + 当前层 ~5KB。
+
+**Journal 格式：**
+
+```markdown
+# Q&A Journal — [项目名]
+> 模式: 功能开发 | 复杂度: 中等
+
+## L0 方向探索
+- 选定方向: [方向 + 一句话说明]
+- 实现思路: [技术方案]
+- 范围: ✅ [要做] / ❌ [不做]
+- 技术栈: [框架 + 语言 + DB]
+
+## S1 代码扫描摘要
+- 技术栈: [Subagent 产出摘要]
+- 关键模块: [组件列表]
+- 已有 API: [端点列表]
+
+## R1 规范确认
+- 已确认规范: [rules/ 扫描结果]
+- 排除: [不适用的规范]
+
+## L1 核心识别
+- Q1: [问题] → [选定答案]
+- Q2: [问题] → [选定答案]
+...
+
+## L2 领域分支
+...
+
+## L3 细节深入
+...
+
+## L4 边界确认
+...
+```
+
+**写入时机：** 每层用户确认后立即 Write（追加模式，不覆盖前序层级）。
+**读取时机：** 每层开始前 Read 全部 journal 内容作为上下文输入。
 
 ---
 
@@ -311,29 +361,121 @@ L0 上下文摘要:
 
 ---
 
-### Phase 2: L1 核心识别
+### 方案卡交互协议（L1-L4 统一）
+
+**L1-L4 每层问答从 N 个 AskUserQuestion 合并为 1 个方案卡。** 方案卡在 question 文本中列出所有问题和 AI 推荐，用户只需选择「全部接受」或输入修改指令。
+
+#### 方案卡模板
+
+```
+【LX: 层级名 — AI 方案卡】
+
+基于: [前序层级 + 代码扫描结果摘要]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ Q1. [问题描述]
+   A) [选项A描述]
+   B) [选项B描述]  ← 匹配现有项目
+   C) [选项C描述]
+   → AI 选择: B
+
+ Q2. [问题描述]
+   A) [选项A描述]  ← 推荐
+   B) [选项B描述]
+   → AI 选择: A
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+要修改请在下方 Type something 中输入如 "Q3 换 B"
+```
+
+#### AskUserQuestion 结构（3 个固定选项）
+
+```json
+{
+  "questions": [{
+    "question": "【方案卡内容】\n\n━━━━━━\n要修改请在下方 Type something 中输入如 \"Q3 换 B\"",
+    "header": "LX 层级名",
+    "options": [
+      { "label": "全部接受 (推荐)", "description": "按 AI 推荐方案继续" },
+      { "label": "方向不对，重新生成", "description": "补充说明后 AI 重新出方案卡" },
+      { "label": "↓ 请在下方 Type something 输入修改", "description": "如 'Q3 换 B'" }
+    ],
+    "multiSelect": false
+  }],
+  "metadata": {
+    "source": "pyramidprd",
+    "level": <层级号>,
+    "levelName": "LX: 层级名",
+    "proposalCard": true
+  }
+}
+```
+
+#### AI 推荐选择规则
+
+**强制规则：每个 Q 必须有且仅有一个 AI 推荐（← 标记），无例外。**
+
+| 优先级 | 依据来源 | 示例 |
+|--------|---------|------|
+| 1 | 代码库扫描 (codebase-scan.md) | 项目用 Prisma → 推荐 PostgreSQL + Prisma |
+| 2 | L0 方向 + 前序层级回答 (journal) | 用户选"管理面板" → 推荐 DataTable |
+| 3 | 行业最佳实践 | 无代码库 → 推荐当前主流方案 |
+| 4 | 最安全/最简单 | 无法判断时 → 推荐最稳妥选项 |
+
+#### 修改指令解析规则
+
+| 用户输入 | 解析结果 |
+|---------|---------|
+| `Q3 换 B` | 第 3 题改为选项 B |
+| `Q2 换 C, Q5 换 B` | 第 2 题改为 C，第 5 题改为 B |
+| `第 3 个问题换成 B` | 同 Q3 换 B |
+| `认证方式换成 Session` | 按关键词匹配到对应 Q，选项匹配到对应字母 |
+
+**解析优先级**: 精确格式 `QN 换 X` → 关键词匹配 → 无法匹配则追问一次确认。
+
+**回显确认规则（强制）**: 修改指令解析后，AI 必须先回显解析结果（"收到：Q3 改为 B(Session 认证)"），等用户确认后再执行。
+
+#### 逃生口处理
+
+- 用户选"方向不对，重新生成" → AI 追问补充说明 → 重新生成方案卡
+- **最多重试 2 次**，仍不满意 → 切换为逐题模式（恢复传统 AskUserQuestion per question）
+
+#### Journal 写入
+
+每层方案卡确认后，立即将所有 Q/A 结果写入（追加） `$PROJECT_DIR/qa-journal.md` 对应章节。
+
+---
+
+### Phase 2: L1 核心识别（方案卡）
 
 **目标：** 理解需求的本质和范围
 
-**必问话题：**
+**Read journal** → 获取 L0 上下文
+
+**必问话题（4-7 题，根据复杂度决定）：**
 1. **问题域** - 这个需求涉及哪些领域？
 2. **目标用户** - 谁会使用这个功能？
 3. **核心价值** - 解决什么痛点？
 4. **规模预期** - MVP 还是完整功能？
 
-（问题示例与格式同之前，此处省略以避免冗余。保持所有 AskUserQuestion 调用必须带 metadata。）
+根据复杂度追加 3 题（中等/复杂需求）：
+5. **优先级** - 哪些功能是 P0 必做？
+6. **数据源** - 数据从哪里来？
+7. **交付形式** - 需要哪些页面/API？
 
-**L1 完成后：**
-- 根据答案确定激活哪些 L2 维度（frontend, backend, ux, architecture）
-- 简短总结收集的信息
-- **进入代码库扫描阶段**（如果有代码库）
-- 扫描完成后进入 L2
+**使用方案卡交互协议**发送 1 个 AskUserQuestion（header: "L1 核心识别"）。
+
+**L1 完成后 → Write journal §L1：**
+- 记录所有 Q/A 选择结果
+- 确定激活哪些 L2 维度（frontend, backend, ux, architecture）
+- **进入 S1 代码库扫描**（如果有代码库）→ R1 规范确认 → L2
 
 ---
 
-### Phase 2.5: 代码库感知扫描（L1→L2 之间）（增强版）
+### Phase 2.5: S1 代码库感知扫描（Explore Subagent）
 
-**目标：** 扫描当前项目代码库，识别技术栈、架构模式、现有组件和数据模型，为后续问答和 PRD 生成提供精准上下文。
+**目标：** 扫描当前项目代码库，识别技术栈、架构模式、现有组件和数据模型。**三模式统一（含 Transform）。**
 
 **触发条件：** L1 完成后自动判断是否有代码库。
 
@@ -341,87 +483,59 @@ L0 上下文摘要:
 
 使用 Glob 工具检查当前工作目录是否有项目文件：
 - 检查 `package.json`、`tsconfig.json`、`Cargo.toml`、`go.mod`、`requirements.txt`、`pom.xml` 等
-- 如果没有任何项目文件 → **跳过扫描**，在 metadata 中标记 `codebaseScanned: false`，直接进入 L2
-- 如果有项目文件 → **执行扫描**
+- 如果没有任何项目文件 → **跳过扫描**，标记 `codebaseScanned: false`，直接进入 R1
+- 如果有项目文件 → **执行 Explore Subagent 扫描**
 
-#### 扫描步骤（有代码库时执行）
+#### 使用 Task(Explore) 执行扫描
 
-**步骤 1：技术栈检测**（不变）
-- 使用 Read 读取 `package.json`（检查 dependencies/devDependencies）
-- 识别框架（React、Next.js、Vue、Express、Django 等）
-- 识别语言（TypeScript、JavaScript、Python、Go 等）
-- 识别构建工具（Vite、Webpack、Turbo 等）
+**将代码扫描委托给 Explore subagent，释放主对话上下文。**
 
-**步骤 2：目录结构分析**（不变）
-- 使用 Glob 扫描顶层目录结构（`*`、`src/*`、`app/*`）
-- 识别项目架构模式（monorepo、标准 src 结构、Next.js App Router 等）
-- 记录关键目录（components、pages/app、api、lib、utils 等）
+```
+Task(subagent_type="Explore", prompt="""
+对当前项目执行全面代码库扫描，输出结构化 codebase-scan.md。
 
-**步骤 3：现有组件/路由/API 识别**（不变）
-- 使用 Glob 扫描 `src/components/**/*.{tsx,jsx,vue}` 识别现有组件
-- 使用 Glob 扫描 `src/app/**/page.{tsx,jsx}` 或 `pages/**/*.{tsx,jsx}` 识别路由
-- 使用 Glob 扫描 `src/app/api/**/*.{ts,js}` 或 `api/**/*.{ts,js}` 识别 API 接口
-- 记录关键组件名称和路由路径
+扫描维度：
+1. 技术栈检测：package.json dependencies、框架、语言、构建工具
+2. 目录结构：顶层目录、架构模式（monorepo/App Router 等）
+3. 现有组件/路由/API：组件名称、路由路径、API 端点
+4. 数据模型：schema.prisma、types.ts、SQL 建表语句
+5. 数据库 Schema：表名、字段、约束、RLS 策略
+6. UI 组件接口：interface.*Props 定义
+7. API 签名：export GET/POST/PUT/DELETE
+8. 业务逻辑：services/、lib/ 的 export 列表
 
-**步骤 4：数据模型分析**（不变）
-- 使用 Grep 搜索 `schema.prisma`、`models.py`、数据库模型定义
-- 使用 Grep 搜索类型定义文件（`types.ts`、`interfaces.ts`）
-- 识别核心数据模型和关系
+输出格式（Markdown）：
+# Codebase Scan Report
+## 技术栈
+## 目录结构
+## 现有组件
+## 现有路由
+## 现有 API 端点
+## 数据模型
+## 数据库 Schema（SQL 表摘要）
+## UI 组件接口
+## 业务逻辑函数
 
-**步骤 5：数据库 Schema 扫描**（NEW）
-- 使用 Glob 搜索 `**/*.sql`、`**/migrations/**`、`**/schema.prisma`
-- 读取现有 SQL 建表语句，提取表名、字段、约束
-- 识别哪些表已存在、哪些有 RLS 策略
-- 这些信息将用于 PRD § 2（当前状态）和 § 4（数据设计）
-
-**步骤 6：UI 组件接口扫描**（NEW）
-- 使用 Grep 搜索 `interface.*Props`、`type.*Props` 提取组件 Props 定义
-- 识别可复用的组件及其接口签名
-- 这些信息将用于 PRD § 5（UI 设计，标记可复用组件）
-
-**步骤 7：API 签名扫描**（NEW）
-- 使用 Grep 搜索 `export.*GET`、`export.*POST`、`export.*PUT`、`export.*DELETE`
-- 识别已有 API 端点的方法签名
-- 这些信息将用于 PRD § 2（当前状态）
-
-**步骤 8：业务逻辑扫描**（NEW）
-- 读取关键 `services/`、`lib/` 文件的 export 列表
-- 识别已有的业务逻辑函数和服务
-- 这些信息将用于 PRD § 2（当前状态）
+将结果写入文件：$TASKS_DIR/<projectId>/codebase-scan.md
+""")
+```
 
 #### 扫描结果双重用途
 
-扫描结果用于两个目的：
+1. **内化到后续问题中**：L2 问题预设技术栈、组件选项包含已有组件名称
+2. **作为 PRD 内容数据源**：§ 2 当前状态、§ 4 数据设计、§ 5 UI 设计、§ 8 文件索引
 
-**1. 内化到后续问题中（不变）：**
-- L2 问题中预设当前项目的技术栈
-- 组件选项中包含已有组件名称
-- API 类型根据项目现有模式预设
+#### 扫描完成后
 
-**2. 作为 PRD 内容数据源（NEW）：**
-- § 2 当前状态：已有能力表格 + 缺口分析
-- § 4 数据设计：已有 Schema 作为基准
-- § 5 UI 设计：已有组件标记为可复用
-- § 8 附录：代码文件索引的基础数据
+- 读取 `codebase-scan.md` 摘要写入 journal §S1
+- 提示用户：> "已识别项目技术栈：[概要]，将基于现有架构生成更精准的问题。"
 
-#### 步骤 9：生成/更新 PROJECT.md（不变）
-
-在代码库扫描完成后，自动生成或更新项目根目录的 `PROJECT.md` 文件。逻辑不变。
-
-#### 无代码库时的降级处理（不变）
+#### 无代码库时的降级处理
 
 如果判断没有代码库（新项目）：
-- 在 metadata 中标记 `codebaseScanned: false`
-- 跳过扫描，直接进入 L2
+- 标记 `codebaseScanned: false`
+- 跳过扫描，直接进入 R1
 - PRD § 2 当前状态将显示为"新项目，无现有代码库"
-
-#### 扫描耗时提示（不变）
-
-扫描前向用户发送简短提示：
-> "正在分析项目代码库，以便为您提供更精准的问题..."
-
-扫描完成后简短总结：
-> "已识别项目技术栈：[Next.js + TypeScript + Prisma]，将基于现有架构生成更精准的问题。"
 
 ---
 
@@ -477,125 +591,78 @@ L0 上下文摘要:
 
 ---
 
-### Phase 3: L2 领域分支（增强版）
+### Phase 3: L2 领域分支（方案卡）
 
-**目标：** 按领域深入探索具体需求。**如果代码库扫描已完成（codebaseScanned: true），必须在问题选项中融入扫描发现的信息。**
+**目标：** 按领域深入探索具体需求。**仅完整规划模式执行，功能开发跳过。**
+
+**Read journal** → 获取 L0 + L1 + S1 + R1 上下文
 
 **融合扫描结果的规则：**
-- 技术栈选项中预设当前项目的技术栈作为推荐选项
-- 组件选项中包含已有组件名称（如「复用现有 DataTable 组件」）
-- API 类型和数据存储选项根据扫描结果预设
+- 技术栈选项中预设 codebase-scan.md 识别的技术栈（AI 推荐 ← 标记）
+- 组件选项包含已有组件名称（如「复用现有 DataTable 组件 ← 匹配现有项目」）
 - 如果 `codebaseScanned: false`，使用通用选项
 
-**维度定义：**
+**维度定义（根据 L1 激活的维度选题，5-12 题）：**
 
-#### frontend（前端）
-- 页面结构（单页/多页/仪表盘）
-- 核心组件（表单/列表/图表）
-- 响应式需求
-- 交互方式
+| 维度 | 话题 |
+|------|------|
+| frontend | 页面结构、核心组件、响应式、交互方式 |
+| backend | API 类型、数据模型、认证方式、存储需求 |
+| ux | 用户旅程、核心流程、错误处理、反馈机制 |
+| architecture | 技术栈、模块划分、部署方式 |
+| dataModel | 新建表？关键字段？表间关系？约束/枚举/软删除？ |
+| uiStructure | 新页面数/路由？复用/新建组件？弹窗？布局？ |
 
-#### backend（后端）
-- API 类型
-- 数据模型
-- 认证方式
-- 存储需求
+**使用方案卡交互协议**发送 1 个 AskUserQuestion（header: "L2 领域分支"）。
 
-#### ux（用户体验）
-- 用户旅程
-- 核心流程
-- 错误处理
-- 反馈机制
-
-#### architecture（技术架构）
-- 技术栈
-- 模块划分
-- 部署方式
-
-**新增话题（功能开发 + 完整规划模式）：**
-
-#### dataModel（数据模型）— NEW
-- 是否需要新建数据库表？
-- 核心表的关键字段有哪些？
-- 与现有表的关系（外键/引用）？
-- 是否有约束或特殊规则（唯一/枚举/软删除）？
-
-#### uiStructure（UI 层次）— NEW
-- 需要几个新页面？列出页面名称和路由
-- 复用哪些已有组件？需要新建哪些组件？
-- 需要哪些弹窗/对话框？
-- 关键页面的大致布局（左右分栏/上下结构/Tab 切换）？
-
-**根据 L1 答案选择激活的维度，为每个维度生成 2-4 个问题。**
+**L2 完成后 → Write journal §L2** → 进入 L3
 
 ---
 
-### Phase 4: L3 细节深入（增强版）
+### Phase 4: L3 细节深入（方案卡）
 
-**目标：** 根据 L2 答案，深入实现细节
+**目标：** 根据 L2 答案，深入实现细节。**仅完整规划模式执行，功能开发跳过。**
 
-**动态话题（根据 L2 答案激活）：**
+**Read journal** → 获取 L0-L2 + S1 + R1 上下文
 
-#### 如果有表单
-- 验证规则
-- 错误提示方式
-- 提交流程
+**动态话题（根据 L2 答案激活，5-12 题）：**
 
-#### 如果有列表
-- 分页方式
-- 排序过滤
-- 空状态
+| 条件 | 话题 |
+|------|------|
+| 有表单 | 验证规则、错误提示方式、提交流程 |
+| 有列表 | 分页方式、排序过滤、空状态 |
+| 有 API | 错误处理、权限控制 |
+| 有数据模型 | 模型关系、字段定义 |
+| 有状态流转 | 状态列表、转换规则、不可逆操作、副作用 |
+| 有业务规则 | 核心规则、删除级联、危险操作确认、边界条件 |
+| 有组件交互 | 弹窗确认流程、下拉选项来源、拖拽/批量操作 |
 
-#### 如果有 API
-- 错误处理
-- 权限控制
+**使用方案卡交互协议**发送 1 个 AskUserQuestion（header: "L3 细节深入"）。
 
-#### 如果有数据模型
-- 模型关系
-- 字段定义
-
-**新增话题（仅完整规划模式）：**
-
-#### 状态流转 — NEW
-- 核心实体有几种状态？（如 draft/published/archived）
-- 状态之间如何转换？谁能触发转换？
-- 是否有不可逆的状态变更？
-- 状态变更时是否有副作用（如通知、级联更新）？
-
-#### 业务规则 — NEW
-- 有哪些核心业务规则？（如"版本号单调递增"、"同一分类下不可重复指派"）
-- 删除操作是否有级联影响？如何处理？
-- 是否有需要弹窗确认的危险操作？
-- 边界情况有哪些？
-
-#### 组件交互 — NEW
-- 弹窗确认流程是怎样的？（如创建/删除确认）
-- 下拉选择的选项来源？（静态列表/API 动态加载）
-- 是否有拖拽排序、批量操作等复杂交互？
+**L3 完成后 → Write journal §L3** → 进入 L4
 
 ---
 
-### Phase 5: L4 边界确认（增强版）
+### Phase 5: L4 边界确认（方案卡）
 
 **目标：** 确认范围边界，防止范围蔓延
 
-**必问话题：**
-1. **集成点** - 需要修改哪些现有代码？
-2. **排除范围** - 哪些功能明确不做？
-3. **非功能需求** - 性能/安全要求？
-4. **MVP 边界** - 哪些可以推迟？
+**Read journal** → 获取 L0-L3 + S1 + R1 上下文
 
-**新增话题（功能开发 + 完整规划模式）：**
+**必问话题（4-7 题）：**
 
-#### 文件命名约定 — NEW
-- API 路径模式（如 `/api/[resource]/route.ts`）？
-- 组件文件命名约定（如 PascalCase）？
-- 是否有现有的目录结构约定需要遵循？
+| 话题 | 问题 |
+|------|------|
+| 集成点 | 需要修改哪些现有代码？ |
+| 排除范围 | 哪些功能明确不做？ |
+| 非功能需求 | 性能/安全要求？ |
+| MVP 边界 | 哪些可以推迟？ |
+| 文件命名约定 | API 路径模式？组件命名约定？目录结构？ |
+| 现有代码修改范围 | 修改哪些文件？是否变更数据库？是否修改类型定义？ |
 
-#### 现有代码修改范围 — NEW
-- 哪些现有文件会被修改（而非新建）？
-- 是否需要修改数据库（新建表/修改现有表）？
-- 是否需要修改现有的类型定义？
+**使用方案卡交互协议**发送 1 个 AskUserQuestion（header: "L4 边界确认"）。
+
+**L4 完成后 → Write journal §L4** → 进入 Phase 5.5 外部依赖扫描
 
 ---
 
@@ -1000,19 +1067,64 @@ LOW:    [风险项]
 
 ---
 
-### Phase 7: 生成多维度 PRD（模板重写）
+### Phase 7: G1/W1 PRD 生成（general-purpose Subagent 委托）
 
-**L5 确认门控通过后，根据收集的所有信息和代码库扫描结果，生成多维度、高颗粒度的 PRD 文档。**
+**L5 确认门控通过后，将 PRD 生成委托给 general-purpose Subagent，释放主对话上下文。**
 
 **输出路径（per-project 子目录）：**
 ```bash
 TASKS_DIR="$([ -d BotoolAgent/tasks ] && echo BotoolAgent/tasks || echo tasks)"
-# projectId 从功能名称派生（kebab-case，如 "adversarial-review"）
 PROJECT_DIR="$TASKS_DIR/<projectId>"
 mkdir -p "$PROJECT_DIR"
 # PRD 写入: $PROJECT_DIR/prd.md
 # (dev.json 和 registry 由 PRDing Ralph 管线中的 A2:prd2json 自动生成)
 ```
+
+#### Subagent 委托调用
+
+```
+Task(
+  subagent_type: "general-purpose",
+  description: "生成 PRD 文档",
+  prompt: """
+你是 BotoolAgent PRD 生成器。根据以下输入生成完整的 PRD 文档。
+
+## 输入
+
+### Q&A Journal（需求决策记录）
+<读取 $PROJECT_DIR/qa-journal.md 的全部内容并粘贴到此处>
+
+### 代码库扫描报告
+<读取 $PROJECT_DIR/codebase-scan.md 的全部内容并粘贴到此处（如不存在则写 "新项目，无现有代码库"）>
+
+### 生成参数
+- 模式: <功能开发 | 完整规划>
+- projectId: <projectId>
+- 输出路径: $PROJECT_DIR/prd.md
+
+## 生成规则
+
+<将下方「复杂度裁剪规则」「PRD 模板」「Dev Task 规则」全部嵌入 prompt>
+
+## 安全检查自动注入
+
+<将下方「Phase 7.5 安全检查自动注入」规则嵌入 prompt>
+
+生成完成后，将 PRD 写入 $PROJECT_DIR/prd.md。
+"""
+)
+```
+
+**Subagent 输入构造规则：**
+1. 读取 `$PROJECT_DIR/qa-journal.md` 全部内容作为需求决策上下文
+2. 读取 `$PROJECT_DIR/codebase-scan.md` 全部内容作为技术上下文（不存在则标记"新项目"）
+3. 根据 journal 中标注的模式（功能开发/完整规划）选择对应模板
+4. 将下方所有模板规则嵌入 Subagent prompt（模板是 Subagent 的生成指令）
+
+**Subagent 完成后：**
+1. 验证 `$PROJECT_DIR/prd.md` 已写入且非空
+2. 如果写入失败 → 报错并提供手动恢复指令
+3. 继续进入 PRDing Ralph 编排器（A1 审查 + A2 转换）
 
 #### 复杂度裁剪规则
 
@@ -1627,45 +1739,47 @@ Phase T1 ──→ S1 ──→ R1 ──→ T2 ──→ T2.5 ──→ T3 ─�
 
 ---
 
-### Phase T4: 针对性问答（仅 PARTIAL/SPARSE 维度）
+### Phase T4: Tq 针对性问答（方案卡，仅 PARTIAL/SPARSE 维度）
 
-**核心原则：不重复问用户 PRD 中已有的内容。**
+**核心原则：不重复问用户 PRD 中已有的内容。只对覆盖不足的维度使用方案卡补充。**
 
-对每个需要补充的维度，复用现有 L2/L3 问题模板，但只选择相关子集：
+#### 问题选取规则
+
+| 维度覆盖度 | 选题来源 | 问题数 |
+|-----------|---------|--------|
+| § 5 UI = PARTIAL | L2 uiStructure（页面列表、组件、布局） | 2-4 |
+| § 6 规则 = SPARSE | L3 业务规则 + 状态流转 + L2 backend（权限、约束） | 3-5 |
+| § 3 架构 = PARTIAL | L2 architecture（跳过已有高层设计） | 2-3 |
+| § 4 数据 = PARTIAL | L2 dataModel（跳过已有表名，只问缺失字段/约束） | 2-4 |
+
+#### Tq 方案卡模板
 
 ```
-如果 § 5 UI 是 PARTIAL：
-  → 复用 L2 的 uiStructure 问题（页面列表、组件、布局）
-  → 跳过 L2 的其他维度
+【Transform Tq — AI 补充方案卡】
 
-如果 § 6 规则是 SPARSE：
-  → 复用 L3 的「业务规则」和「状态流转」问题
-  → 同时复用 L2 的 backend 部分问题（权限、约束）
+覆盖不足维度: [§5 UI (PARTIAL), §6 规则 (SPARSE)]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+§5 补充:
+  Q1. 页面数: A) 2个 ← 推断  B) 3个  C) 我来列
+  → AI 选择: A
 
-如果 § 3 架构是 PARTIAL：
-  → 复用 L2 的 architecture 问题
-  → 跳过已有的高层设计部分
+§6 补充:
+  Q2. 删除策略: A) 软删除 ← 安全  B) 硬删除+确认
+  → AI 选择: A
 
-如果 § 4 数据是 PARTIAL：
-  → 复用 L2 的 dataModel 问题
-  → 跳过已有表名，只问缺失字段和约束
+  Q3. 权限控制: A) 管理员才能删 ← 推荐  B) 所有用户
+  → AI 选择: A
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+要修改请在下方 Type something 中输入如 "Q2 换 B"
 ```
 
-**限制：最多 2 轮问答（每轮批量提问），防止过长。**
+**使用方案卡交互协议**发送 1 个 AskUserQuestion（header: "Tq 补充问答"）。
 
-使用 AskUserQuestion 时的 metadata：
-```json
-{
-  "metadata": {
-    "source": "pyramidprd",
-    "level": 3,
-    "levelName": "Transform: 针对性问答",
-    "progress": "T4/T6",
-    "totalLevels": 5,
-    "transformPhase": "targeted-qa"
-  }
-}
-```
+**3 个固定选项同 L1-L4 方案卡**：全部接受 / 方向不对重新生成 / 输入修改。
+
+**限制：最多 2 轮方案卡**（第 1 轮 PARTIAL/SPARSE 全覆盖，第 2 轮仅处理用户修改后新增的不确定项）。
+
+**Tq 完成后 → Write journal §Tq** → 进入 T5 DT 分解
 
 ---
 
