@@ -517,6 +517,14 @@ Task(subagent_type="Explore", prompt="""
 ## 业务逻辑函数
 
 将结果写入文件：$TASKS_DIR/<projectId>/codebase-scan.md
+
+⚠️ 上下文保护 — 返回消息格式：
+文件写入后，返回结构化摘要（禁止复述文件内容，主对话会通过 Read 获取完整文件）：
+- 技术栈: [框架 + 语言 + DB，一行]
+- 统计: [组件数/路由数/API数/表数]
+- 关键发现: [架构模式、特殊依赖、值得注意的设计]
+- 缺失信号: [未发现的维度，如"无 schema.prisma"、"无 API 路由"]
+控制在 15 行以内。
 """)
 ```
 
@@ -1111,6 +1119,13 @@ Task(
 <将下方「Phase 7.5 安全检查自动注入」规则嵌入 prompt>
 
 生成完成后，将 PRD 写入 $PROJECT_DIR/prd.md。
+
+⚠️ 上下文保护 — 返回消息格式：
+文件写入后，返回结构化摘要（禁止复述 PRD 内容，主对话会验证文件）：
+- 生成统计: [总行数/DT 数量/Phase 数量/CREATE TABLE 数]
+- 维度覆盖: [§1-§8 各维度是否生成，一行概要]
+- 异常标记: [生成中跳过或降级的内容]
+控制在 15 行以内。
 """
 )
 ```
@@ -1530,33 +1545,64 @@ else:  # > 5000
 ```
 # 同时启动 4 个 Task(Explore)，按维度并行提取
 
-Task(subagent_type="Explore", description="提取§4数据设计",
+Task(subagent_type="Explore", description="C2:§4数据设计",
   prompt="读取源 PRD 文件 $SOURCE_PRD_PATH，提取所有与数据设计相关的内容：
     - 全部 CREATE TABLE 语句（完整保留，含字段、约束、注释）
     - 数据模型关系（ER 图、外键引用）
     - 数据库约束和索引
-    输出到: $PROJECT_DIR/c2-data-extraction.md")
+    输出到: $PROJECT_DIR/c2-data-extraction.md
 
-Task(subagent_type="Explore", description="提取§3+§6架构+规则",
+    ⚠️ 上下文保护 — 返回消息格式：
+    文件写入后，返回结构化摘要（禁止复述文件内容，主对话会通过 Read 获取完整文件）：
+    - 表清单: [表名列表，每表标注字段数]
+    - 关键发现: [自引用外键、复合索引、RLS 策略等值得注意的设计]
+    - 缺失信号: [未发现的内容，如「无索引定义」「无约束注释」]
+    控制在 15 行以内。")
+
+Task(subagent_type="Explore", description="C2:§3+§6架构+规则",
   prompt="读取源 PRD 文件 $SOURCE_PRD_PATH，提取所有与架构和规则相关的内容：
     - 架构设计（状态机、角色权限、工作流）
     - 业务规则（所有 BR-xxx 或规则表格）
     - 约束和权限定义
-    输出到: $PROJECT_DIR/c2-arch-rules-extraction.md")
+    输出到: $PROJECT_DIR/c2-arch-rules-extraction.md
 
-Task(subagent_type="Explore", description="提取§5+§8 UI+附录",
+    ⚠️ 上下文保护 — 返回消息格式：
+    文件写入后，返回结构化摘要（禁止复述文件内容，主对话会通过 Read 获取完整文件）：
+    - 架构清单: [状态机数/角色数/工作流数]
+    - 规则清单: [BR-xxx 规则条数，规则表格数]
+    - 关键发现: [复杂状态转换、跨模块约束等]
+    - 缺失信号: [未发现的内容，如「无权限矩阵」「无状态机定义」]
+    控制在 15 行以内。")
+
+Task(subagent_type="Explore", description="C2:§5+§8 UI+附录",
   prompt="读取源 PRD 文件 $SOURCE_PRD_PATH，提取所有与 UI 和附录相关的内容：
     - 页面布局（ASCII 线框图完整保留）
     - 组件清单和 Props 接口
     - 测试策略、风险评估、实现细节代码示例
-    输出到: $PROJECT_DIR/c2-ui-appendix-extraction.md")
+    输出到: $PROJECT_DIR/c2-ui-appendix-extraction.md
 
-Task(subagent_type="Explore", description="提取§7开发计划",
+    ⚠️ 上下文保护 — 返回消息格式：
+    文件写入后，返回结构化摘要（禁止复述文件内容，主对话会通过 Read 获取完整文件）：
+    - UI 清单: [页面数/线框图数/组件数]
+    - 附录清单: [代码示例数/测试策略/风险条目数]
+    - 关键发现: [复杂交互、特殊布局要求等]
+    - 缺失信号: [未发现的内容，如「无 Props 接口」「无线框图」]
+    控制在 15 行以内。")
+
+Task(subagent_type="Explore", description="C2:§7开发计划",
   prompt="读取源 PRD 文件 $SOURCE_PRD_PATH，提取开发计划相关的内容：
     - 所有 Phase 定义（标题、前置条件、产出）
     - 所有任务条目（含文件路径、组件名、API 路由）
     - Phase 间依赖关系
-    输出到: $PROJECT_DIR/c2-plan-extraction.md")
+    输出到: $PROJECT_DIR/c2-plan-extraction.md
+
+    ⚠️ 上下文保护 — 返回消息格式：
+    文件写入后，返回结构化摘要（禁止复述文件内容，主对话会通过 Read 获取完整文件）：
+    - Phase 清单: [Phase 数，每 Phase 标注任务条目数]
+    - 依赖链: [关键前置依赖关系]
+    - 关键发现: [并行可行的 Phase、高风险任务等]
+    - 缺失信号: [未发现的内容，如「无文件路径引用」「无验收条件」]
+    控制在 15 行以内。")
 ```
 
 #### 步骤 2: 主对话合并
@@ -1612,6 +1658,13 @@ Task(subagent_type="Explore", description="提取 master-context",
 [声明]
 
 输出到: $PROJECT_DIR/master-context.md
+
+⚠️ 上下文保护 — 返回消息格式：
+文件写入后，返回结构化摘要（禁止复述文件内容，主对话会通过 Read 获取完整文件）：
+- 统计: [表数/字段总数/规则条数/状态机数]
+- 关键发现: [核心架构决策、跨模块依赖等]
+- 完整性自检: [CREATE TABLE 数量 vs 源 PRD 总数，是否有遗漏]
+控制在 10 行以内。
 """)
 ```
 
@@ -1661,6 +1714,13 @@ for each phase-bundle-N.md:
 - 每个 DT 必须有完整验收条件
 
 输出到: $PROJECT_DIR/prd-phase-N.md
+
+⚠️ 上下文保护 — 返回消息格式：
+文件写入后，返回结构化摘要（禁止复述文件内容，主对话会通过 Read 获取完整文件）：
+- Phase: [Phase 名称 + DT 数量]
+- 涉及维度: [§3/§4/§5/§6 哪些有内容]
+- 关键发现: [高复杂度任务、跨 Phase 依赖]
+控制在 10 行以内。
 """
   )
 ```
