@@ -26,6 +26,8 @@ mkdir -p "$PACKAGE_DIR"
 echo "  Copying core files..."
 mkdir -p "$PACKAGE_DIR/scripts"
 cp "$SCRIPT_DIR/scripts/BotoolAgent.sh" "$PACKAGE_DIR/scripts/"
+cp "$SCRIPT_DIR/scripts/sandbox-guard.sh" "$PACKAGE_DIR/scripts/"
+cp "$SCRIPT_DIR/scripts/gate-check.sh" "$PACKAGE_DIR/scripts/"
 cp "$SCRIPT_DIR/CLAUDE.md" "$PACKAGE_DIR/"
 cp "$SCRIPT_DIR/CLAUDE.lead.md" "$PACKAGE_DIR/"
 cp "$SCRIPT_DIR/AGENTS.md" "$PACKAGE_DIR/"
@@ -112,6 +114,8 @@ cd "$SCRIPT_DIR"
 # Make scripts executable
 chmod +x "$SCRIPT_DIR/BotoolAgent.sh"
 chmod +x "$SCRIPT_DIR/scripts/BotoolAgent.sh"
+chmod +x "$SCRIPT_DIR/scripts/sandbox-guard.sh"
+chmod +x "$SCRIPT_DIR/scripts/gate-check.sh"
 
 # Install skills as symlinks to ~/.claude/skills/
 echo "  Installing skills..."
@@ -143,6 +147,33 @@ for skill_file in "$SCRIPT_DIR"/skills/BotoolAgent/*/SKILL.md; do
   ln -s "$skill_file" "$target_file"
   echo "    Linked: $skill_name"
 done
+
+# Register sandbox-guard.sh as preToolUse hook in .claude/settings.json
+echo "  Registering sandbox-guard hook..."
+GUARD_PATH="$SCRIPT_DIR/scripts/sandbox-guard.sh"
+PROJ_CLAUDE_DIR="$SCRIPT_DIR/.claude"
+PROJ_SETTINGS="$PROJ_CLAUDE_DIR/settings.json"
+mkdir -p "$PROJ_CLAUDE_DIR"
+if [ ! -f "$PROJ_SETTINGS" ]; then
+  echo '{}' > "$PROJ_SETTINGS"
+fi
+
+if command -v jq &>/dev/null; then
+  # Use jq to upsert sandbox-guard hook (preserve existing hooks, PascalCase event name)
+  jq --arg cmd "bash $GUARD_PATH" '
+    .hooks.PreToolUse = (
+      (.hooks.PreToolUse // [])
+      | map(select(
+          (.hooks // []) | any(.command | contains("sandbox-guard")) | not
+        ))
+    ) + [{"matcher":"Bash","hooks":[{"type":"command","command":$cmd}]}]
+  ' "$PROJ_SETTINGS" > "$PROJ_SETTINGS.tmp" \
+    && mv "$PROJ_SETTINGS.tmp" "$PROJ_SETTINGS"
+  echo "    Registered: sandbox-guard.sh → .claude/settings.json"
+else
+  echo "    ⚠️ jq not found — sandbox-guard hook not registered automatically"
+  echo "    Install jq and re-run setup, or manually add to .claude/settings.json"
+fi
 
 echo ""
 echo "BotoolAgent is ready!"

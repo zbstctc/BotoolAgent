@@ -167,6 +167,77 @@ load_config
 # ============================================================================
 # 工具函数
 # ============================================================================
+# Session 结束后安全网检查 — 撤销无 gate-results 支撑的 passes=true
+safety_net_check() {
+  [ -f "$PRD_FILE" ] || return
+
+  # jq 硬依赖（fail-closed: 无 jq 时无法验证，记录告警）
+  if ! command -v jq &>/dev/null; then
+    echo ">>> [SAFETY NET] CRITICAL: jq not found — cannot verify gate-results"
+    echo ">>>   Fail-closed: treating all DTs as unverified"
+    return 1
+  fi
+
+  # 扫描: 有 blocking eval + passes=true 的 DT
+  local passed_with_evals
+  passed_with_evals=$(jq -r '.devTasks[] |
+    select(.passes == true) |
+    select((.evals // []) | map(select(.blocking == true)) | length > 0) |
+    .id' "$PRD_FILE" 2>/dev/null)
+
+  # 使用运行时可信路径（不从 dev.json 读取，防止 LLM 篡改 projectDir 字段绕过）
+  local project_dir
+  project_dir=$(dirname "$PRD_FILE")
+
+  local revoked=0
+  for dt_id in $passed_with_evals; do
+    local result_file="$project_dir/.state/gate-results/${dt_id}.json"
+    if [ ! -f "$result_file" ]; then
+      echo ">>> [SAFETY NET] $dt_id: has blocking evals + passes=true but no gate-results!"
+      echo ">>>   Revoking passes → false"
+      local tmp_file="${PRD_FILE}.tmp"
+      jq --arg id "$dt_id" '
+        .devTasks |= map(if .id == $id then .passes = false else . end)
+      ' "$PRD_FILE" > "$tmp_file" && mv "$tmp_file" "$PRD_FILE"
+      revoked=$((revoked + 1))
+    else
+      # 有 gate-results: 检查 allPassed + 时间新鲜度（防止复用旧结果）
+      local all_passed result_ts
+      all_passed=$(jq -r '.allPassed' "$result_file" 2>/dev/null)
+      result_ts=$(jq -r '.timestamp' "$result_file" 2>/dev/null)
+
+      if [ "$all_passed" != "true" ]; then
+        echo ">>> [SAFETY NET] $dt_id: gate-results shows FAILED but passes=true!"
+        echo ">>>   Revoking passes → false"
+        local tmp_file="${PRD_FILE}.tmp"
+        jq --arg id "$dt_id" '
+          .devTasks |= map(if .id == $id then .passes = false else . end)
+        ' "$PRD_FILE" > "$tmp_file" && mv "$tmp_file" "$PRD_FILE"
+        revoked=$((revoked + 1))
+      fi
+
+      # 新鲜度检查: gate-results 时间戳必须在 session 开始后
+      if [ -n "$SESSION_START_TS" ] && [ -n "$result_ts" ]; then
+        local result_epoch
+        result_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$result_ts" +%s 2>/dev/null || echo 0)
+        if [ "$result_epoch" -lt "$SESSION_START_TS" ]; then
+          echo ">>> [SAFETY NET] $dt_id: gate-results timestamp ($result_ts) is STALE (before session start)!"
+          echo ">>>   Revoking passes → false (must re-run gate-check)"
+          local tmp_file="${PRD_FILE}.tmp"
+          jq --arg id "$dt_id" '
+            .devTasks |= map(if .id == $id then .passes = false else . end)
+          ' "$PRD_FILE" > "$tmp_file" && mv "$tmp_file" "$PRD_FILE"
+          revoked=$((revoked + 1))
+        fi
+      fi
+    fi
+  done
+
+  if [ "$revoked" -gt 0 ]; then
+    echo ">>> [SAFETY NET] Revoked $revoked DT(s) — Lead Agent skipped/faked gate-check"
+  fi
+}
+
 check_all_tasks_complete() {
   # Count total DT tasks
   local total=$(grep -c '"id": "DT-' "$PRD_FILE" 2>/dev/null | tr -d '[:space:]')
@@ -542,16 +613,22 @@ for CURRENT_ROUND in $(seq 1 $MAX_ROUNDS); do
   # 3. 更新状态
   update_status "running" "BotoolAgent 轮次 $CURRENT_ROUND/$MAX_ROUNDS"
 
-  # 4. 启动 session 并等待结束
+  # 4. 记录 session 开始时间（供 safety_net_check 新鲜度校验）
+  SESSION_START_TS=$(date +%s)
+
+  # 5. 启动 session 并等待结束
   start_session
 
-  # 5. Session 结束后检查
+  # 6. Session 结束后安全网检查（撤销无 gate-results 支撑的 passes=true）
+  safety_net_check
+
+  # 7. Session 结束后检查
   if check_all_tasks_complete; then
     echo ">>> 全部完成！"
     break
   fi
 
-  # 6. 没完成，准备下一轮
+  # 8. 没完成，准备下一轮
   echo ">>> Session 结束但还有未完成任务，${ROUND_COOLDOWN}秒后启动下一轮..."
   sleep $ROUND_COOLDOWN
 done

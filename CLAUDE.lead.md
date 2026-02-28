@@ -183,10 +183,24 @@ STATUS_PATH="${BOTOOL_STATUS_FILE:-$BOTOOL_SCRIPT_DIR/.state/agent-status}"
 
 **任何 DT 在标记 passes: true 之前，Lead Agent 必须：**
 
-1. 运行 dev.json 中该任务的所有 evals（不仅仅是 typecheck）
-2. 读取完整输出并确认退出码为 0
+1. **诊断执行**: 运行 dev.json 中该任务的所有 evals（blocking + non-blocking），收集信息
+2. 读取完整输出，对 non-blocking eval 失败记录 warning（不阻塞 passes）
 3. 检查文件是否存在（如果 eval 包含 test -f）
-4. 只有全部 evals 通过后才能写 passes: true
+
+**4. 确定性门控（强制）：**
+   a. 调用: `bash $BOTOOL_SCRIPT_DIR/scripts/gate-check.sh $BOTOOL_PROJECT_DIR {DT-ID}`
+   b. 读取 exit code:
+      - Exit 0 → 门控通过，可以继续写 passes: true
+      - Exit 1 → 门控失败，**禁止写 passes: true**，读取
+        `.state/gate-results/{DT-ID}.json` 诊断失败原因
+      - Exit 2 → 配置错误（缺 dev.json、DT 不存在、或 eval 命令不在白名单），停止并报告
+   c. gate-check.sh 的输出优先级高于 Lead Agent 自己运行 evals 的判断
+      （即使 Lead 认为"应该通过"，gate-check.sh 说失败就是失败）
+   d. 如果该 DT 无 blocking eval，gate-check.sh 会自动 exit 0 跳过
+
+5. **blocking eval 全部通过 且 gate-check.sh exit 0** 后才能写 passes: true
+   - gate-check.sh 只验证 `blocking: true` 的 eval
+   - `blocking: false` 的 eval（如 lint）失败不阻塞 passes（由 Lead Agent 自行判断是否修复）
 
 如果 Teammate 报告完成但 Lead 的独立验证失败：
 
