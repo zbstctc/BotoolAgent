@@ -40,6 +40,8 @@ L4: 边界确认 - Read journal → 方案卡 → Write journal §L4
     ↓
 Phase 5.5: 外部依赖扫描
     ↓
+Phase 5.8: Compact 检查点（用户可选压缩对话后继续）
+    ↓
 L5: 确认门控 - ASCII 多维度可视化确认（架构/数据/UI/规则/计划）
     ↓
 G1/W1: PRD 生成 → Task(general-purpose) subagent → prd.md
@@ -720,6 +722,54 @@ Task(subagent_type="Explore", prompt="""
 - "已全部准备好" → 各项 `resolved: true`
 - 其他选项 → 各项 `resolved: false`
 - Lead Agent 会在初始化时读取此字段，在 progress.txt 中给出预警提示
+
+---
+
+### Phase 5.8: Compact 检查点（L5 前自动触发）
+
+**目标：** L5 确认门控是 context 消耗最重的阶段（2 轮 ASCII 可视化）。在进入 L5 前，给用户一个压缩对话的机会，防止 auto-compact 在 L5 中途触发导致上下文丢失。
+
+**触发条件：** Phase 5.5 完成后、Phase 6 (L5) 开始前自动执行。
+
+**前置检查：** 确认 qa-journal.md 已包含 L0-L4 + S1 + R1 所有层级的决策数据。如有缺失，先补写再继续。
+
+**执行步骤：**
+
+1. 使用 AskUserQuestion 询问用户：
+
+```json
+{
+  "questions": [
+    {
+      "question": "即将进入 L5 确认门控（2 轮 ASCII 可视化，context 消耗较大）。建议先压缩对话释放空间。如何继续？",
+      "header": "Context 检查",
+      "options": [
+        { "label": "先 compact 再继续（推荐）", "description": "运行 /compact 压缩对话历史，释放 context 空间后继续 L5" },
+        { "label": "直接继续 L5", "description": "跳过压缩，直接进入确认门控（context 充足时选此项）" }
+      ],
+      "multiSelect": false
+    }
+  ]
+}
+```
+
+2. **如果用户选择 "先 compact 再继续"：**
+   - 输出以下提示（原文照抄）：
+
+   ```
+   ✅ 所有需求数据已保存到 qa-journal.md。
+
+   👉 请在输入框中运行 /compact，完成后回复「继续」。
+
+   compact 后我会从 qa-journal.md 恢复上下文，继续 L5 确认门控。
+   ```
+
+   - 等待用户回复「继续」或类似确认词
+   - **恢复上下文：** Read qa-journal.md + codebase-scan.md（如存在），在内部重建 L0-L4 决策摘要
+   - 继续进入 Phase 6 (L5)
+
+3. **如果用户选择 "直接继续 L5"：**
+   - 直接进入 Phase 6 (L5)
 
 ---
 
@@ -1442,9 +1492,9 @@ Phase 2, Phase 3 可并行
 **触发条件：** 用户消息中包含 `[模式:导入]` 时进入 Transform 流程。
 
 ```
-Phase T1 ──→ S1 ──→ R1 ──→ T2 ──→ T2.5 ──→ T3 ──→ T4 ──→ T5 ──→ T6 ──→ L5确认 ──→ 生成PRD ──→ Phase 5.5
-获取文件    代码扫描  规范确认  结构发现  完整性校验  覆盖评分  针对问答  DT分解   收敛门控  确认门控  输出PRD    外部依赖
-            (复用)   (复用)   (Grep)   (必执行)   (打分)   (0-2轮)  (算法)   (复用)   (复用)              (复用)
+Phase T1 ──→ S1 ──→ R1 ──→ T2 ──→ T2.5 ──→ T3 ──→ T4 ──→ T5 ──→ T6 ──→ 5.8 ──→ L5确认 ──→ 生成PRD ──→ Phase 5.5
+获取文件    代码扫描  规范确认  结构发现  完整性校验  覆盖评分  针对问答  DT分解   收敛门控  Compact  确认门控  输出PRD    外部依赖
+            (复用)   (复用)   (Grep)   (必执行)   (打分)   (0-2轮)  (算法)   (复用)  检查点   (复用)              (复用)
 ```
 
 **Transform 模式新增步骤说明：**
@@ -2100,10 +2150,12 @@ for each phase-bundle-N.md:
 **目标：** DT 分解完成后，收敛到现有的 L5 确认门控流程。
 
 ```
-Phase T6 输出 → 喂入现有 Phase 6 (L5 Confirmation Gate, 2 轮 Tabs)
+Phase T6 输出 → Phase 5.8 (Compact 检查点) → 喂入现有 Phase 6 (L5 Confirmation Gate, 2 轮 Tabs)
   第 1 轮: 项目概述 | 核心架构 | 用户角色 | 核心工作流
   第 2 轮: 数据模型 | 关键 UI  | 业务规则 | 总确认
 ```
+
+**Compact 检查点：** T6 完成后、L5 开始前，执行 Phase 5.8（Compact 检查点），给用户压缩对话的机会。
 
 **按模式裁剪 L5 步骤：** Transform 模式使用与「完整规划」相同的 L5 配置（2 轮 x 4 Tabs 全部展示），因为用户的原始 PRD 通常涵盖较多维度。
 
@@ -2335,7 +2387,7 @@ SQL 字段完整性校验：
 2. **立即开始提问** - 收到需求后先评估模式，然后按流程开始 L0 或 L1，不做冗长分析
 3. **使用 AskUserQuestion** - 所有问题都通过工具提问
 4. **包含 metadata** - 每次提问必须带 level 信息
-5. **层级递进** - 严格按 L0→L1→S1→R1→L2→L3→L4→Phase 5.5→L5（确认）顺序
+5. **层级递进** - 严格按 L0→L1→S1→R1→L2→L3→L4→Phase 5.5→Phase 5.8（Compact 检查点）→L5（确认）顺序
 6. **动态调整** - 根据答案调整后续问题
 7. **简洁反馈** - 每层完成后简短总结，立即进入下一层
 8. **ASCII 可视化** - L5 门控和 PRD 文档中使用 ASCII 图表达架构/UI/数据/流程
