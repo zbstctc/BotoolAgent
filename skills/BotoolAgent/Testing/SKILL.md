@@ -109,7 +109,7 @@ echo "项目目录: $PROJECT_DIR"
   Layer 3 — E2E Tests: 双轨并进
     Layer 3a — CLI Playwright: spec 文件 （自动修复）
     Layer 3b — Playwright MCP: dev.json testCases 验收测试 （前端问题专项捕获）
-  Layer 4 — Code Review: Claude 审查 git diff （自动修复 HIGH）
+  Layer 4 — Code Review: Claude 审查 git diff + 审查清单（SOLID/Security/Quality/Removal）（自动修复 HIGH）
   Layer 5 — Codex 红队审查: Codex 对抗审查 （对抗循环 ≤ 3 轮）
   Layer 6 — PR 创建 + Claude Review 守门 （Claude Review 修复循环 ≤ 2 轮）
 ```
@@ -781,9 +781,11 @@ Layer 4: 跳过（没有相对于 main 的代码改动）
 ```
 记录跳过并继续最终总结。
 
-### 4b. 加载审查清单
+### 4b. 加载审查清单（仅首次执行，retry 时跳过）
 
-在执行审查前，Read 以下 4 份参考清单（路径相对于 Testing Skill 目录）：
+**首次执行 L4 时**，Read 以下 4 份参考清单。Ralph 修复循环 retry 时**跳过此步**（清单内容已在上下文中，无需重复加载）。
+
+路径相对于 Testing Skill 目录：
 
 ```
 skills/BotoolAgent/Testing/references/solid-checklist.md
@@ -832,11 +834,14 @@ Ralph 修复循环（持续直到通过或断路器触发）：
      - **Phase 1 根因诊断**：检查 HIGH 问题是否有共同根因（如缺少统一的输入验证层）
      - **Phase 2 制定方案**：优先修共同根因（如添加全局 sanitize 中间件），再修独立问题
      - **Phase 3 执行修复**
-3. 按类型修复：
-   - 安全漏洞（SQL 注入）→ 加参数化查询
-   - 安全漏洞（XSS）→ 加转义/sanitize
-   - 数据丢失风险 → 加事务/备份检查
-   - 逻辑错误 → 修复逻辑
+3. 按检查维度修复：
+   - **Security** — 安全漏洞（SQL 注入→参数化查询、XSS→转义/sanitize、SSRF→URL 白名单、路径穿越→路径校验、竞态条件→加锁/原子操作）
+   - **SOLID** — 架构违规（SRP→拆分职责、OCP→引入策略/插件点、DIP→依赖注入替代硬编码）
+   - **Quality/Performance** — 性能问题（N+1→批量查询、缺失缓存→加 TTL 缓存、内存泄漏→流式处理）
+   - **Quality/Boundary** — 边界条件（null/undefined→加守卫检查、空集合→加 length 判断、除零→加分母校验、off-by-one→修循环边界）
+   - **Quality/ErrorHandling** — 错误处理（吞异常→补充错误传播、async 未捕获→加 .catch/try-catch）
+   - **Removal** — 死代码（未使用导出→删除、废弃 feature flag→清理）
+   - **Logic** — 数据丢失风险→加事务/备份检查、逻辑错误→修复逻辑
 4. 如果涉及多文件 **> 3 个**：Agent Teams 并行修复
    - 每个 agent（subagent_type: `general-purpose`）：
    - prompt: "修复以下 Code Review HIGH 问题：\n{问题描述}\n文件路径：{path}\n根因分析：{分析结论}\n只修改这个文件。"
@@ -864,6 +869,8 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 ## Layer 5 — Codex 红队对抗审查
 
 **跳过条件：** `startLayer > 5` 时跳过此层。
+
+**去重规则：** L4 Code Review 已修复的问题不应在 L5 中重复报告。Claude 解析 Codex findings 时，如果某条 finding 的 file:line + 问题描述与 L4 已修复的 HIGH 问题匹配，标记为 `resolved_in_l4` 并从 HIGH/MEDIUM 列表中排除。
 
 ### 5a. 检测 Codex CLI 可用性
 
@@ -935,16 +942,26 @@ codex exec review --base main --full-auto 2>&1 | tee "$REVIEW_OUTPUT"
 # 获取变更文件列表
 CHANGED_FILES=$(git diff main...HEAD --name-only)
 
-# 按 10 个文件一批分组，每批运行一次 codex exec review
-# 使用 --base main 审查指定文件
-for batch in $(echo "$CHANGED_FILES" | xargs -n 10); do
+# 按 10 个文件一批分组
+echo "$CHANGED_FILES" | xargs -n 10 | while read -r batch_files; do
   BATCH_OUTPUT=$(mktemp /tmp/codex-batch-XXXXXX.txt)
-  codex exec review --base main --full-auto 2>&1 | tee "$BATCH_OUTPUT"
+
+  # 生成仅包含本批文件的 diff，传给 codex 审查
+  BATCH_DIFF=$(mktemp /tmp/codex-batch-diff-XXXXXX.patch)
+  git diff main...HEAD -- $batch_files > "$BATCH_DIFF"
+
+  codex exec --full-auto \
+    "Review the following git diff for security, logic, error handling, and performance issues. List each finding with file, line, severity (HIGH/MEDIUM/LOW), and suggestion.
+
+$(cat "$BATCH_DIFF")" \
+    2>&1 | tee "$BATCH_OUTPUT"
+
+  rm -f "$BATCH_DIFF"
   # Claude 解析每批输出，合并到总 findings 列表
 done
 ```
 
-**Claude 解析**：同 5c Step 2，将每批 Codex 自由文本输出解析为结构化 findings，合并去重后生成最终 JSON。
+**Claude 解析**：同 5c Step 2，将每批 Codex 自由文本输出解析为结构化 findings，合并去重后生成最终 JSON。跨批次的重复 finding（同一 file:line）只保留一条。
 
 ### 5e. 解析审查结果
 
@@ -1196,7 +1213,8 @@ git status --porcelain
 
 如果有未提交的更改：
 ```bash
-git add -A
+# 只暂存已跟踪的修改文件（禁止 git add -A，避免暴露 .env 等敏感文件）
+git diff --name-only | xargs git add
 git commit -m "fix(testing): commit remaining auto-fixes before PR creation"
 ```
 
@@ -1527,10 +1545,16 @@ REPORT_PATH="tasks/${PROJECT_ID}/testing-report.json"
     },
     {
       "id": "L4",
-      "name": "Code Review",
+      "name": "Code Review + Checklists",
       "status": "pass|fail|skipped",
       "fixCount": 0,
-      "rounds": 0
+      "rounds": 0,
+      "dimensions": {
+        "solid": 0,
+        "security": 0,
+        "quality": 0,
+        "removal": 0
+      }
     },
     {
       "id": "L5",
@@ -1639,7 +1663,7 @@ BotoolAgent 6 层自动化测试 — 全部通过!
 | Layer 3b | MCP 测试断言失败 | 功能未实现或渲染 bug → 读组件文件修复逻辑/样式 |
 | Layer 3b | MCP 测试 dev server 超时 | 检查 PORT=$TEST_PORT npm run dev 是否正常启动 |
 | Layer 3b | MCP 测试无进展 | 2 轮无进展 → 生成 mcp-e2e-failures.md + 截图 → 问用户 |
-| Layer 4 | Code Review 有 HIGH | **信号清晰度判断 → Ralph 自动修复（根因分析）** → 2 轮无进展才问用户 |
+| Layer 4 | Code Review 有 HIGH（Security/SOLID/Quality/Boundary/Removal） | **信号清晰度判断 → Ralph 按维度分类修复（根因分析）** → 2 轮无进展才问用户 |
 | Layer 5 | Codex CLI 不可用 | 跳过 Layer 5，继续 Layer 6 |
 | Layer 5 | Codex 输出无法解析 | 记录 warning，跳过对抗循环，继续 Layer 6 |
 | Layer 5 | 对抗循环未收敛 | 3 轮后 Circuit Breaker → AskUserQuestion 转人工 |
