@@ -781,16 +781,33 @@ Layer 4: 跳过（没有相对于 main 的代码改动）
 ```
 记录跳过并继续最终总结。
 
-### 4b. Claude 审查
+### 4b. 加载审查清单
 
-将 diff 内容发送给 Claude 进行代码审查。使用以下 prompt：
+在执行审查前，Read 以下 4 份参考清单（路径相对于 Testing Skill 目录）：
 
 ```
-请审查以下 git diff，分析代码质量。按 HIGH / MEDIUM / LOW 三个级别列出问题：
+skills/BotoolAgent/Testing/references/solid-checklist.md
+skills/BotoolAgent/Testing/references/security-checklist.md
+skills/BotoolAgent/Testing/references/code-quality-checklist.md
+skills/BotoolAgent/Testing/references/removal-plan.md
+```
 
-- HIGH: 严重问题（安全漏洞、数据丢失风险、逻辑错误）
-- MEDIUM: 中等问题（性能问题、缺少错误处理、代码风格严重不一致）
-- LOW: 轻微问题（命名建议、代码风格微调、注释缺失）
+> **路径说明**：如果在 BotoolAgent 子目录下运行，路径前缀为 `BotoolAgent/skills/...`；根据实际项目结构调整。使用 Glob 工具搜索 `**/Testing/references/*.md` 确保找到文件。
+
+这些清单提供 6 个额外审查维度：SOLID 原则、安全与可靠性、错误处理、性能与缓存、边界条件、死代码识别。将清单内容作为审查参考框架，但 **只报告在 diff 中实际存在的问题**，不要报告清单中提到但 diff 未涉及的条目。
+
+### 4c. Claude 审查
+
+将 diff 内容结合清单知识进行代码审查。使用以下 prompt：
+
+```
+请审查以下 git diff，结合已加载的审查清单（SOLID、安全、代码质量、死代码），分析代码质量。按 HIGH / MEDIUM / LOW 三个级别列出问题：
+
+- HIGH: 严重问题（安全漏洞、数据丢失风险、逻辑错误、严重 SOLID 违规）
+- MEDIUM: 中等问题（性能问题、缺少错误处理、边界条件遗漏、竞态条件风险）
+- LOW: 轻微问题（命名建议、代码异味、死代码、代码风格微调）
+
+每个问题必须包含：文件路径:行号、问题描述、对应的检查维度（SOLID/Security/Quality/Removal）、修复建议。
 
 如果没有严重问题，输出"审查通过"。
 
@@ -799,7 +816,7 @@ Layer 4: 跳过（没有相对于 main 的代码改动）
 <diff 内容>
 ```
 
-### 4c. 判断审查结果
+### 4d. 判断审查结果
 
 - **如果只有 MEDIUM / LOW 问题或无问题：**
 输出审查摘要（包含 MEDIUM/LOW 建议），继续最终总结。
