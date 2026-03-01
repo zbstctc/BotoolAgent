@@ -862,7 +862,13 @@ Ralph 修复循环（持续直到通过或断路器触发）：
    3. 终止测试
    ```
 
-**Layer 4 通过后，告知用户：** "Layer 4 Code Review 通过"，并输出审查摘要。
+**Layer 4 通过后，告知用户：**
+```
+Layer 4 Code Review + Checklists 通过
+  审查维度: SOLID({n}) Security({n}) Quality({n}) Removal({n})
+  HIGH 修复: {fixCount} 个 | MEDIUM/LOW 建议: {advisoryCount} 个
+```
+其中每个维度的数字为该维度发现的问题总数（含已修复），用于填充 testing-report.json 的 `dimensions` 字段。并输出审查摘要。
 
 ---
 
@@ -870,7 +876,7 @@ Ralph 修复循环（持续直到通过或断路器触发）：
 
 **跳过条件：** `startLayer > 5` 时跳过此层。
 
-**去重规则：** L4 Code Review 已修复的问题不应在 L5 中重复报告。Claude 解析 Codex findings 时，如果某条 finding 的 file:line + 问题描述与 L4 已修复的 HIGH 问题匹配，标记为 `resolved_in_l4` 并从 HIGH/MEDIUM 列表中排除。
+**去重规则（仅当 L4 已执行时生效）：** 如果本次运行包含了 L4（即 `startLayer <= 4`），则 L4 已修复的问题不应在 L5 中重复报告。Claude 解析 Codex findings 时，如果某条 finding 的 file:line + 问题描述与 L4 已修复的 HIGH 问题匹配，标记为 `resolved_in_l4` 并从 HIGH/MEDIUM 列表中排除。当 `startLayer > 4`（L4 未执行）时，跳过去重，所有 Codex findings 正常处理。
 
 ### 5a. 检测 Codex CLI 可用性
 
@@ -1213,8 +1219,9 @@ git status --porcelain
 
 如果有未提交的更改：
 ```bash
-# 只暂存已跟踪的修改文件（禁止 git add -A，避免暴露 .env 等敏感文件）
-git diff --name-only | xargs git add
+# 暂存已跟踪文件的修改和删除（禁止 git add -A，避免暴露 .env 等敏感文件）
+# git add -u 只处理 tracked 文件，不会添加 untracked 文件
+git add -u
 git commit -m "fix(testing): commit remaining auto-fixes before PR creation"
 ```
 
