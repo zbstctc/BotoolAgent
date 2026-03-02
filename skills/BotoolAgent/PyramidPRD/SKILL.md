@@ -1140,6 +1140,13 @@ mkdir -p "$PROJECT_DIR"
 
 #### Subagent 委托调用
 
+**⚠️ Transform 模式使用多 Subagent 分段生成（解决单 Subagent 32000 token 输出上限问题）。**
+**功能开发/完整规划模式继续使用单 Subagent 生成。**
+
+---
+
+**路径 A: 功能开发/完整规划模式 — 单 Subagent 生成**
+
 ```
 Task(
   subagent_type: "general-purpose",
@@ -1155,18 +1162,8 @@ Task(
 ### 代码库扫描报告
 <读取 $PROJECT_DIR/codebase-scan.md 的全部内容并粘贴到此处（如不存在则写 "新项目，无现有代码库"）>
 
-### 源 PRD 原文（仅 Transform 模式）
-- 源 PRD 路径: $SOURCE_PRD_PATH
-- 你必须使用 Read 工具直接读取源 PRD 文件（分段读取，每次 500 行）
-- 对 §1-§8 的每个维度，按「充分摘录规则」逐一比对源 PRD 原文
-- 对「源章节映射表」中标记为 §9+ 的章节，原文完整复制到 §9+ 区域
-- 生成完毕后自检: 确认每个 §9+ 章节存在且非空
-
-### 源章节映射表（仅 Transform 模式）
-<将 T2 建立的完整映射表（含 §9+ 标记）粘贴到此处>
-
 ### 生成参数
-- 模式: <功能开发 | 完整规划 | Transform 导入>
+- 模式: <功能开发 | 完整规划>
 - projectId: <projectId>
 - 输出路径: $PROJECT_DIR/prd.md
 
@@ -1190,12 +1187,159 @@ Task(
 )
 ```
 
+---
+
+**路径 B: Transform 导入模式 — 3 个 Subagent 分段生成**
+
+Transform 模式的 PRD 通常超过 2000 行，单个 Subagent 的输出 token 上限（32000）无法容纳。
+必须拆分为 3 个并行 Subagent，每个负责生成 PRD 的一部分。
+
+**步骤 B1: 启动 3 个 general-purpose Subagent（并行）**
+
+```
+# Subagent A: §1-§3（概述 + 当前状态 + 架构设计）
+Task(
+  subagent_type: "general-purpose",
+  description: "Transform PRD §1-§3",
+  prompt: """
+你是 BotoolAgent PRD 生成器（分段模式 — 第 1/3 部分）。
+
+## 任务
+生成 BotoolAgent PRD 的 §1-§3 部分：
+- § 1. 项目概述（背景/目标/指标）
+- § 2. 当前状态（已有能力/缺口分析）
+- § 3. 架构设计（核心概念/角色/工作流/状态机 — 含所有 ASCII 图）
+
+## 输入
+### Q&A Journal
+<读取 $PROJECT_DIR/qa-journal.md 全部内容>
+
+### 代码库扫描报告
+<读取 $PROJECT_DIR/codebase-scan.md（不存在则写"新项目"）>
+
+### 源 PRD 原文
+- 源 PRD 路径: $SOURCE_PRD_PATH
+- 使用 Read 工具分段读取源 PRD 中映射到 §1/§2/§3 的源章节（参照下方映射表的行号范围）
+- 按「充分摘录规则」：状态机定义完整复制，ASCII 工作流图完整复制，角色权限矩阵完整复制
+
+### 源章节映射表
+<粘贴 T2 完整映射表>
+
+## 模板
+<嵌入「PRD 模板」中 §1-§3 对应部分>
+
+## 输出
+写入: $PROJECT_DIR/prd-part-1.md
+文件以 `# PRD: [功能名称]` 开头，包含 §1-§3 全部内容。
+
+⚠️ 上下文保护 — 返回结构化摘要（15 行以内）。
+""")
+
+# Subagent B: §4-§6（数据设计 + UI 设计 + 业务规则）
+Task(
+  subagent_type: "general-purpose",
+  description: "Transform PRD §4-§6",
+  prompt: """
+你是 BotoolAgent PRD 生成器（分段模式 — 第 2/3 部分）。
+
+## 任务
+生成 BotoolAgent PRD 的 §4-§6 部分：
+- § 4. 数据设计（SQL CREATE TABLE 逐字复制 + ER 图 + 约束）
+- § 5. UI 设计（ASCII 线框图完整复制 + 组件 Props 接口）
+- § 6. 业务规则（规则表格完整复制 + 决策树）
+
+## 输入
+### Q&A Journal
+<读取 $PROJECT_DIR/qa-journal.md 全部内容>
+
+### 源 PRD 原文
+- 源 PRD 路径: $SOURCE_PRD_PATH
+- 使用 Read 工具分段读取源 PRD 中映射到 §4/§5/§6 的源章节
+- **关键**: SQL CREATE TABLE 语句必须逐字复制（含所有字段、约束、注释）
+- **关键**: 业务规则表格和决策树必须完整复制，不可压缩
+
+### 源章节映射表
+<粘贴 T2 完整映射表>
+
+## 模板
+<嵌入「PRD 模板」中 §4-§6 对应部分>
+
+## 输出
+写入: $PROJECT_DIR/prd-part-2.md
+文件以 `## 4. 数据设计` 开头，包含 §4-§6 全部内容。
+
+⚠️ 上下文保护 — 返回结构化摘要（15 行以内）。
+""")
+
+# Subagent C: §7-§8 + §9+（开发计划 + 附录 + 扩展章节）
+Task(
+  subagent_type: "general-purpose",
+  description: "Transform PRD §7-§9+",
+  prompt: """
+你是 BotoolAgent PRD 生成器（分段模式 — 第 3/3 部分）。
+
+## 任务
+生成 BotoolAgent PRD 的 §7-§8 + §9+ 部分：
+- § 7. 开发计划（使用 T5 DT 分解结果，Phase 依赖图 + DT 含文件路径）
+- § 8. 附录（文件索引 + 风险 + 测试 + 非目标 + 安全检查项）
+- § 9+ 扩展章节（映射表中标记为 §9+ 的源章节原文完整复制）
+
+## 输入
+### Q&A Journal
+<读取 $PROJECT_DIR/qa-journal.md 全部内容>
+
+### 源 PRD 原文
+- 源 PRD 路径: $SOURCE_PRD_PATH
+- 使用 Read 工具分段读取源 PRD 中映射到 §7/§8/§9+ 的源章节
+- **§9+ 章节**: 对映射表中标记为 §9+ 的每个源章节，原文完整复制（含代码、表格、ASCII 图）
+
+### 源章节映射表
+<粘贴 T2 完整映射表>
+
+## 模板
+<嵌入「PRD 模板」中 §7-§8 + §9+ 对应部分>
+
+## 安全检查自动注入
+<嵌入「Phase 7.5 安全检查自动注入」规则>
+
+## 输出
+写入: $PROJECT_DIR/prd-part-3.md
+文件以 `## 7. 开发计划` 开头，包含 §7-§8 + §9+ 全部内容。
+
+⚠️ 上下文保护 — 返回结构化摘要（15 行以内）。
+""")
+```
+
+**步骤 B2: 主对话合并分段文件**
+
+3 个 Subagent 完成后，主对话合并分段文件为最终 PRD：
+
+```bash
+# 验证 3 个分段文件存在且非空
+for f in prd-part-1.md prd-part-2.md prd-part-3.md; do
+  [ -s "$PROJECT_DIR/$f" ] || echo "❌ 缺失: $f"
+done
+
+# 合并为最终 prd.md
+cat "$PROJECT_DIR/prd-part-1.md" "$PROJECT_DIR/prd-part-2.md" "$PROJECT_DIR/prd-part-3.md" > "$PROJECT_DIR/prd.md"
+
+# 清理分段文件
+rm -f "$PROJECT_DIR/prd-part-1.md" "$PROJECT_DIR/prd-part-2.md" "$PROJECT_DIR/prd-part-3.md"
+```
+
+**合并后校验（不可跳过）：**
+1. 验证 §1-§8 + §9+ 各章节标题存在（`grep -c '^## [0-9]'`）
+2. 检查章节边界无重复内容（part-1 和 part-2 的交接处）
+3. 如发现分段间 DT 编号冲突 → 按 Phase 顺序重新编号
+
+---
+
 **Subagent 输入构造规则：**
 1. 读取 `$PROJECT_DIR/qa-journal.md` 全部内容作为需求决策上下文
 2. 读取 `$PROJECT_DIR/codebase-scan.md` 全部内容作为技术上下文（不存在则标记"新项目"）
-3. 根据 journal 中标注的模式（功能开发/完整规划）选择对应模板
+3. 根据 journal 中标注的模式选择路径：功能开发/完整规划 → 路径 A，Transform → 路径 B
 4. 将下方所有模板规则嵌入 Subagent prompt（模板是 Subagent 的生成指令）
-5. Transform 模式时，将 SOURCE_PRD_PATH 和源章节映射表传入 Subagent prompt
+5. Transform 模式时，将 SOURCE_PRD_PATH 和源章节映射表传入每个 Subagent prompt
 
 **Subagent 完成后：**
 1. 验证 `$PROJECT_DIR/prd.md` 已写入且非空
