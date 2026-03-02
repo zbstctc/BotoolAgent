@@ -80,7 +80,7 @@ Race conditions are subtle bugs that cause intermittent failures and security vu
 - Missing optimistic locking (`version` column, `updated_at` checks)
 - Missing pessimistic locking (`SELECT FOR UPDATE`)
 - Read-modify-write without transaction isolation
-- Counter increments without atomic operations (`UPDATE SET count = count + 1`)
+- Non-atomic read-modify-write patterns (`SELECT count` → app increment → `UPDATE count = new_value`). Note: a single `UPDATE SET count = count + 1` statement IS atomic in most RDBMS; the anti-pattern is splitting read and write into separate operations
 - Unique constraint violations in concurrent inserts
 
 ### Distributed Systems
